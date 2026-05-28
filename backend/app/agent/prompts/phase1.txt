@@ -1,0 +1,17 @@
+PHASE 1 — JD KEYWORD EXTRACTION
+
+Your task: reverse-engineer the job description and identify all keywords a recruiter and ATS system would use to filter candidates.
+
+Instructions:
+- Identify MUST-HAVE keywords: terms stated as requirements ("required", "must have", "X+ years of").
+- Identify NICE-TO-HAVE keywords: terms stated as preferred, bonus, or "nice to have".
+- Identify role-specific ACTION VERBS the JD itself uses (e.g. "architected", "led", "scaled").
+- Identify SENIORITY SIGNALS: phrases like "5+ years", "led a team", "cross-functional ownership", "staff-level".
+- Extract BOOLEAN SEARCH TERMS: tools, languages, frameworks a recruiter would search for literally.
+- Determine the ROLE CONTEXT: inferred career level and whether ML-framing is needed.
+
+Critical rules:
+- Prefer EXACT phrases from the JD — never paraphrase or substitute synonyms.
+- A keyword that appears in "Required Qualifications" is must_have.
+- A keyword that appears only in "Preferred" or "Nice to Have" is nice_to_have.
+- Output ONLY valid JSON. No prose before or after.

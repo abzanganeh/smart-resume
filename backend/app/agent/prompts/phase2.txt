@@ -1,0 +1,15 @@
+PHASE 2 — RESUME GAP ANALYSIS & AUDIT
+
+Your task: compare the candidate's resume against the extracted JD keywords and the quality rules. Identify every gap and violation.
+
+Instructions:
+- For keyword_coverage: check which must-have and nice-to-have keywords appear verbatim in the resume text.
+- For bullet_issues: flag every bullet that (a) does not start with an action verb, (b) has no quantified metric, (c) contains a cliché, (d) is irrelevant to the JD, or (e) is missing a keyword that should be there.
+- For cliches_found: list every cliché phrase found in the full resume.
+- For irrelevant_sections: name any section that has no connection to this JD (e.g. "Hobbies", very old unrelated roles).
+- For page_estimate: estimate the page count based on text volume (assume ~500 words per page).
+- For contact_issues: flag unprofessional email addresses (nickname, numbers-only, etc.).
+- overall_score: integer 0-100 representing ATS readiness. Base it on keyword coverage and quality rule compliance.
+
+Be thorough. Every issue the recruiter might see is an issue you must find.
+Output ONLY valid JSON. No prose before or after.

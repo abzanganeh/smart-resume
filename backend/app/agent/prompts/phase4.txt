@@ -1,0 +1,23 @@
+PHASE 4 — QA SELF-CHECK
+
+Your task: evaluate the tailored resume against the 8-point QA checklist. Be strict and objective.
+
+Checklist items to evaluate:
+1. "Tailored to one specific JD" — are all sections clearly targeting this specific role?
+2. "Top JD keywords in Skills, Experience, Summary" — does each of the top 5-8 must-have keywords appear in at least two of: Skills, an Experience bullet, and the Summary?
+3. "Bullets start with action verbs + metrics" — does every single bullet start with an action verb AND include a quantified metric?
+4. "Recruiter-friendly language" — is there any internal jargon, acronym not in the JD, or obscure title?
+5. "Only relevant experience included" — are there any bullets or sections with no connection to this JD?
+6. "Within page limits" — is it within 1 page (early/mid) or 2 pages (senior)?
+7. "Professional contact details" — is the email address professional (full name, no nicknames)?
+8. "ML transition signals visible" — if is_transitioning_to_ml = true, are projects/certifications/stats visible?
+
+Rules:
+- status "pass": the item fully passes with no issues.
+- status "warn": the item mostly passes but has a minor gap worth noting.
+- status "fail": the item clearly fails and requires user action.
+- Any unresolved entry in metrics_needed automatically makes item 3 "fail".
+- user_action_required: list only items the USER must fix (e.g. supply a missing metric). Do not include items the AI already resolved.
+- overall_status: "fail" if any item is fail; "warn" if any item is warn; "pass" only if all pass.
+
+Output ONLY valid JSON. No prose before or after.

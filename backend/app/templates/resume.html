@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resume</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #1a1a1a;
+    padding: 0.5in;
+    max-width: 8.5in;
+  }
+  .name {
+    font-size: 22pt;
+    font-weight: bold;
+    text-align: center;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .contact {
+    text-align: center;
+    font-size: 9.5pt;
+    color: #444;
+    margin-bottom: 14px;
+  }
+  .contact a { color: #444; text-decoration: none; }
+  hr {
+    border: none;
+    border-top: 1.5px solid #1a1a1a;
+    margin: 8px 0;
+  }
+  h2 {
+    font-size: 11pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    border-bottom: 0.5px solid #ccc;
+    padding-bottom: 2px;
+  }
+  .summary { margin-bottom: 8px; }
+  .skills { margin-bottom: 8px; font-size: 10.5pt; }
+  .exp-entry { margin-bottom: 10px; }
+  .exp-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    font-size: 10.5pt;
+  }
+  .exp-company { font-style: italic; font-weight: normal; font-size: 10pt; }
+  ul { margin-left: 14px; margin-top: 4px; }
+  li { margin-bottom: 2px; font-size: 10.5pt; }
+  .project-name { font-weight: bold; font-size: 10.5pt; }
+  .project-url { font-size: 9.5pt; color: #555; margin-left: 6px; }
+  .edu-entry { font-size: 10.5pt; margin-bottom: 4px; }
+  .certs { font-size: 10.5pt; }
+</style>
+</head>
+<body>
+
+{% set c = contact if contact is mapping else {} %}
+<div class="name">{{ c.get('name', user.name if user else '') }}</div>
+<div class="contact">
+  {{ c.get('email', user.email if user else '') }}
+  {% if c.get('phone') %} &nbsp;|&nbsp; {{ c.get('phone') }}{% endif %}
+  {% if c.get('linkedin') %} &nbsp;|&nbsp; <a href="{{ c.get('linkedin') }}">LinkedIn</a>{% endif %}
+  {% if c.get('github') %} &nbsp;|&nbsp; <a href="{{ c.get('github') }}">GitHub</a>{% endif %}
+</div>
+
+<hr>
+
+{% if summary %}
+<h2>Summary</h2>
+<div class="summary">{{ summary }}</div>
+{% endif %}
+
+{% if skills %}
+<h2>Skills</h2>
+<div class="skills">{{ skills | join(' &nbsp;·&nbsp; ') }}</div>
+{% endif %}
+
+{% if experience %}
+<h2>Experience</h2>
+{% for exp in experience %}
+<div class="exp-entry">
+  <div class="exp-header">
+    <span>{{ exp.title }} &nbsp;—&nbsp; <span class="exp-company">{{ exp.company }}</span></span>
+    <span>{{ exp.dates }}</span>
+  </div>
+  {% if exp.bullets %}
+  <ul>
+    {% for bullet in exp.bullets %}
+    <li>{{ bullet }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if projects %}
+<h2>Projects</h2>
+{% for proj in projects %}
+{% set p = proj if proj is mapping else {} %}
+<div class="exp-entry">
+  <div>
+    <span class="project-name">{{ p.get('name', '') }}</span>
+    {% if p.get('url') %}<span class="project-url">{{ p.get('url') }}</span>{% endif %}
+  </div>
+  {% if p.get('bullets') %}
+  <ul>
+    {% for bullet in p.get('bullets', []) %}
+    <li>{{ bullet }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if education %}
+<h2>Education</h2>
+{% for edu in education %}
+{% set e = edu if edu is mapping else {} %}
+<div class="edu-entry">
+  <strong>{{ e.get('degree', '') }}</strong> &nbsp;—&nbsp; {{ e.get('institution', '') }}
+  {% if e.get('year') %} ({{ e.get('year') }}){% endif %}
+  {% if e.get('notes') %}<br><span style="font-size:9.5pt">{{ e.get('notes') }}</span>{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if certifications %}
+<h2>Certifications</h2>
+<div class="certs">{{ certifications | join(' &nbsp;·&nbsp; ') }}</div>
+{% endif %}
+
+</body>
+</html>

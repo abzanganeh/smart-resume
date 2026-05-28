@@ -1,0 +1,29 @@
+# Local design docs — private, not pushed to GitHub
+docs/
+tech_docs/
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+.cursor/
+
+# Secrets
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+.pnpm-store/
+
+# Misc
+*.log
