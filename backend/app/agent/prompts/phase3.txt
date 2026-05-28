@@ -1,0 +1,19 @@
+PHASE 3 — TAILORED RESUME REWRITE
+
+Your task: produce a fully tailored version of the candidate's resume, optimized for this specific job description.
+
+Instructions:
+- Summary: rewrite to 2-3 sentences. Include 2-3 core JD keywords. Write for a non-technical recruiter.
+- Skills: reorder by JD relevance (most relevant first). Add any must-have keywords not already listed.
+- Experience bullets: for each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing. Remove bullets with no JD connection.
+- Projects: enhance or add if the candidate is transitioning to ML and has relevant GitHub projects.
+- Education/Certifications: keep as-is unless irrelevant.
+- Page limit: if career_stage = "early_mid", trim to 1-page equivalent. If "senior", max 2 pages.
+
+Critical constraints:
+- NEVER fabricate metrics, titles, or experience. If a bullet has no metric, keep the structure and add it to metrics_needed.
+- NEVER change job titles, company names, or dates.
+- Keywords must appear verbatim — do not paraphrase JD terms.
+- For every change, add a note to rewrite_notes explaining what changed and why.
+
+Output ONLY valid JSON. No prose before or after.

@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from pydantic import BaseModel
+
+from app.config import settings
+from app.llm.base import LLMMessage
+from app.llm.factory import get_llm_client
+from app.llm.structured import complete_structured
+from app.models.resume import ParsedResume
+from app.models.userinfo import UserInfo
+from app.parsers.docx_parser import extract_text_from_docx
+from app.parsers.pdf_parser import extract_text_from_pdf
+from app.parsers.text_parser import extract_text_from_txt
+from app.services.session_store import get_session, update_session
+
+router = APIRouter(prefix="/api/sessions", tags=["resume"])
+
+ALLOWED_MIME = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+}
+
+
+class ResumeTextRequest(BaseModel):
+    text: str
+
+
+class JDRequest(BaseModel):
+    jd_text: str
+    jd_url: str | None = None
+    provider: str | None = None
+    model: str | None = None
+
+
+async def _structure_resume(raw_text: str, llm) -> ParsedResume:
+    """Use an LLM call to structure raw resume text into ParsedResume."""
+    messages = [
+        LLMMessage(
+            role="system",
+            content=(
+                "You are a resume parser. Extract the structured data from the following resume text "
+                "and return it as valid JSON conforming exactly to the given schema. "
+                "If a field is not found, use an empty string or empty list."
+            ),
+        ),
+        LLMMessage(role="user", content=f"RESUME TEXT:\n{raw_text}"),
+    ]
+    return await complete_structured(llm, messages, ParsedResume)
+
+
+@router.post("/{session_id}/resume")
+async def upload_resume(
+    session_id: str,
+    file: UploadFile = File(...),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    x_provider: str | None = Header(default=None, alias="X-Provider"),
+    x_model: str | None = Header(default=None, alias="X-Model"),
+):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_MIME:
+        raise HTTPException(status_code=422, detail=f"Unsupported file type: {content_type}")
+
+    file_bytes = await file.read()
+    if len(file_bytes) > settings.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=422, detail="File exceeds 5MB limit.")
+
+    if "pdf" in content_type:
+        raw_text = extract_text_from_pdf(file_bytes)
+    elif "wordprocessingml" in content_type:
+        raw_text = extract_text_from_docx(file_bytes)
+    else:
+        raw_text = extract_text_from_txt(file_bytes)
+
+    if len(raw_text) > settings.MAX_RESUME_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Resume exceeds {settings.MAX_RESUME_CHARS:,} characters. Trim older or irrelevant experience.",
+        )
+
+    # BYOK: header key > session provider > .env default
+    provider = x_provider or session.provider
+    model = x_model or session.model
+    llm = get_llm_client(provider, model, api_key=x_api_key)
+    parsed = await _structure_resume(raw_text, llm)
+
+    session.resume_raw = raw_text
+    session.resume_parsed = parsed
+    if x_provider:
+        session.provider = x_provider
+    if x_model:
+        session.model = x_model
+    await update_session(session)
+    return {"parsed": parsed.model_dump()}
+
+
+@router.post("/{session_id}/resume/text")
+async def paste_resume(
+    session_id: str,
+    body: ResumeTextRequest,
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    x_provider: str | None = Header(default=None, alias="X-Provider"),
+    x_model: str | None = Header(default=None, alias="X-Model"),
+):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if len(body.text) > settings.MAX_RESUME_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Resume exceeds {settings.MAX_RESUME_CHARS:,} characters.",
+        )
+
+    provider = x_provider or session.provider
+    model = x_model or session.model
+    llm = get_llm_client(provider, model, api_key=x_api_key)
+    parsed = await _structure_resume(body.text, llm)
+
+    session.resume_raw = body.text
+    session.resume_parsed = parsed
+    if x_provider:
+        session.provider = x_provider
+    if x_model:
+        session.model = x_model
+    await update_session(session)
+    return {"parsed": parsed.model_dump()}
+
+
+@router.post("/{session_id}/userinfo")
+async def save_userinfo(session_id: str, body: UserInfo):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.user_info = body
+    await update_session(session)
+    return {"ok": True}
+
+
+@router.post("/{session_id}/jd")
+async def submit_jd(session_id: str, body: JDRequest):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    jd_text = body.jd_text
+    if body.jd_url and not jd_text:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(body.jd_url)
+                jd_text = resp.text[: settings.MAX_JD_CHARS]
+        except Exception:
+            raise HTTPException(status_code=422, detail="Could not fetch JD from URL.")
+
+    if len(jd_text) > settings.MAX_JD_CHARS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Job description exceeds {settings.MAX_JD_CHARS:,} characters. Paste only the requirements section.",
+        )
+
+    session.jd_raw = jd_text
+    if body.provider:
+        session.provider = body.provider
+    if body.model:
+        session.model = body.model
+    await update_session(session)
+    return {"ok": True}
