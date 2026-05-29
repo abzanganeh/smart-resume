@@ -2,18 +2,71 @@ PHASE 3 — TAILORED RESUME REWRITE
 
 Your task: produce a fully tailored version of the candidate's resume, optimized for this specific job description.
 
-Instructions:
-- Summary: rewrite to 2-3 sentences. Include 2-3 core JD keywords. Write for a non-technical recruiter.
-- Skills: reorder by JD relevance (most relevant first). Add any must-have keywords not already listed.
-- Experience bullets: for each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing. Remove bullets with no JD connection.
-- Projects: enhance or add if the candidate is transitioning to ML and has relevant GitHub projects.
-- Education/Certifications: keep as-is unless irrelevant.
-- Page limit: if career_stage = "early_mid", trim to 1-page equivalent. If "senior", max 2 pages.
+━━━ SUMMARY — strict rules ━━━
+- Write EXACTLY 2–3 sentences. Maximum 60 words. Recruiters spend 5–8 seconds here.
+- Include 3–4 EXACT must-have keyword phrases from the JD, verbatim (do not paraphrase).
+- Do NOT use first person ("I", "My"). Start with the candidate's title/level.
+- No clichés: "results-driven", "passionate", "dynamic professional" → forbidden.
+- Formula: "[Level] [Title] with [X] years in [domain], specializing in [JD kw1] and [JD kw2]. [Quantified outcome involving JD kw3]. [JD kw4] applied at [scale/company type]."
 
-Critical constraints:
+━━━ SKILLS ━━━
+- Reorder by JD relevance (most relevant first).
+- Add any must-have keywords not already listed.
+
+━━━ EXPERIENCE ━━━
+- For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing.
+- CRITICAL: If a role has NO bullets relevant to this JD, DO NOT include that role in the experience array at all. Omit the entire entry — a title-only entry is worse than no entry.
+- Add removed bullets to "removed_bullets" for user review.
+
+━━━ PROJECTS ━━━
+- ALWAYS include ALL projects from the original resume. Never silently delete a project.
+- If a project is not relevant to this JD, include it anyway and add a note in rewrite_notes like "Project X kept — not directly relevant to JD but shows initiative".
+- Enhance project bullets with JD keywords if applicable.
+
+━━━ EDUCATION ━━━
+- Keep degree, institution, and year exactly as in the original resume. Do NOT add empty parentheses () for missing years — omit the year field if unknown.
+- Add an optional "bullets" array for relevant coursework, honors, GPA, thesis, or activities if they strengthen the application. Leave bullets as an empty array [] if nothing is relevant.
+
+━━━ GENERAL CONSTRAINTS ━━━
 - NEVER fabricate metrics, titles, or experience. If a bullet has no metric, keep the structure and add it to metrics_needed.
 - NEVER change job titles, company names, or dates.
 - Keywords must appear verbatim — do not paraphrase JD terms.
 - For every change, add a note to rewrite_notes explaining what changed and why.
+- Page limit by career_stage: student/entry → 1 page max. mid → 1–2 pages. senior/staff/executive → 2 pages max.
 
-Output ONLY valid JSON. No prose before or after.
+━━━ REQUIRED JSON OUTPUT SHAPE ━━━
+You MUST include ALL fields. Every experience entry with bullets MUST have a non-empty "bullets" array; entries with no relevant bullets must be OMITTED entirely.
+
+{
+  "contact": {"name": "...", "email": "...", "phone": "...", "linkedin": "...", "github": "..."},
+  "summary": "2-3 sentences, max 60 words, 3-4 exact JD keywords verbatim",
+  "skills": ["most-relevant-to-JD skill first", "skill2", ...],
+  "experience": [
+    {
+      "title": "EXACT job title — do not change",
+      "company": "EXACT company name — do not change",
+      "dates": "EXACT dates — do not change",
+      "bullets": ["Strong action verb + metric + JD keyword...", "..."],
+      "removed_bullets": ["original bullet removed because it had no JD relevance"],
+      "keywords_injected": ["exact JD keyword phrase woven into bullets for this role"]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Project Name",
+      "url": "https://... or null",
+      "bullets": ["bullet describing the project"],
+      "relevant_to_jd": true
+    }
+  ],
+  "education": [
+    {"degree": "Degree Name", "institution": "School", "year": "2020", "bullets": ["Relevant coursework: ...", "GPA: 3.8/4.0"]}
+  ],
+  "certifications": ["Cert 1", "Cert 2"],
+  "rewrite_notes": ["Changed X because Y (JD keyword Z was missing)", ...],
+  "metrics_needed": [
+    {"section": "Professional Experience", "company": "Company Name", "bullet_index": 0, "prompt": "What was the improvement percentage or dollar impact?"}
+  ]
+}
+
+Output ONLY the JSON object. No prose before or after.

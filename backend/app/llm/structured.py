@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 
@@ -44,6 +45,7 @@ async def complete_structured(
     max_retries: int = 3,
     max_tokens: int = 4096,
     temperature: float = 0.2,
+    accept_result: Callable[[BaseModel], str | None] | None = None,
 ) -> BaseModel:
     """
     Call the LLM and parse the result into a Pydantic model.
@@ -68,6 +70,7 @@ async def complete_structured(
         else:
             response = await client.complete(
                 active_messages,
+                response_schema=schema.model_json_schema(),
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
@@ -75,10 +78,19 @@ async def complete_structured(
         try:
             # Strip markdown code fences if present
             content = response.content.strip()
+            if not content:
+                raise ValueError("LLM returned empty content")
             if content.startswith("```"):
                 lines = content.split("\n")
                 content = "\n".join(lines[1:-1]) if len(lines) > 2 else content
-            return schema.model_validate_json(content)
+            if content in ("{}", "[]", "null"):
+                raise ValueError("LLM returned empty JSON object")
+            parsed = schema.model_validate_json(content)
+            if accept_result is not None:
+                rejection = accept_result(parsed)
+                if rejection:
+                    raise ValueError(rejection)
+            return parsed
         except (ValidationError, ValueError, json.JSONDecodeError) as e:
             last_error = e
             if attempt < max_retries - 1:

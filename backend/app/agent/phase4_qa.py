@@ -28,8 +28,8 @@ async def run(
         raise RuntimeError("Phase 3 must complete before Phase 4.")
 
     user_info = session.user_info
-    career_stage = user_info.career_stage if user_info else "senior"
-    is_transitioning = user_info.is_transitioning_to_ml if user_info else False
+    career_stage = user_info.career_stage if user_info else "mid"
+    is_career_transition = user_info.is_career_transition if user_info else False
     jd_text = session.jd_raw or ""
     tailored = session.phase3_output
 
@@ -39,7 +39,7 @@ async def run(
             role="user",
             content=(
                 f"CAREER STAGE: {career_stage}\n"
-                f"TRANSITIONING TO ML: {is_transitioning}\n\n"
+                f"CAREER TRANSITION: {is_career_transition}\n\n"
                 f"JOB DESCRIPTION:\n{jd_text}\n\n"
                 f"MUST-HAVE KEYWORDS:\n{json.dumps([k.term for k in session.phase1_output.must_have_keywords] if session.phase1_output else [])}\n\n"
                 f"TAILORED RESUME (Phase 3 output):\n{tailored.model_dump_json()}\n\n"

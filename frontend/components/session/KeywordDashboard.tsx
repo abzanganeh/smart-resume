@@ -67,7 +67,9 @@ export function KeywordDashboard({ output, streaming }: Props) {
           />
         </div>
         <p className="text-slate-500 text-xs mt-1.5">
-          {mustHaveTotal - mustHavePresent > 0
+          {mustHaveTotal === 0
+            ? "No must-have keywords were extracted — use Retry or try a stronger model."
+            : mustHaveTotal - mustHavePresent > 0
             ? `${mustHaveTotal - mustHavePresent} must-have keyword${mustHaveTotal - mustHavePresent > 1 ? "s" : ""} will be added by the rewrite.`
             : "All must-have keywords are already in your resume."}
         </p>

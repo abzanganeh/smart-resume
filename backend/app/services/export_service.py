@@ -34,28 +34,19 @@ def _resume_to_html(session: Session) -> str:
 
 
 async def render_pdf(session: Session) -> bytes:
-    """Render the tailored resume to PDF via Puppeteer (pyppeteer)."""
-    try:
-        from pyppeteer import launch
-
-        html = _resume_to_html(session)
-        browser = await launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"],
-        )
-        page = await browser.newPage()
-        await page.setContent(html, {"waitUntil": "networkidle0"})
-        pdf_bytes = await page.pdf({
-            "format": "Letter",
-            "printBackground": True,
-            "margin": {"top": "0.5in", "right": "0.5in", "bottom": "0.5in", "left": "0.5in"},
-        })
-        await browser.close()
-        return pdf_bytes
-    except Exception as e:
-        log.error("pdf_render_error", error=str(e))
-        # Fallback: return HTML as bytes if Puppeteer fails
-        return _resume_to_html(session).encode()
+    """Render the tailored resume to PDF via WeasyPrint (pure Python, no browser needed)."""
+    from weasyprint import HTML, CSS
+    html = _resume_to_html(session)
+    css = CSS(string="""
+        @page { size: Letter; margin: 0.6in 0.65in; }
+        body { font-family: Georgia, serif; font-size: 10.5pt; color: #111; line-height: 1.45; }
+        h1 { font-size: 18pt; margin: 0 0 2pt; }
+        h2 { font-size: 11pt; border-bottom: 1px solid #555; padding-bottom: 2pt; margin: 12pt 0 4pt; }
+        ul { margin: 2pt 0; padding-left: 14pt; }
+        li { margin-bottom: 2pt; }
+        p  { margin: 2pt 0; }
+    """)
+    return HTML(string=html).write_pdf(stylesheets=[css])
 
 
 def render_docx(session: Session) -> bytes:
@@ -109,8 +100,10 @@ def render_docx(session: Session) -> bytes:
     if output.education:
         doc.add_heading("Education", level=1)
         for edu in output.education:
-            if isinstance(edu, dict):
-                doc.add_paragraph(f"{edu.get('degree', '')} — {edu.get('institution', '')} ({edu.get('year', '')})")
+            year_str = f" ({edu.year})" if edu.year else ""
+            doc.add_paragraph(f"{edu.degree} — {edu.institution}{year_str}")
+            for bullet in edu.bullets:
+                doc.add_paragraph(bullet, style="List Bullet")
 
     # Certifications
     if output.certifications:
@@ -163,8 +156,10 @@ def render_txt(session: Session) -> str:
     if output.education:
         lines += ["EDUCATION", "---------"]
         for edu in output.education:
-            if isinstance(edu, dict):
-                lines.append(f"{edu.get('degree', '')} — {edu.get('institution', '')} ({edu.get('year', '')})")
+            year_str = f" ({edu.year})" if edu.year else ""
+            lines.append(f"{edu.degree} — {edu.institution}{year_str}")
+            for bullet in edu.bullets:
+                lines.append(f"  • {bullet}")
         lines.append("")
 
     if output.certifications:

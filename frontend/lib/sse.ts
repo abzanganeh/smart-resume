@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface SSEEvent {
   event: string;
@@ -32,7 +32,7 @@ export function useSSE(): UseSSEResult {
   const [error, setError] = useState<string | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
 
-  const connect = (url: string) => {
+  const connect = useCallback((url: string) => {
     // Close any existing connection
     sourceRef.current?.close();
     setEvents([]);
@@ -57,6 +57,7 @@ export function useSSE(): UseSSEResult {
         }
         if (parsed.event === "error") {
           setError(parsed.message ?? "Unknown error");
+          setIsDone(true);
           setIsConnected(false);
           es.close();
         }
@@ -66,20 +67,23 @@ export function useSSE(): UseSSEResult {
     };
 
     es.onerror = () => {
+      // Ignore errors after a successful completion (browser may fire on close).
+      if (sourceRef.current !== es) return;
       setError("Connection lost. Please try again.");
+      setIsDone(true);
       setIsConnected(false);
       es.close();
     };
-  };
+  }, []);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     sourceRef.current?.close();
     setEvents([]);
     setLastEvent(null);
     setIsConnected(false);
     setIsDone(false);
     setError(null);
-  };
+  }, []);
 
   useEffect(() => {
     return () => {

@@ -126,11 +126,16 @@
 {% if education %}
 <h2>Education</h2>
 {% for edu in education %}
-{% set e = edu if edu is mapping else {} %}
 <div class="edu-entry">
-  <strong>{{ e.get('degree', '') }}</strong> &nbsp;—&nbsp; {{ e.get('institution', '') }}
-  {% if e.get('year') %} ({{ e.get('year') }}){% endif %}
-  {% if e.get('notes') %}<br><span style="font-size:9.5pt">{{ e.get('notes') }}</span>{% endif %}
+  <strong>{{ edu.degree }}</strong> &nbsp;—&nbsp; {{ edu.institution }}
+  {% if edu.year %} ({{ edu.year }}){% endif %}
+  {% if edu.bullets %}
+  <ul>
+    {% for bullet in edu.bullets %}
+    <li>{{ bullet }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </div>
 {% endfor %}
 {% endif %}

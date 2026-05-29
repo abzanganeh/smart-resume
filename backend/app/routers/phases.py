@@ -10,15 +10,38 @@ from app.agent.orchestrator import run_phase
 from app.llm.factory import get_llm_client
 from app.models.rewrite import ResumeVersion, TailoredResumeOutput
 from app.models.session import PhaseStatus
-from app.services.session_store import get_session, update_session
+from pydantic import BaseModel
+
+from app.services.session_store import get_session, reset_phase, update_session
+
+
+def _cached_output_replayable(session, phase: int) -> bool:
+    output = getattr(session, f"phase{phase}_output", None)
+    if output is None:
+        return False
+    if phase == 1:
+        return bool(output.must_have_keywords or output.nice_to_have_keywords)
+    if phase == 2:
+        return not (
+            output.overall_score == 0
+            and not (output.summary or "").strip()
+            and not output.bullet_issues
+            and not output.keyword_coverage.missing_must_have
+        )
+    return True
 
 router = APIRouter(prefix="/api/sessions", tags=["phases"])
+
+
+class RunPhaseRequest(BaseModel):
+    force: bool = False
 
 
 @router.post("/{session_id}/phases/{phase}/run", status_code=202)
 async def trigger_phase(
     session_id: str,
     phase: int,
+    body: RunPhaseRequest = RunPhaseRequest(),
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
@@ -51,7 +74,15 @@ async def trigger_phase(
     if x_api_key:
         # Store the key temporarily in the session (cleared on expiry — never logged)
         session.byok_api_key = x_api_key
-        await update_session(session)
+
+    if body.force:
+        await reset_phase(session_id, phase)
+        session = await get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    session.phase_run_requested = phase
+    await update_session(session)
 
     return {
         "job_id": f"phase{phase}-{session_id[:8]}",
@@ -69,16 +100,24 @@ async def phase_events(session_id: str, phase: int):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # If already done, replay the cached output immediately
     phase_status = getattr(session, f"phase{phase}_status")
-    if phase_status == PhaseStatus.done:
+    run_requested = session.phase_run_requested == phase
+
+    # Replay cached output only when the phase finished, no fresh run was requested, and cache is usable.
+    if phase_status == PhaseStatus.done and not run_requested and _cached_output_replayable(session, phase):
         output = getattr(session, f"phase{phase}_output")
+        if output is not None:
 
-        async def replay():
-            payload = json.dumps({"event": "done", "phase": phase, "output": json.loads(output.model_dump_json())})
-            yield f"data: {payload}\n\n"
+            async def replay():
+                payload = json.dumps({"event": "done", "phase": phase, "output": json.loads(output.model_dump_json())})
+                yield f"data: {payload}\n\n"
+                yield 'data: {"event": "stream_end"}\n\n'
 
-        return StreamingResponse(replay(), media_type="text/event-stream")
+            return StreamingResponse(replay(), media_type="text/event-stream")
+
+    if run_requested:
+        session.phase_run_requested = None
+        await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
     # BYOK: use key stored at run-trigger time (never logged)
@@ -149,6 +188,26 @@ async def patch_tailored_resume(session_id: str, body: dict):
                 break
     elif section == "skills":
         output.skills = body.get("skills", output.skills)
+    elif section == "education" and bullet_index is not None:
+        institution = body.get("institution")
+        for entry in output.education:
+            if entry.institution == institution:
+                bullets = list(entry.bullets)
+                if bullet_index == len(bullets):
+                    bullets.append(new_text)
+                elif bullet_index < len(bullets):
+                    if new_text.strip():
+                        bullets[bullet_index] = new_text
+                    else:
+                        bullets.pop(bullet_index)
+                entry.bullets = bullets
+                break
+    elif section == "education_bullets":
+        institution = body.get("institution")
+        for entry in output.education:
+            if entry.institution == institution:
+                entry.bullets = body.get("bullets", entry.bullets)
+                break
 
     version_num = len(session.phase3_versions) + 1
     snapshot_id = str(uuid.uuid4())[:8]

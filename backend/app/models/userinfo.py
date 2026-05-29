@@ -2,16 +2,24 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel
 
 
 class UserInfo(BaseModel):
-    name: str
-    email: EmailStr
+    name: str = ""
+    email: str = ""
     phone: str | None = None
     linkedin: str | None = None
     github: str | None = None
-    career_stage: Literal["early_mid", "senior"]
-    target_role_type: Literal["ml_engineer", "swe", "data_scientist", "other"]
+
+    # How far along the candidate is — drives page-length rules
+    career_stage: Literal["student", "entry", "mid", "senior", "staff", "executive"] = "mid"
+
+    # Free-text: any role, any industry
+    target_role: str = ""
+
     certifications: list[str] = []
-    is_transitioning_to_ml: bool = False
+
+    # True when the candidate is applying outside their primary field.
+    # Detected from JD context; only surfaced in the UI for AI/ML jobs.
+    is_career_transition: bool = False

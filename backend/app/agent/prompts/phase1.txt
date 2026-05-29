@@ -10,8 +10,17 @@ Instructions:
 - Extract BOOLEAN SEARCH TERMS: tools, languages, frameworks a recruiter would search for literally.
 - Determine the ROLE CONTEXT: inferred career level and whether ML-framing is needed.
 
+Setting present_in_resume — CRITICAL RULES:
+- Set present_in_resume = true when the resume contains EVIDENCE of the requirement, not just the literal phrase.
+- "2+ years of working experience" → true if the resume shows 2 or more years of work history based on job dates or explicit statements like "8+ years".
+- "Proficient in Java" → true if Java appears anywhere in the resume as a language, skill, or in job descriptions.
+- "OO design principles" → true if the resume mentions object-oriented design, OOP, OO, or related concepts.
+- "large scale distributed systems" → true if the resume mentions distributed systems, large-scale, or equivalent with or without hyphens.
+- "cloud computing platforms" → true if the resume lists any cloud platforms (AWS, GCP, Azure, etc.) even without the phrase "cloud computing platforms".
+- Do NOT require verbatim phrase match. Look for semantic evidence.
+
 Critical rules:
-- Prefer EXACT phrases from the JD — never paraphrase or substitute synonyms.
+- Prefer EXACT phrases from the JD — never paraphrase or substitute synonyms (for the `term` field).
 - A keyword that appears in "Required Qualifications" is must_have.
 - A keyword that appears only in "Preferred" or "Nice to Have" is nice_to_have.
 - Output ONLY valid JSON. No prose before or after.

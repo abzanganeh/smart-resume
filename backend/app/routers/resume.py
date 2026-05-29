@@ -142,6 +142,23 @@ async def save_userinfo(session_id: str, body: UserInfo):
     return {"ok": True}
 
 
+class AdditionsRequest(BaseModel):
+    claimed_keywords: list[str] = []
+    extra_notes: str = ""
+
+
+@router.patch("/{session_id}/additions")
+async def save_additions(session_id: str, body: AdditionsRequest):
+    """Save keywords/skills the user claims to have that weren't in the original resume."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.user_claimed_keywords = body.claimed_keywords
+    session.user_extra_notes = body.extra_notes
+    await update_session(session)
+    return {"ok": True, "claimed": len(body.claimed_keywords)}
+
+
 @router.post("/{session_id}/jd")
 async def submit_jd(session_id: str, body: JDRequest):
     session = await get_session(session_id)

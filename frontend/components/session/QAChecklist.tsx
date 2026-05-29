@@ -16,7 +16,7 @@ const STATUS_CONFIG = {
 };
 
 function QARow({ item }: { item: QAItem }) {
-  const cfg = STATUS_CONFIG[item.status];
+  const cfg = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.warn;
   const Icon = cfg.icon;
   return (
     <div className={cn("flex items-start gap-3 border rounded-lg p-3", cfg.bg)}>
@@ -40,7 +40,8 @@ export function QAChecklist({ output, streaming }: Props) {
   }
   if (!output) return null;
 
-  const overallCfg = STATUS_CONFIG[output.overall_status];
+  // Guard: LLM may return a status value not in our map
+  const overallCfg = STATUS_CONFIG[output.overall_status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.warn;
   const OverallIcon = overallCfg.icon;
 
   return (
@@ -50,7 +51,10 @@ export function QAChecklist({ output, streaming }: Props) {
         <OverallIcon className={cn("w-6 h-6", overallCfg.cls)} />
         <div>
           <p className={cn("font-semibold", overallCfg.cls)}>
-            Overall: {output.overall_status.charAt(0).toUpperCase() + output.overall_status.slice(1)}
+            Overall:{" "}
+            {output.overall_status
+              ? output.overall_status.charAt(0).toUpperCase() + output.overall_status.slice(1)
+              : "Unknown"}
           </p>
           {output.overall_status === "pass" && (
             <p className="text-green-400/70 text-sm">Your resume passes all quality checks. Ready to export.</p>
@@ -60,18 +64,21 @@ export function QAChecklist({ output, streaming }: Props) {
 
       {/* Checklist items */}
       <div className="space-y-2">
-        {output.checklist.map((item, i) => <QARow key={i} item={item} />)}
+        {(output.checklist ?? []).map((item, i) => {
+        const status = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG] ? item.status : "warn";
+        return <QARow key={i} item={{ ...item, status: status as QAItem["status"] }} />;
+      })}
       </div>
 
       {/* User action required */}
-      {output.user_action_required.length > 0 && (
+      {(output.user_action_required ?? []).length > 0 && (
         <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-4">
           <div className="flex items-center gap-2 text-red-400 font-semibold text-sm mb-2">
             <AlertCircle className="w-4 h-4" />
             Action required before export
           </div>
           <ul className="space-y-1">
-            {output.user_action_required.map((action, i) => (
+            {(output.user_action_required ?? []).map((action, i) => (
               <li key={i} className="text-red-300 text-sm flex items-start gap-2">
                 <span className="mt-1">›</span>
                 {action}
