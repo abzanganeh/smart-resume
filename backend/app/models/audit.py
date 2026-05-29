@@ -31,3 +31,16 @@ class AuditOutput(BaseModel):
     contact_issues: list[str] = []
     overall_score: int = 0
     summary: str = ""
+
+
+class AuditLLMOutput(BaseModel):
+    """Subset produced by the LLM; keyword_coverage is computed from Phase 1."""
+
+    bullet_issues: list[BulletIssue] = []
+    cliches_found: list[str] = []
+    irrelevant_sections: list[str] = []
+    page_estimate: str = ""
+    page_limit_exceeded: bool = False
+    contact_issues: list[str] = []
+    overall_score: int = 0
+    summary: str = ""

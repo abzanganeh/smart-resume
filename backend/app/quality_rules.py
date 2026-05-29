@@ -38,12 +38,13 @@ LENGTH RULES:
 - Every line must earn its place. White noise buries the signal.
 """
 
-NO_ML_FRAMING = """
-NO-ML-EXPERIENCE FRAMING (apply when is_transitioning_to_ml = true):
-- Lead with Python, data analysis, statistics, automation.
-- Add a Projects section with GitHub links.
-- Include certifications: Coursera, Fast.ai, etc.
-- Frame all prior work through an ML-readiness lens.
+TRANSITION_FRAMING = """
+CAREER TRANSITION FRAMING (apply when CAREER TRANSITION = True):
+- Lead with transferable skills most relevant to the target role.
+- Add a Projects or Portfolio section if the candidate has relevant work to showcase.
+- Include certifications and self-study that bridge the gap.
+- Frame all prior work through a lens of relevance to the target role.
+- Do not hide prior career — reframe it as complementary experience.
 """
 
 QA_CHECKLIST = """

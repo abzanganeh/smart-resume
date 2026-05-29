@@ -13,8 +13,9 @@ PRICING: dict[str, dict[str, dict[str, float]]] = {
         "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
     },
     "gemini": {
-        "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-        "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+        "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+        "gemini-2.5-flash-lite": {"input": 0.0375, "output": 0.15},
+        "gemini-3.5-flash": {"input": 0.15, "output": 0.60},
     },
     "openrouter": {
         "meta-llama/llama-3.1-70b-instruct": {"input": 0.52, "output": 0.75},

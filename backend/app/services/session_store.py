@@ -8,7 +8,7 @@ from typing import Any
 import redis.asyncio as aioredis
 
 from app.config import settings
-from app.models.session import Session
+from app.models.session import PhaseStatus, Session
 
 # ---------------------------------------------------------------------------
 # In-memory fallback (for local dev without Redis)
@@ -71,7 +71,17 @@ async def save_phase_output(session_id: str, phase: int, output: Any) -> None:
     if session is None:
         return
     setattr(session, f"phase{phase}_output", output)
-    setattr(session, f"phase{phase}_status", "done")
+    setattr(session, f"phase{phase}_status", PhaseStatus.done)
+    await update_session(session)
+
+
+async def reset_phase(session_id: str, phase: int) -> None:
+    """Clear cached output so the next SSE run executes a fresh LLM call."""
+    session = await get_session(session_id)
+    if session is None:
+        return
+    setattr(session, f"phase{phase}_output", None)
+    setattr(session, f"phase{phase}_status", "pending")
     await update_session(session)
 
 

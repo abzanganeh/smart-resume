@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import sentry_sdk
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -14,7 +15,7 @@ from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.llm.factory import get_all_providers
-from app.routers import export, phases, resume, sessions
+from app.routers import export, llm, phases, resume, sessions
 from app.services.session_store import close_redis, health_check, init_redis
 
 # ---------------------------------------------------------------------------
@@ -77,24 +78,60 @@ app.add_middleware(
 )
 
 
+def _cors_headers(request: Request) -> dict[str, str]:
+    """Return CORS headers based on the incoming Origin."""
+    origin = request.headers.get("origin", "")
+    allowed = origin if origin in settings.ALLOWED_ORIGINS else (
+        settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "*"
+    )
+    return {
+        "Access-Control-Allow-Origin": allowed,
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Ensure HTTPException responses (404, 422, etc.) always carry CORS headers."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=_cors_headers(request),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)},
+        headers=_cors_headers(request),
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Return JSON errors so CORS headers are present and the browser shows the real failure."""
+    """Return JSON errors with CORS headers so the browser shows the real failure."""
     log.error("unhandled_exception", path=str(request.url.path), error=str(exc))
-    # Surface LLM auth failures clearly — most common local-dev issue
     msg = str(exc)
     if "invalid_api_key" in msg or "AuthenticationError" in type(exc).__name__:
         return JSONResponse(
             status_code=502,
             content={
                 "detail": (
-                    "LLM authentication failed. Check OPENAI_API_KEY (or your provider key) "
-                    "in backend/.env, then restart the backend. "
-                    "For free local inference, set LLM_PROVIDER=ollama and run Ollama."
+                    "LLM authentication failed. "
+                    "Check your API key in the browser UI or in backend/.env."
                 )
             },
+            headers=_cors_headers(request),
         )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error. Check backend logs."})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {msg}"},
+        headers=_cors_headers(request),
+    )
 
 
 # Include routers
@@ -102,6 +139,7 @@ app.include_router(sessions.router)
 app.include_router(resume.router)
 app.include_router(phases.router)
 app.include_router(export.router)
+app.include_router(llm.router)
 
 
 # ---------------------------------------------------------------------------

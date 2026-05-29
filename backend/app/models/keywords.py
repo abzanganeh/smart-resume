@@ -27,3 +27,12 @@ class KeywordExtractionOutput(BaseModel):
     seniority_signals: list[str] = []
     boolean_search_terms: list[str] = []
     role_context: RoleContext = RoleContext(career_level="mid")
+
+
+class KeywordStringsOutput(BaseModel):
+    """Minimal schema for fallback keyword extraction when full output is hollow."""
+
+    must_have_keywords: list[str] = []
+    nice_to_have_keywords: list[str] = []
+    action_verbs: list[str] = []
+    seniority_signals: list[str] = []

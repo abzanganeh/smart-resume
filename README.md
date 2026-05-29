@@ -57,7 +57,7 @@ Your key is stored in your browser's `sessionStorage` only — it disappears whe
 |---|---|---|
 | OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | `gpt-4o` |
 | Anthropic | [console.anthropic.com](https://console.anthropic.com/) | `claude-opus-4-5` |
-| Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `gemini-1.5-pro` |
+| Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `gemini-2.5-flash` |
 | OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | any available model |
 | Ollama (local, free) | — install from [ollama.ai](https://ollama.ai) | `llama3.1:8b` |
 
@@ -78,9 +78,9 @@ The UI will show a green "configured" badge on that provider. Users can still ov
 
 ### Adding a new LLM provider (3 steps)
 
-1. Create `backend/backend/llm/providers/my_provider_adapter.py` — implement `LLMClient`
-2. Add a `case "my_provider":` block in `backend/backend/llm/factory.py`
-3. Add the provider entry to `backend/backend/llm/model_catalog.py`
+1. Create `backend/app/llm/providers/my_provider_adapter.py` — implement `LLMClient`
+2. Add a `case "my_provider":` block in `backend/app/llm/factory.py`
+3. Add the provider entry to `backend/app/llm/model_catalog.py`
 
 ---
 

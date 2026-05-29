@@ -34,6 +34,10 @@ class Session(BaseModel):
     # Ephemeral — user-supplied API key (BYOK). Never logged. Cleared on session expiry.
     byok_api_key: str | None = None
 
+    # User-declared additions: skills/keywords they have but weren't in the original resume
+    user_claimed_keywords: list[str] = []
+    user_extra_notes: str = ""  # free-text: "I also have experience with X and Y"
+
     phase1_status: PhaseStatus = PhaseStatus.pending
     phase1_output: KeywordExtractionOutput | None = None
 
@@ -46,3 +50,6 @@ class Session(BaseModel):
 
     phase4_status: PhaseStatus = PhaseStatus.pending
     phase4_output: QAOutput | None = None
+
+    # Set by POST /phases/{n}/run so SSE knows to execute instead of replaying cache.
+    phase_run_requested: int | None = None

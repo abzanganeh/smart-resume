@@ -15,9 +15,9 @@ MODEL_CATALOG: dict[str, list[dict[str, str]]] = {
         {"id": "claude-3-haiku-20240307", "label": "Claude 3 Haiku", "note": "Fast and cheap"},
     ],
     "gemini": [
-        {"id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro", "note": "Best quality (recommended)"},
-        {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash", "note": "Fast and very cheap"},
-        {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash", "note": "Latest flash model"},
+        {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash", "note": "Best balance — fast and cheap (recommended)"},
+        {"id": "gemini-3.5-flash", "label": "Gemini 3.5 Flash", "note": "Latest stable flash — best quality"},
+        {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite", "note": "Fastest and cheapest"},
     ],
     "openrouter": [
         {"id": "meta-llama/llama-3.1-70b-instruct", "label": "Llama 3.1 70B", "note": "Strong open model"},

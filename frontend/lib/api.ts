@@ -24,6 +24,27 @@ export async function createSession(): Promise<{ session_id: string }> {
   return request("/api/sessions", { method: "POST" });
 }
 
+export async function checkSession(
+  sessionId: string
+): Promise<{
+  session_id: string;
+  ok: boolean;
+  resume_raw: string;
+  phases: Record<string, { status: string; output: unknown | null }>;
+}> {
+  return request(`/api/sessions/${sessionId}`);
+}
+
+export async function saveResumeEdits(
+  sessionId: string,
+  tailoredOutput: TailoredResumeOutput
+): Promise<{ ok: boolean }> {
+  return request(`/api/sessions/${sessionId}/tailored`, {
+    method: "PATCH",
+    body: JSON.stringify({ tailored_output: tailoredOutput }),
+  });
+}
+
 // ── Resume ──────────────────────────────────────────────────────────────────
 
 export async function uploadResumeFile(
@@ -55,6 +76,16 @@ export async function pasteResumeText(
   });
 }
 
+export async function saveAdditions(
+  sessionId: string,
+  payload: { claimed_keywords: string[]; extra_notes: string }
+): Promise<{ ok: boolean; claimed: number }> {
+  return request<{ ok: boolean; claimed: number }>(
+    `/api/sessions/${sessionId}/additions`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+}
+
 export async function saveUserInfo(
   sessionId: string,
   info: UserInfoPayload
@@ -79,10 +110,12 @@ export async function submitJD(
 
 export async function triggerPhase(
   sessionId: string,
-  phase: number
+  phase: number,
+  options?: { force?: boolean }
 ): Promise<{ job_id: string; stream_url: string }> {
   return request(`/api/sessions/${sessionId}/phases/${phase}/run`, {
     method: "POST",
+    body: JSON.stringify({ force: options?.force ?? false }),
   });
 }
 
@@ -114,6 +147,19 @@ export async function getLLMProviders(): Promise<{ providers: LLMProvider[] }> {
   return request("/api/llm/providers");
 }
 
+export async function verifyLLMKey(payload: {
+  provider: string;
+  model: string;
+  api_key?: string;
+}): Promise<{ valid: boolean; message: string; provider: string; model: string }> {
+  const res = await fetch(`${BASE}/api/llm/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.json() as Promise<{ valid: boolean; message: string; provider: string; model: string }>;
+}
+
 // ── Export ───────────────────────────────────────────────────────────────────
 
 export function exportUrl(
@@ -126,15 +172,15 @@ export function exportUrl(
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface UserInfoPayload {
-  name: string;
-  email: string;
+  name?: string;
+  email?: string;
   phone?: string;
   linkedin?: string;
   github?: string;
-  career_stage: "early_mid" | "senior";
-  target_role_type: "ml_engineer" | "swe" | "data_scientist" | "other";
+  career_stage: "student" | "entry" | "mid" | "senior" | "staff" | "executive";
+  target_role: string;
   certifications: string[];
-  is_transitioning_to_ml: boolean;
+  is_career_transition: boolean;
 }
 
 export interface JDPayload {
@@ -233,13 +279,20 @@ export interface MetricNeeded {
   prompt: string;
 }
 
+export interface TailoredEducation {
+  degree: string;
+  institution: string;
+  year: string;
+  bullets: string[];
+}
+
 export interface TailoredResumeOutput {
   contact: Record<string, string>;
   summary: string;
   skills: string[];
   experience: TailoredExperience[];
   projects: Record<string, unknown>[];
-  education: Record<string, unknown>[];
+  education: TailoredEducation[];
   certifications: string[];
   rewrite_notes: string[];
   metrics_needed: MetricNeeded[];

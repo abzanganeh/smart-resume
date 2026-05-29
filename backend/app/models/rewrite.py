@@ -19,13 +19,20 @@ class TailoredExperienceEntry(BaseModel):
     keywords_injected: list[str] = []
 
 
+class TailoredEducationEntry(BaseModel):
+    degree: str = ""
+    institution: str = ""
+    year: str = ""
+    bullets: list[str] = []
+
+
 class TailoredResumeOutput(BaseModel):
     contact: dict = {}
     summary: str = ""
     skills: list[str] = []
     experience: list[TailoredExperienceEntry] = []
     projects: list[dict] = []
-    education: list[dict] = []
+    education: list[TailoredEducationEntry] = []
     certifications: list[str] = []
     rewrite_notes: list[str] = []
     metrics_needed: list[MetricNeeded] = []

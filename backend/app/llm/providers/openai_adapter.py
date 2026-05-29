@@ -48,10 +48,12 @@ class OpenAIAdapter(LLMClient):
         if response_schema:
             kwargs["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {"name": "output", "strict": True, "schema": response_schema},
+                "json_schema": {
+                    "name": "output",
+                    "strict": False,  # strict=True requires additionalProperties:false at every level
+                    "schema": response_schema,
+                },
             }
-        else:
-            kwargs["response_format"] = {"type": "json_object"}
 
         resp = await self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
