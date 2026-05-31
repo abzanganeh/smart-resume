@@ -2,18 +2,36 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.models.rewrite import TailoredResumeOutput
+from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @router.post("", status_code=201)
-async def new_session():
+async def new_session(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
     session = await create_session()
+    # Best-effort binding of session -> authenticated user so downstream
+    # phase-3 retrieval can load that user's master-resume chunks.  We
+    # intentionally do not require auth here to preserve the anonymous
+    # demo flow.
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            try:
+                claims = decode_access_token(token, expected_type="access")
+                session.user_id = str(claims.get("sub") or "")
+                await update_session(session)
+            except (TokenExpiredError, TokenInvalidError):
+                # Ignore invalid bearer headers here; authenticated APIs
+                # still enforce auth on their own routes.
+                pass
     return {"session_id": session.session_id}
 
 
