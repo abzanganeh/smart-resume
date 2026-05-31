@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
-    USE_IN_MEMORY_STORE: bool = False  # set True in dev to skip Redis
+    USE_IN_MEMORY_STORE: bool = True  # True by default so local dev works without Redis
 
     # Session
     SESSION_TTL_SECONDS: int = 86400  # 24 hours

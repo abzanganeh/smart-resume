@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.agent.orchestrator import run_phase
@@ -12,6 +12,7 @@ from app.models.rewrite import ResumeVersion, TailoredResumeOutput
 from app.models.session import PhaseStatus
 from pydantic import BaseModel
 
+from app.limiter import limiter
 from app.services.session_store import get_session, reset_phase, update_session
 
 
@@ -38,7 +39,9 @@ class RunPhaseRequest(BaseModel):
 
 
 @router.post("/{session_id}/phases/{phase}/run", status_code=202)
+@limiter.limit("10/minute")
 async def trigger_phase(
+    request: Request,
     session_id: str,
     phase: int,
     body: RunPhaseRequest = RunPhaseRequest(),

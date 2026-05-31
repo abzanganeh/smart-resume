@@ -56,7 +56,7 @@ Your key is stored in your browser's `sessionStorage` only — it disappears whe
 | Provider | Key dashboard | Recommended model |
 |---|---|---|
 | OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | `gpt-4o` |
-| Anthropic | [console.anthropic.com](https://console.anthropic.com/) | `claude-opus-4-5` |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com/) | `claude-3-5-sonnet-20241022` |
 | Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `gemini-2.5-flash` |
 | OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | any available model |
 | Ollama (local, free) | — install from [ollama.ai](https://ollama.ai) | `llama3.1:8b` |
