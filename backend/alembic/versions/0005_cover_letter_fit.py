@@ -48,6 +48,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_fit_analyses_user_id", "fit_analyses", ["user_id"])
+    op.create_index("ix_fit_analyses_jd_hash", "fit_analyses", ["jd_hash"])
     op.create_index(
         "ix_fit_analyses_user_created",
         "fit_analyses",
@@ -57,5 +58,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_fit_analyses_user_created", table_name="fit_analyses")
+    op.drop_index("ix_fit_analyses_jd_hash", table_name="fit_analyses")
     op.drop_index("ix_fit_analyses_user_id", table_name="fit_analyses")
     op.drop_table("fit_analyses")
