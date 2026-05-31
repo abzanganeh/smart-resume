@@ -53,13 +53,25 @@ async def run_phase(
             case 2:
                 output = await phase2_audit.run(session, llm, event_queue)
             case 3:
-                output = await phase3_rewrite.run(session, llm, event_queue)
+                scope = session.phase_run_scope
+                output = await phase3_rewrite.run(session, llm, event_queue, scope=scope)
             case 4:
                 output = await phase4_qa.run(session, llm, event_queue)
             case _:
                 raise ValueError(f"Unknown phase: {phase}")
 
         await session_store.save_phase_output(session_id, phase, output)
+
+        # Clear stale markers after a successful phase run (§18.6).
+        session = await session_store.get_session(session_id)
+        if session is not None:
+            if phase == 3:
+                session.phase3_stale_since = None
+                session.phase4_stale_since = None
+                session.phase_run_scope = None
+            elif phase == 4:
+                session.phase4_stale_since = None
+            await session_store.update_session(session)
         elapsed = round(time.monotonic() - start, 2)
         log.info("phase_complete", session_id=session_id, phase=phase, elapsed_s=elapsed,
                  provider=llm.provider_name, model=llm.model_name)

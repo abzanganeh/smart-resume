@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,18 @@ class PhaseStatus(str, Enum):
     running = "running"
     done = "done"
     error = "error"
+
+
+class PhaseRunScope(BaseModel):
+    """Optional scope for Phase 3 scoped regeneration (§18.5)."""
+
+    section: str
+    bullet_index: int | None = None
+    company: str | None = None
+    institution: str | None = None
+    chunk_id: str | None = None
+    chunk_content: str | None = None
+    mode: Literal["regen", "add"] = "regen"
 
 
 class Session(BaseModel):
@@ -59,3 +72,9 @@ class Session(BaseModel):
 
     # Set by POST /phases/{n}/run so SSE knows to execute instead of replaying cache.
     phase_run_requested: int | None = None
+    phase_run_scope: PhaseRunScope | None = None
+
+    # Stale markers — set when upstream phase output is manually edited (§18.6).
+    stale_since: datetime | None = None
+    phase3_stale_since: datetime | None = None
+    phase4_stale_since: datetime | None = None
