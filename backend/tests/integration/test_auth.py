@@ -13,6 +13,8 @@ Verifies the contracts laid out in §18.2 + §8.2:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -188,6 +190,42 @@ async def test_login_failure_count_records_audit_rows(
         )
     ).scalars().all()
     assert len(failures) == 3
+
+
+async def test_suspended_login_records_failure_audit_row(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _register(app_client)
+    user = (
+        await db_session.execute(
+            select(User).where(User.email == REGISTER_PAYLOAD["email"])
+        )
+    ).scalar_one()
+    user.suspended_at = datetime.now(timezone.utc)
+    user.suspension_reason = "manual_admin_suspend"
+    await db_session.flush()
+
+    r = await app_client.post(
+        "/api/auth/login",
+        json={
+            "email": REGISTER_PAYLOAD["email"],
+            "password": REGISTER_PAYLOAD["password"],
+        },
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "account_suspended"
+
+    failures = (
+        await db_session.execute(
+            select(AuthAuditLog).where(
+                AuthAuditLog.user_id == user.id,
+                AuthAuditLog.event == AuthAuditEvent.login_failure,
+            )
+        )
+    ).scalars().all()
+    assert any(
+        (row.event_metadata or {}).get("reason") == "suspended" for row in failures
+    )
 
 
 async def test_me_requires_bearer_token(app_client: AsyncClient) -> None:
