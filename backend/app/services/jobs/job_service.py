@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -124,9 +124,6 @@ async def search_cache(
     if filters.get("remote"):
         stmt = stmt.where(JobCache.remote.is_(True))
 
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await session.execute(count_stmt)).scalar_one() or 0
-
     offset = (page - 1) * page_size
     rows = (
         await session.execute(
@@ -138,7 +135,7 @@ async def search_cache(
         [job_cache_to_result(r) for r in rows],
         blocked_companies,
     )
-    return jobs, int(total)
+    return jobs, len(jobs)
 
 
 async def get_job_by_id(
@@ -212,6 +209,15 @@ async def run_keyword_search(
                 source=JobSearchSource.cache,
             )
             return jobs, total, True, _STALE_MESSAGE, False
+        await log_search(
+            session,
+            user_id=user_id,
+            query=normalized,
+            location=location,
+            filters=filters,
+            result_count=0,
+            source=JobSearchSource.cache,
+        )
         return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
 
     try:
@@ -246,6 +252,15 @@ async def run_keyword_search(
                 source=JobSearchSource.cache,
             )
             return jobs, total, True, _STALE_MESSAGE, False
+        await log_search(
+            session,
+            user_id=user_id,
+            query=normalized,
+            location=location,
+            filters=filters,
+            result_count=0,
+            source=JobSearchSource.cache,
+        )
         return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
     except hirebase_client.HirebaseClientError as exc:
         log.warning("hirebase.search_failed", error=str(exc))
@@ -269,6 +284,15 @@ async def run_keyword_search(
                 source=JobSearchSource.cache,
             )
             return jobs, total, True, _STALE_MESSAGE, False
+        await log_search(
+            session,
+            user_id=user_id,
+            query=normalized,
+            location=location,
+            filters=filters,
+            result_count=0,
+            source=JobSearchSource.cache,
+        )
         return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
 
     # Persist + map (search returns JobResult already when we fix hirebase_client)
