@@ -579,7 +579,7 @@ export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
                 <div key={i} className="border border-slate-700 rounded-xl px-4 py-3 bg-slate-800/30">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-slate-100 text-sm font-semibold">{String(p.name ?? "")}</p>
-                    {p.url && (
+                    {!!p.url && (
                       <a
                         href={String(p.url)}
                         target="_blank"
