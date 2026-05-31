@@ -15,6 +15,7 @@ const PROTECTED_PREFIXES = [
   "/profile",
   "/billing",
   "/dashboard",
+  "/onboarding",
   "/fit",
   "/cover-letter",
   "/jobs",

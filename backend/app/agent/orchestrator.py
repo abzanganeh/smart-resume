@@ -185,6 +185,31 @@ async def run_phase(
 
         await session_store.save_phase_output(session_id, phase, output)
 
+        # Step 27 — persist ResumeRecord + ATS history after Phase 4.
+        if phase == 4 and session.user_id:
+            try:
+                user_id = uuid.UUID(session.user_id)
+                from app.services.dashboard.resume_record import (
+                    upsert_resume_record_from_session,
+                )
+
+                persisted = await session_store.get_session(session_id)
+                if persisted is not None:
+                    async with async_session_factory() as db:
+                        await upsert_resume_record_from_session(
+                            db,
+                            user_id=user_id,
+                            session=persisted,
+                            ats_score=output.ats_score,
+                        )
+                        await db.commit()
+            except Exception as exc:  # noqa: BLE001 — do not fail the phase run
+                log.warning(
+                    "resume_record_upsert_failed",
+                    session_id=session_id,
+                    error=str(exc),
+                )
+
         # Clear stale markers after a successful phase run (§18.6).
         session = await session_store.get_session(session_id)
         if session is not None:

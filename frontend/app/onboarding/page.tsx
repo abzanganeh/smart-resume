@@ -1,18 +1,87 @@
 /**
- * Onboarding page — placeholder (P7 will flesh this out fully).
- *
- * Shown to users on their first login via the /auth redirect logic.
- * Guards the route so only authenticated users can reach it (the proxy
- * also enforces this at the edge, but we guard client-side for consistency).
+ * Onboarding — 3-step first-run flow (Step 28 / P3 completion).
  */
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { ArrowRight, FileText, Settings, Sparkles } from "lucide-react"
+import { useRouter } from "next/navigation"
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  FileText,
+  Sparkles,
+  Upload,
+} from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
+import { clsx } from "clsx"
+
+const STEPS = [
+  {
+    title: "Welcome to Smart Resume",
+    subtitle: "Let's get your account ready in three quick steps.",
+    body: (
+      <>
+        <p className="text-slate-400 leading-relaxed mb-6">
+          Smart Resume tailors your master resume to every job description with
+          ATS keyword analysis and evidence-based quality rules. Start by
+          uploading the resume you want to reuse across applications.
+        </p>
+        <ul className="text-sm text-slate-400 space-y-2 text-left max-w-md mx-auto">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            One master resume — unlimited tailored versions
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            ATS score tracking on every build
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            Cover letters and job fit analysis included
+          </li>
+        </ul>
+      </>
+    ),
+    cta: "Upload your master resume",
+    href: "/profile",
+    icon: Upload,
+  },
+  {
+    title: "Tailor your first resume",
+    subtitle: "Paste a job description and run the agent pipeline.",
+    body: (
+      <p className="text-slate-400 leading-relaxed max-w-md mx-auto">
+        Create a new session, paste the job description you&apos;re targeting,
+        and let the four-phase agent extract keywords, audit gaps, rewrite your
+        resume, and score it for ATS compatibility.
+      </p>
+    ),
+    cta: "Start tailoring",
+    href: "/session/new",
+    icon: FileText,
+  },
+  {
+    title: "You're all set!",
+    subtitle: "Your dashboard is ready whenever you need it.",
+    body: (
+      <p className="text-slate-400 leading-relaxed max-w-md mx-auto">
+        Track every resume you build, monitor ATS scores over time, and manage
+        your subscription from the dashboard. You can always upload an updated
+        master resume from your profile.
+      </p>
+    ),
+    cta: "Go to dashboard",
+    href: "/dashboard",
+    icon: Sparkles,
+  },
+] as const
 
 export default function OnboardingPage() {
+  const router = useRouter()
   const { session, status } = useRequireAuth("/onboarding")
+  const [step, setStep] = useState(0)
 
   if (status === "loading" || !session) {
     return (
@@ -23,63 +92,93 @@ export default function OnboardingPage() {
   }
 
   const name = session.backendUser?.display_name ?? session.user?.name ?? "there"
+  const current = STEPS[step]
+  const Icon = current.icon
+  const isLast = step === STEPS.length - 1
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center px-4 py-16">
       <div className="w-full max-w-lg text-center">
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={clsx(
+                "h-1.5 rounded-full transition-all",
+                i === step ? "w-8 bg-amber-400" : i < step ? "w-4 bg-amber-400/50" : "w-4 bg-slate-700",
+              )}
+            />
+          ))}
+        </div>
+
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-400/10 border border-amber-400/20 mb-6">
-          <Sparkles className="w-8 h-8 text-amber-400" />
+          <Icon className="w-8 h-8 text-amber-400" />
         </div>
 
-        <h1 className="text-3xl font-bold text-white mb-3">
-          Welcome, {name}!
-        </h1>
-        <p className="text-slate-400 leading-relaxed mb-10">
-          Your Smart Resume account is ready. Let&apos;s set things up so you get
-          the most out of every job application.
+        <p className="text-xs font-semibold uppercase tracking-widest text-amber-400/80 mb-2">
+          Step {step + 1} of {STEPS.length}
         </p>
+        <h1 className="text-3xl font-bold text-white mb-2">
+          {step === 0 ? `Welcome, ${name}!` : current.title}
+        </h1>
+        <p className="text-slate-400 mb-8">{current.subtitle}</p>
 
-        {/* Action cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-          <Link
-            href="/profile"
-            className="group flex flex-col items-start gap-3 bg-slate-800/80 border border-slate-700 rounded-xl p-5 hover:border-amber-400/40 transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Settings className="w-5 h-5 text-violet-400" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-100 text-sm mb-0.5">Set up your profile</h2>
-              <p className="text-xs text-slate-400">
-                Add your contact info, career stage, and preferences.
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors ml-auto" />
-          </Link>
+        <div className="mb-10">{current.body}</div>
 
-          <Link
-            href="/session/new"
-            className="group flex flex-col items-start gap-3 bg-slate-800/80 border border-slate-700 rounded-xl p-5 hover:border-amber-400/40 transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-slate-100 text-sm mb-0.5">Tailor your first resume</h2>
-              <p className="text-xs text-slate-400">
-                Upload your resume and paste a job description to get started.
-              </p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors ml-auto" />
-          </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {step > 0 && (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s - 1)}
+              className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 px-4 py-2.5"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+          )}
+          {isLast ? (
+            <Link
+              href={current.href}
+              className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-amber-300 transition-colors"
+            >
+              {current.cta}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (step === 0 || step === 1) {
+                  router.push(current.href)
+                } else {
+                  setStep((s) => s + 1)
+                }
+              }}
+              className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-amber-300 transition-colors"
+            >
+              {current.cta}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+          {!isLast && (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s + 1)}
+              className="text-sm text-slate-500 hover:text-slate-300 underline underline-offset-4"
+            >
+              Skip for now
+            </button>
+          )}
         </div>
 
-        <Link
-          href="/dashboard"
-          className="text-sm text-slate-400 hover:text-slate-200 transition-colors underline underline-offset-4"
-        >
-          Go to dashboard →
-        </Link>
+        {step < STEPS.length - 1 && (
+          <Link
+            href="/dashboard"
+            className="inline-block mt-8 text-sm text-slate-500 hover:text-slate-300 underline underline-offset-4"
+          >
+            Go to dashboard →
+          </Link>
+        )}
       </div>
     </main>
   )
