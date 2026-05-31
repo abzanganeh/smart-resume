@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { ChevronDown, CreditCard, FileText, LogOut, Settings, Sparkles } from "lucide-react"
 import { logoutUser } from "@/lib/auth/api"
@@ -10,7 +9,6 @@ import { clsx } from "clsx"
 
 export function NavBar() {
   const { data: session, status } = useSession()
-  const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
