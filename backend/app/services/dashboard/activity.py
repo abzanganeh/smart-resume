@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import desc, select, union_all
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import Notification
-from app.models.dashboard import AtsScoreHistory, ResumeRecord
+from app.models.dashboard import AtsRecalcType, AtsScoreHistory, ResumeRecord
 from app.models.jobs import JobSearchLog, SavedJob
 from app.models.user import CreditTransaction
 
@@ -56,7 +56,7 @@ async def build_recent_activity(
             .where(
                 ResumeRecord.user_id == user_id,
                 ResumeRecord.deleted_at.is_(None),
-                AtsScoreHistory.recalc_type != "initial",
+                AtsScoreHistory.recalc_type != AtsRecalcType.initial,
             )
             .order_by(desc(AtsScoreHistory.triggered_at))
             .limit(limit)
@@ -92,7 +92,7 @@ async def build_recent_activity(
             {
                 "type": "payment" if tx.stripe_event_id else "credit",
                 "at": tx.created_at,
-                "title": tx.reason.replace("_", " ").title(),
+                "title": (tx.reason or tx.action.value).replace("_", " ").title(),
                 "subtitle": f"{'+' if tx.delta > 0 else ''}{tx.delta} credits",
                 "meta": {"action": tx.action.value},
             }

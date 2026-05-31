@@ -19,7 +19,6 @@ import {
 import {
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -130,7 +129,7 @@ export function DashboardView({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<ResumeRecordStatus | "">("")
+  const [statusFilters, setStatusFilters] = useState<ResumeRecordStatus[]>([])
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [atsMin, setAtsMin] = useState(0)
@@ -138,6 +137,12 @@ export function DashboardView({ token }: { token: string }) {
   const [sort, setSort] = useState<ResumeSort>("date")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expandedResumeId, setExpandedResumeId] = useState<string | null>(null)
+  const [selectedTrendPoint, setSelectedTrendPoint] = useState<{
+    date: string
+    score: number
+    jd_title?: string
+    jd_company?: string
+  } | null>(null)
 
   const loadSummary = useCallback(async () => {
     const data = await getDashboardSummary(token)
@@ -149,7 +154,7 @@ export function DashboardView({ token }: { token: string }) {
     try {
       const data = await listResumes(token, {
         q: search || undefined,
-        status: statusFilter || undefined,
+        statuses: statusFilters.length ? statusFilters : undefined,
         date_from: dateFrom ? `${dateFrom}T00:00:00Z` : undefined,
         date_to: dateTo ? `${dateTo}T23:59:59Z` : undefined,
         ats_min: atsMin > 0 ? atsMin : undefined,
@@ -163,7 +168,7 @@ export function DashboardView({ token }: { token: string }) {
     } finally {
       setListLoading(false)
     }
-  }, [token, search, statusFilter, dateFrom, dateTo, atsMin, atsMax, sort, page])
+  }, [token, search, statusFilters, dateFrom, dateTo, atsMin, atsMax, sort, page])
 
   useEffect(() => {
     let cancelled = false
@@ -210,6 +215,35 @@ export function DashboardView({ token }: { token: string }) {
     setSelected(new Set())
     await loadResumes()
     await loadSummary()
+  }
+
+  const handleBulkTag = async () => {
+    if (selected.size === 0) return
+    const raw = window.prompt("Enter tags (comma separated)")
+    if (!raw) return
+    const tags = raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+    if (!tags.length) return
+    await bulkResumeAction(token, { action: "tag", ids: [...selected], tags })
+    await loadResumes()
+  }
+
+  const handleBulkExport = async () => {
+    if (selected.size === 0) return
+    const result = await bulkResumeAction(token, {
+      action: "export",
+      ids: [...selected],
+    })
+    for (const entry of result.exports ?? []) {
+      await downloadResume(
+        token,
+        entry.id,
+        "zip",
+        `${entry.company.replace(/\s+/g, "_")}_resume.zip`,
+      )
+    }
   }
 
   const handleDuplicate = async (id: string) => {
@@ -342,22 +376,60 @@ export function DashboardView({ token }: { token: string }) {
               </h2>
             </div>
             {sparklineData.length > 0 ? (
-              <div className="h-36">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={sparklineData}>
-                    <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} />
-                    <YAxis domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 10 }} width={28} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "#0f172a",
-                        border: "1px solid #334155",
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                    />
-                    <Line type="monotone" dataKey="score" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: "#fbbf24" }} />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="h-36 overflow-x-auto">
+                <LineChart
+                  width={760}
+                  height={144}
+                  data={sparklineData}
+                  onClick={(state) => {
+                    const payload = state.activePayload?.[0]?.payload as
+                      | { date: string; score: number }
+                      | undefined
+                    if (!payload) return
+                    const source = summary?.ats_trend.find(
+                      (p) =>
+                        p.date === payload.date &&
+                        p.score === payload.score,
+                    )
+                    setSelectedTrendPoint({
+                      date: payload.date,
+                      score: payload.score,
+                      jd_title: source?.jd_title,
+                      jd_company: source?.jd_company,
+                    })
+                  }}
+                >
+                  <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: "#64748b", fontSize: 10 }} width={28} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: "#fbbf24" }} />
+                </LineChart>
+                {selectedTrendPoint && (
+                  <div className="mt-2 text-xs text-slate-400">
+                    <span className="text-slate-300">
+                      {formatDate(selectedTrendPoint.date)}:
+                    </span>{" "}
+                    ATS {selectedTrendPoint.score}
+                    {selectedTrendPoint.jd_title && (
+                      <>
+                        {" "}for{" "}
+                        <span className="text-slate-300">
+                          {selectedTrendPoint.jd_title}
+                        </span>
+                        {selectedTrendPoint.jd_company
+                          ? ` @ ${selectedTrendPoint.jd_company}`
+                          : ""}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-slate-500 py-8 text-center">
@@ -409,12 +481,20 @@ export function DashboardView({ token }: { token: string }) {
               />
             </div>
             <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as ResumeRecordStatus | ""); setPage(1) }}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200"
+              multiple
+              value={statusFilters}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions).map(
+                  (opt) => opt.value as ResumeRecordStatus,
+                )
+                setStatusFilters(values.filter(Boolean))
+                setPage(1)
+              }}
+              className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 min-w-[180px] h-[84px]"
+              aria-label="Status filters"
             >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value || "all"} value={o.value}>{o.label}</option>
+              {STATUS_OPTIONS.filter((o) => o.value).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
             <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" aria-label="From date" />
@@ -439,6 +519,12 @@ export function DashboardView({ token }: { token: string }) {
         {selected.size > 0 && (
           <div className="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2 text-sm">
             <span className="text-slate-300">{selected.size} selected</span>
+            <button type="button" onClick={() => void handleBulkTag()} className="text-amber-400 hover:text-amber-300 flex items-center gap-1">
+              Tag
+            </button>
+            <button type="button" onClick={() => void handleBulkExport()} className="text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              Export
+            </button>
             <button type="button" onClick={() => void handleBulkDelete()} className="text-red-400 hover:text-red-300 flex items-center gap-1">
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
@@ -479,13 +565,13 @@ export function DashboardView({ token }: { token: string }) {
                 </div>
                 {expandedResumeId === r.id && summary && (
                   <div className="mt-4 h-24 border-t border-slate-800 pt-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={summary.ats_trend.filter((p) => p.resume_id === r.id)}>
+                    <div className="overflow-x-auto">
+                      <LineChart width={720} height={84} data={summary.ats_trend.filter((p) => p.resume_id === r.id)}>
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} />
                         <YAxis domain={[0, 100]} width={24} tick={{ fontSize: 10, fill: "#64748b" }} />
                         <Line type="monotone" dataKey="score" stroke="#fbbf24" dot />
                       </LineChart>
-                    </ResponsiveContainer>
+                    </div>
                   </div>
                 )}
                 <button type="button" onClick={() => setExpandedResumeId((id) => (id === r.id ? null : r.id))} className="mt-2 text-[10px] text-slate-500 hover:text-amber-400">

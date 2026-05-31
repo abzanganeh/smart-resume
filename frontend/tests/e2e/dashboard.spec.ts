@@ -126,8 +126,10 @@ async function mockDashboardApis(page: Page) {
   )
   await page.route(`${API}/api/resumes*`, (route: Route) => {
     const url = new URL(route.request().url())
-    const status = url.searchParams.get("status")
-    const body = status === "applied" ? RESUMES_APPLIED_FIXTURE : RESUMES_ALL_FIXTURE
+    const statuses = url.searchParams.getAll("status")
+    const body = statuses.includes("applied")
+      ? RESUMES_APPLIED_FIXTURE
+      : RESUMES_ALL_FIXTURE
     route.fulfill({ json: body, status: 200 })
   })
   await page.route(`${API}/api/subscriptions/current`, (route: Route) =>
@@ -164,7 +166,7 @@ test.describe("dashboard page (mocked API)", () => {
 
   test("filter by status=applied shows only applied resume", async ({ page }) => {
     await page.waitForSelector("select")
-    await page.locator("select").first().selectOption("applied")
+    await page.locator('select[aria-label="Status filters"]').selectOption(["applied"])
     await page.getByRole("button", { name: /Apply filters/i }).click()
     await expect(page.getByRole("heading", { name: "Applied Role" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Backend Engineer" })).not.toBeVisible()
