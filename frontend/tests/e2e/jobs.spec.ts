@@ -145,6 +145,80 @@ async function mockJobsApi(page: Page) {
   )
 }
 
+async function mockStaleSearch(page: Page) {
+  await page.route(`${API}/api/jobs/saved`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    }),
+  )
+
+  await page.route(`${API}/api/jobs/search`, async (route: Route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue()
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobs: [MOCK_JOB],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        results_may_be_stale: true,
+        message: "Provider degraded",
+      }),
+    })
+  })
+}
+
+async function mockPreferencesApi(page: Page) {
+  let blocked = ["Umbrella Corp"]
+
+  await page.route(`${API}/api/jobs/saved-searches`, (route: Route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      })
+    }
+    return route.continue()
+  })
+
+  await page.route(`${API}/api/jobs/preferences`, async (route: Route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          blocked_companies: blocked,
+          default_filters: {},
+        }),
+      })
+    }
+
+    if (route.request().method() === "PUT") {
+      const payload = route.request().postDataJSON() as {
+        blocked_companies?: string[]
+      }
+      blocked = payload.blocked_companies ?? blocked
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          blocked_companies: blocked,
+          default_filters: {},
+        }),
+      })
+    }
+
+    return route.continue()
+  })
+}
+
 async function login(page: Page) {
   await page.goto(`${BASE}/auth`)
   await page.getByPlaceholder("you@example.com").fill(MOCK_USER.email)
@@ -176,4 +250,37 @@ test("search results tailor resume navigates with jd prefilled", async ({ page }
   await expect(
     page.getByPlaceholder("Paste the full job description here…"),
   ).toHaveValue(/Senior Python Engineer/, { timeout: 10_000 })
+})
+
+test("stale search response renders required stale banner", async ({ page }) => {
+  await mockAuth(page)
+  await mockSubscription(page)
+  await mockStaleSearch(page)
+  await login(page)
+
+  await page.goto(`${BASE}/jobs`)
+  await page.getByTestId("jobs-search-role").fill("Python engineer")
+  await page.getByTestId("jobs-search-submit").click()
+
+  await expect(page.getByTestId("jobs-stale-banner")).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText("Results may not be fully up to date")).toBeVisible()
+})
+
+test("blocked companies add/remove updates view immediately", async ({ page }) => {
+  await mockAuth(page)
+  await mockSubscription(page)
+  await mockPreferencesApi(page)
+  await login(page)
+
+  await page.goto(`${BASE}/jobs/preferences`)
+  await expect(page.getByTestId("blocked-companies-section")).toBeVisible({ timeout: 10_000 })
+
+  await expect(page.getByText("Umbrella Corp")).toBeVisible()
+
+  await page.getByTestId("blocked-company-input").fill("Acme Labs")
+  await page.getByTestId("blocked-company-add").click()
+  await expect(page.getByText("Acme Labs")).toBeVisible()
+
+  await page.getByLabel("Remove Acme Labs").click()
+  await expect(page.getByText("Acme Labs")).toHaveCount(0)
 })

@@ -19,8 +19,8 @@ export function runTests() {
     "stale=true without custom message → default copy",
   )
   assert(
-    staleBannerMessage(true, "Custom stale notice") === "Custom stale notice",
-    "stale=true with custom message → uses API message",
+    staleBannerMessage(true, "Custom stale notice") === "Results may not be fully up to date",
+    "stale=true with custom message → still uses required exact copy",
   )
   assert(
     staleBannerMessage(true, "  ") === "Results may not be fully up to date",
