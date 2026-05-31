@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from jose import JWTError, jwt
+from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -242,10 +243,13 @@ async def find_refresh_token(
     session: AsyncSession,
     *,
     token: str,
+    for_update: bool = False,
 ) -> RefreshToken | None:
-    from sqlalchemy import select
-
     stmt = select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh(token))
+    if for_update:
+        # Prevent concurrent rotate requests from minting two child tokens
+        # from the same parent token row.
+        stmt = stmt.with_for_update()
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -270,7 +274,7 @@ async def rotate_refresh_token(
       networks rotate IPs constantly), but it is recorded onto the new
       token so auditors can spot anomalous patterns later.
     """
-    row = await find_refresh_token(session, token=token)
+    row = await find_refresh_token(session, token=token, for_update=True)
     if row is None:
         raise TokenInvalidError("refresh token not recognised")
 
