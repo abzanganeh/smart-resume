@@ -31,6 +31,9 @@ export async function checkSession(
   ok: boolean;
   resume_raw: string;
   phases: Record<string, { status: string; output: unknown | null }>;
+  stale: Record<string, string | null>;
+  stale_since?: string | null;
+  phase1_complete: boolean;
 }> {
   return request(`/api/sessions/${sessionId}`);
 }
@@ -108,14 +111,27 @@ export async function submitJD(
 
 // ── Phases ──────────────────────────────────────────────────────────────────
 
+export interface PhaseRunScope {
+  section: string;
+  bullet_index?: number;
+  company?: string;
+  institution?: string;
+  chunk_id?: string;
+  chunk_content?: string;
+  mode?: "regen" | "add";
+}
+
 export async function triggerPhase(
   sessionId: string,
   phase: number,
-  options?: { force?: boolean }
+  options?: { force?: boolean; scope?: PhaseRunScope }
 ): Promise<{ job_id: string; stream_url: string }> {
   return request(`/api/sessions/${sessionId}/phases/${phase}/run`, {
     method: "POST",
-    body: JSON.stringify({ force: options?.force ?? false }),
+    body: JSON.stringify({
+      force: options?.force ?? false,
+      scope: options?.scope ?? null,
+    }),
   });
 }
 
@@ -128,11 +144,31 @@ export function phaseEventsUrl(sessionId: string, phase: number): string {
 export async function patchTailoredResume(
   sessionId: string,
   patch: Record<string, unknown>
-): Promise<{ version: number; snapshot_id: string }> {
-  return request<{ version: number; snapshot_id: string }>(
+): Promise<{
+  version: number;
+  snapshot_id: string;
+  phase3_versions?: ResumeVersionMeta[];
+  stale?: Record<string, string | null>;
+}> {
+  return request<{
+    version: number;
+    snapshot_id: string;
+    phase3_versions?: ResumeVersionMeta[];
+    stale?: Record<string, string | null>;
+  }>(
     `/api/sessions/${sessionId}/resume/tailored`,
     { method: "PATCH", body: JSON.stringify(patch) }
   );
+}
+
+export async function patchAuditOutput(
+  sessionId: string,
+  patch: { output?: AuditOutput; summary?: string; overall_score?: number }
+): Promise<{ ok: boolean; stale: Record<string, string | null> }> {
+  return request(`/api/sessions/${sessionId}/audit`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }
 
 export async function getVersions(sessionId: string) {
@@ -356,6 +392,9 @@ export interface TailoredResumeOutput {
   certifications: string[];
   rewrite_notes: string[];
   metrics_needed: MetricNeeded[];
+  selected_chunks?: Array<{ chunk_id: string; section: string; score: number; tokens: number }>;
+  skipped_chunks?: Array<{ chunk_id: string; section: string; score: number; reason: string; content?: string }>;
+  retrieval_meta?: Record<string, unknown>;
 }
 
 export interface QAItem {

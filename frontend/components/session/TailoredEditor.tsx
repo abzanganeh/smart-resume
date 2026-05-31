@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -9,15 +9,21 @@ import {
   Info,
   Pencil,
   Plus,
+  Redo2,
+  RotateCw,
   Save,
   Trash2,
+  Undo2,
 } from "lucide-react";
-import { patchTailoredResume, type TailoredResumeOutput } from "@/lib/api";
+import { patchTailoredResume, type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
+import { useVersionStack } from "@/lib/useVersionStack";
 
 interface Props {
   initial: TailoredResumeOutput;
   sessionId: string;
   onSaved?: (updated: TailoredResumeOutput) => void;
+  onScopedRun?: (scope: PhaseRunScope) => void;
+  phaseRunning?: boolean;
 }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -253,28 +259,235 @@ function BulletList({
   );
 }
 
+function ScopedBulletList({
+  bullets,
+  company,
+  phaseRunning,
+  onRegenBullet,
+  onSaveBullet,
+  onDeleteBullet,
+  onAddBullet,
+  addPlaceholder,
+}: {
+  bullets: string[];
+  company: string;
+  phaseRunning?: boolean;
+  onRegenBullet: (idx: number) => void;
+  onSaveBullet: (idx: number, text: string) => Promise<void>;
+  onDeleteBullet: (idx: number) => Promise<void>;
+  onAddBullet: (text: string) => Promise<void>;
+  addPlaceholder?: string;
+}) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [adding, setAdding] = useState(false);
+  const [newBullet, setNewBullet] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function commitEdit(idx: number) {
+    const text = (drafts[idx] ?? bullets[idx]).trim();
+    setSaving(true);
+    await onSaveBullet(idx, text);
+    setSaving(false);
+    setEditingIdx(null);
+  }
+
+  async function commitDelete(idx: number) {
+    setSaving(true);
+    await onDeleteBullet(idx);
+    setSaving(false);
+  }
+
+  async function commitAdd() {
+    if (!newBullet.trim()) return;
+    setSaving(true);
+    await onAddBullet(newBullet.trim());
+    setSaving(false);
+    setNewBullet("");
+    setAdding(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {bullets.map((b, idx) => (
+        <div key={idx} className="group flex items-start gap-2">
+          {editingIdx === idx ? (
+            <div className="flex-1 space-y-1.5">
+              <textarea
+                autoFocus
+                value={drafts[idx] ?? b}
+                onChange={(e) => setDrafts((p) => ({ ...p, [idx]: e.target.value }))}
+                rows={2}
+                className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => commitEdit(idx)}
+                  disabled={saving}
+                  className="flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-50"
+                >
+                  <Save className="w-3 h-3" />
+                  {saving ? "…" : "Save"}
+                </button>
+                <button
+                  onClick={() => setEditingIdx(null)}
+                  className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <span className="text-slate-500 mt-1 shrink-0">•</span>
+              <p className="flex-1 text-slate-200 text-sm leading-relaxed">{b}</p>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                <button
+                  type="button"
+                  disabled={phaseRunning}
+                  onClick={() => onRegenBullet(idx)}
+                  className="p-1 rounded text-slate-500 hover:text-amber-400 disabled:opacity-40"
+                  title="Regenerate bullet"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
+                  className="p-1 rounded text-slate-500 hover:text-amber-400"
+                  title="Edit bullet"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => commitDelete(idx)}
+                  className="p-1 rounded text-slate-500 hover:text-red-400"
+                  title="Delete bullet"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+
+      {adding ? (
+        <div className="space-y-1.5 pt-1">
+          <textarea
+            autoFocus
+            value={newBullet}
+            onChange={(e) => setNewBullet(e.target.value)}
+            placeholder={addPlaceholder}
+            rows={2}
+            className="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-600"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={commitAdd}
+              disabled={saving || !newBullet.trim()}
+              className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-40"
+            >
+              <Plus className="w-3 h-3" />
+              {saving ? "Adding…" : "Add"}
+            </button>
+            <button
+              onClick={() => { setAdding(false); setNewBullet(""); }}
+              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-400 transition mt-1"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add bullet
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── main component ────────────────────────────────────────────────────────────
 
-export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
-  const [data, setData] = useState<TailoredResumeOutput>(initial);
+export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning }: Props) {
+  const { present: data, push, replace, undo, redo, canUndo, canRedo } = useVersionStack(initial);
   const [expandedExp, setExpandedExp] = useState<string | null>(
     initial.experience[0]?.company ?? null
   );
   const [expandedEdu, setExpandedEdu] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
+  const [addMode, setAddMode] = useState<"master" | "manual" | null>(null);
+  const [manualSectionText, setManualSectionText] = useState("");
+  const [manualTitle, setManualTitle] = useState("Experience");
+  const [manualCompany, setManualCompany] = useState("Manual entry");
+
+  useEffect(() => {
+    replace(initial);
+  }, [initial, replace]);
 
   async function patch(payload: Record<string, unknown>) {
     const result = await patchTailoredResume(sessionId, payload);
     return result;
   }
 
-  function updateLocal(updater: (prev: TailoredResumeOutput) => TailoredResumeOutput) {
-    setData((prev) => {
-      const next = updater(prev);
-      onSaved?.(next);
-      return next;
-    });
+  function updateLocal(updater: (prev: TailoredResumeOutput) => TailoredResumeOutput, trackHistory = true) {
+    const next = updater(data);
+    if (trackHistory) {
+      push(next);
+    } else {
+      replace(next);
+    }
+    onSaved?.(next);
   }
+
+  function regen(scope: PhaseRunScope) {
+    onScopedRun?.(scope);
+  }
+
+  async function saveManualSection() {
+    if (!manualSectionText.trim()) return;
+    await patch({
+      section_id: "add_section",
+      content: {
+        section: "experience",
+        title: manualTitle,
+        company: manualCompany,
+        text: manualSectionText.trim(),
+      },
+    });
+    updateLocal((p) => ({
+      ...p,
+      experience: [
+        ...p.experience,
+        {
+          title: manualTitle,
+          company: manualCompany,
+          dates: "",
+          bullets: [manualSectionText.trim()],
+          removed_bullets: [],
+          keywords_injected: [],
+        },
+      ],
+    }));
+    setManualSectionText("");
+    setAddMode(null);
+  }
+
+  async function addFromMasterChunk(chunk: { chunk_id: string; section: string; content?: string; score: number }) {
+    regen({
+      section: chunk.section || "experience",
+      mode: "add",
+      chunk_id: chunk.chunk_id,
+      chunk_content: chunk.content ?? "",
+    });
+    setAddMode(null);
+  }
+
+  const skippedChunks = data.skipped_chunks ?? [];
 
   // ── Summary ──────────────────────────────────────────────────────────────
 
@@ -308,8 +521,6 @@ export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
     const entry = data.experience.find((e) => e.company === company);
     if (!entry) return;
     const bullets = entry.bullets.filter((_, i) => i !== idx);
-    await patch({ section: "skills", skills: data.skills }); // flush via skills as workaround
-    // Use education_bullets pattern for proper update
     await patch({ section: "experience", company, bullet_index: idx, new_text: "" });
     updateLocal((p) => ({
       ...p,
@@ -383,10 +594,129 @@ export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 className="w-3.5 h-3.5" /> Undo
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo2 className="w-3.5 h-3.5" /> Redo
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddMode(addMode ? null : "master")}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700"
+          >
+            Add Section
+          </button>
+        </div>
+      </div>
+
+      {addMode && (
+        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAddMode("master")}
+              className={`px-3 py-1 rounded text-xs ${addMode === "master" ? "bg-amber-400 text-slate-900" : "bg-slate-700 text-slate-300"}`}
+            >
+              Pull from master resume
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddMode("manual")}
+              className={`px-3 py-1 rounded text-xs ${addMode === "manual" ? "bg-amber-400 text-slate-900" : "bg-slate-700 text-slate-300"}`}
+            >
+              Write manually
+            </button>
+          </div>
+
+          {addMode === "master" && (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {skippedChunks.length === 0 ? (
+                <p className="text-xs text-slate-500">No skipped master-resume chunks available.</p>
+              ) : (
+                skippedChunks.map((chunk) => (
+                  <button
+                    key={chunk.chunk_id}
+                    type="button"
+                    disabled={phaseRunning}
+                    onClick={() => addFromMasterChunk(chunk)}
+                    className="w-full text-left p-3 rounded-lg border border-slate-700 hover:border-amber-400/40 bg-slate-900/50 disabled:opacity-50"
+                  >
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>{chunk.section}</span>
+                      <span>score {chunk.score.toFixed(2)}</span>
+                    </div>
+                    <p className="text-sm text-slate-300 line-clamp-2">
+                      {(chunk as { content?: string }).content ?? chunk.reason}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {addMode === "manual" && (
+            <div className="space-y-2">
+              <input
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"
+              />
+              <input
+                value={manualCompany}
+                onChange={(e) => setManualCompany(e.target.value)}
+                placeholder="Company / label"
+                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"
+              />
+              <textarea
+                value={manualSectionText}
+                onChange={(e) => setManualSectionText(e.target.value)}
+                rows={4}
+                placeholder="Section content…"
+                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm resize-none"
+              />
+              <button
+                type="button"
+                onClick={saveManualSection}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500"
+              >
+                Save section
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Summary ──────────────────────────────────────────────────────── */}
       <section>
-        <SectionHeader title="Professional Summary" />
+        <div className="flex items-center justify-between mb-3">
+          <SectionHeader title="Professional Summary" />
+          <button
+            type="button"
+            disabled={phaseRunning}
+            onClick={() => regen({ section: "summary" })}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+          >
+            <RotateCw className="w-3.5 h-3.5" /> Regenerate
+          </button>
+        </div>
         <InlineText
           value={data.summary}
           onSave={saveSummary}
@@ -397,7 +727,17 @@ export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
 
       {/* ── Skills ───────────────────────────────────────────────────────── */}
       <section>
-        <SectionHeader title="Skills" count={data.skills.length} />
+        <div className="flex items-center justify-between mb-3">
+          <SectionHeader title="Skills" count={data.skills.length} />
+          <button
+            type="button"
+            disabled={phaseRunning}
+            onClick={() => regen({ section: "skills" })}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+          >
+            <RotateCw className="w-3.5 h-3.5" /> Regenerate
+          </button>
+        </div>
         {editingSkills ? (
           <div className="space-y-2">
             <p className="text-xs text-slate-500">Comma-separated, ordered by JD relevance.</p>
@@ -479,8 +819,23 @@ export function TailoredEditor({ initial, sessionId, onSaved }: Props) {
 
                   {open && (
                     <div className="px-4 py-4 space-y-4 bg-slate-900/40">
-                      <BulletList
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          disabled={phaseRunning}
+                          onClick={() => regen({ section: "experience", company: exp.company })}
+                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+                        >
+                          <RotateCw className="w-3.5 h-3.5" /> Regenerate section
+                        </button>
+                      </div>
+                      <ScopedBulletList
                         bullets={exp.bullets}
+                        company={exp.company}
+                        phaseRunning={phaseRunning}
+                        onRegenBullet={(idx) =>
+                          regen({ section: "experience", company: exp.company, bullet_index: idx })
+                        }
                         onSaveBullet={(idx, text) => saveExpBullet(exp.company, idx, text)}
                         onDeleteBullet={(idx) => deleteExpBullet(exp.company, idx)}
                         onAddBullet={(text) => addExpBullet(exp.company, text)}

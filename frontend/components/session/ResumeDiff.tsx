@@ -1,6 +1,6 @@
 "use client";
 
-import { type TailoredResumeOutput } from "@/lib/api";
+import { type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
 import { TailoredEditor } from "./TailoredEditor";
 
 interface Props {
@@ -9,9 +9,11 @@ interface Props {
   costInfo?: { cost_formatted: string; provider: string; model: string } | null;
   sessionId: string;
   onEdited?: (updated: TailoredResumeOutput) => void;
+  onScopedRun?: (scope: PhaseRunScope) => void;
+  phaseRunning?: boolean;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited, onScopedRun, phaseRunning }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -45,7 +47,13 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited 
           </span>
         </div>
       )}
-      <TailoredEditor initial={tailored} sessionId={sessionId} onSaved={onEdited} />
+      <TailoredEditor
+        initial={tailored}
+        sessionId={sessionId}
+        onSaved={onEdited}
+        onScopedRun={onScopedRun}
+        phaseRunning={phaseRunning}
+      />
     </div>
   );
 }
