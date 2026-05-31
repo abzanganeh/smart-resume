@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
 import { UserInfoForm } from "@/components/wizard/UserInfoForm";
 import { JDInput } from "@/components/wizard/JDInput";
@@ -30,6 +32,7 @@ const STEP_LABELS: Record<Step, string> = {
 function NewSessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [step, setStep] = useState<Step>((searchParams.get("step") as Step) ?? "ai");
 
@@ -86,8 +89,26 @@ function NewSessionContent() {
         setJdText(jdFromQuery);
         setStep("jd");
       }
+      return;
     }
-  }, [searchParams]);
+
+    const jdId = searchParams.get("jd_id");
+    const token = session?.backendAccessToken;
+    if (jdId && token) {
+      void (async () => {
+        try {
+          const job = await getJob(token, jdId);
+          if (job.description?.trim()) {
+            setJdText(job.description);
+            setStep("jd");
+            router.replace(`/session/new?step=jd&jd_id=${jdId}`);
+          }
+        } catch {
+          // User can paste JD manually if fetch fails
+        }
+      })();
+    }
+  }, [searchParams, session?.backendAccessToken, router]);
 
   const goTo = (s: Step) => {
     setStep(s);
@@ -240,6 +261,7 @@ function NewSessionContent() {
                 selectedProvider={provider}
                 selectedModel={model}
                 loading={loading}
+                initialJdText={jdText}
               />
             </div>
           )}
