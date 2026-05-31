@@ -38,7 +38,9 @@ test.describe("unauthenticated route guard", () => {
 test.describe("/auth page", () => {
   test("renders Sign in and Register toggle tabs", async ({ page }) => {
     await page.goto(`${BASE}/auth`)
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible()
+    await expect(
+      page.locator('button[type="button"]').filter({ hasText: "Sign in" }),
+    ).toBeVisible()
     await expect(page.getByRole("button", { name: "Register" })).toBeVisible()
   })
 
@@ -51,8 +53,8 @@ test.describe("/auth page", () => {
   test("switching to Register shows consent checkboxes", async ({ page }) => {
     await page.goto(`${BASE}/auth`)
     await page.getByRole("button", { name: "Register" }).click()
-    await expect(page.getByText(/Terms of Service/)).toBeVisible()
-    await expect(page.getByText(/Privacy Policy/)).toBeVisible()
+    await expect(page.locator("form").getByText(/Terms of Service/)).toBeVisible()
+    await expect(page.locator("form").getByText(/Privacy Policy/)).toBeVisible()
     await expect(page.getByText(/product updates/)).toBeVisible()
   })
 
