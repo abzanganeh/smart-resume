@@ -39,12 +39,19 @@ def normalize_salary(amount: int | float | None, currency: str | None) -> int | 
     """Convert a salary amount to USD using a hardcoded FX table."""
     if amount is None:
         return None
-    if currency is None:
-        return int(round(float(amount)))
+    if currency is None or not currency.strip():
+        log.warning(
+            "unknown currency for salary normalization",
+            extra={"currency": currency, "amount": amount},
+        )
+        return None
     code = currency.strip().upper()
     rate = _FX_TO_USD.get(code)
     if rate is None:
-        log.warning("unknown currency for salary normalization: %s", code)
+        log.warning(
+            "unknown currency for salary normalization",
+            extra={"currency": code, "amount": amount},
+        )
         return None
     return int(round(float(amount) * rate))
 
