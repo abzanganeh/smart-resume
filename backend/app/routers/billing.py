@@ -41,6 +41,7 @@ from app.limiter import limiter
 from app.models.billing import (
     AdminAuditLog,
     CreditKind,
+    LLMUpgradeTier,
     RefundInitiator,
     RefundReason,
     RefundRecord,
@@ -451,7 +452,6 @@ class LLMUpgradeCheckoutRequest(BaseModel):
 
     code: Literal[
         "better_5pack",
-        "better_pack",
         "better_monthly",
         "better_yearly",
         "best_per_resume",
@@ -501,6 +501,7 @@ async def subscriptions_llm_upgrade_checkout(
         await db.execute(
             select(Subscription)
             .where(Subscription.user_id == user.id)
+            .where(Subscription.llm_upgrade == LLMUpgradeTier.standard)
             .where(
                 Subscription.status.in_(
                     [

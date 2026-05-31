@@ -203,6 +203,34 @@ async def test_better_tier_without_credits_falls_back_to_standard(
     assert decision.downgrade_reason is Phase3TierError.not_entitled_better
 
 
+async def test_best_request_downgrades_to_better_when_entitled(
+    db_session: AsyncSession,
+) -> None:
+    """Requested best should downgrade to better (not standard) when the
+    user has Better entitlement but no Best subscription.
+    """
+    user = await _seed_user(db_session, email="best-to-better@example.com")
+    await grant_credit(
+        db_session,
+        user_id=user.id,
+        credit_kind=CreditKind.better,
+        delta=1,
+        reason="purchase_better_5pack",
+    )
+    await db_session.commit()
+
+    decision = await apply_phase3_tier(
+        db_session,
+        user_id=user.id,
+        requested_tier="best",
+    )
+    await db_session.commit()
+
+    assert decision.effective_tier == "better"
+    assert decision.downgrade_reason is None
+    assert decision.consumed_credit_id is not None
+
+
 # ---------------------------------------------------------------------------
 # Best tier — atomic counter increment + soft cap
 # ---------------------------------------------------------------------------
