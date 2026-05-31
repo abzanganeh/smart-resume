@@ -407,30 +407,37 @@ async def apply_phase3_tier(
                 "billing.llm_upgrade.best_not_entitled",
                 user_id=str(user_id),
             )
-            return await _fallback_to_standard(
-                session, reason=Phase3TierError.not_entitled_best
+            # Downgrade to Better when available (entitlement precedence:
+            # best -> better -> standard). This prevents routing leaks where
+            # a user asks for Best but is only entitled to Better.
+            if better_sub is not None or better_balance > 0:
+                requested = "better"
+            else:
+                return await _fallback_to_standard(
+                    session, reason=Phase3TierError.not_entitled_best
+                )
+        if best_sub is not None:
+            if best_sub.upgraded_resumes_used >= BEST_SUBSCRIPTION_SOFT_CAP:
+                log.info(
+                    "billing.llm_upgrade.best_soft_cap_hit",
+                    user_id=str(user_id),
+                    used=best_sub.upgraded_resumes_used,
+                    cap=BEST_SUBSCRIPTION_SOFT_CAP,
+                )
+                return await _fallback_to_standard(
+                    session,
+                    reason=Phase3TierError.best_soft_cap_hit,
+                    soft_cap_hit=True,
+                )
+            best_sub.upgraded_resumes_used += 1
+            await session.flush()
+            provider, model = await resolve_phase3_model(session, "best")
+            return Phase3RouteDecision(
+                effective_tier="best",
+                provider=provider,
+                model_string=model,
+                incremented_subscription_id=best_sub.id,
             )
-        if best_sub.upgraded_resumes_used >= BEST_SUBSCRIPTION_SOFT_CAP:
-            log.info(
-                "billing.llm_upgrade.best_soft_cap_hit",
-                user_id=str(user_id),
-                used=best_sub.upgraded_resumes_used,
-                cap=BEST_SUBSCRIPTION_SOFT_CAP,
-            )
-            return await _fallback_to_standard(
-                session,
-                reason=Phase3TierError.best_soft_cap_hit,
-                soft_cap_hit=True,
-            )
-        best_sub.upgraded_resumes_used += 1
-        await session.flush()
-        provider, model = await resolve_phase3_model(session, "best")
-        return Phase3RouteDecision(
-            effective_tier="best",
-            provider=provider,
-            model_string=model,
-            incremented_subscription_id=best_sub.id,
-        )
 
     # requested == "better"
     if better_sub is None and better_balance <= 0:
@@ -588,7 +595,6 @@ def normalize_llm_upgrade_code(code: str) -> str:
 VALID_LLM_UPGRADE_CODES: frozenset[str] = frozenset(
     {
         "better_5pack",
-        "better_pack",
         "better_monthly",
         "better_yearly",
         "best_per_resume",
