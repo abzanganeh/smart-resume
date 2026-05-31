@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
+    # Platform-owned key for master-resume embeddings (IMPLEMENTATION_PLAN §6a).
+    # This is *not* the user's BYOK key — embeddings always use the
+    # canonical retrieval model (text-embedding-3-small) so JD↔chunk
+    # vectors live in the same space regardless of which chat model the
+    # user has selected.  In local/dev it falls back to OPENAI_API_KEY
+    # so a single key suffices.
+    OPENAI_EMBEDDING_KEY: str = ""
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
     USE_IN_MEMORY_STORE: bool = True  # True by default so local dev works without Redis

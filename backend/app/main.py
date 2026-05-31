@@ -16,7 +16,7 @@ from app.config import settings
 from app.db.engine import async_session_factory
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
-from app.routers import auth, billing, export, llm, phases, resume, sessions
+from app.routers import auth, billing, export, llm, phases, profile, resume, sessions
 from app.services.billing.bootstrap import (
     assert_canonical_codes_resolve,
     seed_plan_configs_if_empty,
@@ -158,6 +158,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # Include routers
 app.include_router(auth.router)
 app.include_router(billing.router)
+app.include_router(profile.router)
 app.include_router(sessions.router)
 app.include_router(resume.router)
 app.include_router(phases.router)
