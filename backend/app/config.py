@@ -57,6 +57,39 @@ class Settings(BaseSettings):
     # Never compare APP_ENV directly outside this module; use is_production_grade() instead.
     APP_ENV: str = "local"
 
+    # ---------------------------------------------------------------
+    # Auth secrets (Release Phase 2 §18.2 / §18.12)
+    # ---------------------------------------------------------------
+    # 32-byte hex string used to sign JWTs (HS256). MUST be set in any non-local env.
+    AUTH_SECRET: str = ""
+    # 32-byte hex string used to derive the AES-256-GCM key for BYOK API keys
+    # and TOTP secrets. MUST be set in any non-local env.
+    BYOK_ENCRYPTION_KEY: str = ""
+
+    # OAuth providers (Google / GitHub)
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+
+    # Transactional email (Resend)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "noreply@zanganehai.com"
+
+    # Base URL of the frontend, used to build email links (verify/reset/etc.)
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+
+    # Token TTLs (seconds) — overridable per environment for testing.
+    ACCESS_TOKEN_TTL_SECONDS: int = 15 * 60        # 15 min — §18.2 hard cap
+    REFRESH_TOKEN_TTL_SECONDS: int = 7 * 24 * 3600  # 7 days
+    EMAIL_VERIFY_TTL_SECONDS: int = 24 * 3600       # 24 h
+    PASSWORD_RESET_TTL_SECONDS: int = 3600          # 1 h
+    TFA_CHALLENGE_TTL_SECONDS: int = 5 * 60         # 5 min
+
+    # Failed-login lockout window (§18.2 "5 failures in 15 min → lockout").
+    LOGIN_FAILURE_WINDOW_SECONDS: int = 15 * 60
+    LOGIN_FAILURE_LOCKOUT_THRESHOLD: int = 5
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:
