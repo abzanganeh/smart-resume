@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from slowapi.util import get_remote_address
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import job_fit as job_fit_agent
@@ -261,6 +262,8 @@ async def create_saved_search(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    # Serialize per-user limit accounting to avoid race over-inserts.
+    await db.execute(select(User.id).where(User.id == user.id).with_for_update())
     count = (
         await db.execute(
             select(func.count())
@@ -327,6 +330,7 @@ async def update_saved_search(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    await db.execute(select(User.id).where(User.id == user.id).with_for_update())
     try:
         sid = uuid.UUID(search_id)
     except ValueError:
@@ -573,8 +577,22 @@ async def save_job(
         job_cache_id=jid,
     )
     db.add(bookmark)
-    await db.commit()
-    return {"id": str(bookmark.id), "job_id": job_id}
+    try:
+        await db.commit()
+        return {"id": str(bookmark.id), "job_id": job_id}
+    except IntegrityError:
+        await db.rollback()
+        existing = (
+            await db.execute(
+                select(SavedJob).where(
+                    SavedJob.user_id == user.id,
+                    SavedJob.job_cache_id == jid,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return {"id": str(existing.id), "job_id": job_id}
+        raise
 
 
 @router.delete("/{job_id}/save", status_code=204)

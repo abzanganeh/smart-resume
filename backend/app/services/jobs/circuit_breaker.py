@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -10,9 +9,11 @@ import structlog
 
 from app.services.session_store import (
     redis_delete,
+    redis_expire,
     redis_get,
     redis_incr,
     redis_set,
+    redis_set_nx,
 )
 
 log = structlog.get_logger("jobs.circuit_breaker")
@@ -86,14 +87,19 @@ async def _open_circuit(*, reason: str) -> None:
 
 async def record_failure(*, status_code: int | None = None) -> None:
     """Record a Hirebase failure; open circuit when thresholds are met."""
-    if status_code is not None and (status_code == 429 or status_code >= 500):
+    if status_code == 429:
         await redis_incr(FAILURES_KEY)
-        await _open_circuit(reason=f"http_{status_code}")
+        await redis_expire(FAILURES_KEY, FAILURE_WINDOW_SECONDS)
+        await _open_circuit(reason="http_429")
         return
 
     count = await redis_incr(FAILURES_KEY)
+    await redis_expire(FAILURES_KEY, FAILURE_WINDOW_SECONDS)
     if count >= FAILURE_THRESHOLD:
-        await _open_circuit(reason="consecutive_failures")
+        if status_code is not None and status_code >= 500:
+            await _open_circuit(reason=f"http_{status_code}_threshold")
+        else:
+            await _open_circuit(reason="consecutive_failures")
 
 
 async def record_probe_failure() -> None:
@@ -103,11 +109,7 @@ async def record_probe_failure() -> None:
 
 async def acquire_probe_slot() -> bool:
     """Return True if this request may act as the single probe after cool-down."""
-    existing = await redis_get(PROBE_LOCK_KEY)
-    if existing:
-        return False
-    await redis_set(PROBE_LOCK_KEY, "1", ex=COOLDOWN_SECONDS)
-    return True
+    return await redis_set_nx(PROBE_LOCK_KEY, "1", ex=COOLDOWN_SECONDS)
 
 
 async def assert_call_allowed() -> CircuitState:
