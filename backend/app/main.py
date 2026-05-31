@@ -9,11 +9,11 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.config import settings
+from app.limiter import limiter
 from app.llm.factory import get_all_providers
 from app.routers import export, llm, phases, resume, sessions
 from app.services.session_store import close_redis, health_check, init_redis
@@ -38,13 +38,6 @@ log = structlog.get_logger()
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
-
-
-# ---------------------------------------------------------------------------
-# Rate limiter
-# ---------------------------------------------------------------------------
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ---------------------------------------------------------------------------
