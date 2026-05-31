@@ -3,10 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Always load backend/.env regardless of the shell's current working directory.
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+_ALLOWED_APP_ENVS = {"local", "development", "ci", "staging", "production"}
 
 
 class Settings(BaseSettings):
@@ -44,5 +47,35 @@ class Settings(BaseSettings):
     MAX_JD_CHARS: int = 10_000
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5 MB
 
+    # Database (PostgreSQL + pgvector)
+    # Required for all environments except pure in-memory local dev.
+    # Set via DATABASE_URL env var or .env file.
+    DATABASE_URL: str = ""
+
+    # App environment — controls security decisions, feature flags, and debug helpers.
+    # Allowed values: local | development | ci | staging | production
+    # Never compare APP_ENV directly outside this module; use is_production_grade() instead.
+    APP_ENV: str = "local"
+
+    @field_validator("APP_ENV")
+    @classmethod
+    def _validate_app_env(cls, v: str) -> str:
+        if v not in _ALLOWED_APP_ENVS:
+            raise ValueError(
+                f"APP_ENV={v!r} is not valid. "
+                f"Allowed values: {sorted(_ALLOWED_APP_ENVS)}"
+            )
+        return v
+
 
 settings = Settings()
+
+
+def is_production_grade() -> bool:
+    """Return True when running in an environment that requires full security hardening.
+
+    Import and call this function instead of comparing APP_ENV directly.
+    Security-sensitive code paths (auth enforcement, debug endpoint gating,
+    relaxed CORS, etc.) must gate on this helper, never on raw APP_ENV strings.
+    """
+    return settings.APP_ENV in {"ci", "staging", "production"}
