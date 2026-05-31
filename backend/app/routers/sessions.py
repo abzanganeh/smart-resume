@@ -56,11 +56,19 @@ async def check_session(session_id: str):
         "3": phase_payload(3),
         "4": phase_payload(4),
     }
+
+    stale: dict[str, str | None] = {
+        "3": session.phase3_stale_since.isoformat() if session.phase3_stale_since else None,
+        "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
+    }
+
     return {
         "session_id": session.session_id,
         "ok": True,
         "resume_raw": session.resume_raw or "",
         "phases": phases_out,
+        "stale": stale,
+        "phase1_complete": session.phase1_status.value == "done",
     }
 
 

@@ -2,26 +2,37 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
-from app.models.rewrite import ResumeVersion, TailoredResumeOutput
-from app.models.session import PhaseStatus
-from pydantic import BaseModel
-
 from app.limiter import limiter
+from app.models.audit import AuditOutput
+from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
+from app.models.session import PhaseRunScope, PhaseStatus
+from app.models.user import User
 from app.services.auth.tokens import (
     TokenExpiredError,
     TokenInvalidError,
     decode_access_token,
 )
+from app.services.billing.exceptions import (
+    AccountSuspendedError,
+    InsufficientCreditsError,
+)
+from app.services.billing.quota import check_quota_for_section_regen
 from app.services.master_resume.crud import has_any_live_chunk
 from app.services.session_store import get_session, reset_phase, update_session
+
+MAX_PHASE3_VERSIONS = 20
 
 
 def _cached_output_replayable(session, phase: int) -> bool:
@@ -39,11 +50,73 @@ def _cached_output_replayable(session, phase: int) -> bool:
         )
     return True
 
+
+def _append_version_snapshot(
+    session,
+    *,
+    label: str,
+    output: TailoredResumeOutput,
+) -> ResumeVersion:
+    if len(session.phase3_versions) >= MAX_PHASE3_VERSIONS:
+        session.phase3_versions.pop(0)
+    version_num = len(session.phase3_versions) + 1
+    snapshot_id = str(uuid.uuid4())[:8]
+    version = ResumeVersion(
+        version=version_num,
+        snapshot_id=snapshot_id,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        label=label,
+        output=output,
+    )
+    session.phase3_versions.append(version)
+    return version
+
+
+def _versions_payload(session) -> list[dict]:
+    return [
+        {
+            "version": v.version,
+            "snapshot_id": v.snapshot_id,
+            "created_at": v.created_at,
+            "label": v.label,
+        }
+        for v in session.phase3_versions
+    ]
+
+
+async def _resolve_bearer_user_id(
+    authorization: str | None,
+    session,
+) -> str | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return session.user_id
+    token = authorization[7:].strip()
+    if not token:
+        return session.user_id
+    try:
+        claims = decode_access_token(token, expected_type="access")
+        bearer_sub = str(claims.get("sub") or "")
+        if not bearer_sub:
+            return session.user_id
+        if session.user_id and session.user_id != bearer_sub:
+            raise HTTPException(
+                status_code=403,
+                detail="Session does not belong to this user.",
+            )
+        if session.user_id != bearer_sub:
+            session.user_id = bearer_sub
+            await update_session(session)
+        return bearer_sub
+    except (TokenExpiredError, TokenInvalidError):
+        return session.user_id
+
+
 router = APIRouter(prefix="/api/sessions", tags=["phases"])
 
 
 class RunPhaseRequest(BaseModel):
     force: bool = False
+    scope: PhaseRunScope | None = None
 
 
 @router.post("/{session_id}/phases/{phase}/run", status_code=202)
@@ -66,46 +139,32 @@ async def trigger_phase(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Best-effort bind session to the bearer user (if present).  This
-    # activates the master-resume retrieval path in phase 3 and prevents
-    # cross-user reuse of session ids.
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-        if token:
-            try:
-                claims = decode_access_token(token, expected_type="access")
-                bearer_sub = str(claims.get("sub") or "")
-                if bearer_sub:
-                    if session.user_id and session.user_id != bearer_sub:
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Session does not belong to this user.",
-                        )
-                    if session.user_id != bearer_sub:
-                        session.user_id = bearer_sub
-                        await update_session(session)
-            except (TokenExpiredError, TokenInvalidError):
-                # Keep legacy anonymous behavior when bearer header is invalid.
-                pass
+    user_id = await _resolve_bearer_user_id(authorization, session)
 
-    # Pre-flight checks
     if phase >= 2 and getattr(session, f"phase{phase - 1}_status") != PhaseStatus.done:
         raise HTTPException(
             status_code=422,
-            detail=f"Phase {phase - 1} must complete before starting Phase {phase}."
+            detail=f"Phase {phase - 1} must complete before starting Phase {phase}.",
+        )
+
+    if body.scope is not None and phase != 3:
+        raise HTTPException(status_code=422, detail="Scoped runs are only supported for Phase 3.")
+
+    if body.scope is not None and session.phase3_status != PhaseStatus.done:
+        raise HTTPException(
+            status_code=422,
+            detail="Phase 3 must complete before a scoped regeneration.",
         )
 
     phase_status = getattr(session, f"phase{phase}_status")
     if phase_status == PhaseStatus.running:
         raise HTTPException(status_code=409, detail=f"Phase {phase} is already running.")
 
-    # IMPLEMENTATION_PLAN §6a: if user has no master-resume chunks,
-    # block phase 3 with 409 so frontend routes user to /profile.
     if phase == 3 and session.user_id:
-        import uuid
+        import uuid as uuid_mod
 
         try:
-            uid = uuid.UUID(session.user_id)
+            uid = uuid_mod.UUID(session.user_id)
         except ValueError:
             uid = None
         if uid is not None and not await has_any_live_chunk(db, user_id=uid):
@@ -114,7 +173,24 @@ async def trigger_phase(
                 detail={"code": "master_resume_required"},
             )
 
-    # Persist BYOK choice to session so the SSE endpoint picks it up
+    if body.scope is not None and user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+        if uid is not None:
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            if user is not None:
+                try:
+                    await check_quota_for_section_regen(
+                        db, user=user, session_id=session_id
+                    )
+                    await db.commit()
+                except AccountSuspendedError:
+                    raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except InsufficientCreditsError:
+                    raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+
     if x_provider and session.provider != x_provider:
         session.provider = x_provider
         await update_session(session)
@@ -122,7 +198,6 @@ async def trigger_phase(
         session.model = x_model
         await update_session(session)
     if x_api_key:
-        # Store the key temporarily in the session (cleared on expiry — never logged)
         session.byok_api_key = x_api_key
 
     if body.force:
@@ -132,6 +207,7 @@ async def trigger_phase(
             raise HTTPException(status_code=404, detail="Session not found")
 
     session.phase_run_requested = phase
+    session.phase_run_scope = body.scope
     await update_session(session)
 
     return {
@@ -153,13 +229,20 @@ async def phase_events(session_id: str, phase: int):
     phase_status = getattr(session, f"phase{phase}_status")
     run_requested = session.phase_run_requested == phase
 
-    # Replay cached output only when the phase finished, no fresh run was requested, and cache is usable.
-    if phase_status == PhaseStatus.done and not run_requested and _cached_output_replayable(session, phase):
+    if (
+        phase_status == PhaseStatus.done
+        and not run_requested
+        and _cached_output_replayable(session, phase)
+    ):
         output = getattr(session, f"phase{phase}_output")
         if output is not None:
 
             async def replay():
-                payload = json.dumps({"event": "done", "phase": phase, "output": json.loads(output.model_dump_json())})
+                payload = json.dumps({
+                    "event": "done",
+                    "phase": phase,
+                    "output": json.loads(output.model_dump_json()),
+                })
                 yield f"data: {payload}\n\n"
                 yield 'data: {"event": "stream_end"}\n\n'
 
@@ -170,10 +253,10 @@ async def phase_events(session_id: str, phase: int):
         await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
-    # BYOK: use key stored at run-trigger time (never logged)
-    llm = get_llm_client(session.provider, session.model, api_key=getattr(session, "byok_api_key", None))
+    llm = get_llm_client(
+        session.provider, session.model, api_key=getattr(session, "byok_api_key", None)
+    )
 
-    # Run the phase in the background
     task = asyncio.create_task(run_phase(session_id, phase, llm, event_queue))
 
     async def event_generator():
@@ -193,85 +276,171 @@ async def phase_events(session_id: str, phase: int):
             if item.get("event") in ("done", "error"):
                 break
 
-        # Signal end
         yield "data: {\"event\": \"stream_end\"}\n\n"
 
     async def run_and_signal():
         try:
             await task
         finally:
-            await event_queue.put(object())  # sentinel
+            await event_queue.put(object())
 
     asyncio.create_task(run_and_signal())
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-class TailoredPatchRequest(TailoredResumeOutput):
-    pass
+class TailoredInlinePatch(BaseModel):
+    section_id: str
+    content: str | dict | list
+    undo_token: str | None = None
+
+
+class AuditPatchRequest(BaseModel):
+    output: AuditOutput | None = None
+    summary: str | None = None
+    overall_score: int | None = Field(default=None, ge=0, le=100)
+
+
+@router.patch("/{session_id}/audit")
+async def patch_audit_output(session_id: str, body: AuditPatchRequest):
+    """Persist manual Phase 2 edits and mark downstream phases stale."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.phase2_output:
+        raise HTTPException(status_code=422, detail="No audit output exists yet.")
+
+    audit = session.phase2_output
+    if body.output is not None:
+        audit = body.output
+    else:
+        if body.summary is not None:
+            audit.summary = body.summary
+        if body.overall_score is not None:
+            audit.overall_score = body.overall_score
+
+    session.phase2_output = audit
+    now = datetime.now(timezone.utc)
+    session.phase3_stale_since = now
+    session.phase4_stale_since = now
+    await update_session(session)
+
+    return {
+        "ok": True,
+        "stale": {
+            "3": session.phase3_stale_since.isoformat(),
+            "4": session.phase4_stale_since.isoformat(),
+        },
+    }
 
 
 @router.patch("/{session_id}/resume/tailored")
 async def patch_tailored_resume(session_id: str, body: dict):
-    """Save user inline edits; creates a version snapshot."""
-    import uuid
-    from datetime import datetime, timezone
-
+    """Save inline edits; supports legacy field patches and section_id updates."""
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     if not session.phase3_output:
         raise HTTPException(status_code=422, detail="No tailored resume exists yet.")
 
-    # Apply the patch — simple field update on the section
-    section = body.get("section")
-    bullet_index = body.get("bullet_index")
-    new_text = body.get("new_text", "")
-    company = body.get("company")
-
     output = session.phase3_output
-    if section == "summary":
-        output.summary = new_text
-    elif section == "experience" and company is not None and bullet_index is not None:
-        for entry in output.experience:
-            if entry.company == company and bullet_index < len(entry.bullets):
-                entry.bullets[bullet_index] = new_text
-                break
-    elif section == "skills":
-        output.skills = body.get("skills", output.skills)
-    elif section == "education" and bullet_index is not None:
-        institution = body.get("institution")
-        for entry in output.education:
-            if entry.institution == institution:
-                bullets = list(entry.bullets)
-                if bullet_index == len(bullets):
-                    bullets.append(new_text)
-                elif bullet_index < len(bullets):
-                    if new_text.strip():
-                        bullets[bullet_index] = new_text
-                    else:
-                        bullets.pop(bullet_index)
-                entry.bullets = bullets
-                break
-    elif section == "education_bullets":
-        institution = body.get("institution")
-        for entry in output.education:
-            if entry.institution == institution:
-                entry.bullets = body.get("bullets", entry.bullets)
-                break
+    label = "User edit"
 
-    version_num = len(session.phase3_versions) + 1
-    snapshot_id = str(uuid.uuid4())[:8]
-    version = ResumeVersion(
-        version=version_num,
-        snapshot_id=snapshot_id,
-        created_at=datetime.now(timezone.utc).isoformat(),
-        label=f"User edit: {section}",
-        output=output,
-    )
-    session.phase3_versions.append(version)
+    if "section_id" in body:
+        section_id = str(body["section_id"])
+        content = body.get("content", "")
+        label = f"Inline edit: {section_id}"
+
+        if section_id == "summary":
+            output.summary = str(content)
+        elif section_id == "skills":
+            output.skills = list(content) if isinstance(content, list) else output.skills
+        elif section_id.startswith("experience:"):
+            company = section_id.split(":", 1)[1]
+            for entry in output.experience:
+                if entry.company == company:
+                    if isinstance(content, list):
+                        entry.bullets = [str(b) for b in content]
+                    else:
+                        idx = body.get("bullet_index")
+                        if idx is not None and idx < len(entry.bullets):
+                            entry.bullets[idx] = str(content)
+                    break
+        elif section_id.startswith("education:"):
+            institution = section_id.split(":", 1)[1]
+            for entry in output.education:
+                if entry.institution == institution:
+                    if isinstance(content, list):
+                        entry.bullets = [str(b) for b in content]
+                    else:
+                        entry.degree = str(content)
+                    break
+        elif section_id == "add_section" and isinstance(content, dict):
+            section = content.get("section", "experience")
+            text = str(content.get("text", ""))
+            if section == "experience":
+                output.experience.append(
+                    TailoredExperienceEntry(
+                        title=str(content.get("title", "Experience")),
+                        company=str(content.get("company", "Manual entry")),
+                        dates=str(content.get("dates", "")),
+                        bullets=[text] if text else [],
+                    )
+                )
+            label = f"Manual add: {section}"
+    else:
+        section = body.get("section")
+        bullet_index = body.get("bullet_index")
+        new_text = body.get("new_text", "")
+        company = body.get("company")
+
+        if section == "summary":
+            output.summary = new_text
+            label = "User edit: summary"
+        elif section == "experience" and company is not None and bullet_index is not None:
+            for entry in output.experience:
+                if entry.company == company and bullet_index < len(entry.bullets):
+                    entry.bullets[bullet_index] = new_text
+                    break
+            label = f"User edit: experience/{company}"
+        elif section == "skills":
+            output.skills = body.get("skills", output.skills)
+            label = "User edit: skills"
+        elif section == "education" and bullet_index is not None:
+            institution = body.get("institution")
+            for entry in output.education:
+                if entry.institution == institution:
+                    bullets = list(entry.bullets)
+                    if bullet_index == len(bullets):
+                        bullets.append(new_text)
+                    elif bullet_index < len(bullets):
+                        if new_text.strip():
+                            bullets[bullet_index] = new_text
+                        else:
+                            bullets.pop(bullet_index)
+                    entry.bullets = bullets
+                    break
+            label = f"User edit: education/{institution}"
+        elif section == "education_bullets":
+            institution = body.get("institution")
+            for entry in output.education:
+                if entry.institution == institution:
+                    entry.bullets = body.get("bullets", entry.bullets)
+                    break
+            label = f"User edit: education/{institution}"
+
+    version = _append_version_snapshot(session, label=label, output=output)
     session.phase3_output = output
+    session.phase4_stale_since = datetime.now(timezone.utc)
     await update_session(session)
-    return {"version": version_num, "snapshot_id": snapshot_id}
+
+    return {
+        "version": version.version,
+        "snapshot_id": version.snapshot_id,
+        "phase3_versions": _versions_payload(session),
+        "stale": {
+            "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
+        },
+    }
 
 
 @router.get("/{session_id}/resume/versions")
@@ -279,8 +448,4 @@ async def get_versions(session_id: str):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    versions = [
-        {"version": v.version, "snapshot_id": v.snapshot_id, "created_at": v.created_at, "label": v.label}
-        for v in session.phase3_versions
-    ]
-    return {"versions": versions}
+    return {"versions": _versions_payload(session)}
