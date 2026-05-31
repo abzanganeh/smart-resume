@@ -115,6 +115,10 @@ class MasterResume(Base):
     last_embedded_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Hirebase resume-matching artifact (POST /v2/resumes/embed).
+    hirebase_artifact_id: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
