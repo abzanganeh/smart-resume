@@ -18,6 +18,7 @@ import { KeywordDashboard } from "@/components/session/KeywordDashboard";
 import { AuditPanel } from "@/components/session/AuditPanel";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
+import { ATSGuidancePanel } from "@/components/session/ATSGuidancePanel";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { VersionHistory } from "@/components/session/VersionHistory";
 import { ProgressLog } from "@/components/session/ProgressLog";
@@ -54,15 +55,30 @@ function SessionContent() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [phase1Complete, setPhase1Complete] = useState(false);
   const [stale, setStale] = useState<Record<string, string | null>>({ "3": null, "4": null });
+  const [atsScoreHistory, setAtsScoreHistory] = useState<number[]>([]);
+  const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
+  const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
+  const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
 
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
+  const phase4RecalcRef = useRef(false);
 
   const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
 
   useEffect(() => {
     activeStepRef.current = step;
   }, [step]);
+
+  useEffect(() => {
+    phase4RecalcRef.current = phase4RecalcActive;
+  }, [phase4RecalcActive]);
+
+  const recordAtsScore = useCallback((qaOut: QAOutput) => {
+    if (typeof qaOut.ats_score === "number") {
+      setAtsScoreHistory((prev) => [...prev.slice(-4), qaOut.ats_score!]);
+    }
+  }, []);
 
   const applyPhaseOutput = useCallback((s: Step, output: unknown) => {
     if (s === "audit") {
@@ -81,8 +97,12 @@ function SessionContent() {
       setTailored(output as TailoredResumeOutput);
       setResumeVersion((v) => v + 1);
     }
-    if (s === "export") setQa(output as QAOutput);
-  }, []);
+    if (s === "export") {
+      const qaOut = output as QAOutput;
+      setQa(qaOut);
+      recordAtsScore(qaOut);
+    }
+  }, [recordAtsScore]);
 
   const hydrateFromSession = useCallback((s: Awaited<ReturnType<typeof checkSession>>) => {
     setStale(s.stale ?? { "3": null, "4": null });
@@ -98,6 +118,14 @@ function SessionContent() {
     applyCached("audit", "2");
     applyCached("rewrite", "3");
     applyCached("export", "4");
+
+    const phase4 = s.phases?.["4"];
+    if (phase4?.status === "done" && phase4.output) {
+      const out = phase4.output as QAOutput;
+      if (typeof out.ats_score === "number") {
+        setAtsScoreHistory([out.ats_score]);
+      }
+    }
   }, [applyPhaseOutput]);
 
   const goTo = (s: Step) => {
@@ -123,16 +151,25 @@ function SessionContent() {
       reset();
 
       try {
-        await triggerPhase(sessionId, phase, { force: options?.force, scope: options?.scope });
+        await triggerPhase(sessionId, phase, { force: options?.force, scope: options?.scope ?? null });
         connect(phaseEventsUrl(sessionId, phase));
       } catch (e: unknown) {
         setPhaseRunning(false);
         runInFlightRef.current = false;
+        setPhase4RecalcActive(false);
+        setAtsRecalcRunning(false);
         setRunError(e instanceof Error ? e.message : "Failed to start phase.");
       }
     },
     [sessionId, connect, reset]
   );
+
+  const recalculateAts = useCallback(async () => {
+    if (runInFlightRef.current) return;
+    setPhase4RecalcActive(true);
+    setAtsRecalcRunning(true);
+    await runPhase("export", { force: true });
+  }, [runPhase]);
 
   const runCurrentPhase = useCallback(
     (options?: { force?: boolean; scope?: PhaseRunScope }) => runPhase(step, options),
@@ -143,13 +180,23 @@ function SessionContent() {
     if (!lastEvent) return;
 
     const activePhase = PHASE_FOR_STEP[activeStepRef.current];
-    if (lastEvent.phase !== undefined && lastEvent.phase !== activePhase) return;
+    const isPhase4Recalc = phase4RecalcRef.current && lastEvent.phase === 4;
+
+    if (
+      lastEvent.phase !== undefined &&
+      lastEvent.phase !== activePhase &&
+      !isPhase4Recalc
+    ) {
+      return;
+    }
+
+    const outputStep: Step = isPhase4Recalc ? "export" : activeStepRef.current;
 
     if (lastEvent.event === "progress" && lastEvent.message) {
       setProgressLog((prev) => [...prev, lastEvent.message!]);
     }
     if (lastEvent.event === "partial" && lastEvent.data) {
-      applyPhaseOutput(activeStepRef.current, lastEvent.data);
+      applyPhaseOutput(outputStep, lastEvent.data);
     }
     if (lastEvent.event === "cost_estimate" && lastEvent.cost_formatted) {
       setCostInfo({
@@ -161,17 +208,21 @@ function SessionContent() {
     if (lastEvent.event === "done") {
       setPhaseRunning(false);
       runInFlightRef.current = false;
-      applyPhaseOutput(activeStepRef.current, lastEvent.output);
+      applyPhaseOutput(outputStep, lastEvent.output);
       if (lastEvent.phase === 3) {
         setStale((prev) => ({ ...prev, "3": null, "4": null }));
       }
       if (lastEvent.phase === 4) {
         setStale((prev) => ({ ...prev, "4": null }));
+        setPhase4RecalcActive(false);
+        setAtsRecalcRunning(false);
       }
     }
     if (lastEvent.event === "error") {
       setPhaseRunning(false);
       runInFlightRef.current = false;
+      setPhase4RecalcActive(false);
+      setAtsRecalcRunning(false);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
   }, [lastEvent, applyPhaseOutput]);
@@ -179,6 +230,8 @@ function SessionContent() {
   useEffect(() => {
     let cancelled = false;
     setSessionLoaded(false);
+    setAtsScoreHistory([]);
+    setAppliedSuggestion(null);
 
     checkSession(sessionId)
       .then((s) => {
@@ -373,10 +426,24 @@ function SessionContent() {
 
           {step === "rewrite" && (
             <div>
-              <h1 className="text-xl font-bold mb-1">Tailored Rewrite</h1>
-              <p className="text-slate-400 text-sm mb-4">
-                Your resume, rewritten with exact JD phrasing and quality rules applied.
-              </p>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <div>
+                  <h1 className="text-xl font-bold mb-1">Tailored Rewrite</h1>
+                  <p className="text-slate-400 text-sm">
+                    Your resume, rewritten with exact JD phrasing and quality rules applied.
+                  </p>
+                </div>
+                {tailored && (
+                  <button
+                    type="button"
+                    onClick={() => recalculateAts()}
+                    disabled={atsRecalcRunning || phaseRunning}
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                  >
+                    {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
+                  </button>
+                )}
+              </div>
               {!tailored && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
@@ -396,18 +463,35 @@ function SessionContent() {
                   <VersionHistory sessionId={sessionId} currentVersion={resumeVersion} onRestore={() => {}} />
                 </div>
               )}
-              <ResumeDiff
-                tailored={tailored}
-                streaming={isStreaming && !showProgress}
-                costInfo={costInfo}
-                sessionId={sessionId}
-                onEdited={(updated) => {
-                  setTailored(updated);
-                  setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-                }}
-                onScopedRun={(scope) => runPhase("rewrite", { scope })}
-                phaseRunning={phaseRunning}
-              />
+              <div className="flex flex-col lg:flex-row gap-6">
+                <div className="flex-1 min-w-0">
+                  <ResumeDiff
+                    tailored={tailored}
+                    streaming={isStreaming && !showProgress}
+                    costInfo={costInfo}
+                    sessionId={sessionId}
+                    onEdited={(updated) => {
+                      setTailored(updated);
+                      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+                    }}
+                    onScopedRun={(scope) => runPhase("rewrite", { scope })}
+                    phaseRunning={phaseRunning}
+                    suggestionDraft={appliedSuggestion}
+                    onClearSuggestion={() => setAppliedSuggestion(null)}
+                  />
+                </div>
+                {(qa || atsRecalcRunning) && (
+                  <div className="lg:w-80 shrink-0">
+                    <ATSGuidancePanel
+                      output={qa}
+                      streaming={atsRecalcRunning}
+                      scoreHistory={atsScoreHistory}
+                      variant="sidebar"
+                      onApplySuggestion={setAppliedSuggestion}
+                    />
+                  </div>
+                )}
+              </div>
               {tailored && !isStreaming && (
                 <button
                   onClick={() => goTo("export")}
@@ -437,6 +521,18 @@ function SessionContent() {
                   <ProgressLog messages={progressLog} done={false} />
                 </div>
               )}
+              <div className="mb-8">
+                <ATSGuidancePanel
+                  output={qa}
+                  streaming={isStreaming && !showProgress}
+                  scoreHistory={atsScoreHistory}
+                  variant="primary"
+                  onApplySuggestion={(text) => {
+                    setAppliedSuggestion(text);
+                    goTo("rewrite");
+                  }}
+                />
+              </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />
               {qa && (
                 <div className="mt-6">
