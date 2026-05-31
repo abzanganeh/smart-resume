@@ -10,11 +10,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditOutput, KeywordCoverage
+from app.models.billing import CreditKind
 from app.models.cover_letter import CoverLetterOutput
 from app.models.rewrite import TailoredExperienceEntry, TailoredResumeOutput
 from app.models.session import PhaseStatus
+from app.models.user import User
 from app.services.billing.credits import consume_credit
-from app.models.billing import CreditKind
 from app.services.session_store import create_session, update_session
 from tests.integration.test_auth import REGISTER_PAYLOAD
 

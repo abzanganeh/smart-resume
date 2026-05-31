@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import io
-import os
 import re
 from pathlib import Path
 
 import structlog
 from docx import Document
 from docx.shared import Pt
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.models.cover_letter import CoverLetterOutput
 from app.models.session import Session
@@ -16,7 +15,10 @@ from app.models.session import Session
 log = structlog.get_logger()
 
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
-_jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATE_DIR)),
+    autoescape=select_autoescape(["html", "xml"]),
+)
 
 
 def _resume_to_html(session: Session) -> str:

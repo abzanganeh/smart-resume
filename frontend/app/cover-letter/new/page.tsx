@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { useRequireAuth } from "@/lib/auth/guards";
 import { getRecentSessions, trackRecentSession, type RecentSessionEntry } from "@/lib/recentSessions";
