@@ -90,6 +90,40 @@ class Settings(BaseSettings):
     LOGIN_FAILURE_WINDOW_SECONDS: int = 15 * 60
     LOGIN_FAILURE_LOCKOUT_THRESHOLD: int = 5
 
+    # ---------------------------------------------------------------
+    # Stripe / Billing (Release Phase 2 §18.3 + IMPLEMENTATION_PLAN §7)
+    # ---------------------------------------------------------------
+    # Secret API key (sk_live_… / sk_test_…). MUST be set in any non-local env.
+    STRIPE_SECRET_KEY: str = ""
+    # Webhook signing secret used by stripe.Webhook.construct_event.
+    STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Bootstrap / disaster-recovery price IDs per the canonical 10 codes
+    # in IMPLEMENTATION_PLAN §7.1.  PlanConfig DB rows take precedence at
+    # runtime; these env values are only consulted if no active PlanConfig
+    # row exists for the code (see BillingService.resolve_price_id).
+    STRIPE_PRICE_DAILY: str = ""
+    STRIPE_PRICE_WEEKLY: str = ""
+    STRIPE_PRICE_MONTHLY: str = ""
+    STRIPE_PRICE_MONTHLY_YEARLY: str = ""  # yearly billing-cycle for monthly plan
+
+    STRIPE_PRICE_BETTER_PACK: str = ""        # better_5pack
+    STRIPE_PRICE_BETTER_MONTHLY: str = ""
+    STRIPE_PRICE_BETTER_YEARLY: str = ""
+
+    STRIPE_PRICE_BEST_PER_RESUME: str = ""
+    STRIPE_PRICE_BEST_MONTHLY: str = ""
+    STRIPE_PRICE_BEST_YEARLY: str = ""
+
+    # Default currency code surfaced by /api/billing/prices (Step 7).
+    BILLING_CURRENCY: str = "USD"
+
+    # Hard server-side limits enforced before calling Stripe (§7.7).
+    SUBSCRIPTION_PAUSE_MIN_DAYS: int = 7
+    SUBSCRIPTION_PAUSE_MAX_DAYS: int = 90
+    SUBSCRIPTION_GRACE_HOURS: int = 72
+    STRIPE_WEBHOOK_MAX_ATTEMPTS: int = 5
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:
