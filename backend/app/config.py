@@ -132,6 +132,17 @@ class Settings(BaseSettings):
     SUBSCRIPTION_GRACE_HOURS: int = 72
     STRIPE_WEBHOOK_MAX_ATTEMPTS: int = 5
 
+    # ---------------------------------------------------------------
+    # Job search (Release Phase 3 §18.10)
+    # ---------------------------------------------------------------
+    HIREBASE_API_KEY: str = ""
+    APIFY_API_TOKEN: str = ""
+    APIFY_ACTOR_ID: str = "automation-lab/google-jobs-scraper"
+    JOB_CACHE_TTL_COMMON_SECONDS: int = 3600
+    JOB_CACHE_TTL_UNIQUE_SECONDS: int = 86400
+    JOB_CACHE_SQS_URL: str = ""
+    AWS_REGION: str = "us-east-1"
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:
