@@ -73,8 +73,12 @@ async def test_register_grants_six_credits_and_audit_row(
         )
     ).scalars().all()
     assert len(grants) == 1
-    assert grants[0].amount == 6
+    assert grants[0].delta == 6
     assert grants[0].action == CreditTransactionAction.registration_grant
+    # IMPLEMENTATION_PLAN §7.5: registration grant is partitioned under
+    # ``credit_kind=free`` so SUM(delta) returns the right balance.
+    assert grants[0].credit_kind.value == "free"
+    assert grants[0].reason == "registration_grant"
 
     audit_rows = (
         await db_session.execute(
