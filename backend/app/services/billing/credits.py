@@ -42,6 +42,7 @@ _REASON_TO_ACTION: dict[str, CreditTransactionAction] = {
     "ats_recalc": CreditTransactionAction.ats_recalc,
     "cover_letter": CreditTransactionAction.cover_letter,
     "section_regen": CreditTransactionAction.section_regen,
+    "purchase_better_pack": CreditTransactionAction.llm_upgrade_pack,
     "purchase_better_5pack": CreditTransactionAction.llm_upgrade_pack,
     "purchase_best_per_resume": CreditTransactionAction.llm_upgrade_pack,
     "phase3_run_better": CreditTransactionAction.llm_upgrade_pack_use,
@@ -62,7 +63,7 @@ async def get_balance(
     *,
     user_id: uuid.UUID,
     credit_kind: CreditKind,
-    for_share: bool = False,
+    for_share: bool = True,
 ) -> int:
     """Return ``SUM(delta)`` for ``(user_id, credit_kind)``.
 
@@ -77,7 +78,14 @@ async def get_balance(
         .where(CreditTransaction.credit_kind == credit_kind)
     )
     if for_share:
-        stmt = stmt.with_for_update(read=True)
+        # PostgreSQL does not allow FOR SHARE directly on aggregate-only
+        # SELECTs. Lock the source rows in a companion query, then compute SUM.
+        await session.execute(
+            select(CreditTransaction.id)
+            .where(CreditTransaction.user_id == user_id)
+            .where(CreditTransaction.credit_kind == credit_kind)
+            .with_for_update(read=True)
+        )
     return int((await session.execute(stmt)).scalar() or 0)
 
 
@@ -138,17 +146,23 @@ async def consume_credit(
     :class:`InsufficientCreditsError` (HTTP 402) when the projected
     balance is zero or negative.
     """
-    # Lock the user row so concurrent consumes serialize.  We don't
-    # lock the ledger itself — it's append-only and locking it would
-    # block unrelated audit reads.
+    # Lock the user row so concurrent consumes serialize.
     locked = await session.execute(
         select(User.id).where(User.id == user_id).with_for_update()
     )
     if locked.scalar_one_or_none() is None:
         raise InsufficientCreditsError(credit_kind.value, 0)
 
+    # Also lock existing ledger rows for this (user, kind) projection so
+    # the "check then insert" path is strictly serialized at the balance source.
+    await session.execute(
+        select(CreditTransaction.id)
+        .where(CreditTransaction.user_id == user_id)
+        .where(CreditTransaction.credit_kind == credit_kind)
+        .with_for_update()
+    )
     balance = await get_balance(
-        session, user_id=user_id, credit_kind=credit_kind
+        session, user_id=user_id, credit_kind=credit_kind, for_share=False
     )
     if balance <= 0:
         raise InsufficientCreditsError(credit_kind.value, balance)
