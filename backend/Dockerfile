@@ -1,19 +1,14 @@
 FROM python:3.12-slim
 
-# Install Chromium for Puppeteer PDF rendering
+# Install WeasyPrint system dependencies
 RUN apt-get update && apt-get install -y \
-    chromium \
-    chromium-driver \
     fonts-liberation \
     libglib2.0-0 \
-    libnss3 \
-    libgconf-2-4 \
-    libfontconfig1 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf2.0-0 \
     --no-install-recommends && rm -rf /var/lib/apt/lists/*
-
-ENV PYPPETEER_CHROMIUM_REVISION=skip
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV CHROME_PATH=/usr/bin/chromium
 
 WORKDIR /app
 

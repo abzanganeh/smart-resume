@@ -9,13 +9,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.config import settings
+from app.limiter import limiter
 from app.llm.factory import get_all_providers
-from app.routers import export, llm, phases, resume, sessions
+from app.routers import auth, export, llm, phases, resume, sessions
 from app.services.session_store import close_redis, health_check, init_redis
 
 # ---------------------------------------------------------------------------
@@ -38,13 +38,6 @@ log = structlog.get_logger()
 
 if settings.SENTRY_DSN:
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
-
-
-# ---------------------------------------------------------------------------
-# Rate limiter
-# ---------------------------------------------------------------------------
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 # ---------------------------------------------------------------------------
@@ -94,11 +87,18 @@ def _cors_headers(request: Request) -> dict[str, str]:
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Ensure HTTPException responses (404, 422, etc.) always carry CORS headers."""
+    """Ensure HTTPException responses (404, 422, etc.) always carry CORS headers.
+
+    Also forwards any ``exc.headers`` (e.g. ``WWW-Authenticate``) so auth
+    routes can advertise the expected scheme on 401.
+    """
+    headers = _cors_headers(request)
+    if exc.headers:
+        headers.update(exc.headers)
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=_cors_headers(request),
+        headers=headers,
     )
 
 
@@ -135,6 +135,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(sessions.router)
 app.include_router(resume.router)
 app.include_router(phases.router)
