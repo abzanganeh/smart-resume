@@ -96,7 +96,7 @@ def _reject_hollow_llm(output: BaseModel) -> str | None:
             "and bullet_issues for weak resume bullets. Do not return all-empty arrays."
         )
     if output.overall_score == 0:
-        return "overall_score must be between 1 and 100 based on ATS readiness."
+        return "overall_score must be between 1 and 100 based on audit findings."
     if not (output.summary or "").strip():
         return "summary must be a non-empty string describing the main audit findings."
     return None
@@ -123,7 +123,7 @@ async def run(
 ) -> AuditOutput:
     await event_queue.put({"event": "progress", "phase": 2, "message": "Scanning resume for missing ATS keywords…"})
     await event_queue.put({"event": "progress", "phase": 2, "message": "Checking every bullet for action verbs and measurable impact…"})
-    await event_queue.put({"event": "progress", "phase": 2, "message": "Scoring ATS readiness against keyword coverage and quality rules…"})
+    await event_queue.put({"event": "progress", "phase": 2, "message": "Scoring audit results against keyword coverage and quality rules…"})
 
     if not session.phase1_output:
         raise RuntimeError("Phase 1 must complete before Phase 2.")
@@ -188,7 +188,7 @@ async def run(
         )
 
     output = _merge_audit(coverage, llm_output)
-    await event_queue.put({"event": "progress", "phase": 2, "message": f"Finalizing audit — ATS score {output.overall_score}/100…"})
+    await event_queue.put({"event": "progress", "phase": 2, "message": f"Finalizing audit — audit score {output.overall_score}/100…"})
     await event_queue.put({"event": "partial", "phase": 2, "data": json.loads(output.model_dump_json())})
     log.info("phase2_done", overall_score=output.overall_score, issues=len(output.bullet_issues))
     return output
