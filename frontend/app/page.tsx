@@ -25,13 +25,13 @@ export default function LandingPage() {
           never charge you for AI calls. Gemini and Ollama have free tiers.
         </p>
         <Link
-          href="/session/new?step=ai"
+          href="/auth"
           className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
         >
           Get started free
           <ArrowRight className="w-5 h-5" />
         </Link>
-        <p className="mt-4 text-slate-500 text-sm">No account · No subscription · Sessions expire after 24h</p>
+        <p className="mt-4 text-slate-500 text-sm">Free account · 6 credits included · No credit card required</p>
       </section>
 
       {/* Provider badges */}
@@ -172,13 +172,13 @@ export default function LandingPage() {
       {/* CTA footer */}
       <section className="text-center pb-24">
         <Link
-          href="/session/new?step=ai"
+          href="/auth"
           className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
         >
           Start tailoring your resume
           <ArrowRight className="w-5 h-5" />
         </Link>
-        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes of setup. Free forever.</p>
+        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes of setup. Free account, 6 credits included.</p>
       </section>
 
     </main>
