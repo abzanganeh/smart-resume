@@ -56,6 +56,7 @@ async def _resolve_phase3_llm(
 
     requested = session.phase3_llm_tier or "standard"
 
+    upgraded_llm: LLMClient | None = None
     async with async_session_factory() as db:
         try:
             decision = await apply_phase3_tier(
@@ -64,6 +65,19 @@ async def _resolve_phase3_llm(
                 requested_tier=requested,  # type: ignore[arg-type]
                 session_id=session.session_id,
             )
+            # Build the routed client before commit so any initialization
+            # failure rolls back credit/counter side-effects.
+            if not (
+                decision.effective_tier == "standard"
+                and decision.provider == fallback_llm.provider_name
+                and decision.model_string == fallback_llm.model_name
+            ):
+                upgraded_llm = get_llm_client(
+                    provider=decision.provider,
+                    model=decision.model_string,
+                    api_key=getattr(session, "byok_api_key", None),
+                )
+            await db.commit()
         except InsufficientCreditsError:
             await db.rollback()
             log.info(
@@ -82,7 +96,6 @@ async def _resolve_phase3_llm(
         except Exception:
             await db.rollback()
             raise
-        await db.commit()
 
     if decision.soft_cap_hit:
         await event_queue.put({
@@ -102,18 +115,9 @@ async def _resolve_phase3_llm(
             "effective_tier": decision.effective_tier,
         })
 
-    if (
-        decision.effective_tier == "standard"
-        and decision.provider == fallback_llm.provider_name
-        and decision.model_string == fallback_llm.model_name
-    ):
+    if upgraded_llm is None:
         return fallback_llm, decision
 
-    upgraded_llm = get_llm_client(
-        provider=decision.provider,
-        model=decision.model_string,
-        api_key=getattr(session, "byok_api_key", None),
-    )
     log.info(
         "phase3_tier_routed",
         session_id=session.session_id,
