@@ -4,6 +4,7 @@ import asyncio
 import json
 import uuid
 
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -27,6 +28,7 @@ from app.services.export_service import (
 from app.services.session_store import get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["cover-letter"])
+log = structlog.get_logger("cover_letter.router")
 
 _cover_letter_locks: set[str] = set()
 
@@ -36,21 +38,21 @@ class CoverLetterGenerateRequest(BaseModel):
     custom_hook: str | None = Field(default=None, max_length=500)
 
 
-async def _resolve_user_for_quota(
+async def _resolve_user_for_quota_or_401(
     authorization: str | None,
     session,
     db: AsyncSession,
-) -> User | None:
+) -> User:
     if not authorization or not authorization.lower().startswith("bearer "):
-        return None
+        raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization[7:].strip()
     if not token:
-        return None
+        raise HTTPException(status_code=401, detail="Missing bearer token")
     try:
         claims = decode_access_token(token, expected_type="access")
         bearer_sub = str(claims.get("sub") or "")
         if not bearer_sub:
-            return None
+            raise HTTPException(status_code=401, detail="Invalid access token")
         if session.user_id and session.user_id != bearer_sub:
             raise HTTPException(
                 status_code=403,
@@ -62,10 +64,13 @@ async def _resolve_user_for_quota(
         try:
             uid = uuid.UUID(bearer_sub)
         except ValueError:
-            return None
-        return (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            raise HTTPException(status_code=401, detail="Invalid access token")
+        user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
     except (TokenExpiredError, TokenInvalidError):
-        return None
+        raise HTTPException(status_code=401, detail="Invalid access token")
 
 
 def _require_tailored_resume(session) -> None:
@@ -105,15 +110,13 @@ async def generate_cover_letter(
     if session_id in _cover_letter_locks:
         raise HTTPException(status_code=409, detail="Cover letter generation is already running.")
 
-    user = await _resolve_user_for_quota(authorization, session, db)
-    if user is not None:
-        try:
-            await check_quota_for_cover_letter(db, user=user, session_id=session_id)
-            await db.commit()
-        except AccountSuspendedError:
-            raise HTTPException(status_code=403, detail={"code": "account_suspended"})
-        except InsufficientCreditsError:
-            raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+    try:
+        user = await _resolve_user_for_quota_or_401(authorization, session, db)
+        await check_quota_for_cover_letter(db, user=user, session_id=session_id)
+    except AccountSuspendedError:
+        raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+    except InsufficientCreditsError:
+        raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
 
     if x_api_key:
         session.byok_api_key = x_api_key
@@ -152,12 +155,18 @@ async def generate_cover_letter(
                 if session_after is not None:
                     session_after.cover_letter_output = output
                     await update_session(session_after)
+                await db.commit()
                 await event_queue.put({
                     "event": "done",
                     "output": json.loads(output.model_dump_json()),
                 })
             except Exception as exc:
-                await event_queue.put({"event": "error", "message": str(exc)})
+                await db.rollback()
+                log.exception("cover_letter_generation_failed", session_id=session_id, error=str(exc))
+                await event_queue.put({
+                    "event": "error",
+                    "message": "Cover letter generation failed. Please retry.",
+                })
             finally:
                 await event_queue.put(sentinel)
 
