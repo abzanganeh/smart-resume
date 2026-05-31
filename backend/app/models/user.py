@@ -3,12 +3,13 @@
 Mirrors the schemas defined in:
 - SYSTEM_DESIGN_PHASE_2 §18.2 (User, RefreshToken)
 - SYSTEM_DESIGN_PHASE_2 §19.7 (AuthAuditLog)
-- SYSTEM_DESIGN_PHASE_2 §18.3 (CreditTransaction — registration grant only;
-  full billing surface lands in Step 6 / migration 0002_billing)
+- SYSTEM_DESIGN_PHASE_2 §18.3 (CreditTransaction)
+- IMPLEMENTATION_PLAN §7.5 (CreditTransaction extensions: ``credit_kind``,
+  ``stripe_event_id``, ``related_subscription_id``, ``related_resume_record_id``)
 
 These models intentionally use Postgres-specific types (JSONB, native ENUMs)
 because the deployment target is Postgres + pgvector and the matching enums
-are owned by ``alembic/versions/0001_base.py``.
+are owned by ``alembic/versions/0001_base.py`` plus ``0002_billing.py``.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.billing import CreditKind, _CREDIT_KIND_PG  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -331,11 +333,22 @@ class AuthAuditLog(Base):
 
 
 # ---------------------------------------------------------------------------
-# CreditTransaction (minimal slice — Step 6 fills out the billing surface)
+# CreditTransaction — full billing-aware ledger after Step 6 / 0002_billing
 # ---------------------------------------------------------------------------
 
 
 class CreditTransaction(Base):
+    """Append-only credit ledger.
+
+    Single source of truth for free-tier credit balance, Better LLM
+    5-pack balance, and Best LLM per-resume balance per
+    IMPLEMENTATION_PLAN §7.5.
+
+    The legacy ``User.credit_balance`` integer is now a denormalized
+    cache of ``SUM(delta) WHERE credit_kind='free'`` — services should
+    read balances via ``app.services.billing.credits.get_balance``.
+    """
+
     __tablename__ = "credit_transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -347,15 +360,52 @@ class CreditTransaction(Base):
         nullable=False,
         index=True,
     )
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Renamed from ``amount`` in 0002_billing.  Positive on grant,
+    # negative on consume.
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Categorical action enum from §18.3 (kept for back-compat with
+    # registration-grant audit reads).  New code may pass any reason
+    # string via ``reason`` and pick the closest enum here.
     action: Mapped[CreditTransactionAction] = mapped_column(
         _CREDIT_ACTION_PG, nullable=False
+    )
+    # IMPLEMENTATION_PLAN §7.5: free-form reason ("purchase_better_5pack",
+    # "phase3_run_better", "refund", "backfill_legacy_balance", …).
+    reason: Mapped[str] = mapped_column(
+        String(120), nullable=False, default="", server_default=""
+    )
+    # IMPLEMENTATION_PLAN §7.5: ``credit_kind`` partitions the ledger.
+    # ``free`` → registration grant + admin compensation; ``better`` →
+    # Better 5-pack credits; ``best`` → Best per-resume credits.  The
+    # Postgres ENUM type is created by ``0002_billing``.
+    credit_kind: Mapped[CreditKind] = mapped_column(
+        _CREDIT_KIND_PG,
+        nullable=False,
+        default=CreditKind.free,
+        server_default=CreditKind.free.value,
     )
     session_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     admin_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Stripe event id on rows created from a webhook (§7.4 idempotency).
+    # Combined with ``credit_kind`` in a partial UNIQUE index so that a
+    # duplicate webhook delivery becomes a no-op.
+    stripe_event_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    related_subscription_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("subscriptions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # ``resume_records`` table is introduced by Step 27 (RP4).  Until
+    # then this column carries a soft reference (no FK) so phase-3
+    # consumption logging can still cite the run.
+    related_resume_record_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

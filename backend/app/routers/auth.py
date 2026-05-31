@@ -368,14 +368,15 @@ async def register(
     await db.flush()
 
     # §18.3 — record the registration grant on the credit ledger in
-    # the same transaction as the user row.  Step 6 will extend this
-    # with the wider subscription/refund surface.
+    # the same transaction as the user row.  ``delta`` is the §7.5
+    # ledger-extended replacement for the legacy ``amount`` column.
     db.add(
         CreditTransaction(
             id=uuid.uuid4(),
             user_id=user.id,
-            amount=REGISTRATION_GRANT_CREDITS,
+            delta=REGISTRATION_GRANT_CREDITS,
             action=CreditTransactionAction.registration_grant,
+            reason="registration_grant",
             note="initial free credit grant on registration",
         )
     )
@@ -559,8 +560,9 @@ async def oauth_callback(
             CreditTransaction(
                 id=uuid.uuid4(),
                 user_id=user.id,
-                amount=REGISTRATION_GRANT_CREDITS,
+                delta=REGISTRATION_GRANT_CREDITS,
                 action=CreditTransactionAction.registration_grant,
+                reason="registration_grant",
                 note=f"registration grant via {provider_enum.value}",
             )
         )
