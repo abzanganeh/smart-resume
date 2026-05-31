@@ -58,6 +58,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
                 "credit_transactions, subscriptions, plan_configs, "
+                "llm_configs, "
                 "auth_audit_log, refresh_tokens, users "
                 "RESTART IDENTITY CASCADE"
             )

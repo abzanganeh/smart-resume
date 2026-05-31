@@ -21,6 +21,7 @@ from app.services.billing.bootstrap import (
     assert_canonical_codes_resolve,
     seed_plan_configs_if_empty,
 )
+from app.services.billing.llm_upgrade import seed_llm_configs_if_empty
 from app.services.session_store import close_redis, health_check, init_redis
 
 # ---------------------------------------------------------------------------
@@ -59,6 +60,10 @@ async def lifespan(app: FastAPI):
         try:
             async with async_session_factory() as db_session:
                 await seed_plan_configs_if_empty(db_session)
+                # Step 19 — seed LLMConfig rows so the Phase 3 router
+                # always resolves a (provider, model) pair without
+                # waiting for an admin write.
+                await seed_llm_configs_if_empty(db_session)
                 unresolved = await assert_canonical_codes_resolve(db_session)
                 if unresolved and settings.APP_ENV in {"ci", "staging", "production"}:
                     raise RuntimeError(

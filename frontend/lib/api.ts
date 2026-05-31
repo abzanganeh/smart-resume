@@ -125,13 +125,14 @@ export interface PhaseRunScope {
 export async function triggerPhase(
   sessionId: string,
   phase: number,
-  options?: { force?: boolean; scope?: PhaseRunScope }
+  options?: { force?: boolean; scope?: PhaseRunScope; llmTier?: LLMTier }
 ): Promise<{ job_id: string; stream_url: string }> {
   return request(`/api/sessions/${sessionId}/phases/${phase}/run`, {
     method: "POST",
     body: JSON.stringify({
       force: options?.force ?? false,
       scope: options?.scope ?? null,
+      llm_tier: options?.llmTier ?? null,
     }),
   });
 }
@@ -355,6 +356,50 @@ export async function unpauseSubscription(token: string): Promise<{ ok: boolean 
   return request("/api/subscriptions/unpause", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+// ── LLM upgrade (Step 19/20) ─────────────────────────────────────────────────
+
+export type LLMTier = "standard" | "better" | "best"
+
+export type LLMUpgradeCheckoutCode =
+  | "better_5pack"
+  | "better_monthly"
+  | "better_yearly"
+  | "best_per_resume"
+  | "best_monthly"
+  | "best_yearly"
+
+export interface LLMUpgradeStatus {
+  entitled_tier: LLMTier
+  better_subscription_active: boolean
+  best_subscription_active: boolean
+  better_credits_balance: number
+  upgraded_resumes_used: number
+  upgraded_resumes_limit: number
+  best_soft_cap_hit: boolean
+  base_billing_cycle: "recurring" | "yearly" | null
+}
+
+export async function getLLMUpgradeStatus(token: string): Promise<LLMUpgradeStatus> {
+  return request("/api/subscriptions/llm-upgrade/status", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function createLLMUpgradeCheckout(
+  token: string,
+  payload: {
+    code: LLMUpgradeCheckoutCode
+    success_url: string
+    cancel_url: string
+  },
+): Promise<{ url: string; id: string }> {
+  return request("/api/subscriptions/llm-upgrade/checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
   })
 }
 
