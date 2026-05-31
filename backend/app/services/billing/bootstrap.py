@@ -42,6 +42,19 @@ _INTERVAL_BY_CODE: dict[str, PlanConfigInterval] = {
     "best_yearly": PlanConfigInterval.year,
 }
 
+_ELIGIBILITY_BY_CODE: dict[str, str] = {
+    "daily": "base_plan",
+    "weekly": "base_plan",
+    "monthly": "base_plan",
+    "monthly_yearly": "base_plan",
+    "better_pack": "credit_pack",
+    "better_monthly": "addon_subscription",
+    "better_yearly": "addon_subscription",
+    "best_per_resume": "per_resume",
+    "best_monthly": "addon_subscription",
+    "best_yearly": "addon_subscription",
+}
+
 
 async def seed_plan_configs_if_empty(session: AsyncSession) -> int:
     """Insert one row per canonical code; no-op if any rows already exist.
@@ -70,6 +83,7 @@ async def seed_plan_configs_if_empty(session: AsyncSession) -> int:
             code=code,
             stripe_price_id=price_id,
             stripe_product_id=None,
+            eligibility=_ELIGIBILITY_BY_CODE[code],
             amount_cents=0,
             currency="USD",
             interval=_INTERVAL_BY_CODE[code],

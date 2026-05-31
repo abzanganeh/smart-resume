@@ -17,6 +17,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import (
+    PlanConfig,
+    PlanConfigInterval,
     Subscription,
     SubscriptionBillingCycle,
     SubscriptionPlan,
@@ -91,6 +93,19 @@ async def seeded_subscription(db_session: AsyncSession) -> Subscription:
         last_event_created_at=datetime(2026, 5, 30, 12, 0, tzinfo=timezone.utc),
     )
     db_session.add(sub)
+    db_session.add(
+        PlanConfig(
+            id=uuid.uuid4(),
+            code="monthly",
+            stripe_price_id="price_monthly_test",
+            stripe_product_id="prod_monthly_test",
+            eligibility="base_plan",
+            amount_cents=1999,
+            currency="USD",
+            interval=PlanConfigInterval.month,
+            is_active=True,
+        )
+    )
     await db_session.commit()
     return sub
 

@@ -39,8 +39,8 @@ from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.models.billing import (
+    AdminAuditLog,
     CreditKind,
-    PlanConfig,
     RefundInitiator,
     RefundReason,
     RefundRecord,
@@ -58,7 +58,6 @@ from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
     PriceUnresolvedError,
-    WebhookSignatureError,
 )
 
 log = structlog.get_logger("billing.router")
@@ -572,11 +571,11 @@ async def stripe_webhook(
         ) from exc
 
     event_dict = _stripe_event_to_dict(event)
-    return await _persist_and_dispatch(db, event_dict, raw_body)
+    return await _persist_and_dispatch(db, event_dict)
 
 
 async def _persist_and_dispatch(
-    db: AsyncSession, event: dict[str, Any], raw_body: bytes
+    db: AsyncSession, event: dict[str, Any]
 ) -> dict[str, Any]:
     """Idempotency + ordering wrapper around handler dispatch.
 
@@ -632,24 +631,34 @@ async def _persist_and_dispatch(
     )
     inserted_id = (await db.execute(insert_stmt)).scalar_one_or_none()
     await db.commit()
-
     row = (
         await db.execute(
             select(StripeWebhookEvent).where(StripeWebhookEvent.event_id == event_id)
         )
     ).scalar_one()
-
-    if inserted_id is None and row.status == StripeWebhookStatus.processed:
-        # Pure duplicate — the handler ran successfully on a previous
-        # delivery.  Return 200 immediately without touching anything.
-        log.info(
-            "billing.webhook.duplicate_processed_ack", event_id=event_id
-        )
+    if inserted_id is None and row.status in {
+        StripeWebhookStatus.processed,
+        StripeWebhookStatus.needs_review,
+    }:
+        # Already terminally handled: duplicate webhook delivery becomes
+        # a no-op and returns 200 immediately.
+        log.info("billing.webhook.duplicate_ack", event_id=event_id, status=row.status.value)
         return {"received": True, "duplicate": True}
 
     if row.attempts >= settings.STRIPE_WEBHOOK_MAX_ATTEMPTS:
         row.status = StripeWebhookStatus.needs_review
         await db.commit()
+        await _write_admin_audit(
+            db,
+            action="stripe_event_needs_review",
+            target_kind="stripe_webhook_event",
+            target_id=row.event_id,
+            after_json={
+                "event_type": row.event_type,
+                "attempts": row.attempts,
+                "last_error": row.last_error or "",
+            },
+        )
         log.error(
             "billing.webhook.needs_review_after_max_attempts",
             event_id=event_id,
@@ -667,16 +676,24 @@ async def _persist_and_dispatch(
     # Step 3 — dispatch.
     try:
         await webhook_handler.dispatch(db, event)
-    except WebhookSignatureError as exc:
-        # Should never reach here — signature was verified above.
-        await db.rollback()
-        await _mark_failed(db, row, str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "invalid_signature"},
-        ) from exc
     except Exception as exc:  # noqa: BLE001 — webhook resilience
         await db.rollback()
+        # After max attempts (default: 5), park in needs_review and stop
+        # retries (return 200) while writing an admin audit row.
+        if row.attempts >= settings.STRIPE_WEBHOOK_MAX_ATTEMPTS:
+            await _mark_needs_review(db, row, str(exc))
+            await _write_admin_audit(
+                db,
+                action="stripe_event_needs_review",
+                target_kind="stripe_webhook_event",
+                target_id=row.event_id,
+                after_json={
+                    "event_type": row.event_type,
+                    "attempts": row.attempts,
+                    "last_error": (str(exc) or "")[:2000],
+                },
+            )
+            return {"received": True, "needs_review": True}
         await _mark_failed(db, row, str(exc))
         log.error(
             "billing.webhook.handler_failed",
@@ -719,6 +736,47 @@ async def _mark_failed(
         return
     fresh.status = StripeWebhookStatus.failed
     fresh.last_error = (message or "")[:2000]
+    await db.commit()
+
+
+async def _mark_needs_review(
+    db: AsyncSession, row: StripeWebhookEvent, message: str
+) -> None:
+    fresh = (
+        await db.execute(
+            select(StripeWebhookEvent).where(
+                StripeWebhookEvent.id == row.id
+            )
+        )
+    ).scalar_one_or_none()
+    if fresh is None:
+        return
+    fresh.status = StripeWebhookStatus.needs_review
+    fresh.last_error = (message or "")[:2000]
+    await db.commit()
+
+
+async def _write_admin_audit(
+    db: AsyncSession,
+    *,
+    action: str,
+    target_kind: str,
+    target_id: str,
+    after_json: dict[str, Any],
+) -> None:
+    row = AdminAuditLog(
+        id=uuid.uuid4(),
+        actor_admin_id=None,
+        action=action,
+        target_kind=target_kind,
+        target_id=target_id,
+        before_json={},
+        after_json=after_json,
+        ip="system:webhook",
+        user_agent="stripe-webhook",
+        request_id="",
+    )
+    db.add(row)
     await db.commit()
 
 

@@ -59,7 +59,12 @@ async def lifespan(app: FastAPI):
         try:
             async with async_session_factory() as db_session:
                 await seed_plan_configs_if_empty(db_session)
-                await assert_canonical_codes_resolve(db_session)
+                unresolved = await assert_canonical_codes_resolve(db_session)
+                if unresolved and settings.APP_ENV in {"ci", "staging", "production"}:
+                    raise RuntimeError(
+                        "startup_price_gap: unresolved Stripe pricing codes: "
+                        + ", ".join(unresolved)
+                    )
                 await db_session.commit()
         except Exception as exc:  # noqa: BLE001 - boot-time best effort
             log.warning("billing.bootstrap.skipped", error=str(exc))
