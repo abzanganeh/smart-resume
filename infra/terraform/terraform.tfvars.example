@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in secrets before terraform apply.
+aws_region   = "us-east-1"
+environment  = "staging"
+
+postgres_url   = "postgresql://smart_resume:password@localhost:5432/smart_resume"
+apify_api_token = "apify_api_..."
+
+lambda_apify_cache_worker_zip = "build/apify_cache_worker.zip"
+lambda_job_cache_writer_zip   = "build/job_cache_writer.zip"
+lambda_alert_dispatcher_zip   = "build/alert_dispatcher.zip"
