@@ -12,7 +12,6 @@ from app.config import settings
 from app.services.jobs.circuit_breaker import (
     HirebaseUnavailableError,
     assert_call_allowed,
-    get_circuit_state,
     record_failure,
     record_probe_failure,
     record_success,
@@ -92,8 +91,17 @@ async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
             status_code=resp.status_code,
         )
 
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        if was_probe:
+            await record_probe_failure()
+        else:
+            await record_failure(status_code=None)
+        raise HirebaseClientError("Hirebase returned invalid JSON") from exc
+
     await record_success()
-    return resp.json()
+    return payload
 
 
 async def embed_resume(resume_text: str) -> str:

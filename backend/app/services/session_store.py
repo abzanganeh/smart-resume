@@ -159,6 +159,17 @@ async def redis_set(key: str, value: str, *, ex: int | None = None) -> None:
         _memory_store[key] = value
 
 
+async def redis_set_nx(key: str, value: str, *, ex: int | None = None) -> bool:
+    """Set key only when absent. Returns True when set."""
+    if _redis_client:
+        result = await _redis_client.set(key, value, nx=True, ex=ex)
+        return result is True
+    if key in _memory_store:
+        return False
+    _memory_store[key] = value
+    return True
+
+
 async def redis_delete(*keys: str) -> None:
     if _redis_client:
         if keys:
@@ -166,6 +177,11 @@ async def redis_delete(*keys: str) -> None:
     else:
         for key in keys:
             _memory_store.pop(key, None)
+
+
+async def redis_expire(key: str, seconds: int) -> None:
+    if _redis_client:
+        await _redis_client.expire(key, seconds)
 
 
 async def redis_incr(key: str) -> int:

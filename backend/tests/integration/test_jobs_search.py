@@ -163,11 +163,45 @@ async def test_saved_search_limit_returns_422_on_eleventh(
 
 
 @pytest.mark.asyncio
-async def test_circuit_opens_after_five_consecutive_failures(
+async def test_five_upstream_500s_open_circuit_and_sixth_uses_cache(
+    app_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    for _ in range(5):
-        await circuit_breaker.record_failure(status_code=None)
-    state = await circuit_breaker.get_circuit_state()
-    assert state.is_open is True
-    assert state.consecutive_failures >= 5
+    token, user_id = await _register(app_client)
+    await _seed_subscription(db_session, user_id)
+    await _seed_cache_job(
+        db_session, company="Fallback Co", title="Backend Engineer"
+    )
+    await db_session.commit()
+
+    async def _raise_500(*args, **kwargs):
+        await circuit_breaker.record_failure(status_code=500)
+        raise circuit_breaker.HirebaseUnavailableError("upstream_500")
+
+    with patch(
+        "app.services.jobs.hirebase_client.search",
+        side_effect=_raise_500,
+    ) as mock_search:
+        for _ in range(5):
+            res = await app_client.post(
+                "/api/jobs/search",
+                json={"query": "backend engineer", "location": "Toronto"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert res.status_code == 200, res.text
+            assert res.json()["results_may_be_stale"] is True
+
+        state = await circuit_breaker.get_circuit_state()
+        assert state.is_open is True
+
+        sixth = await app_client.post(
+            "/api/jobs/search",
+            json={"query": "backend engineer", "location": "Toronto"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert sixth.status_code == 200, sixth.text
+        body = sixth.json()
+        assert body["results_may_be_stale"] is True
+        assert len(body["jobs"]) >= 1
+        # Once open, the sixth request should short-circuit before the client call.
+        assert mock_search.call_count == 5
