@@ -403,10 +403,23 @@ export interface QAItem {
   note: string;
 }
 
+export interface BlockingIssue {
+  category: "keyword" | "bullet" | "metric" | "format" | "length" | "section";
+  description: string;
+  suggestion: string;
+  impact: "high" | "medium" | "low";
+  fix_effort: "one_click" | "user_input" | "manual_rewrite";
+}
+
 export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
   user_action_required: string[];
+  /** ATS score (Phase 4) — not AuditOutput.overall_score (Phase 2 audit score). */
+  ats_score?: number;
+  blocking_issues?: BlockingIssue[];
+  score_ceiling?: number;
+  quick_wins?: BlockingIssue[];
 }
 
 // ── Billing types ─────────────────────────────────────────────────────────────
