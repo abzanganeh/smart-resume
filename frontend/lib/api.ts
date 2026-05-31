@@ -259,28 +259,42 @@ export async function streamCoverLetterGeneration(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let streamError: Error | null = null;
+
+  const consumeChunk = (chunk: string) => {
+    for (const line of chunk.split("\n")) {
+      if (!line.startsWith("data: ")) continue;
+      const parsed = JSON.parse(line.slice(6)) as import("./sse").SSEEvent;
+      onEvent(parsed);
+      if (parsed.event === "error") {
+        streamError = new Error(parsed.message ?? "Generation failed.");
+      }
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      if (buffer.trim()) {
+        consumeChunk(buffer);
+      }
+      break;
+    }
     buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      for (const line of part.split("\n")) {
-        if (!line.startsWith("data: ")) continue;
-        try {
-          const parsed = JSON.parse(line.slice(6)) as import("./sse").SSEEvent;
-          onEvent(parsed);
-          if (parsed.event === "error") {
-            throw new Error(parsed.message ?? "Generation failed.");
-          }
-        } catch (e) {
-          if (e instanceof Error && e.message !== "Generation failed.") throw e;
-        }
-      }
+      consumeChunk(part);
     }
+
+    if (streamError) {
+      throw streamError;
+    }
+  }
+
+  if (streamError) {
+    throw streamError;
   }
 }
 

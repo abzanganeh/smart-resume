@@ -147,5 +147,5 @@ test("phase 4 page generate cover letter renders letter body", async ({ page }) 
   await expect(page.locator("textarea").filter({ hasText: "Dear Hiring Manager" })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole("link", { name: "PDF" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "PDF", exact: true })).toBeVisible();
 });
