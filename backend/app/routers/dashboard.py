@@ -273,7 +273,7 @@ async def list_resumes(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
     q: str | None = None,
-    status: ResumeRecordStatus | None = None,
+    statuses: list[ResumeRecordStatus] = Query(default_factory=list, alias="status"),
     tag: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -297,8 +297,8 @@ async def list_resumes(
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
-    if status is not None:
-        query = query.where(ResumeRecord.status == status)
+    if statuses:
+        query = query.where(ResumeRecord.status.in_(statuses))
     if tag:
         query = query.where(ResumeRecord.tags.contains([tag]))
     if date_from is not None:
@@ -330,8 +330,8 @@ async def list_resumes(
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
-    if status is not None:
-        count_query = count_query.where(ResumeRecord.status == status)
+    if statuses:
+        count_query = count_query.where(ResumeRecord.status.in_(statuses))
     if tag:
         count_query = count_query.where(ResumeRecord.tags.contains([tag]))
     if date_from is not None:
@@ -445,20 +445,15 @@ async def duplicate_resume(
     )
     new_session.user_id = str(user.id)
     new_session.jd_raw = source.jd_raw
+    # Keep duplication deterministic: only prefill reusable inputs and JD text.
+    # Phase outputs are intentionally not copied to avoid stale-state forks.
     new_session.user_info = source.user_info
     new_session.resume_raw = source.resume_raw
     new_session.resume_parsed = source.resume_parsed
-    new_session.phase1_output = source.phase1_output
-    new_session.phase1_status = source.phase1_status
-    new_session.phase2_output = source.phase2_output
-    new_session.phase2_status = source.phase2_status
-    new_session.phase3_output = source.phase3_output
-    new_session.phase3_status = source.phase3_status
-    new_session.phase3_versions = list(source.phase3_versions)
-    new_session.phase4_output = source.phase4_output
-    new_session.phase4_status = (
-        PhaseStatus.done if source.phase4_output else PhaseStatus.pending
-    )
+    new_session.phase1_status = PhaseStatus.pending
+    new_session.phase2_status = PhaseStatus.pending
+    new_session.phase3_status = PhaseStatus.pending
+    new_session.phase4_status = PhaseStatus.pending
     await update_session(new_session)
     return DuplicateResponse(session_id=new_session.session_id)
 

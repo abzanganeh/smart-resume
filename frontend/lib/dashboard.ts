@@ -35,7 +35,7 @@ export async function getDashboardSummary(
 
 export interface ResumeListParams {
   q?: string
-  status?: ResumeRecordStatus
+  statuses?: ResumeRecordStatus[]
   tag?: string
   date_from?: string
   date_to?: string
@@ -52,7 +52,9 @@ export async function listResumes(
 ): Promise<ResumeListResponse> {
   const qs = new URLSearchParams()
   if (params.q) qs.set("q", params.q)
-  if (params.status) qs.set("status", params.status)
+  if (params.statuses?.length) {
+    for (const status of params.statuses) qs.append("status", status)
+  }
   if (params.tag) qs.set("tag", params.tag)
   if (params.date_from) qs.set("date_from", params.date_from)
   if (params.date_to) qs.set("date_to", params.date_to)
@@ -94,7 +96,12 @@ export async function bulkResumeAction(
     ids: string[]
     tags?: string[]
   },
-): Promise<{ ok: boolean }> {
+): Promise<{
+  ok: boolean
+  deleted?: number
+  tagged?: number
+  exports?: Array<{ id: string; title: string; company: string; download_url: string }>
+}> {
   return authRequest("/api/resumes/bulk", token, {
     method: "POST",
     body: JSON.stringify(body),
