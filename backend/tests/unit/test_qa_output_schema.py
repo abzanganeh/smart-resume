@@ -84,3 +84,36 @@ def test_blocking_issue_invalid_category_rejected() -> None:
     payload["blocking_issues"][0]["category"] = "unknown"
     with pytest.raises(ValidationError):
         QAOutput.model_validate(payload)
+
+
+def test_score_ceiling_must_not_be_below_ats_score() -> None:
+    payload = _mock_phase4_payload()
+    payload["score_ceiling"] = payload["ats_score"] - 1
+    with pytest.raises(ValidationError):
+        QAOutput.model_validate(payload)
+
+
+def test_blocking_issues_must_be_sorted_by_impact_then_effort() -> None:
+    payload = _mock_phase4_payload()
+    payload["blocking_issues"] = [
+        payload["blocking_issues"][2],  # low
+        payload["blocking_issues"][0],  # high one_click
+        payload["blocking_issues"][1],  # high user_input
+    ]
+    with pytest.raises(ValidationError):
+        QAOutput.model_validate(payload)
+
+
+def test_quick_wins_must_be_high_one_click_subset_of_blocking_issues() -> None:
+    payload = _mock_phase4_payload()
+    payload["quick_wins"] = [
+        {
+            "category": "metric",
+            "description": "Manual-only fix that is not a quick win.",
+            "suggestion": "Collect hard metrics from the user first.",
+            "impact": "high",
+            "fix_effort": "user_input",
+        }
+    ]
+    with pytest.raises(ValidationError):
+        QAOutput.model_validate(payload)
