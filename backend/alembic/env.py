@@ -46,6 +46,7 @@ from app.db.base import Base  # noqa: E402
 # Explicitly import model modules here as they are added so their tables
 # are registered with Base.metadata:
 from app.models import billing as _billing_models  # noqa: F401, E402
+from app.models import master_resume as _master_resume_models  # noqa: F401, E402
 from app.models import user as _user_models  # noqa: F401, E402
 
 target_metadata = Base.metadata

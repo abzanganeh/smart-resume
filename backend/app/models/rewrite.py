@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class MetricNeeded(BaseModel):
@@ -26,6 +28,16 @@ class TailoredEducationEntry(BaseModel):
     bullets: list[str] = []
 
 
+# ---------------------------------------------------------------------------
+# Master-resume retrieval transparency (IMPLEMENTATION_PLAN §6a).
+#
+# These fields are emitted on every Phase 3 run so the UI can render
+# the "selected vs skipped" panel from SYSTEM_DESIGN_PHASE_2 §18.4.
+# They are intentionally permissive ``dict``s with documented shapes
+# so we don't tightly couple Phase 3 output to ORM types.
+# ---------------------------------------------------------------------------
+
+
 class TailoredResumeOutput(BaseModel):
     contact: dict = {}
     summary: str = ""
@@ -36,6 +48,17 @@ class TailoredResumeOutput(BaseModel):
     certifications: list[str] = []
     rewrite_notes: list[str] = []
     metrics_needed: list[MetricNeeded] = []
+
+    # Step 10 — master-resume retrieval trace.  ``selected_chunks`` is a
+    # list of ``{chunk_id, section, score, tokens}`` dicts.
+    # ``skipped_chunks`` adds a ``reason`` field
+    # (``below_threshold | cap_exceeded | budget_exceeded | fallback_used``).
+    # ``retrieval_meta`` carries the resolved thresholds, embedding model,
+    # total token count, and fallback flags — see
+    # :class:`app.services.retrieval.retrieval_service.RetrievalResult.to_trace`.
+    selected_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    skipped_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    retrieval_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResumeVersion(BaseModel):
