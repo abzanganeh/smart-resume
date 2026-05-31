@@ -50,5 +50,11 @@ async def run(
 
     output = await complete_structured(llm, messages, QAOutput)
     await event_queue.put({"event": "partial", "phase": 4, "data": json.loads(output.model_dump_json())})
-    log.info("phase4_done", overall_status=output.overall_status, actions=len(output.user_action_required))
+    log.info(
+        "phase4_done",
+        overall_status=output.overall_status,
+        ats_score=output.ats_score,
+        blocking=len(output.blocking_issues),
+        actions=len(output.user_action_required),
+    )
     return output
