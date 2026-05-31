@@ -31,6 +31,7 @@ export async function checkSession(
   ok: boolean;
   resume_raw: string;
   phases: Record<string, { status: string; output: unknown | null }>;
+  cover_letter?: CoverLetterOutput | null;
   stale: Record<string, string | null>;
   stale_since?: string | null;
   phase1_complete: boolean;
@@ -203,6 +204,98 @@ export function exportUrl(
   format: "pdf" | "docx" | "txt"
 ): string {
   return `${BASE}/api/sessions/${sessionId}/export?format=${format}`;
+}
+
+// ── Cover letter ─────────────────────────────────────────────────────────────
+
+export type CoverLetterTone = "formal" | "balanced" | "warm";
+
+export interface CoverLetterOutput {
+  body_markdown: string;
+  body_plain: string;
+  word_count: number;
+  tone: CoverLetterTone;
+  keywords_used: string[];
+}
+
+export async function fetchCoverLetter(sessionId: string): Promise<CoverLetterOutput> {
+  return request(`/api/sessions/${sessionId}/cover-letter`);
+}
+
+export function coverLetterExportUrl(
+  sessionId: string,
+  format: "pdf" | "docx" | "txt",
+): string {
+  return `${BASE}/api/sessions/${sessionId}/cover-letter/export?format=${format}`;
+}
+
+export async function streamCoverLetterGeneration(
+  sessionId: string,
+  payload: { tone: CoverLetterTone; custom_hook?: string },
+  accessToken: string,
+  onEvent: (event: import("./sse").SSEEvent) => void,
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/sessions/${sessionId}/cover-letter`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...byokHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = body?.detail;
+    const code = typeof detail === "object" ? detail?.code : detail;
+    throw new Error(code ?? detail ?? `HTTP ${res.status}`);
+  }
+
+  if (!res.body) {
+    throw new Error("No response stream");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let streamError: Error | null = null;
+
+  const consumeChunk = (chunk: string) => {
+    for (const line of chunk.split("\n")) {
+      if (!line.startsWith("data: ")) continue;
+      const parsed = JSON.parse(line.slice(6)) as import("./sse").SSEEvent;
+      onEvent(parsed);
+      if (parsed.event === "error") {
+        streamError = new Error(parsed.message ?? "Generation failed.");
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      if (buffer.trim()) {
+        consumeChunk(buffer);
+      }
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+
+    for (const part of parts) {
+      consumeChunk(part);
+    }
+
+    if (streamError) {
+      throw streamError;
+    }
+  }
+
+  if (streamError) {
+    throw streamError;
+  }
 }
 
 // ── Billing ──────────────────────────────────────────────────────────────────
