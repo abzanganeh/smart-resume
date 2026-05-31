@@ -1,0 +1,13 @@
+John Doe — Senior Backend Engineer
+
+Summary: 8 years of Python, FastAPI, PostgreSQL, Kubernetes.
+
+Experience:
+- Built async pipelines at Acme for invoice processing in Python.
+- Migrated legacy Django monolith to FastAPI microservices.
+
+Skills:
+- Python, FastAPI, PostgreSQL, pgvector, Kubernetes, Redis
+
+Education:
+- BS Computer Science, MIT (2017)
