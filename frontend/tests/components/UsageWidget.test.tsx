@@ -55,6 +55,8 @@ function deriveWidgetProps(current: typeof FREE_USER_FIXTURE | typeof SUBSCRIBED
       tierLabel: sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1),
       resumesUsed: sub.resumes_used,
       resumesLimit: sub.resumes_limit,
+      searchesUsed: sub.searches_used,
+      searchesLimit: sub.searches_limit,
     }
   }
   return {
@@ -98,6 +100,14 @@ function runTests() {
     assert(
       "resumesLimit" in props && props.resumesLimit === 150,
       "subscribed user → resumes limit is 150",
+    )
+    assert(
+      "searchesUsed" in props && props.searchesUsed === 45,
+      "subscribed user → searches used is 45",
+    )
+    assert(
+      "searchesLimit" in props && props.searchesLimit === 300,
+      "subscribed user → searches limit is 300",
     )
   }
 
