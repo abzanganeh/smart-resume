@@ -136,3 +136,66 @@ async def health_check() -> dict:
         except Exception as e:
             return {"redis": f"error: {e}"}
     return {"redis": "in-memory (dev mode)"}
+
+
+def redis_available() -> bool:
+    """Return True when a live Redis client is connected."""
+    return _redis_client is not None
+
+
+async def redis_get(key: str) -> str | None:
+    if _redis_client:
+        return await _redis_client.get(key)
+    return _memory_store.get(key)
+
+
+async def redis_set(key: str, value: str, *, ex: int | None = None) -> None:
+    if _redis_client:
+        if ex is not None:
+            await _redis_client.setex(key, ex, value)
+        else:
+            await _redis_client.set(key, value)
+    else:
+        _memory_store[key] = value
+
+
+async def redis_set_nx(key: str, value: str, *, ex: int | None = None) -> bool:
+    """Set key only when absent. Returns True when set."""
+    if _redis_client:
+        result = await _redis_client.set(key, value, nx=True, ex=ex)
+        return result is True
+    if key in _memory_store:
+        return False
+    _memory_store[key] = value
+    return True
+
+
+async def redis_delete(*keys: str) -> None:
+    if _redis_client:
+        if keys:
+            await _redis_client.delete(*keys)
+    else:
+        for key in keys:
+            _memory_store.pop(key, None)
+
+
+async def redis_expire(key: str, seconds: int) -> None:
+    if _redis_client:
+        await _redis_client.expire(key, seconds)
+
+
+async def redis_incr(key: str) -> int:
+    if _redis_client:
+        return int(await _redis_client.incr(key))
+    current = int(_memory_store.get(key, "0"))
+    current += 1
+    _memory_store[key] = str(current)
+    return current
+
+
+async def reset_redis_keys_for_tests() -> None:
+    """Clear in-memory Redis fallback between tests."""
+    if not _redis_client:
+        keys = [k for k in _memory_store if k.startswith("hirebase:")]
+        for key in keys:
+            _memory_store.pop(key, None)

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.limiter import limiter
 from app.main import app
 from app.services.auth import session as redis_session
+from app.services.session_store import reset_redis_keys_for_tests
 from app.db.engine import get_db
 
 
@@ -54,7 +55,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await session.execute(
             text(
                 "TRUNCATE TABLE "
-                "job_cache, job_search_log, saved_search, "
+                "saved_job, job_cache, job_search_log, saved_search, "
                 "fit_analyses, master_resume_chunks, master_resumes, "
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
@@ -87,8 +88,10 @@ async def app_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, No
 
     app.dependency_overrides[get_db] = _override_db
     redis_session._reset_for_tests()  # type: ignore[attr-defined]
+    await reset_redis_keys_for_tests()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
     app.dependency_overrides.pop(get_db, None)
     redis_session._reset_for_tests()  # type: ignore[attr-defined]
+    await reset_redis_keys_for_tests()
