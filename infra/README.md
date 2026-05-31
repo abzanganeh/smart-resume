@@ -64,7 +64,7 @@ zip -r ../terraform/build/job_cache_writer.zip handler.py
 # Add psycopg2-binary + boto3 to the zip or attach a Lambda layer.
 ```
 
-Set `lambda_*_zip_path` variables in `terraform.tfvars` to the built zip paths.
+Set `lambda_*_zip` variables in `terraform.tfvars` to the built zip paths.
 
 ## Local testing
 
