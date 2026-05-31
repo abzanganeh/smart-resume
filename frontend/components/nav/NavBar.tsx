@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react"
 import { ChevronDown, CreditCard, FileText, LogOut, Settings, Sparkles } from "lucide-react"
 import { logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
+import { JobsNavItem } from "@/components/nav/JobsNavItem"
 import { UsageWidget } from "@/components/nav/UsageWidget"
 
 export function NavBar() {
@@ -52,7 +53,7 @@ export function NavBar() {
             <NavLink href="/profile">Edit master resume</NavLink>
             <NavLink href="/fit">Job fit</NavLink>
             <NavLink href="/dashboard">Dashboard</NavLink>
-            <NavLink href="/jobs">Jobs</NavLink>
+            <JobsNavItem />
           </div>
         )}
 

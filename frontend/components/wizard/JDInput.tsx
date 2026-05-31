@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { type JDPayload } from "@/lib/api";
 
@@ -9,14 +9,21 @@ interface Props {
   selectedProvider: string;
   selectedModel: string;
   loading?: boolean;
+  initialJdText?: string;
 }
 
 const MAX_JD = 10_000;
 
-export function JDInput({ onSubmit, selectedProvider, selectedModel, loading }: Props) {
-  const [jdText, setJdText] = useState("");
+export function JDInput({ onSubmit, selectedProvider, selectedModel, loading, initialJdText = "" }: Props) {
+  const [jdText, setJdText] = useState(initialJdText);
   const [jdUrl, setJdUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialJdText) {
+      setJdText(initialJdText);
+    }
+  }, [initialJdText]);
 
   const handleSubmit = () => {
     setError(null);
