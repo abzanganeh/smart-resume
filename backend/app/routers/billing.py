@@ -59,6 +59,12 @@ from app.services.billing.exceptions import (
     BillingError,
     PriceUnresolvedError,
 )
+from app.services.billing.llm_upgrade import (
+    VALID_LLM_UPGRADE_CODES,
+    TierStatus,
+    get_phase3_tier_status,
+    normalize_llm_upgrade_code,
+)
 
 log = structlog.get_logger("billing.router")
 
@@ -434,20 +440,63 @@ async def subscriptions_current(
     )
 
 
+class LLMUpgradeCheckoutRequest(BaseModel):
+    """Spec-canonical add-on codes per IMPLEMENTATION_PLAN §7.1.
+
+    ``better_5pack`` is the canonical name for what the legacy webhook
+    handler / price resolver call ``better_pack`` — both are accepted
+    here and collapsed to the internal name in
+    :func:`normalize_llm_upgrade_code`.
+    """
+
+    code: Literal[
+        "better_5pack",
+        "better_pack",
+        "better_monthly",
+        "better_yearly",
+        "best_per_resume",
+        "best_monthly",
+        "best_yearly",
+    ]
+    success_url: str = Field(..., max_length=2048)
+    cancel_url: str = Field(..., max_length=2048)
+
+
+class LLMUpgradeStatusResponse(BaseModel):
+    entitled_tier: Literal["standard", "better", "best"]
+    better_subscription_active: bool
+    best_subscription_active: bool
+    better_credits_balance: int
+    upgraded_resumes_used: int
+    upgraded_resumes_limit: int
+    best_soft_cap_hit: bool
+    base_billing_cycle: Literal["recurring", "yearly"] | None
+
+
 @router.post("/api/subscriptions/llm-upgrade/checkout")
 @limiter.limit("30/minute")
 async def subscriptions_llm_upgrade_checkout(
     request: Request,
-    payload: CheckoutRequest,
+    payload: LLMUpgradeCheckoutRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> CheckoutResponse:
-    """LLM upgrade checkout — Step 19 ships the full pricing/routing logic.
+    """LLM upgrade checkout — Step 19 enforces yearly-cycle alignment.
 
-    Step 6 wires up the route so the public route table is satisfied;
-    Step 19 layers in the yearly-mismatch enforcement and Best soft-cap
-    middleware.  Today this delegates to the same checkout helper.
+    Accepts the §7.1 canonical codes (``better_5pack``, ``better_monthly``,
+    ``better_yearly``, ``best_per_resume``, ``best_monthly``,
+    ``best_yearly``) and returns a Stripe Checkout URL.
+
+    Yearly add-ons require a yearly base subscription cycle (§7.7).
+    Monthly users requesting a yearly add-on receive HTTP 409 with
+    ``{"code": "billing_cycle_mismatch"}``.
     """
+    if payload.code not in VALID_LLM_UPGRADE_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_llm_upgrade_code", "value": payload.code},
+        )
+
     base = (
         await db.execute(
             select(Subscription)
@@ -466,14 +515,16 @@ async def subscriptions_llm_upgrade_checkout(
             .limit(1)
         )
     ).scalar_one_or_none()
+
+    internal_code = normalize_llm_upgrade_code(payload.code)
     try:
         sub_service.assert_yearly_addon_alignment(
-            addon_code=payload.code, base_subscription=base
+            addon_code=internal_code, base_subscription=base
         )
         result = await sub_service.create_checkout_session(
             db,
             user=user,
-            code=payload.code,
+            code=internal_code,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,
         )
@@ -482,6 +533,35 @@ async def subscriptions_llm_upgrade_checkout(
     return CheckoutResponse(
         url=str(result.get("url", "")),
         id=str(result.get("id", "")),
+    )
+
+
+@router.get("/api/subscriptions/llm-upgrade/status")
+@limiter.limit("120/minute")
+async def subscriptions_llm_upgrade_status(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> LLMUpgradeStatusResponse:
+    """Snapshot of the user's Phase 3 LLM tier entitlements (Step 19).
+
+    The frontend selector on the rewrite page calls this to render the
+    Better-credit badge, the Best soft-cap banner, and to gate the
+    yearly add-on option behind a yearly base subscription.
+    """
+    status_view: TierStatus = await get_phase3_tier_status(db, user_id=user.id)
+    cycle = status_view.base_billing_cycle
+    if cycle not in (None, "recurring", "yearly"):
+        cycle = None
+    return LLMUpgradeStatusResponse(
+        entitled_tier=status_view.entitled_tier,
+        better_subscription_active=status_view.better_subscription_active,
+        best_subscription_active=status_view.best_subscription_active,
+        better_credits_balance=status_view.better_credits_balance,
+        upgraded_resumes_used=status_view.upgraded_resumes_used,
+        upgraded_resumes_limit=status_view.upgraded_resumes_limit,
+        best_soft_cap_hit=status_view.best_soft_cap_hit,
+        base_billing_cycle=cycle,  # type: ignore[arg-type]
     )
 
 
