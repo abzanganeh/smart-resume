@@ -8,7 +8,7 @@ Run with a local database:
 
     docker compose up -d postgres
     cd backend
-    DATABASE_URL=postgresql+asyncpg://smart_resume:password@localhost:5433/smart_resume \\
+    DATABASE_URL=postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume \\
         uv run pytest tests/test_db_smoke.py -m integration -v
 """
 

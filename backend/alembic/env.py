@@ -18,13 +18,20 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # ---------------------------------------------------------------------------
-# Inject DATABASE_URL from environment so credentials never live in .ini
+# Inject DATABASE_URL from environment (with settings fallback) so credentials
+# never live in alembic.ini.
 # ---------------------------------------------------------------------------
 _db_url = os.environ.get("DATABASE_URL")
 if not _db_url:
+    # Fallback to backend/.env via Settings to keep local commands ergonomic.
+    from app.config import settings  # noqa: E402
+
+    _db_url = settings.DATABASE_URL
+
+if not _db_url:
     raise RuntimeError(
-        "DATABASE_URL environment variable is not set. "
-        "Export it before running alembic commands.\n"
+        "DATABASE_URL is not set (environment or backend/.env). "
+        "Set it before running alembic commands.\n"
         "Example: export DATABASE_URL=postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume"
     )
 config.set_main_option("sqlalchemy.url", _db_url)
