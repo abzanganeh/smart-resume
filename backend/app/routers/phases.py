@@ -5,6 +5,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -117,6 +119,10 @@ router = APIRouter(prefix="/api/sessions", tags=["phases"])
 class RunPhaseRequest(BaseModel):
     force: bool = False
     scope: PhaseRunScope | None = None
+    # Step 19/20: user-selected LLM tier for Phase 3.  Ignored for
+    # other phases.  The orchestrator falls back to "standard" when
+    # the user is not entitled to the requested tier.
+    llm_tier: Literal["standard", "better", "best"] | None = None
 
 
 @router.post("/{session_id}/phases/{phase}/run", status_code=202)
@@ -208,6 +214,8 @@ async def trigger_phase(
 
     session.phase_run_requested = phase
     session.phase_run_scope = body.scope
+    if phase == 3 and body.llm_tier is not None:
+        session.phase3_llm_tier = body.llm_tier
     await update_session(session)
 
     return {

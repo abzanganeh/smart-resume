@@ -8,12 +8,17 @@ import {
   triggerPhase,
   phaseEventsUrl,
   checkSession,
+  getLLMUpgradeStatus,
+  createLLMUpgradeCheckout,
   type PhaseRunScope,
   type KeywordExtractionOutput,
   type AuditOutput,
   type TailoredResumeOutput,
   type QAOutput,
   type CoverLetterOutput,
+  type LLMTier,
+  type LLMUpgradeStatus,
+  type LLMUpgradeCheckoutCode,
 } from "@/lib/api";
 import { trackRecentSession } from "@/lib/recentSessions";
 import { useSession } from "next-auth/react";
@@ -27,6 +32,10 @@ import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { VersionHistory } from "@/components/session/VersionHistory";
 import { ProgressLog } from "@/components/session/ProgressLog";
 import { StaleBanner } from "@/components/session/StaleBanner";
+import {
+  LLMTierSelector,
+  LLMUpgradePurchaseModal,
+} from "@/components/session/LLMTierSelector";
 import { AlertCircle, ChevronRight } from "lucide-react";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
@@ -65,6 +74,11 @@ function SessionContent() {
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState<CoverLetterOutput | null>(null);
+
+  const [llmTier, setLlmTier] = useState<LLMTier>("standard");
+  const [llmStatus, setLlmStatus] = useState<LLMUpgradeStatus | null>(null);
+  const [purchaseTier, setPurchaseTier] = useState<Exclude<LLMTier, "standard"> | null>(null);
+  const [checkoutBusyCode, setCheckoutBusyCode] = useState<LLMUpgradeCheckoutCode | null>(null);
 
   const { data: authSession } = useSession();
   const runInFlightRef = useRef(false);
@@ -161,7 +175,11 @@ function SessionContent() {
       reset();
 
       try {
-        await triggerPhase(sessionId, phase, { force: options?.force, scope: options?.scope ?? null });
+        await triggerPhase(sessionId, phase, {
+          force: options?.force,
+          scope: options?.scope ?? null,
+          llmTier: phase === 3 ? llmTier : undefined,
+        });
         connect(phaseEventsUrl(sessionId, phase));
       } catch (e: unknown) {
         setPhaseRunning(false);
@@ -171,7 +189,7 @@ function SessionContent() {
         setRunError(e instanceof Error ? e.message : "Failed to start phase.");
       }
     },
-    [sessionId, connect, reset]
+    [sessionId, connect, reset, llmTier]
   );
 
   const recalculateAts = useCallback(async () => {
@@ -258,6 +276,80 @@ function SessionContent() {
       cancelled = true;
     };
   }, [sessionId, hydrateFromSession]);
+
+  const refreshLLMStatus = useCallback(async () => {
+    if (!authSession?.backendAccessToken) return;
+    try {
+      const status = await getLLMUpgradeStatus(authSession.backendAccessToken);
+      setLlmStatus(status);
+      setLlmTier((current) => {
+        if (current === "best" && status.best_soft_cap_hit) return "standard";
+        if (current === "best" && !status.best_subscription_active) return "standard";
+        if (
+          current === "better" &&
+          !status.better_subscription_active &&
+          status.better_credits_balance <= 0
+        ) {
+          return "standard";
+        }
+        return current;
+      });
+    } catch {
+      setLlmStatus(null);
+    }
+  }, [authSession?.backendAccessToken]);
+
+  useEffect(() => {
+    void refreshLLMStatus();
+  }, [refreshLLMStatus]);
+
+  const handleRequestPurchase = useCallback(
+    (tier: Exclude<LLMTier, "standard">) => {
+      setPurchaseTier(tier);
+    },
+    [],
+  );
+
+  const handleCheckout = useCallback(
+    async (code: LLMUpgradeCheckoutCode) => {
+      if (!authSession?.backendAccessToken) return;
+      setCheckoutBusyCode(code);
+      try {
+        const origin =
+          typeof window !== "undefined" ? window.location.origin : "";
+        const ret = `${origin}/session/${sessionId}?step=rewrite&llm_purchase=success`;
+        const cancel = `${origin}/session/${sessionId}?step=rewrite&llm_purchase=cancel`;
+        const { url } = await createLLMUpgradeCheckout(
+          authSession.backendAccessToken,
+          { code, success_url: ret, cancel_url: cancel },
+        );
+        if (typeof window !== "undefined") {
+          window.location.assign(url);
+        }
+      } catch (e) {
+        setRunError(
+          e instanceof Error ? e.message : "Failed to start checkout.",
+        );
+        setCheckoutBusyCode(null);
+        setPurchaseTier(null);
+      }
+    },
+    [authSession?.backendAccessToken, sessionId],
+  );
+
+  useEffect(() => {
+    if (!lastEvent) return;
+    if (lastEvent.event === "best_soft_cap_hit") {
+      void refreshLLMStatus();
+      setLlmTier("standard");
+    }
+    if (lastEvent.event === "tier_downgraded") {
+      void refreshLLMStatus();
+    }
+    if (lastEvent.event === "done" && lastEvent.phase === 3) {
+      void refreshLLMStatus();
+    }
+  }, [lastEvent, refreshLLMStatus]);
 
   useEffect(() => {
     runInFlightRef.current = false;
@@ -455,6 +547,13 @@ function SessionContent() {
                   </button>
                 )}
               </div>
+              <LLMTierSelector
+                value={llmTier}
+                status={llmStatus}
+                disabled={phaseRunning}
+                onChange={setLlmTier}
+                onRequestPurchase={handleRequestPurchase}
+              />
               {!tailored && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
@@ -573,6 +672,18 @@ function SessionContent() {
         initial={coverLetter}
         open={coverLetterOpen}
         onClose={() => setCoverLetterOpen(false)}
+      />
+
+      <LLMUpgradePurchaseModal
+        open={purchaseTier !== null}
+        tier={purchaseTier}
+        status={llmStatus}
+        onClose={() => {
+          setPurchaseTier(null);
+          setCheckoutBusyCode(null);
+        }}
+        onCheckout={handleCheckout}
+        busyCode={checkoutBusyCode}
       />
     </div>
   );
