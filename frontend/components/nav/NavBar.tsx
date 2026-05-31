@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react"
 import { ChevronDown, CreditCard, FileText, LogOut, Settings, Sparkles } from "lucide-react"
 import { logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
+import { UsageWidget } from "@/components/nav/UsageWidget"
 
 export function NavBar() {
   const { data: session, status } = useSession()
@@ -54,7 +55,8 @@ export function NavBar() {
         )}
 
         {/* Right side */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {status === "authenticated" && session && <UsageWidget />}
           {status === "loading" ? (
             <div className="w-20 h-7 bg-slate-800 rounded animate-pulse" />
           ) : status === "authenticated" && session ? (
