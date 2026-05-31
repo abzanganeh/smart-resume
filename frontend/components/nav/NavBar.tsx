@@ -49,6 +49,7 @@ export function NavBar() {
         {status === "authenticated" && session && (
           <div className="flex items-center gap-1 text-sm text-slate-400 overflow-x-auto">
             <NavLink href="/session/new">New session</NavLink>
+            <NavLink href="/profile">Edit master resume</NavLink>
             <NavLink href="/dashboard">Dashboard</NavLink>
             <NavLink href="/jobs">Jobs</NavLink>
           </div>
