@@ -44,7 +44,7 @@ export default function ProfilePage() {
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [reembedding, setReembedding] = useState(false)
-  const [editsSinceFullEmbed, setEditsSinceFullEmbed] = useState(0)
+  const [editedChunkIds, setEditedChunkIds] = useState<Set<string>>(new Set())
   const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -61,7 +61,7 @@ export default function ProfilePage() {
       setProfile(resume)
       setChunks(chunkRows)
       setTailoredCount(tailored)
-      setEditsSinceFullEmbed(0)
+      setEditedChunkIds(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load profile")
     } finally {
@@ -78,7 +78,8 @@ export default function ProfilePage() {
 
   const grouped = useMemo(() => groupChunksBySection(chunks), [chunks])
   const liveCount = liveChunkCount(chunks)
-  const showReembed = editsSinceFullEmbed >= REEMBED_THRESHOLD && Boolean(profile?.raw_text)
+  const showReembed =
+    editedChunkIds.size >= REEMBED_THRESHOLD && Boolean(profile?.raw_text)
 
   async function handleUpload(payload: { file?: File; text?: string }) {
     if (!token) return
@@ -88,7 +89,7 @@ export default function ProfilePage() {
       const result = await uploadProfileResume(token, payload)
       setProfile(result)
       setChunks(result.chunks)
-      setEditsSinceFullEmbed(0)
+      setEditedChunkIds(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
       throw e
@@ -105,7 +106,7 @@ export default function ProfilePage() {
       const result = await reembedAllProfileResume(token, profile.raw_text)
       setProfile(result)
       setChunks(result.chunks)
-      setEditsSinceFullEmbed(0)
+      setEditedChunkIds(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : "Re-embed failed")
     } finally {
@@ -115,7 +116,11 @@ export default function ProfilePage() {
 
   function handleChunkSaved(updated: ProfileChunk) {
     setChunks((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
-    setEditsSinceFullEmbed((n) => n + 1)
+    setEditedChunkIds((prev) => {
+      const next = new Set(prev)
+      next.add(updated.id)
+      return next
+    })
     if (profile) {
       setProfile({ ...profile, last_embedded_at: new Date().toISOString() })
     }

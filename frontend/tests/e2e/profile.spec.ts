@@ -108,6 +108,7 @@ async function mockProfileBackend(page: Page) {
       })
     }
     if (route.request().method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 250))
       return route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -145,7 +146,7 @@ async function login(page: Page) {
 }
 
 test.describe("profile page", () => {
-  test("upload TXT fixture → chunks appear grouped by section", async ({ page }) => {
+  test("drop TXT fixture → chunks appear grouped by section", async ({ page }) => {
     await mockProfileBackend(page)
     await login(page)
 
@@ -163,9 +164,12 @@ test.describe("profile page", () => {
     const fixturePath = join(process.cwd(), "tests/fixtures/master-resume.txt")
     const fixture = readFileSync(fixturePath, "utf8")
 
-    await page.getByRole("button", { name: "Paste text" }).click()
-    await page.getByPlaceholder("Paste your master resume text here…").fill(fixture)
-    await page.getByRole("button", { name: "Save master resume" }).click()
+    await page.locator("#profile-file-input").setInputFiles({
+      name: "master-resume.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(fixture),
+    })
+    await expect(page.getByText("Chunking and embedding your resume…")).toBeVisible()
 
     await expect(page.getByRole("heading", { name: "Experience" })).toBeVisible({
       timeout: 10_000,
