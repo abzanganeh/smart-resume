@@ -61,6 +61,7 @@ async def _enroll_and_confirm(
         await db.execute(select(User).where(User.email == email))
     ).scalar_one()
     assert user.totp_secret is not None
+    assert user.has_totp is False
     assert decrypt_bytes(user.totp_secret).decode("utf-8") == secret
     assert user.totp_recovery_codes == []  # only minted after verify
 
@@ -78,6 +79,7 @@ async def _enroll_and_confirm(
     assert len(user.totp_recovery_codes) == 10
     for plain in recovery_codes:
         assert plain not in user.totp_recovery_codes
+    assert user.has_totp is True
     return secret, recovery_codes
 
 
@@ -270,3 +272,17 @@ async def test_disable_requires_valid_totp(
     await db_session.refresh(user)
     assert user.totp_secret is None
     assert user.totp_recovery_codes == []
+
+
+async def test_enroll_rejected_when_totp_already_enabled(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    access = await _register_and_get_access(app_client)
+    await _enroll_and_confirm(app_client, access, db_session, REGISTER_PAYLOAD["email"])
+
+    r = await app_client.post(
+        "/api/auth/2fa/enroll",
+        headers={"Authorization": f"Bearer {access}"},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "tfa_already_enrolled"

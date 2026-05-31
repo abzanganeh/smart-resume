@@ -221,7 +221,9 @@ class User(Base):
 
     @property
     def has_totp(self) -> bool:
-        return self.totp_secret is not None
+        # 2FA is considered "enabled" only after enrollment confirmation,
+        # which mints the recovery-code hashes.
+        return self.totp_secret is not None and len(self.totp_recovery_codes) > 0
 
     @property
     def is_suspended(self) -> bool:
