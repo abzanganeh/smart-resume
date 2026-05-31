@@ -52,7 +52,7 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
   }
 
   return (
-    <div className={cn("space-y-4", compact && "space-y-3")}>
+    <div className={cn("space-y-4 relative", compact && "space-y-3")}>
       {!compact && (
         <div>
           <h2 className="text-lg font-semibold text-white">Master resume</h2>
@@ -150,9 +150,11 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-          Chunking and embedding your resume…
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-950/75">
+          <div className="flex items-center gap-2 text-slate-100 text-sm px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/90">
+            <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            Chunking and embedding your resume…
+          </div>
         </div>
       )}
 
