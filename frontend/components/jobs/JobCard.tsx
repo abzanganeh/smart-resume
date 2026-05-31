@@ -27,7 +27,7 @@ interface Props {
   isSubscribed: boolean
   accessToken: string
   saved: boolean
-  onSaveToggle: (jobId: string, saved: boolean) => void
+  onSaveToggle: (jobId: string, saved: boolean) => Promise<void>
 }
 
 const FIT_LABEL_COLOR: Record<string, string> = {
@@ -71,7 +71,7 @@ export function JobCard({
     if (blurred || saveLoading) return
     setSaveLoading(true)
     try {
-      onSaveToggle(job.id, !saved)
+      await onSaveToggle(job.id, !saved)
     } finally {
       setSaveLoading(false)
     }

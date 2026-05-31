@@ -122,11 +122,31 @@ export function formatSalaryRange(job: JobResult): string | null {
 
 export function formatPostedDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
+    const postedAt = new Date(iso)
+    const now = Date.now()
+    const diffMs = now - postedAt.getTime()
+    if (Number.isNaN(diffMs) || diffMs < 0) {
+      return postedAt.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    }
+
+    const minutes = Math.floor(diffMs / 60_000)
+    if (minutes < 60) return minutes <= 1 ? "1 minute ago" : `${minutes} minutes ago`
+
+    const hours = Math.floor(diffMs / 3_600_000)
+    if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`
+
+    const days = Math.floor(diffMs / 86_400_000)
+    if (days < 30) return days === 1 ? "1 day ago" : `${days} days ago`
+
+    const months = Math.floor(days / 30)
+    if (months < 12) return months === 1 ? "1 month ago" : `${months} months ago`
+
+    const years = Math.floor(months / 12)
+    return years === 1 ? "1 year ago" : `${years} years ago`
   } catch {
     return iso
   }
@@ -164,10 +184,10 @@ export function removeBlockedCompany(companies: string[], name: string): string[
 
 export function staleBannerMessage(
   resultsMayBeStale: boolean,
-  message?: string | null,
+  _message?: string | null,
 ): string | null {
   if (!resultsMayBeStale) return null
-  return message?.trim() || "Results may not be fully up to date"
+  return "Results may not be fully up to date"
 }
 
 export async function searchJobs(
