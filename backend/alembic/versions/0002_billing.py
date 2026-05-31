@@ -44,6 +44,8 @@ REFUND_REASON_ENUM = "refund_reason"
 REFUND_INITIATOR_ENUM = "refund_initiator"
 STRIPE_WEBHOOK_STATUS_ENUM = "stripe_webhook_status"
 PLAN_CONFIG_INTERVAL_ENUM = "plan_config_interval"
+NOTIFICATION_CHANNEL_ENUM = "notification_channel"
+NOTIFICATION_STATUS_ENUM = "notification_status"
 
 
 def upgrade() -> None:
@@ -75,7 +77,7 @@ def upgrade() -> None:
         ),
         postgresql.ENUM(
             "trialing", "active", "grace", "paused",
-            "cancel_at_period_end", "expired",
+            "cancelled", "cancel_at_period_end", "expired",
             name=SUBSCRIPTION_STATUS_ENUM,
             create_type=True,
         ),
@@ -102,6 +104,16 @@ def upgrade() -> None:
         postgresql.ENUM(
             "day", "week", "month", "year", "one_time",
             name=PLAN_CONFIG_INTERVAL_ENUM,
+            create_type=True,
+        ),
+        postgresql.ENUM(
+            "in_app", "email",
+            name=NOTIFICATION_CHANNEL_ENUM,
+            create_type=True,
+        ),
+        postgresql.ENUM(
+            "pending", "sent", "failed",
+            name=NOTIFICATION_STATUS_ENUM,
             create_type=True,
         ),
     ]
@@ -332,6 +344,7 @@ def upgrade() -> None:
         sa.Column("code", sa.String(length=64), nullable=False),
         sa.Column("stripe_price_id", sa.String(length=255), nullable=False),
         sa.Column("stripe_product_id", sa.String(length=255), nullable=True),
+        sa.Column("eligibility", sa.String(length=64), nullable=False, server_default=""),
         sa.Column(
             "amount_cents", sa.Integer(), nullable=False, server_default="0"
         ),
@@ -376,6 +389,79 @@ def upgrade() -> None:
     op.create_index(
         "ix_plan_configs_code_active", "plan_configs", ["code", "is_active"]
     )
+
+    # -------------------------------------------------------------------
+    # notifications / admin_audit_log (used by billing state machine now;
+    # expanded further in Step 31 / Step 35).
+    # -------------------------------------------------------------------
+    op.create_table(
+        "notifications",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("type", sa.String(length=80), nullable=False),
+        sa.Column(
+            "channel",
+            postgresql.ENUM(name=NOTIFICATION_CHANNEL_ENUM, create_type=False),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            postgresql.ENUM(name=NOTIFICATION_STATUS_ENUM, create_type=False),
+            nullable=False,
+            server_default="pending",
+        ),
+        sa.Column(
+            "payload",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+    )
+    op.create_index("ix_notifications_user_id", "notifications", ["user_id"])
+    op.create_index("ix_notifications_status", "notifications", ["status"])
+
+    op.create_table(
+        "admin_audit_log",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("actor_admin_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("action", sa.String(length=120), nullable=False),
+        sa.Column("target_kind", sa.String(length=80), nullable=False),
+        sa.Column("target_id", sa.String(length=255), nullable=False),
+        sa.Column(
+            "before_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column(
+            "after_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column("ip", sa.String(length=64), nullable=False, server_default=""),
+        sa.Column("user_agent", sa.String(length=512), nullable=False, server_default=""),
+        sa.Column("request_id", sa.String(length=128), nullable=False, server_default=""),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+    )
+    op.create_index("ix_admin_audit_log_action", "admin_audit_log", ["action"])
+    op.create_index("ix_admin_audit_log_created_at", "admin_audit_log", ["created_at"])
 
     # -------------------------------------------------------------------
     # credit_transactions extensions  (§7.5)
@@ -474,6 +560,14 @@ def downgrade() -> None:
         existing_nullable=False,
     )
 
+    op.drop_index("ix_admin_audit_log_created_at", table_name="admin_audit_log")
+    op.drop_index("ix_admin_audit_log_action", table_name="admin_audit_log")
+    op.drop_table("admin_audit_log")
+
+    op.drop_index("ix_notifications_status", table_name="notifications")
+    op.drop_index("ix_notifications_user_id", table_name="notifications")
+    op.drop_table("notifications")
+
     op.drop_index("ix_plan_configs_code_active", table_name="plan_configs")
     op.drop_index("ix_plan_configs_code", table_name="plan_configs")
     op.drop_table("plan_configs")
@@ -512,6 +606,8 @@ def downgrade() -> None:
     bind = op.get_bind()
     for name in (
         PLAN_CONFIG_INTERVAL_ENUM,
+        NOTIFICATION_STATUS_ENUM,
+        NOTIFICATION_CHANNEL_ENUM,
         STRIPE_WEBHOOK_STATUS_ENUM,
         REFUND_INITIATOR_ENUM,
         REFUND_REASON_ENUM,

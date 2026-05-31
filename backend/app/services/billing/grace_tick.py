@@ -26,7 +26,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.billing import Subscription, SubscriptionStatus
+from app.models.billing import (
+    AdminAuditLog,
+    Notification,
+    NotificationChannel,
+    Subscription,
+    SubscriptionStatus,
+)
 
 log = structlog.get_logger("billing.grace_tick")
 
@@ -69,6 +75,37 @@ async def run_grace_tick(
         sub.ended_at = now_dt
         sub.updated_at = now_dt
         expired.append(sub.id)
+        session.add(
+            Notification(
+                id=uuid.uuid4(),
+                user_id=sub.user_id,
+                type="subscription_expired",
+                channel=NotificationChannel.in_app,
+                payload={
+                    "subscription_id": str(sub.id),
+                    "reason": "grace_window_elapsed",
+                    "payment_failed_at": (
+                        sub.payment_failed_at.isoformat()
+                        if sub.payment_failed_at
+                        else None
+                    ),
+                },
+            )
+        )
+        session.add(
+            AdminAuditLog(
+                id=uuid.uuid4(),
+                actor_admin_id=None,
+                action="grace_to_expired",
+                target_kind="subscription",
+                target_id=str(sub.id),
+                before_json={"status": SubscriptionStatus.grace.value},
+                after_json={"status": SubscriptionStatus.expired.value},
+                ip="system:grace_tick",
+                user_agent="subscriptions_grace_tick",
+                request_id="",
+            )
+        )
         log.info(
             "billing.grace_tick.expired",
             subscription_id=str(sub.id),

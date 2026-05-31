@@ -78,6 +78,7 @@ class SubscriptionStatus(str, enum.Enum):
     active = "active"
     grace = "grace"
     paused = "paused"
+    cancelled = "cancelled"
     cancel_at_period_end = "cancel_at_period_end"
     expired = "expired"
 
@@ -439,6 +440,9 @@ class PlanConfig(Base):
     stripe_product_id: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
     )
+    eligibility: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default=""
+    )
     amount_cents: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -485,10 +489,107 @@ class PlanConfig(Base):
     )
 
 
+class NotificationChannel(str, enum.Enum):
+    in_app = "in_app"
+    email = "email"
+
+
+class NotificationStatus(str, enum.Enum):
+    pending = "pending"
+    sent = "sent"
+    failed = "failed"
+
+
+class Notification(Base):
+    """Minimal notification outbox row used by billing jobs.
+
+    Step 31 will expand this model.  Step 6 needs a durable row so
+    grace-expiry and trial reminders are persisted transactionally.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type: Mapped[str] = mapped_column(String(80), nullable=False)
+    channel: Mapped[NotificationChannel] = mapped_column(
+        _pg_enum(NotificationChannel, "notification_channel"),
+        nullable=False,
+    )
+    status: Mapped[NotificationStatus] = mapped_column(
+        _pg_enum(NotificationStatus, "notification_status"),
+        nullable=False,
+        default=NotificationStatus.pending,
+        server_default=NotificationStatus.pending.value,
+    )
+    payload: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=text("now()"),
+    )
+
+
+class AdminAuditLog(Base):
+    """Minimal admin audit row needed by billing failure paths.
+
+    Step 35 introduces the full admin domain; this table shape is a
+    compatible subset so Step 6 can already persist critical billing
+    escalation actions.
+    """
+
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    actor_admin_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    target_kind: Mapped[str] = mapped_column(String(80), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    before_json: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    after_json: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    ip: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default=""
+    )
+    user_agent: Mapped[str] = mapped_column(
+        String(512), nullable=False, default="", server_default=""
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="", server_default=""
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=text("now()"),
+    )
+
+
 __all__ = [
+    "AdminAuditLog",
     "CreditKind",
     "LLMUpgradeBillingCycle",
     "LLMUpgradeTier",
+    "Notification",
+    "NotificationChannel",
+    "NotificationStatus",
     "PlanConfig",
     "PlanConfigInterval",
     "RefundInitiator",

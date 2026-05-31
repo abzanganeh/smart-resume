@@ -40,6 +40,8 @@ from app.models.billing import (
     CreditKind,
     LLMUpgradeBillingCycle,
     LLMUpgradeTier,
+    Notification,
+    NotificationChannel,
     Subscription,
     SubscriptionBillingCycle,
     SubscriptionPlan,
@@ -201,19 +203,19 @@ async def handle_checkout_completed(
     if code and _is_one_time_credit_code(code):
         kind, delta = _credit_kind_for_one_time(code)
         try:
-            await grant_credit(
-                session,
-                user_id=user.id,
-                credit_kind=kind,
-                delta=delta,
-                reason=f"purchase_{code}",
-                stripe_event_id=event["id"],
-            )
+            async with session.begin_nested():
+                await grant_credit(
+                    session,
+                    user_id=user.id,
+                    credit_kind=kind,
+                    delta=delta,
+                    reason=f"purchase_{code}",
+                    stripe_event_id=event["id"],
+                )
         except IntegrityError:
             # Partial UNIQUE on (stripe_event_id, credit_kind) — duplicate
-            # delivery already granted these credits.  Roll back the
-            # failed insert savepoint so the webhook row commits clean.
-            await session.rollback()
+            # delivery already granted these credits.  Nested transaction
+            # rollback is automatic; outer webhook transaction continues.
             log.info(
                 "billing.webhook.duplicate_credit_grant_noop",
                 event_id=event["id"],
@@ -263,6 +265,10 @@ async def handle_subscription_created(
 
     price_id = _first_price_id(obj)
     code = await reverse_lookup_code(session, price_id) if price_id else None
+    if price_id and code is None:
+        raise WebhookPayloadError(
+            f"unknown stripe_price_id for subscription.created: {price_id!r}"
+        )
 
     plan, billing_cycle, llm_tier, llm_billing = _classify_code(code)
 
@@ -330,6 +336,10 @@ async def handle_subscription_updated(
     if price_id:
         existing.stripe_price_id = price_id
         code = await reverse_lookup_code(session, price_id)
+        if code is None:
+            raise WebhookPayloadError(
+                f"unknown stripe_price_id for subscription.updated: {price_id!r}"
+            )
         plan, billing_cycle, llm_tier, llm_billing = _classify_code(code)
         existing.plan = plan
         existing.billing_cycle = billing_cycle
@@ -463,8 +473,34 @@ async def handle_trial_will_end(
             stripe_subscription_id=stripe_sub_id,
         )
         return
-    # No DB mutation — Step 31 (notifications) will emit the
-    # in-app/email message off this audit row.
+    # Persist notification outbox rows now; Step 31 delivery worker will
+    # fan them out to concrete channels/providers.
+    session.add(
+        Notification(
+            id=uuid.uuid4(),
+            user_id=existing.user_id,
+            type="subscription_trial_will_end",
+            channel=NotificationChannel.in_app,
+            payload={
+                "subscription_id": str(existing.id),
+                "stripe_subscription_id": stripe_sub_id,
+                "event_id": event["id"],
+            },
+        )
+    )
+    session.add(
+        Notification(
+            id=uuid.uuid4(),
+            user_id=existing.user_id,
+            type="subscription_trial_will_end",
+            channel=NotificationChannel.email,
+            payload={
+                "subscription_id": str(existing.id),
+                "stripe_subscription_id": stripe_sub_id,
+                "event_id": event["id"],
+            },
+        )
+    )
     existing.last_event_created_at = _event_created_at(event)
     await session.flush()
     log.info(
