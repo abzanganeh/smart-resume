@@ -231,7 +231,7 @@ _PER_SECTION_QUERY = text(
       AND section_type = :section_type
       AND deleted_at IS NULL
       AND embedding IS NOT NULL
-    ORDER BY embedding <=> CAST(:jd AS vector) ASC, created_at ASC, id ASC
+    ORDER BY score DESC, created_at ASC, id ASC
     LIMIT :limit
     """
 ).bindparams(
@@ -565,7 +565,7 @@ async def retrieve_for_jd(
         if kept:
             selected_by_section[section] = kept
         else:
-            if candidates and not cfg.is_critical_section(section):
+            if not cfg.is_critical_section(section):
                 sections_omitted.append(section)
         if fallback_used:
             fallback_sections.append(section)
@@ -595,7 +595,11 @@ async def retrieve_for_jd(
         selected=selected,
         skipped=all_skipped,
         meta={
-            "threshold_used": runtime.primary_threshold,
+            "threshold_used": (
+                runtime.fallback_threshold
+                if fallback_sections
+                else runtime.primary_threshold
+            ),
             "fallback_threshold": runtime.fallback_threshold,
             "fallback_used": bool(fallback_sections),
             "fallback_sections": fallback_sections,
