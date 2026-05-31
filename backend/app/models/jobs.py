@@ -133,6 +133,38 @@ class JobSearchLog(Base):
     )
 
 
+class SavedJob(Base):
+    """User bookmark for a cached job listing."""
+
+    __tablename__ = "saved_job"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    job_cache_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("job_cache.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=text("now()"),
+    )
+
+    __table_args__ = (
+        Index("uq_saved_job_user_job", "user_id", "job_cache_id", unique=True),
+    )
+
+
 class SavedSearch(Base):
     __tablename__ = "saved_search"
 
@@ -175,5 +207,6 @@ __all__ = [
     "JobCache",
     "JobSearchLog",
     "JobSearchSource",
+    "SavedJob",
     "SavedSearch",
 ]
