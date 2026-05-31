@@ -68,6 +68,7 @@ async def check_session(session_id: str):
         "resume_raw": session.resume_raw or "",
         "phases": phases_out,
         "stale": stale,
+        "stale_since": session.stale_since.isoformat() if session.stale_since else None,
         "phase1_complete": session.phase1_status.value == "done",
     }
 
