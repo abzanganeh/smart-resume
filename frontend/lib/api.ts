@@ -515,6 +515,152 @@ export interface QAOutput {
   quick_wins?: BlockingIssue[];
 }
 
+// ── Fit analysis ─────────────────────────────────────────────────────────────
+
+export type FitLabel = "strong" | "good" | "partial" | "weak"
+
+export interface SectionFit {
+  section_type: string
+  match_score: number
+  matched_items: string[]
+  missing_items: string[]
+}
+
+export interface FitAnalysisOutput {
+  overall_fit_score: number
+  fit_label: FitLabel
+  section_fits: SectionFit[]
+  key_gaps: string[]
+  key_strengths: string[]
+  recommendation: string
+  should_apply: boolean
+  suggested_master_resume_edits: string[]
+}
+
+export interface FitHistoryItem {
+  id: string
+  jd_hash: string
+  overall_fit_score: number
+  fit_label: FitLabel
+  created_at: string
+}
+
+export interface FitHistoryResponse {
+  items: FitHistoryItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface FitDetailResponse {
+  id: string
+  jd_hash: string
+  jd_text: string
+  result: FitAnalysisOutput
+  created_at: string
+}
+
+export async function fetchJdFromUrl(
+  token: string,
+  jdUrl: string,
+): Promise<string> {
+  const res = await fetch(`${BASE}/api/fit/fetch-jd`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ jd_url: jdUrl }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.detail ?? `HTTP ${res.status}`)
+  }
+  const body = (await res.json()) as { jd_text: string }
+  return body.jd_text
+}
+
+export async function streamFitAnalysis(
+  token: string,
+  payload: { jd_text?: string; jd_url?: string; file?: File },
+  onEvent: (event: import("./sse").SSEEvent) => void,
+): Promise<void> {
+  const form = new FormData()
+  if (payload.file) {
+    form.append("file", payload.file)
+  } else if (payload.jd_text) {
+    form.append("jd_text", payload.jd_text)
+  }
+  if (payload.jd_url) {
+    form.append("jd_url", payload.jd_url)
+  }
+
+  const res = await fetch(`${BASE}/api/fit/analyze`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const detail = body?.detail
+    const code = typeof detail === "object" ? detail?.code : detail
+    const err = new Error(code ?? detail ?? `HTTP ${res.status}`) as Error & { code?: string }
+    err.code = code
+    throw err
+  }
+
+  if (!res.body) throw new Error("No response stream")
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let streamError: Error | null = null
+
+  const consumeChunk = (chunk: string) => {
+    for (const line of chunk.split("\n")) {
+      if (!line.startsWith("data: ")) continue
+      const parsed = JSON.parse(line.slice(6)) as import("./sse").SSEEvent
+      onEvent(parsed)
+      if (parsed.event === "error") {
+        streamError = new Error(parsed.message ?? "Analysis failed.")
+      }
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      if (buffer.trim()) consumeChunk(buffer)
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split("\n\n")
+    buffer = parts.pop() ?? ""
+    for (const part of parts) consumeChunk(part)
+    if (streamError) throw streamError
+  }
+  if (streamError) throw streamError
+}
+
+export async function getFitHistory(
+  token: string,
+  page = 1,
+): Promise<FitHistoryResponse> {
+  return request(`/api/fit/history?page=${page}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function getFitDetail(
+  token: string,
+  analysisId: string,
+): Promise<FitDetailResponse> {
+  return request(`/api/fit/${analysisId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 // ── Billing types ─────────────────────────────────────────────────────────────
 
 export interface BillingPlan {
