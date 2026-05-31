@@ -77,6 +77,11 @@ class Session(BaseModel):
     phase_run_requested: int | None = None
     phase_run_scope: PhaseRunScope | None = None
 
+    # User-selected LLM tier for the next Phase 3 run (Step 19/20).
+    # One of "standard" | "better" | "best".  ``None`` falls back to
+    # the user's entitled tier in the orchestrator middleware.
+    phase3_llm_tier: Literal["standard", "better", "best"] | None = None
+
     # Stale markers — set when upstream phase output is manually edited (§18.6).
     stale_since: datetime | None = None
     phase3_stale_since: datetime | None = None
