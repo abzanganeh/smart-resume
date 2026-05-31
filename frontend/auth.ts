@@ -20,11 +20,18 @@
  *   an appropriate error that guides the user to link via email/password.
  */
 import NextAuth from "next-auth"
+import type { User } from "next-auth"
 import Google from "next-auth/providers/google"
 import GitHub from "next-auth/providers/github"
 import Credentials from "next-auth/providers/credentials"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const NEXTAUTH_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
+const isLocalEnv =
+  process.env.NEXT_PUBLIC_APP_ENV === "local" || process.env.NODE_ENV !== "production"
+const nextAuthSecret =
+  process.env.NEXTAUTH_SECRET ??
+  (isLocalEnv ? "local-dev-nextauth-secret-change-me" : undefined)
 
 // ── Types shared with next-auth.d.ts augmentation ────────────────────────────
 
@@ -39,6 +46,12 @@ export interface BackendUser {
   has_totp: boolean
   closure_requested_at: string | null
   suspended_at: string | null
+}
+
+interface BackendAuthUser extends User {
+  backendAccessToken?: string
+  backendExpiresAt?: number
+  backendUser?: BackendUser
 }
 
 // ── Backend OAuth sync helper ─────────────────────────────────────────────────
@@ -76,6 +89,7 @@ async function syncOAuthWithBackend(
 // ── NextAuth config ───────────────────────────────────────────────────────────
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  secret: nextAuthSecret,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -175,9 +189,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, account }) {
       // ── Initial sign-in ────────────────────────────────────────────────────
       if (user && (account?.provider === "credentials" || account?.provider === "token")) {
-        token.backendAccessToken = (user as any).backendAccessToken
-        token.backendExpiresAt = (user as any).backendExpiresAt
-        token.backendUser = (user as any).backendUser
+        const backendUser = user as BackendAuthUser
+        token.backendAccessToken = backendUser.backendAccessToken
+        token.backendExpiresAt = backendUser.backendExpiresAt
+        token.backendUser = backendUser.backendUser
         return token
       }
 
@@ -187,7 +202,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           account.provider,
           account.access_token ?? undefined,
           account.id_token ?? undefined,
-          `${process.env.NEXTAUTH_URL}/api/auth/callback/${account.provider}`,
+          `${NEXTAUTH_URL}/api/auth/callback/${account.provider}`,
         )
         if (synced) {
           token.backendAccessToken = synced.access_token

@@ -21,5 +21,15 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
+    env: {
+      NEXTAUTH_SECRET: "playwright-local-secret",
+      NEXTAUTH_URL: "http://localhost:3000",
+      NEXT_PUBLIC_API_URL: "http://localhost:8000",
+      NEXT_PUBLIC_APP_ENV: "local",
+      GOOGLE_CLIENT_ID: "playwright-google-client-id",
+      GOOGLE_CLIENT_SECRET: "playwright-google-client-secret",
+      GITHUB_CLIENT_ID: "playwright-github-client-id",
+      GITHUB_CLIENT_SECRET: "playwright-github-client-secret",
+    },
   },
 })
