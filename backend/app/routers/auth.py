@@ -442,6 +442,7 @@ async def login(
             user_agent=_user_agent(request),
             metadata={"reason": "suspended"},
         )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "account_suspended"},
@@ -799,6 +800,7 @@ async def verify_send(
     user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
     if user.is_email_verified:
+        _attach_closure_header(request, response)
         return {"ok": True, "already_verified": True}
     try:
         await send_verification_email(
@@ -927,9 +929,10 @@ async def tfa_enroll(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> EnrollTfaResponse:
-    # Allow re-enroll until ``has_totp`` becomes confirmed.  An already
-    # enrolled user must disable first (so they retain the existing
-    # active TOTP secret if they bail out mid-flow).
+    # Allow re-enroll while enrollment is still pending.  Once fully
+    # enrolled, the user must disable first.
+    if user.has_totp:
+        raise HTTPException(status_code=400, detail={"code": "tfa_already_enrolled"})
     enrollment = begin_enrollment(account_label=user.email)
     user.totp_secret = enrollment.encrypted_secret
     user.totp_recovery_codes = []  # codes only minted after confirm
