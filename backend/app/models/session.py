@@ -25,6 +25,12 @@ class Session(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # User id (UUID as string) — set when the session is opened by an
+    # authenticated user.  Legacy anonymous demo sessions leave it
+    # ``None``; retrieval-based Phase 3 is only run when ``user_id`` is
+    # present (see ``app/agent/phase3_rewrite.py``).
+    user_id: str | None = None
+
     resume_raw: str | None = None
     resume_parsed: ParsedResume | None = None
     user_info: UserInfo | None = None

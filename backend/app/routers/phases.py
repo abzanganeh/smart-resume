@@ -3,16 +3,24 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
+from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.models.rewrite import ResumeVersion, TailoredResumeOutput
 from app.models.session import PhaseStatus
 from pydantic import BaseModel
 
 from app.limiter import limiter
+from app.services.auth.tokens import (
+    TokenExpiredError,
+    TokenInvalidError,
+    decode_access_token,
+)
+from app.services.master_resume.crud import has_any_live_chunk
 from app.services.session_store import get_session, reset_phase, update_session
 
 
@@ -45,9 +53,11 @@ async def trigger_phase(
     session_id: str,
     phase: int,
     body: RunPhaseRequest = RunPhaseRequest(),
+    authorization: str | None = Header(default=None, alias="Authorization"),
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
+    db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
         raise HTTPException(status_code=400, detail="Phase must be 1, 2, 3, or 4.")
@@ -55,6 +65,28 @@ async def trigger_phase(
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Best-effort bind session to the bearer user (if present).  This
+    # activates the master-resume retrieval path in phase 3 and prevents
+    # cross-user reuse of session ids.
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            try:
+                claims = decode_access_token(token, expected_type="access")
+                bearer_sub = str(claims.get("sub") or "")
+                if bearer_sub:
+                    if session.user_id and session.user_id != bearer_sub:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Session does not belong to this user.",
+                        )
+                    if session.user_id != bearer_sub:
+                        session.user_id = bearer_sub
+                        await update_session(session)
+            except (TokenExpiredError, TokenInvalidError):
+                # Keep legacy anonymous behavior when bearer header is invalid.
+                pass
 
     # Pre-flight checks
     if phase >= 2 and getattr(session, f"phase{phase - 1}_status") != PhaseStatus.done:
@@ -66,6 +98,21 @@ async def trigger_phase(
     phase_status = getattr(session, f"phase{phase}_status")
     if phase_status == PhaseStatus.running:
         raise HTTPException(status_code=409, detail=f"Phase {phase} is already running.")
+
+    # IMPLEMENTATION_PLAN §6a: if user has no master-resume chunks,
+    # block phase 3 with 409 so frontend routes user to /profile.
+    if phase == 3 and session.user_id:
+        import uuid
+
+        try:
+            uid = uuid.UUID(session.user_id)
+        except ValueError:
+            uid = None
+        if uid is not None and not await has_any_live_chunk(db, user_id=uid):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "master_resume_required"},
+            )
 
     # Persist BYOK choice to session so the SSE endpoint picks it up
     if x_provider and session.provider != x_provider:
