@@ -13,9 +13,14 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.db.engine import async_session_factory
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
-from app.routers import auth, export, llm, phases, resume, sessions
+from app.routers import auth, billing, export, llm, phases, resume, sessions
+from app.services.billing.bootstrap import (
+    assert_canonical_codes_resolve,
+    seed_plan_configs_if_empty,
+)
 from app.services.session_store import close_redis, health_check, init_redis
 
 # ---------------------------------------------------------------------------
@@ -47,6 +52,22 @@ if settings.SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_redis()
+    # Seed PlanConfig + assert all 10 canonical billing codes resolve
+    # (IMPLEMENTATION_PLAN §7.2).  Failures here are logged at WARN and
+    # tolerated in local/development; CI's staging gate fails on any gap.
+    if settings.DATABASE_URL:
+        try:
+            async with async_session_factory() as db_session:
+                await seed_plan_configs_if_empty(db_session)
+                unresolved = await assert_canonical_codes_resolve(db_session)
+                if unresolved and settings.APP_ENV in {"ci", "staging", "production"}:
+                    raise RuntimeError(
+                        "startup_price_gap: unresolved Stripe pricing codes: "
+                        + ", ".join(unresolved)
+                    )
+                await db_session.commit()
+        except Exception as exc:  # noqa: BLE001 - boot-time best effort
+            log.warning("billing.bootstrap.skipped", error=str(exc))
     log.info("startup", provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL)
     yield
     await close_redis()
@@ -136,6 +157,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(billing.router)
 app.include_router(sessions.router)
 app.include_router(resume.router)
 app.include_router(phases.router)

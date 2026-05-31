@@ -48,11 +48,17 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     engine = create_async_engine(url, echo=False, pool_pre_ping=True)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
-        # Wipe identity tables so tests are isolated regardless of run order.
+        # Wipe identity + billing tables so tests are isolated regardless
+        # of run order.  Order matters when CASCADE is in play but we
+        # use RESTART IDENTITY CASCADE which handles the FK closure.
         await session.execute(
             text(
-                "TRUNCATE TABLE auth_audit_log, credit_transactions, "
-                "refresh_tokens, users RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE "
+                "admin_audit_log, notifications, "
+                "stripe_webhook_events, refund_records, "
+                "credit_transactions, subscriptions, plan_configs, "
+                "auth_audit_log, refresh_tokens, users "
+                "RESTART IDENTITY CASCADE"
             )
         )
         await session.commit()
