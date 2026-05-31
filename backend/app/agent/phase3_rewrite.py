@@ -12,7 +12,7 @@ from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
 from app.models.rewrite import TailoredResumeOutput
-from app.models.session import Session
+from app.models.session import PhaseRunScope, Session
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
     PromptBudgetExceededError,
@@ -39,6 +39,150 @@ _RETRIEVAL_INSTRUCTION = (
     "the job description so you can prioritize the highest-scoring ones."
 )
 
+_SCOPED_INSTRUCTION = (
+    "\n\nSCOPED REGENERATION — regenerate ONLY the requested section or bullet. "
+    "Return a JSON object containing ONLY the fields you are rewriting. "
+    "Do not repeat unchanged sections.  Preserve all factual details."
+)
+
+
+def _merge_scoped_output(
+    existing: TailoredResumeOutput,
+    partial: TailoredResumeOutput,
+    scope: PhaseRunScope,
+) -> TailoredResumeOutput:
+    """Merge a scoped LLM response into the existing tailored resume."""
+    merged = existing.model_copy(deep=True)
+
+    if scope.mode == "add" and scope.chunk_content:
+        if scope.section == "experience" and partial.experience:
+            merged.experience = [*merged.experience, *partial.experience]
+        elif scope.section == "projects" and partial.projects:
+            merged.projects = [*merged.projects, *partial.projects]
+        elif scope.section == "education" and partial.education:
+            merged.education = [*merged.education, *partial.education]
+        elif scope.section == "skills" and partial.skills:
+            seen = {s.lower() for s in merged.skills}
+            for skill in partial.skills:
+                if skill.lower() not in seen:
+                    merged.skills.append(skill)
+                    seen.add(skill.lower())
+        elif scope.section == "summary" and partial.summary:
+            merged.summary = partial.summary
+        return merged
+
+    if scope.section == "summary" and partial.summary:
+        merged.summary = partial.summary
+    elif scope.section == "skills" and partial.skills:
+        merged.skills = partial.skills
+    elif scope.section == "experience":
+        if scope.bullet_index is not None and scope.company:
+            new_bullet: str | None = None
+            if partial.experience:
+                entry = partial.experience[0]
+                if entry.bullets:
+                    new_bullet = entry.bullets[0]
+            for exp in merged.experience:
+                if exp.company == scope.company and new_bullet is not None:
+                    if 0 <= scope.bullet_index < len(exp.bullets):
+                        exp.bullets[scope.bullet_index] = new_bullet
+                    break
+        elif partial.experience:
+            if scope.company:
+                replaced = False
+                for i, exp in enumerate(merged.experience):
+                    if exp.company == scope.company:
+                        merged.experience[i] = partial.experience[0]
+                        replaced = True
+                        break
+                if not replaced:
+                    merged.experience.append(partial.experience[0])
+            else:
+                merged.experience = partial.experience
+    elif scope.section == "education" and partial.education:
+        if scope.institution:
+            for i, edu in enumerate(merged.education):
+                if edu.institution == scope.institution:
+                    merged.education[i] = partial.education[0]
+                    break
+        else:
+            merged.education = partial.education
+    elif scope.section == "projects" and partial.projects:
+        merged.projects = partial.projects
+
+    if partial.rewrite_notes:
+        merged.rewrite_notes = [*merged.rewrite_notes, *partial.rewrite_notes]
+    if partial.metrics_needed:
+        merged.metrics_needed = partial.metrics_needed
+
+    return merged
+
+
+def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutput) -> str:
+    if scope.mode == "add" and scope.chunk_content:
+        return (
+            f"ADD SECTION MODE — convert the following master-resume chunk into a "
+            f"tailored ``{scope.section}`` section entry and return ONLY that section "
+            f"in the JSON output.\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
+        )
+    if scope.bullet_index is not None and scope.section == "experience":
+        company = scope.company or ""
+        current = ""
+        for exp in existing.experience:
+            if exp.company == company and scope.bullet_index < len(exp.bullets):
+                current = exp.bullets[scope.bullet_index]
+                break
+        return (
+            f"REGENERATE ONLY experience bullet index {scope.bullet_index} "
+            f"for company \"{company}\".  Current bullet:\n{current}\n"
+            f"Return JSON with a single experience entry whose bullets array "
+            f"contains exactly one rewritten bullet."
+        )
+    if scope.company and scope.section == "experience":
+        return (
+            f"REGENERATE ONLY the experience entry for company \"{scope.company}\". "
+            f"Return JSON with only the experience array containing that one entry."
+        )
+    if scope.institution and scope.section == "education":
+        return (
+            f"REGENERATE ONLY the education entry for institution "
+            f"\"{scope.institution}\".  Return JSON with only the education array."
+        )
+    return (
+        f"REGENERATE ONLY the ``{scope.section}`` section.  "
+        f"Return JSON containing only that section's field(s)."
+    )
+
+
+async def _resolve_chunk_content(scope: PhaseRunScope, user_id: str | None) -> PhaseRunScope:
+    """Load master-resume chunk text when only ``chunk_id`` is provided."""
+    if not scope.chunk_id or scope.chunk_content or not user_id:
+        return scope
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        return scope
+
+    from sqlalchemy import select
+
+    from app.db.engine import async_session_factory
+    from app.models.master_resume import MasterResumeChunk
+
+    async with async_session_factory() as db:
+        row = (
+            await db.execute(
+                select(MasterResumeChunk).where(
+                    MasterResumeChunk.id == uuid.UUID(scope.chunk_id),
+                    MasterResumeChunk.user_id == uid,
+                )
+            )
+        ).scalar_one_or_none()
+        await db.rollback()
+
+    if row is None:
+        return scope
+    return scope.model_copy(update={"chunk_content": row.content})
+
 
 async def _run_retrieval(
     user_id: uuid.UUID, jd_text: str
@@ -57,11 +201,25 @@ async def run(
     session: Session,
     llm: LLMClient,
     event_queue: asyncio.Queue,
+    scope: PhaseRunScope | None = None,
 ) -> TailoredResumeOutput:
-    await event_queue.put({"event": "progress", "phase": 3, "message": "Reading your resume and extracted JD keywords…"})
+    scoped = scope is not None
+    if scoped:
+        await event_queue.put({
+            "event": "progress",
+            "phase": 3,
+            "message": f"Regenerating {scope.section} section…",
+        })
+    else:
+        await event_queue.put({"event": "progress", "phase": 3, "message": "Reading your resume and extracted JD keywords…"})
 
     if not session.phase1_output or not session.phase2_output:
         raise RuntimeError("Phases 1 and 2 must complete before Phase 3.")
+    if scoped and not session.phase3_output:
+        raise RuntimeError("Phase 3 must complete before a scoped regeneration.")
+
+    if scoped and scope is not None:
+        scope = await _resolve_chunk_content(scope, session.user_id)
 
     resume_text = session.resume_raw or ""
     jd_text = session.jd_raw or ""
@@ -141,6 +299,8 @@ async def run(
     # Compose the system prompt — append the retrieval instructions when
     # we have chunks to pin the LLM against.
     system_content = _SYSTEM_BASE + "\n\n" + _PHASE3
+    if scoped:
+        system_content += _SCOPED_INSTRUCTION
     chunks_prompt_block = ""
     if retrieval_result is not None and retrieval_result.selected:
         system_content += _RETRIEVAL_INSTRUCTION
@@ -161,6 +321,13 @@ async def run(
         f"ORIGINAL RESUME:\n{resume_text}"
     )
 
+    if scoped and session.phase3_output:
+        user_content += (
+            f"\n\nCURRENT TAILORED RESUME (preserve all other sections):\n"
+            f"{session.phase3_output.model_dump_json()}\n\n"
+            f"{_scoped_user_instruction(scope, session.phase3_output)}"
+        )
+
     # Prompt budget gate (§6a "Determinism and prompt budget contract").
     # Raises ``PromptBudgetExceededError`` → orchestrator surfaces 422.
     assert_prompt_fits(system_content, user_content, model=llm.model_name)
@@ -172,9 +339,17 @@ async def run(
 
     output = await complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000)
 
-    # Attach retrieval transparency so the UI / version snapshots can
-    # render "selected vs skipped" panels even after a page reload.
-    if retrieval_result is not None:
+    if scoped and session.phase3_output:
+        output = _merge_scoped_output(session.phase3_output, output, scope)
+        # Preserve retrieval trace from the full run.
+        prior = session.phase3_output
+        if not output.selected_chunks and prior.selected_chunks:
+            output.selected_chunks = prior.selected_chunks
+        if not output.skipped_chunks and prior.skipped_chunks:
+            output.skipped_chunks = prior.skipped_chunks
+        if not output.retrieval_meta and prior.retrieval_meta:
+            output.retrieval_meta = prior.retrieval_meta
+    elif retrieval_result is not None:
         trace = retrieval_result.to_trace()
         output.selected_chunks = trace["selected_chunks"]
         output.skipped_chunks = trace["skipped_chunks"]

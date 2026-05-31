@@ -239,6 +239,49 @@ async def check_and_increment_quota(
     )
 
 
+async def check_quota_for_section_regen(
+    session: AsyncSession,
+    *,
+    user: User,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Quota for scoped Phase 3 section/bullet regen (§18.5).
+
+    Subscribers run scoped regen without incrementing ``resumes_used``.
+    Free users consume one ``section_regen`` credit.
+    """
+    if user.is_suspended:
+        raise AccountSuspendedError("account_suspended")
+
+    now = datetime.now(timezone.utc)
+    sub = await _active_subscription_for(session, user_id=user.id)
+
+    if sub is not None and _within_period(sub, now=now):
+        if sub.status != SubscriptionStatus.paused:
+            return QuotaDecision(
+                action=QuotaAction.section_regen,
+                charged_to="subscription_section_regen",
+                subscription_id=sub.id,
+            )
+
+    try:
+        row = await consume_credit(
+            session,
+            user_id=user.id,
+            credit_kind=CreditKind.free,
+            reason=QuotaAction.section_regen.value,
+            session_id=session_id,
+        )
+    except InsufficientCreditsError:
+        raise
+
+    return QuotaDecision(
+        action=QuotaAction.section_regen,
+        charged_to="free_credit",
+        credit_transaction_id=row.id,
+    )
+
+
 __all__ = [
     "FREE_CREDIT_ACTIONS",
     "PLAN_RESUMES_PER_PERIOD",
@@ -248,4 +291,5 @@ __all__ = [
     "RESUME_COUNTER_ACTIONS",
     "SEARCH_COUNTER_ACTIONS",
     "check_and_increment_quota",
+    "check_quota_for_section_regen",
 ]

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, Plus, Save } from "lucide-react";
-import { saveAdditions, type AuditOutput } from "@/lib/api";
+import { saveAdditions, patchAuditOutput, type AuditOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -10,7 +10,8 @@ interface Props {
   streaming: boolean;
   sessionId: string;
   onAdditionsSaved?: () => void;
-  onReaudit?: () => void;  // callback to re-run Phase 2 with additions
+  onReaudit?: () => void;
+  onAuditEdited?: (stale: Record<string, string | null>) => void;
 }
 
 const SEVERITY_CONFIG = {
@@ -19,7 +20,7 @@ const SEVERITY_CONFIG = {
   low: { icon: Info, cls: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
 };
 
-export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onReaudit }: Props) {
+export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onReaudit, onAuditEdited }: Props) {
   const [claimedKeywords, setClaimedKeywords] = useState<Set<string>>(new Set());
   const [extraNotes, setExtraNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,7 +28,22 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
   // Per-bullet fix drafts: key = `${i}`, value = user-typed corrected bullet
   const [bulletFixes, setBulletFixes] = useState<Record<number, string>>({});
   const [expandedFix, setExpandedFix] = useState<number | null>(null);
+  const [summaryDraft, setSummaryDraft] = useState("");
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summarySaving, setSummarySaving] = useState(false);
   const fixRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+
+  async function saveSummaryEdit() {
+    if (!output) return;
+    setSummarySaving(true);
+    try {
+      const res = await patchAuditOutput(sessionId, { summary: summaryDraft.trim() });
+      onAuditEdited?.(res.stale);
+      setEditingSummary(false);
+    } finally {
+      setSummarySaving(false);
+    }
+  }
 
   // ProgressLog in the parent handles loading UI.
   if (!output) return null;
@@ -92,9 +108,49 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
 
       {/* Summary */}
       {output.summary && (
-        <p className="text-slate-300 text-sm bg-slate-800 border border-slate-700 rounded-lg p-3">
-          {output.summary}
-        </p>
+        <div className="text-slate-300 text-sm bg-slate-800 border border-slate-700 rounded-lg p-3">
+          {editingSummary ? (
+            <div className="space-y-2">
+              <textarea
+                value={summaryDraft}
+                onChange={(e) => setSummaryDraft(e.target.value)}
+                rows={3}
+                className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveSummaryEdit}
+                  disabled={summarySaving}
+                  className="px-3 py-1 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-50"
+                >
+                  {summarySaving ? "Saving…" : "Save audit edit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingSummary(false)}
+                  className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-3">
+              <p>{output.summary}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSummaryDraft(output.summary);
+                  setEditingSummary(true);
+                }}
+                className="text-xs text-amber-400 hover:text-amber-300 shrink-0"
+              >
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Missing keywords ─────────────────────────────────────────────── */}
