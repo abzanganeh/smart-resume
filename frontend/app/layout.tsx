@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { NavBar } from "@/components/nav/NavBar";
+import { SessionProvider } from "@/components/nav/SessionProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -13,7 +15,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-slate-950 antialiased`}>
-        {children}
+        <SessionProvider>
+          <NavBar />
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );
