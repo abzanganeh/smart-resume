@@ -42,6 +42,7 @@ class FitAnalysis(Base):
     )
 
     __table_args__ = (
+        Index("ix_fit_analyses_jd_hash", "jd_hash"),
         Index("ix_fit_analyses_user_created", "user_id", "created_at"),
     )
 

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated
 
 import httpx
@@ -22,6 +23,7 @@ from app.llm.factory import get_llm_client
 from app.limiter import limiter
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
+from app.models.billing import Subscription, SubscriptionStatus
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
@@ -34,6 +36,7 @@ from app.services.billing.exceptions import (
 )
 from app.services.billing.quota import QuotaAction, check_and_increment_quota
 from app.services.retrieval.exceptions import MasterResumeRequiredError
+from app.services.auth.tokens import decode_access_token
 
 router = APIRouter(prefix="/api/fit", tags=["fit"])
 log = structlog.get_logger("fit.router")
@@ -50,7 +53,15 @@ ALLOWED_JD_MIME = {
 def _rate_limit_user_key(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
     if auth.lower().startswith("bearer "):
-        return f"user:{auth[7:].strip()[:64]}"
+        token = auth[7:].strip()
+        try:
+            claims = decode_access_token(token, expected_type="access")
+            subject = str(claims.get("sub") or "").strip()
+            if subject:
+                return f"user:{subject}"
+        except Exception:  # noqa: BLE001 - fallback to token-prefix/IP keying
+            pass
+        return f"token:{token[:64]}"
     return get_remote_address(request)
 
 
@@ -115,6 +126,54 @@ async def _extract_jd_text(
 
 def _jd_hash(jd_text: str) -> str:
     return hashlib.sha256(jd_text.encode("utf-8")).hexdigest()
+
+
+def _empty_fit_output() -> FitAnalysisOutput:
+    return FitAnalysisOutput(
+        overall_fit_score=0,
+        fit_label="weak",
+        section_fits=[],
+        key_gaps=[],
+        key_strengths=[],
+        recommendation="No recommendation available.",
+        should_apply=False,
+        suggested_master_resume_edits=[],
+    )
+
+
+def _safe_fit_output(payload: object) -> FitAnalysisOutput:
+    if isinstance(payload, dict):
+        try:
+            return FitAnalysisOutput.model_validate(payload)
+        except Exception:  # noqa: BLE001 - fallback avoids 500 on malformed legacy rows
+            return _empty_fit_output()
+    return _empty_fit_output()
+
+
+async def _require_fit_subscription(db: AsyncSession, *, user_id: uuid.UUID) -> None:
+    now = datetime.now(timezone.utc)
+    sub = (
+        await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id)
+            .where(
+                Subscription.status.in_(
+                    [
+                        SubscriptionStatus.active,
+                        SubscriptionStatus.trialing,
+                        SubscriptionStatus.grace,
+                        SubscriptionStatus.cancel_at_period_end,
+                    ]
+                )
+            )
+            .where(Subscription.period_start <= now)
+            .where(Subscription.period_end >= now)
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if sub is None:
+        raise HTTPException(status_code=402, detail={"code": "subscription_required"})
 
 
 class FetchJdRequest(BaseModel):
@@ -232,6 +291,7 @@ async def analyze_fit(
                 await event_queue.put({
                     "event": "done",
                     "analysis_id": str(analysis_id),
+                    "jd_text": resolved_jd,
                     "output": json.loads(output.model_dump_json()),
                 })
             except MasterResumeRequiredError:
@@ -286,6 +346,8 @@ async def fit_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
+    await _require_fit_subscription(db, user_id=user.id)
+
     offset = (page - 1) * page_size
     total = (
         await db.execute(
@@ -307,13 +369,13 @@ async def fit_history(
 
     items: list[FitHistoryItem] = []
     for row in rows:
-        result = row.result_json or {}
+        result = _safe_fit_output(row.result_json)
         items.append(
             FitHistoryItem(
                 id=str(row.id),
                 jd_hash=row.jd_hash,
-                overall_fit_score=int(result.get("overall_fit_score", 0)),
-                fit_label=str(result.get("fit_label", "weak")),
+                overall_fit_score=result.overall_fit_score,
+                fit_label=result.fit_label,
                 created_at=row.created_at.isoformat() if row.created_at else "",
             )
         )
@@ -331,6 +393,8 @@ async def fit_detail(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    await _require_fit_subscription(db, user_id=user.id)
+
     try:
         aid = uuid.UUID(analysis_id)
     except ValueError:
@@ -351,6 +415,6 @@ async def fit_detail(
         id=str(row.id),
         jd_hash=row.jd_hash,
         jd_text=row.jd_text,
-        result=FitAnalysisOutput.model_validate(row.result_json),
+        result=_safe_fit_output(row.result_json),
         created_at=row.created_at.isoformat() if row.created_at else "",
     )
