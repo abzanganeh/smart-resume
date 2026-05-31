@@ -67,6 +67,11 @@ async def check_session(session_id: str):
         "ok": True,
         "resume_raw": session.resume_raw or "",
         "phases": phases_out,
+        "cover_letter": (
+            json.loads(session.cover_letter_output.model_dump_json())
+            if session.cover_letter_output is not None
+            else None
+        ),
         "stale": stale,
         "stale_since": session.stale_since.isoformat() if session.stale_since else None,
         "phase1_complete": session.phase1_status.value == "done",

@@ -89,11 +89,12 @@ FREE_CREDIT_ACTIONS: frozenset[QuotaAction] = frozenset(
     }
 )
 # Actions that count against the resume counter (§18.3 "Resumes / period").
+# ``cover_letter`` is bundled for subscribers — see
+# :func:`check_quota_for_cover_letter`.
 RESUME_COUNTER_ACTIONS: frozenset[QuotaAction] = frozenset(
     {
         QuotaAction.resume_build,
         QuotaAction.ats_recalc,
-        QuotaAction.cover_letter,
         QuotaAction.section_regen,
     }
 )
@@ -239,6 +240,49 @@ async def check_and_increment_quota(
     )
 
 
+async def check_quota_for_cover_letter(
+    session: AsyncSession,
+    *,
+    user: User,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Quota for cover letter generation (§18.11).
+
+    Subscribers run cover letter generation without incrementing
+    ``resumes_used``.  Free users consume one ``cover_letter`` credit.
+    """
+    if user.is_suspended:
+        raise AccountSuspendedError("account_suspended")
+
+    now = datetime.now(timezone.utc)
+    sub = await _active_subscription_for(session, user_id=user.id)
+
+    if sub is not None and _within_period(sub, now=now):
+        if sub.status != SubscriptionStatus.paused:
+            return QuotaDecision(
+                action=QuotaAction.cover_letter,
+                charged_to="subscription_cover_letter",
+                subscription_id=sub.id,
+            )
+
+    try:
+        row = await consume_credit(
+            session,
+            user_id=user.id,
+            credit_kind=CreditKind.free,
+            reason=QuotaAction.cover_letter.value,
+            session_id=session_id,
+        )
+    except InsufficientCreditsError:
+        raise
+
+    return QuotaDecision(
+        action=QuotaAction.cover_letter,
+        charged_to="free_credit",
+        credit_transaction_id=row.id,
+    )
+
+
 async def check_quota_for_section_regen(
     session: AsyncSession,
     *,
@@ -291,5 +335,6 @@ __all__ = [
     "RESUME_COUNTER_ACTIONS",
     "SEARCH_COUNTER_ACTIONS",
     "check_and_increment_quota",
+    "check_quota_for_cover_letter",
     "check_quota_for_section_regen",
 ]
