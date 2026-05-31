@@ -198,6 +198,26 @@ export async function deleteProfileChunk(
   if (!res.ok) throw new Error(await parseError(res))
 }
 
+export interface BulkChunkInsertItem {
+  content: string
+  section_type?: string
+  metadata?: Record<string, unknown>
+}
+
+export async function bulkInsertProfileChunks(
+  token: string,
+  chunks: BulkChunkInsertItem[],
+): Promise<ProfileChunk[]> {
+  const res = await fetch(`${BASE}/api/profile/resume/chunks`, {
+    method: "PATCH",
+    headers: authHeaders(token, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ chunks }),
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  const body = (await res.json()) as { chunks: ProfileChunk[] }
+  return body.chunks
+}
+
 /** Placeholder until GET /api/resumes?has_master_resume=true ships (Step 27). */
 export async function fetchTailoredResumeCount(token: string): Promise<number | null> {
   try {

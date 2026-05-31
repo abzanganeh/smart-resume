@@ -76,7 +76,18 @@ function NewSessionContent() {
       setModel(stored.model);
       setAiReady(true);
     }
-  }, []);
+
+    const jdFromQuery = searchParams.get("jd");
+    if (jdFromQuery) {
+      try {
+        setJdText(decodeURIComponent(jdFromQuery));
+        setStep("jd");
+      } catch {
+        setJdText(jdFromQuery);
+        setStep("jd");
+      }
+    }
+  }, [searchParams]);
 
   const goTo = (s: Step) => {
     setStep(s);
