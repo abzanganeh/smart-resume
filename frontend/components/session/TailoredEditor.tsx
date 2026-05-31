@@ -521,8 +521,6 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
     const entry = data.experience.find((e) => e.company === company);
     if (!entry) return;
     const bullets = entry.bullets.filter((_, i) => i !== idx);
-    await patch({ section: "skills", skills: data.skills }); // flush via skills as workaround
-    // Use education_bullets pattern for proper update
     await patch({ section: "experience", company, bullet_index: idx, new_text: "" });
     updateLocal((p) => ({
       ...p,

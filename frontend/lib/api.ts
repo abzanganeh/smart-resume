@@ -32,6 +32,7 @@ export async function checkSession(
   resume_raw: string;
   phases: Record<string, { status: string; output: unknown | null }>;
   stale: Record<string, string | null>;
+  stale_since?: string | null;
   phase1_complete: boolean;
 }> {
   return request(`/api/sessions/${sessionId}`);

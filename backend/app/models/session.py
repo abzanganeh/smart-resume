@@ -75,5 +75,6 @@ class Session(BaseModel):
     phase_run_scope: PhaseRunScope | None = None
 
     # Stale markers — set when upstream phase output is manually edited (§18.6).
+    stale_since: datetime | None = None
     phase3_stale_since: datetime | None = None
     phase4_stale_since: datetime | None = None
