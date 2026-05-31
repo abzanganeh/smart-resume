@@ -11,6 +11,10 @@ from app.llm.base import LLMClient
 from app.llm.pricing import estimate_cost, format_cost
 from app.models.session import PhaseStatus, Session
 from app.services import session_store
+from app.services.retrieval.exceptions import (
+    MasterResumeRequiredError,
+    PromptBudgetExceededError,
+)
 
 log = structlog.get_logger()
 
@@ -65,6 +69,41 @@ async def run_phase(
             "output": json.loads(output.model_dump_json()),
         })
 
+    except MasterResumeRequiredError as e:
+        # IMPLEMENTATION_PLAN §6a — surface 409 so the frontend can route
+        # the user to /profile.  Keep the phase status as ``pending`` so
+        # they can rerun once a master resume has been uploaded.
+        await session_store.update_phase_status(session_id, phase, PhaseStatus.pending)
+        log.info("phase_blocked_master_resume_required", session_id=session_id, phase=phase)
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "code": e.code,
+            "status": 409,
+            "message": str(e),
+        })
+        raise
+    except PromptBudgetExceededError as e:
+        await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
+        log.warning(
+            "phase_prompt_budget_exceeded",
+            session_id=session_id,
+            phase=phase,
+            total_tokens=e.total_tokens,
+            budget=e.budget,
+            model=e.model,
+        )
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "code": e.code,
+            "status": 422,
+            "message": str(e),
+            "total_tokens": e.total_tokens,
+            "budget": e.budget,
+            "model": e.model,
+        })
+        raise
     except Exception as e:
         await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
         log.error("phase_error", session_id=session_id, phase=phase, error=str(e))
