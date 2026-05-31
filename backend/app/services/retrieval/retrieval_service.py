@@ -154,6 +154,7 @@ class SkippedChunk:
     section: str
     score: float
     reason: str  # ∈ {below_threshold, cap_exceeded, budget_exceeded, fallback_used}
+    content: str = ""
 
     def to_trace(self) -> dict[str, Any]:
         return {
@@ -161,6 +162,7 @@ class SkippedChunk:
             "section": self.section,
             "score": round(self.score, 6),
             "reason": self.reason,
+            "content": self.content,
         }
 
 
@@ -346,6 +348,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="cap_exceeded",
+                    content=c.content,
                 )
             )
         for c in below_primary:
@@ -355,6 +358,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="below_threshold",
+                    content=c.content,
                 )
             )
         return kept, skipped, fallback_used
@@ -371,6 +375,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="cap_exceeded",
+                    content=c.content,
                 )
             )
         for c in candidates:
@@ -381,6 +386,7 @@ def _select_for_section(
                         section=c.section,
                         score=c.score,
                         reason="below_threshold",
+                        content=c.content,
                     )
                 )
         # Mark the kept chunks as fallback-used so the trace explains why
@@ -394,6 +400,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="fallback_used",
+                    content=c.content,
                 )
             )
         return kept, skipped, fallback_used
@@ -415,6 +422,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="below_threshold",
+                    content=c.content,
                 )
             )
         for c in kept:
@@ -424,6 +432,7 @@ def _select_for_section(
                     section=c.section,
                     score=c.score,
                     reason="fallback_used",
+                    content=c.content,
                 )
             )
         return kept, skipped, fallback_used
@@ -436,6 +445,7 @@ def _select_for_section(
                 section=c.section,
                 score=c.score,
                 reason="below_threshold",
+                content=c.content,
             )
         )
     return [], skipped, False
@@ -507,6 +517,7 @@ def _enforce_token_budget(
                         section=c.section,
                         score=c.score,
                         reason="budget_exceeded",
+                        content=c.content,
                     )
                 )
     return survivors, skipped
