@@ -169,6 +169,66 @@ export function exportUrl(
   return `${BASE}/api/sessions/${sessionId}/export?format=${format}`;
 }
 
+// ── Billing ──────────────────────────────────────────────────────────────────
+
+export async function getBillingPrices(token?: string): Promise<BillingPricesResponse> {
+  return request("/api/billing/prices", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+}
+
+export async function getSubscriptionCurrent(token: string): Promise<SubscriptionCurrentResponse> {
+  return request("/api/subscriptions/current", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function createCheckoutSession(
+  token: string,
+  payload: { stripe_price_id: string; billing_cycle?: "recurring" | "yearly" },
+): Promise<{ checkout_url: string }> {
+  return request("/api/subscriptions/checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function createPortalSession(token: string): Promise<{ portal_url: string }> {
+  return request("/api/subscriptions/portal", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function cancelSubscription(token: string): Promise<{ ok: boolean }> {
+  return request("/api/subscriptions/cancel", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function resumeSubscription(token: string): Promise<{ ok: boolean }> {
+  return request("/api/subscriptions/resume", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function pauseSubscription(token: string): Promise<{ ok: boolean }> {
+  return request("/api/subscriptions/pause", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function unpauseSubscription(token: string): Promise<{ ok: boolean }> {
+  return request("/api/subscriptions/unpause", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface UserInfoPayload {
@@ -308,4 +368,66 @@ export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
   user_action_required: string[];
+}
+
+// ── Billing types ─────────────────────────────────────────────────────────────
+
+export interface BillingPlan {
+  code: string;
+  display_name: string;
+  cycle: "daily" | "weekly" | "monthly" | "yearly";
+  amount_cents: number;
+  trial_days: number | null;
+  stripe_price_id: string;
+  is_active: boolean;
+  features: string[];
+}
+
+export interface BillingAddon {
+  code: string;
+  display_name: string;
+  kind: "credit_pack" | "addon_subscription" | "per_resume";
+  unit_amount_cents: number;
+  credits_granted: number | null;
+  stripe_price_id: string;
+  billing_cycle_requirement: "yearly" | "monthly" | null;
+  is_active: boolean;
+}
+
+export interface BillingPricesResponse {
+  version: string;
+  currency: string;
+  plans: BillingPlan[];
+  addons: BillingAddon[];
+}
+
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "cancel_at_period_end"
+  | "paused"
+  | "cancelled"
+  | "expired"
+  | "grace";
+
+export interface SubscriptionCurrentResponse {
+  /** null when user has no subscription (free tier) */
+  subscription: {
+    id: string;
+    plan: "daily" | "weekly" | "monthly";
+    billing_cycle: "recurring" | "yearly";
+    status: SubscriptionStatus;
+    trial_ends_at: string | null;
+    period_start: string;
+    period_end: string;
+    resumes_used: number;
+    resumes_limit: number;
+    searches_used: number;
+    searches_limit: number;
+    cancel_at_period_end: boolean;
+    paused_at: string | null;
+    pause_resumes_at: string | null;
+  } | null;
+  /** Free credit balance (relevant when subscription is null) */
+  credit_balance: number;
 }
