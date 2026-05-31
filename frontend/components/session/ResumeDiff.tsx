@@ -11,9 +11,11 @@ interface Props {
   onEdited?: (updated: TailoredResumeOutput) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
+  suggestionDraft?: string | null;
+  onClearSuggestion?: () => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited, onScopedRun, phaseRunning }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -53,6 +55,8 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited,
         onSaved={onEdited}
         onScopedRun={onScopedRun}
         phaseRunning={phaseRunning}
+        suggestionDraft={suggestionDraft}
+        onClearSuggestion={onClearSuggestion}
       />
     </div>
   );

@@ -24,6 +24,8 @@ interface Props {
   onSaved?: (updated: TailoredResumeOutput) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
+  suggestionDraft?: string | null;
+  onClearSuggestion?: () => void;
 }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -413,8 +415,13 @@ function ScopedBulletList({
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning }: Props) {
+export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
   const { present: data, push, replace, undo, redo, canUndo, canRedo } = useVersionStack(initial);
+  const [draftText, setDraftText] = useState(suggestionDraft ?? "");
+
+  useEffect(() => {
+    if (suggestionDraft) setDraftText(suggestionDraft);
+  }, [suggestionDraft]);
   const [expandedExp, setExpandedExp] = useState<string | null>(
     initial.experience[0]?.company ?? null
   );
@@ -594,6 +601,26 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
 
   return (
     <div className="space-y-8">
+      {suggestionDraft && (
+        <div className="bg-amber-400/10 border border-amber-400/30 rounded-xl p-4 space-y-2">
+          <p className="text-xs text-amber-400 font-semibold uppercase tracking-wide">
+            ATS suggestion — edit and apply to your resume
+          </p>
+          <textarea
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+            rows={3}
+            className="w-full bg-slate-900 border border-amber-400/40 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+          />
+          <button
+            type="button"
+            onClick={() => onClearSuggestion?.()}
+            className="text-xs text-slate-400 hover:text-slate-200 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex items-center gap-2">
           <button

@@ -92,7 +92,7 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
       {/* Score */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p className="text-slate-400 text-sm">ATS Readiness Score</p>
+          <p className="text-slate-400 text-sm">Audit Score</p>
           <p className={cn("text-3xl font-bold mt-0.5", scoreColor)}>
             {output.overall_score}
             <span className="text-slate-500 text-lg font-normal"> / 100</span>
@@ -270,7 +270,7 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                 <div className="flex-1 text-xs text-slate-300">
                   <span className="text-emerald-400 font-semibold">Saved.</span>{" "}
-                  Recalculate your ATS Readiness Score with these additions applied.
+                  Recalculate your audit score with these additions applied.
                 </div>
                 {onReaudit && (
                   <button
@@ -278,7 +278,7 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
                     onClick={onReaudit}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors whitespace-nowrap"
                   >
-                    Recalculate ATS Score →
+                    Recalculate Audit Score →
                   </button>
                 )}
               </div>
