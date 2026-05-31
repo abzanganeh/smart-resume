@@ -56,26 +56,6 @@ const SUB_CURRENT_FREE_FIXTURE = {
   credit_balance: 3,
 }
 
-const SUB_CURRENT_ACTIVE_FIXTURE = {
-  subscription: {
-    id: "sub_test_123",
-    plan: "monthly",
-    billing_cycle: "recurring",
-    status: "active",
-    trial_ends_at: null,
-    period_start: "2026-05-01T00:00:00Z",
-    period_end: "2026-06-01T00:00:00Z",
-    resumes_used: 12,
-    resumes_limit: 150,
-    searches_used: 45,
-    searches_limit: 300,
-    cancel_at_period_end: false,
-    paused_at: null,
-    pause_resumes_at: null,
-  },
-  credit_balance: 0,
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function mockBillingApis(page: Page, subFixture: object = SUB_CURRENT_FREE_FIXTURE) {
@@ -109,6 +89,17 @@ test.describe("/billing/cancel page", () => {
       .getByRole("link", { name: /View plans/i })
       .getAttribute("href")
     expect(href).toContain("/billing")
+  })
+})
+
+test.describe("/billing/success page", () => {
+  test("unauthenticated users are prompted to sign in for verification", async ({ page }) => {
+    await page.goto(`${BASE}/billing/success`)
+    await expect(page.getByText(/Sign in to confirm billing status/i)).toBeVisible()
+    await expect(page.getByRole("link", { name: /Sign in/i })).toBeVisible()
+    const href = await page.getByRole("link", { name: /Sign in/i }).getAttribute("href")
+    expect(href).toContain("/auth")
+    expect(href).toContain("callbackUrl=/billing/success")
   })
 })
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import {
   Check,
   CreditCard,
@@ -28,6 +27,7 @@ import {
   type BillingPricesResponse,
   type SubscriptionCurrentResponse,
 } from "@/lib/api"
+import { isSubscriptionActive, yearlyDiscountedAmount, yearlySavingsAmount } from "@/lib/billing"
 import { clsx } from "clsx"
 
 // ── Feature display labels ─────────────────────────────────────────────────
@@ -85,9 +85,7 @@ function PlanCard({
 }: PlanCardProps) {
   const isMonthly = plan.cycle === "monthly"
   const showYearly = isMonthly && yearlyToggle
-  const displayAmount = showYearly
-    ? Math.round(plan.amount_cents * 12 * 0.8)
-    : plan.amount_cents
+  const displayAmount = showYearly ? yearlyDiscountedAmount(plan.amount_cents) : plan.amount_cents
   const isHighlighted = plan.code === PLAN_HIGHLIGHT
 
   return (
@@ -127,7 +125,7 @@ function PlanCard({
         </div>
         {showYearly && (
           <p className="text-emerald-400 text-xs mt-1 font-medium">
-            Save 20% — {formatCents(plan.amount_cents * 12 - displayAmount, currency)} off
+            Save 20% — {formatCents(yearlySavingsAmount(plan.amount_cents), currency)} off
           </p>
         )}
       </div>
@@ -202,7 +200,6 @@ function UsageMeter({ label, used, limit }: UsageMeterProps) {
 
 export default function BillingPage() {
   const { session, status } = useRequireAuth("/billing")
-  const router = useRouter()
   const { data: clientSession } = useSession()
 
   const [prices, setPrices] = useState<BillingPricesResponse | null>(null)
@@ -216,6 +213,7 @@ export default function BillingPage() {
   const token = clientSession?.backendAccessToken ?? session?.backendAccessToken
 
   const loadPrices = useCallback(async () => {
+    setLoadingPrices(true)
     try {
       const data = await getBillingPrices(token ?? undefined)
       setPrices(data)
@@ -228,6 +226,7 @@ export default function BillingPage() {
 
   const loadCurrent = useCallback(async () => {
     if (!token) return
+    setLoadingCurrent(true)
     try {
       const data = await getSubscriptionCurrent(token)
       setCurrent(data)
@@ -240,12 +239,18 @@ export default function BillingPage() {
   }, [token])
 
   useEffect(() => {
-    loadPrices()
-    loadCurrent()
+    const timeout = window.setTimeout(() => {
+      void loadPrices()
+      void loadCurrent()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeout)
+    }
   }, [loadPrices, loadCurrent])
 
   async function handleSubscribe(stripePriceId: string, yearly: boolean) {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("checkout")
     setError(null)
     try {
@@ -253,7 +258,7 @@ export default function BillingPage() {
         stripe_price_id: stripePriceId,
         billing_cycle: yearly ? "yearly" : "recurring",
       })
-      router.push(checkout_url)
+      window.location.assign(checkout_url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start checkout")
     } finally {
@@ -262,12 +267,12 @@ export default function BillingPage() {
   }
 
   async function handlePortal() {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("portal")
     setError(null)
     try {
       const { portal_url } = await createPortalSession(token)
-      router.push(portal_url)
+      window.location.assign(portal_url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to open billing portal")
     } finally {
@@ -276,7 +281,7 @@ export default function BillingPage() {
   }
 
   async function handleCancel() {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("cancel")
     setError(null)
     try {
@@ -290,7 +295,7 @@ export default function BillingPage() {
   }
 
   async function handleResume() {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("resume")
     setError(null)
     try {
@@ -304,7 +309,7 @@ export default function BillingPage() {
   }
 
   async function handlePause() {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("pause")
     setError(null)
     try {
@@ -318,7 +323,7 @@ export default function BillingPage() {
   }
 
   async function handleUnpause() {
-    if (!token) return
+    if (!token || busyAction) return
     setBusyAction("unpause")
     setError(null)
     try {
@@ -340,7 +345,8 @@ export default function BillingPage() {
   }
 
   const sub = current?.subscription
-  const isSubscribed = !!sub && sub.status !== "expired" && sub.status !== "cancelled"
+  const isSubscribed = !!sub && isSubscriptionActive(sub.status)
+  const isAnyActionBusy = busyAction !== null
   const orderedPlans = prices
     ? [...prices.plans].sort(
         (a, b) => PLAN_ORDER.indexOf(a.cycle) - PLAN_ORDER.indexOf(b.cycle),
@@ -438,6 +444,7 @@ export default function BillingPage() {
               busy={busyAction === "portal"}
               onClick={handlePortal}
               variant="primary"
+              disabled={isAnyActionBusy}
             />
 
             {sub.paused_at ? (
@@ -446,6 +453,7 @@ export default function BillingPage() {
                 icon={<PlayCircle className="w-4 h-4" />}
                 busy={busyAction === "unpause"}
                 onClick={handleUnpause}
+                disabled={isAnyActionBusy}
               />
             ) : (
               <ActionButton
@@ -453,6 +461,7 @@ export default function BillingPage() {
                 icon={<PauseCircle className="w-4 h-4" />}
                 busy={busyAction === "pause"}
                 onClick={handlePause}
+                disabled={isAnyActionBusy}
               />
             )}
 
@@ -462,6 +471,7 @@ export default function BillingPage() {
                 icon={<RefreshCw className="w-4 h-4" />}
                 busy={busyAction === "resume"}
                 onClick={handleResume}
+                disabled={isAnyActionBusy}
               />
             ) : (
               <ActionButton
@@ -470,6 +480,7 @@ export default function BillingPage() {
                 busy={busyAction === "cancel"}
                 onClick={handleCancel}
                 variant="danger"
+                disabled={isAnyActionBusy}
               />
             )}
           </div>
@@ -483,7 +494,9 @@ export default function BillingPage() {
             <p className="text-sm text-slate-400">Free credits remaining</p>
             <p className="text-2xl font-bold text-amber-400">
               {current.credit_balance}{" "}
-              <span className="text-sm font-normal text-slate-400">credits</span>
+              <span className="text-sm font-normal text-slate-400">
+                credit{current.credit_balance === 1 ? "" : "s"} left
+              </span>
             </p>
           </div>
           <p className="text-xs text-slate-500 max-w-[200px] text-right">
@@ -546,10 +559,28 @@ export default function BillingPage() {
                 currency={prices?.currency ?? "USD"}
                 yearlyToggle={yearlyToggle}
                 isCurrentPlan={isSubscribed && sub?.plan === plan.code}
-                isBusy={busyAction === "checkout"}
+                isBusy={isAnyActionBusy}
                 onSubscribe={handleSubscribe}
               />
             ))}
+          </div>
+        )}
+        {!loadingPrices && orderedPlans.length === 0 && (
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-6 text-sm text-slate-300 flex flex-wrap items-center justify-between gap-3">
+            <p>
+              Pricing is temporarily unavailable. Please retry in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null)
+                void loadPrices()
+                if (token) void loadCurrent()
+              }}
+              className="bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors"
+            >
+              Retry
+            </button>
           </div>
         )}
       </section>
@@ -565,6 +596,10 @@ function StatusBadge({ status }: { status: string }) {
     trialing: { label: "Trial", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
     grace: { label: "Payment failed", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
     paused: { label: "Paused", className: "bg-slate-600/40 text-slate-400 border-slate-600/50" },
+    cancel_at_period_end: {
+      label: "Cancels at period end",
+      className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    },
     cancelled: { label: "Cancelled", className: "bg-red-500/20 text-red-400 border-red-500/30" },
     expired: { label: "Expired", className: "bg-red-500/20 text-red-400 border-red-500/30" },
   }
@@ -580,11 +615,19 @@ interface ActionButtonProps {
   label: string
   icon: React.ReactNode
   busy: boolean
+  disabled?: boolean
   onClick: () => void
   variant?: "primary" | "default" | "danger"
 }
 
-function ActionButton({ label, icon, busy, onClick, variant = "default" }: ActionButtonProps) {
+function ActionButton({
+  label,
+  icon,
+  busy,
+  disabled = false,
+  onClick,
+  variant = "default",
+}: ActionButtonProps) {
   const cls = {
     primary: "bg-amber-400 text-slate-900 hover:bg-amber-300",
     default: "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700",
@@ -594,7 +637,7 @@ function ActionButton({ label, icon, busy, onClick, variant = "default" }: Actio
   return (
     <button
       onClick={onClick}
-      disabled={busy}
+      disabled={busy || disabled}
       className={clsx(
         "flex items-center gap-1.5 text-sm px-4 py-2 rounded-xl transition-colors disabled:opacity-50",
         cls,

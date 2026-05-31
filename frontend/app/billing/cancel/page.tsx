@@ -18,6 +18,9 @@ export default function BillingCancelPage() {
           No worries — your checkout was cancelled and nothing was charged. Come back
           whenever you&apos;re ready to unlock full access.
         </p>
+        <p className="text-slate-500 text-sm">
+          You can return directly to the billing matrix and choose a plan again.
+        </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
@@ -32,6 +35,12 @@ export default function BillingCancelPage() {
           className="bg-slate-800 text-slate-200 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-colors border border-slate-700"
         >
           Back to home
+        </Link>
+        <Link
+          href="/session/new"
+          className="bg-slate-900 text-slate-300 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-800 transition-colors border border-slate-700"
+        >
+          Continue using free credits
         </Link>
       </div>
     </main>
