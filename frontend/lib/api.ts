@@ -404,6 +404,7 @@ export interface BillingPricesResponse {
 export type SubscriptionStatus =
   | "trialing"
   | "active"
+  | "cancel_at_period_end"
   | "paused"
   | "cancelled"
   | "expired"
