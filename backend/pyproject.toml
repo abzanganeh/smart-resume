@@ -42,6 +42,7 @@ dependencies = [
     "uvicorn[standard]>=0.48.0",
     "weasyprint>=68.1",
     "zxcvbn>=4.5.0",
+    "pgvector>=0.4.2",
 ]
 
 [dependency-groups]
