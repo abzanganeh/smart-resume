@@ -22,7 +22,6 @@ import {
   getFitHistory,
   getSubscriptionCurrent,
   streamFitAnalysis,
-  fetchJdFromUrl,
   type FitAnalysisOutput,
   type FitHistoryItem,
   type FitLabel,
@@ -176,7 +175,9 @@ function FitResults({
       <div className="flex flex-col sm:flex-row gap-8 items-center sm:items-start">
         <FitScoreGauge score={result.overall_fit_score} fitLabel={result.fit_label} />
         <div className="flex-1 text-center sm:text-left">
-          <p className="text-slate-300 text-sm leading-relaxed">{result.recommendation}</p>
+          <pre className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+            {result.recommendation}
+          </pre>
           <p className="mt-3 text-xs text-slate-500">
             {result.should_apply
               ? "Recommendation: worth applying with targeted resume tailoring."
@@ -385,7 +386,6 @@ function FitPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FitAnalysisOutput | null>(null);
   const [resultJd, setResultJd] = useState("");
-  const [fetchingUrl, setFetchingUrl] = useState(false);
 
   const token = session?.backendAccessToken ?? "";
 
@@ -412,19 +412,6 @@ function FitPageContent() {
     setProgressMsg("Starting analysis…");
 
     let textToAnalyze = jdText.trim();
-    if (inputTab === "url" && jdUrl.trim() && !textToAnalyze) {
-      setFetchingUrl(true);
-      try {
-        textToAnalyze = await fetchJdFromUrl(token, jdUrl.trim());
-        setJdText(textToAnalyze);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not fetch URL.");
-        setAnalyzing(false);
-        setFetchingUrl(false);
-        return;
-      }
-      setFetchingUrl(false);
-    }
 
     if (inputTab === "paste" && !textToAnalyze) {
       setError("Paste a job description.");
@@ -459,7 +446,9 @@ function FitPageContent() {
           }
           if (event.event === "done" && event.output) {
             setResult(event.output as FitAnalysisOutput);
-            setResultJd(textToAnalyze || jdText);
+            const resolved = typeof event.jd_text === "string" ? event.jd_text : (textToAnalyze || jdText);
+            setResultJd(resolved);
+            if (resolved) setJdText(resolved);
           }
         },
       );
@@ -634,7 +623,7 @@ function FitPageContent() {
                   {analyzing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {fetchingUrl ? "Fetching job posting…" : progressMsg ?? "Analyzing…"}
+                      {progressMsg ?? "Analyzing…"}
                     </>
                   ) : (
                     "Analyze fit"

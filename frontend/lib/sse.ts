@@ -8,6 +8,7 @@ export interface SSEEvent {
   message?: string;
   data?: unknown;
   output?: unknown;
+  jd_text?: string;
   cost?: number;
   cost_formatted?: string;
   provider?: string;
