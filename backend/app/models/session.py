@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.models.audit import AuditOutput
+from app.models.cover_letter import CoverLetterOutput
 from app.models.keywords import KeywordExtractionOutput
 from app.models.qa import QAOutput
 from app.models.resume import ParsedResume
@@ -69,6 +70,8 @@ class Session(BaseModel):
 
     phase4_status: PhaseStatus = PhaseStatus.pending
     phase4_output: QAOutput | None = None
+
+    cover_letter_output: CoverLetterOutput | None = None
 
     # Set by POST /phases/{n}/run so SSE knows to execute instead of replaying cache.
     phase_run_requested: int | None = None

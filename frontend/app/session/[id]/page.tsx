@@ -13,13 +13,17 @@ import {
   type AuditOutput,
   type TailoredResumeOutput,
   type QAOutput,
+  type CoverLetterOutput,
 } from "@/lib/api";
+import { trackRecentSession } from "@/lib/recentSessions";
+import { useSession } from "next-auth/react";
 import { KeywordDashboard } from "@/components/session/KeywordDashboard";
 import { AuditPanel } from "@/components/session/AuditPanel";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel } from "@/components/session/ATSGuidancePanel";
 import { ExportButtons } from "@/components/session/ExportButtons";
+import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { VersionHistory } from "@/components/session/VersionHistory";
 import { ProgressLog } from "@/components/session/ProgressLog";
 import { StaleBanner } from "@/components/session/StaleBanner";
@@ -59,7 +63,10 @@ function SessionContent() {
   const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [coverLetter, setCoverLetter] = useState<CoverLetterOutput | null>(null);
 
+  const { data: authSession } = useSession();
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
@@ -125,6 +132,9 @@ function SessionContent() {
       if (typeof out.ats_score === "number") {
         setAtsScoreHistory([out.ats_score]);
       }
+    }
+    if (s.cover_letter) {
+      setCoverLetter(s.cover_letter);
     }
   }, [applyPhaseOutput]);
 
@@ -237,6 +247,7 @@ function SessionContent() {
       .then((s) => {
         if (cancelled) return;
         hydrateFromSession(s);
+        trackRecentSession(sessionId, s.resume_raw?.slice(0, 40) || undefined);
         setSessionLoaded(true);
       })
       .catch(() => {
@@ -540,10 +551,29 @@ function SessionContent() {
                   <ExportButtons sessionId={sessionId} disabled={false} />
                 </div>
               )}
+              {tailored && (
+                <div className="mt-6 pt-6 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCoverLetterOpen(true)}
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+                  >
+                    Generate cover letter
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      <CoverLetterPanel
+        sessionId={sessionId}
+        accessToken={authSession?.backendAccessToken}
+        initial={coverLetter}
+        open={coverLetterOpen}
+        onClose={() => setCoverLetterOpen(false)}
+      />
     </div>
   );
 }

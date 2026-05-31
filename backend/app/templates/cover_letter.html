@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cover Letter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    color: #1a1a1a;
+    padding: 0.75in;
+    max-width: 8.5in;
+  }
+  .header {
+    margin-bottom: 24px;
+    font-size: 10.5pt;
+    color: #333;
+  }
+  .name { font-weight: bold; font-size: 12pt; margin-bottom: 4px; }
+  .body p { margin-bottom: 12px; text-align: justify; }
+  .meta {
+    margin-top: 20px;
+    font-size: 9pt;
+    color: #666;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  {% if user %}
+  <div class="name">{{ user.name }}</div>
+  {% if user.email %}<div>{{ user.email }}</div>{% endif %}
+  {% if user.phone %}<div>{{ user.phone }}</div>{% endif %}
+  {% endif %}
+  {% if target_role %}
+  <div class="meta">Re: {{ target_role }}</div>
+  {% endif %}
+</div>
+
+<div class="body">
+  {% for para in paragraphs %}
+  <p>{{ para }}</p>
+  {% endfor %}
+</div>
+
+</body>
+</html>
