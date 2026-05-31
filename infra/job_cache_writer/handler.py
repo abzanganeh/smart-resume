@@ -12,6 +12,14 @@ from typing import Any
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+_FX_TO_USD: dict[str, float] = {
+    "USD": 1.0,
+    "CAD": 0.73,
+    "EUR": 1.08,
+    "GBP": 1.27,
+    "AUD": 0.65,
+}
+
 
 def _postgres_url() -> str:
     url = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL", "")
@@ -40,6 +48,26 @@ def _normalize_location(location_str: str | None) -> tuple[str | None, str | Non
     return parts[0], parts[-1]
 
 
+def _normalize_salary(amount: Any, currency: Any) -> int | None:
+    if amount is None:
+        return None
+    if currency is None or not str(currency).strip():
+        log.warning(
+            "unknown currency for salary normalization",
+            extra={"currency": currency, "amount": amount},
+        )
+        return None
+    code = str(currency).strip().upper()
+    rate = _FX_TO_USD.get(code)
+    if rate is None:
+        log.warning(
+            "unknown currency for salary normalization",
+            extra={"currency": code, "amount": amount},
+        )
+        return None
+    return int(round(float(amount) * rate))
+
+
 def _normalize_record(raw: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     company = str(raw.get("company") or raw.get("companyName") or "")
@@ -57,6 +85,9 @@ def _normalize_record(raw: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any
 
     external_id = str(raw.get("id") or raw.get("jobId") or "")
     dedup_key = _compute_dedup_key(company, title, city, posted_date)
+    salary_currency = raw.get("salary_currency") or raw.get("salaryCurrency")
+    salary_min = _normalize_salary(raw.get("salary_min") or raw.get("salaryMin"), salary_currency)
+    salary_max = _normalize_salary(raw.get("salary_max") or raw.get("salaryMax"), salary_currency)
 
     return {
         "sources": json.dumps(["apify"]),
@@ -68,9 +99,9 @@ def _normalize_record(raw: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any
         "location_city": city,
         "location_country": country,
         "remote": bool(raw.get("remote") or raw.get("isRemote")),
-        "salary_min_usd": None,
-        "salary_max_usd": None,
-        "salary_currency_original": None,
+        "salary_min_usd": salary_min,
+        "salary_max_usd": salary_max,
+        "salary_currency_original": str(salary_currency) if salary_currency else None,
         "employment_type": str(raw.get("employment_type") or raw.get("employmentType") or ""),
         "posted_date": posted_date,
         "description": str(raw.get("description") or ""),
@@ -85,85 +116,50 @@ def _normalize_record(raw: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any
 def _upsert_job(conn: Any, record: dict[str, Any]) -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, sources, external_ids FROM job_cache WHERE dedup_key = %s",
-            (record["dedup_key"],),
-        )
-        row = cur.fetchone()
-        if row is None:
-            cur.execute(
-                """
-                INSERT INTO job_cache (
-                    id, sources, external_ids, title, company, company_normalized,
-                    location, location_city, location_country, remote,
-                    salary_min_usd, salary_max_usd, salary_currency_original,
-                    employment_type, posted_date, description, apply_url,
-                    raw_json, cached_at, expires_at, dedup_key
-                ) VALUES (
-                    %s, %s::jsonb, %s::jsonb, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s::jsonb, %s, %s, %s
-                )
-                """,
-                (
-                    str(uuid.uuid4()),
-                    record["sources"],
-                    record["external_ids"],
-                    record["title"],
-                    record["company"],
-                    record["company_normalized"],
-                    record["location"],
-                    record["location_city"],
-                    record["location_country"],
-                    record["remote"],
-                    record["salary_min_usd"],
-                    record["salary_max_usd"],
-                    record["salary_currency_original"],
-                    record["employment_type"],
-                    record["posted_date"],
-                    record["description"],
-                    record["apply_url"],
-                    record["raw_json"],
-                    record["cached_at"],
-                    record["expires_at"],
-                    record["dedup_key"],
-                ),
-            )
-            return
-
-        existing_sources = row[1] or []
-        merged_sources = list(existing_sources)
-        if "apify" not in merged_sources:
-            merged_sources.append("apify")
-        existing_ext = row[2] or {}
-        incoming_ext = json.loads(record["external_ids"])
-        merged_ext = {**existing_ext, **incoming_ext}
-
-        cur.execute(
             """
-            UPDATE job_cache SET
-                sources = %s::jsonb,
-                external_ids = %s::jsonb,
-                title = %s,
-                company = %s,
-                company_normalized = %s,
-                location = %s,
-                location_city = %s,
-                location_country = %s,
-                remote = %s,
-                employment_type = %s,
-                posted_date = %s,
-                description = %s,
-                apply_url = %s,
-                raw_json = %s::jsonb,
-                cached_at = %s,
-                expires_at = %s
-            WHERE dedup_key = %s
+            INSERT INTO job_cache (
+                id, sources, external_ids, title, company, company_normalized,
+                location, location_city, location_country, remote,
+                salary_min_usd, salary_max_usd, salary_currency_original,
+                employment_type, posted_date, description, apply_url,
+                raw_json, cached_at, expires_at, dedup_key
+            ) VALUES (
+                %s, %s::jsonb, %s::jsonb, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s::jsonb, %s, %s, %s
+            )
+            ON CONFLICT (dedup_key) DO UPDATE SET
+                sources = (
+                    SELECT jsonb_agg(DISTINCT v.value)
+                    FROM jsonb_array_elements(
+                        COALESCE(job_cache.sources, '[]'::jsonb) || COALESCE(EXCLUDED.sources, '[]'::jsonb)
+                    ) AS v(value)
+                ),
+                external_ids = COALESCE(job_cache.external_ids, '{}'::jsonb) || COALESCE(EXCLUDED.external_ids, '{}'::jsonb),
+                title = EXCLUDED.title,
+                company = EXCLUDED.company,
+                company_normalized = EXCLUDED.company_normalized,
+                location = EXCLUDED.location,
+                location_city = EXCLUDED.location_city,
+                location_country = EXCLUDED.location_country,
+                remote = EXCLUDED.remote,
+                salary_min_usd = EXCLUDED.salary_min_usd,
+                salary_max_usd = EXCLUDED.salary_max_usd,
+                salary_currency_original = EXCLUDED.salary_currency_original,
+                employment_type = EXCLUDED.employment_type,
+                posted_date = EXCLUDED.posted_date,
+                description = EXCLUDED.description,
+                apply_url = EXCLUDED.apply_url,
+                raw_json = EXCLUDED.raw_json,
+                cached_at = EXCLUDED.cached_at,
+                expires_at = EXCLUDED.expires_at
             """,
             (
-                json.dumps(merged_sources),
-                json.dumps(merged_ext),
+                str(uuid.uuid4()),
+                record["sources"],
+                record["external_ids"],
                 record["title"],
                 record["company"],
                 record["company_normalized"],
@@ -171,6 +167,9 @@ def _upsert_job(conn: Any, record: dict[str, Any]) -> None:
                 record["location_city"],
                 record["location_country"],
                 record["remote"],
+                record["salary_min_usd"],
+                record["salary_max_usd"],
+                record["salary_currency_original"],
                 record["employment_type"],
                 record["posted_date"],
                 record["description"],
