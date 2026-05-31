@@ -9,7 +9,7 @@ Instructions:
 - For irrelevant_sections: name any section that has no connection to this JD (e.g. "Hobbies", very old unrelated roles).
 - For page_estimate: estimate the page count based on text volume (assume ~500 words per page).
 - For contact_issues: flag unprofessional email addresses (nickname, numbers-only, etc.).
-- overall_score: integer 0-100 representing ATS readiness. Base it on keyword coverage and quality rule compliance.
+- overall_score: integer 0-100 representing the Phase 2 Audit score. Base it on keyword coverage and quality rule compliance.
 
 Be thorough. Every issue the recruiter might see is an issue you must find.
 Output ONLY valid JSON. No prose before or after.
