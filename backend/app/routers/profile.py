@@ -53,6 +53,7 @@ from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
 from app.services.auth.dependencies import get_current_user
 from app.services.master_resume import crud as master_crud
+from app.services.master_resume.chunking import Chunk, count_tokens
 from app.services.master_resume.embedding import embed_text
 from app.services.retrieval.config import RETRIEVAL_EMBEDDING_MODEL
 from app.services.session_store import get_session as get_redis_session
@@ -82,6 +83,16 @@ class ChunkPatch(BaseModel):
     content: str = Field(..., min_length=1, max_length=20_000)
     section_type: MasterResumeSectionType | None = None
     metadata: dict[str, Any] | None = None
+
+
+class BulkChunkItem(BaseModel):
+    content: str = Field(..., min_length=1, max_length=20_000)
+    section_type: MasterResumeSectionType = MasterResumeSectionType.experience
+    metadata: dict[str, Any] | None = None
+
+
+class BulkChunkInsert(BaseModel):
+    chunks: list[BulkChunkItem] = Field(..., min_length=1, max_length=20)
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +406,34 @@ def _cosine(a, b) -> float:
     if na == 0.0 or nb == 0.0:
         return 0.0
     return round(dot / (math.sqrt(na) * math.sqrt(nb)), 6)
+
+
+@router.patch("/resume/chunks", status_code=200)
+@limiter.limit("30/minute")
+async def bulk_insert_chunks(
+    request: Request,
+    body: BulkChunkInsert,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Bulk-insert new master resume chunks (e.g. suggested bullets from fit analysis)."""
+    chunk_models = [
+        Chunk(
+            section_type=item.section_type,
+            content=item.content.strip(),
+            token_count=count_tokens(item.content),
+            metadata=dict(item.metadata or {}),
+        )
+        for item in body.chunks
+    ]
+    try:
+        rows = await master_crud.add_chunks(db, user_id=user.id, chunks=chunk_models)
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "master_resume_required"},
+        ) from None
+    return {"chunks": master_crud.iter_chunk_summaries(rows)}
 
 
 @router.patch("/resume/chunks/{chunk_id}", status_code=200)
