@@ -230,6 +230,32 @@ async def _insert_chunks(
     return rows
 
 
+async def add_chunks(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    chunks: Sequence[Chunk],
+) -> list[MasterResumeChunk]:
+    """Append new chunks to the user's master resume (bulk insert).
+
+    Used by ``PATCH /api/profile/resume/chunks`` when the fit UI adds
+    suggested bullets.  Requires an existing ``MasterResume`` row.
+    """
+    if not chunks:
+        return []
+
+    resume = await get_raw_resume(db, user_id=user_id)
+    if resume is None:
+        raise ValueError("master resume not found")
+
+    rows = await _insert_chunks(db, resume=resume, user_id=user_id, chunks=chunks)
+    resume.chunk_count += len(rows)
+    resume.last_embedded_at = _utcnow()
+    resume.updated_at = _utcnow()
+    await db.flush()
+    return rows
+
+
 async def update_chunk_content(
     db: AsyncSession,
     *,
@@ -349,6 +375,7 @@ def iter_chunk_summaries(
 
 
 __all__ = [
+    "add_chunks",
     "delete_chunk",
     "get_chunk",
     "get_chunks_for_user",
