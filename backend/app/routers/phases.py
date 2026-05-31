@@ -300,8 +300,7 @@ class AuditPatchRequest(BaseModel):
     overall_score: int | None = Field(default=None, ge=0, le=100)
 
 
-@router.patch("/{session_id}/audit")
-async def patch_audit_output(session_id: str, body: AuditPatchRequest):
+async def _apply_audit_patch(session_id: str, body: AuditPatchRequest):
     """Persist manual Phase 2 edits and mark downstream phases stale."""
     session = await get_session(session_id)
     if not session:
@@ -320,6 +319,7 @@ async def patch_audit_output(session_id: str, body: AuditPatchRequest):
 
     session.phase2_output = audit
     now = datetime.now(timezone.utc)
+    session.stale_since = now
     session.phase3_stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
@@ -331,6 +331,17 @@ async def patch_audit_output(session_id: str, body: AuditPatchRequest):
             "4": session.phase4_stale_since.isoformat(),
         },
     }
+
+
+@router.patch("/{session_id}/audit")
+async def patch_audit_output(session_id: str, body: AuditPatchRequest):
+    return await _apply_audit_patch(session_id, body)
+
+
+@router.post("/{session_id}/audit")
+async def post_audit_output(session_id: str, body: AuditPatchRequest):
+    """Alias for clients using POST to save manual Phase 2 edits."""
+    return await _apply_audit_patch(session_id, body)
 
 
 @router.patch("/{session_id}/resume/tailored")
@@ -398,9 +409,18 @@ async def patch_tailored_resume(session_id: str, body: dict):
             label = "User edit: summary"
         elif section == "experience" and company is not None and bullet_index is not None:
             for entry in output.experience:
-                if entry.company == company and bullet_index < len(entry.bullets):
-                    entry.bullets[bullet_index] = new_text
-                    break
+                if entry.company != company:
+                    continue
+                bullets = list(entry.bullets)
+                if bullet_index == len(bullets):
+                    bullets.append(new_text)
+                elif bullet_index < len(bullets):
+                    if str(new_text).strip():
+                        bullets[bullet_index] = new_text
+                    else:
+                        bullets.pop(bullet_index)
+                entry.bullets = bullets
+                break
             label = f"User edit: experience/{company}"
         elif section == "skills":
             output.skills = body.get("skills", output.skills)
@@ -430,7 +450,9 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
     version = _append_version_snapshot(session, label=label, output=output)
     session.phase3_output = output
-    session.phase4_stale_since = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    session.stale_since = now
+    session.phase4_stale_since = now
     await update_session(session)
 
     return {
