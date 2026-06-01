@@ -746,6 +746,84 @@ export type SubscriptionStatus =
   | "expired"
   | "grace";
 
+// ── Dashboard (Step 27/28) ───────────────────────────────────────────────────
+
+export type ResumeRecordStatus =
+  | "draft"
+  | "applied"
+  | "interviewing"
+  | "offer"
+  | "rejected"
+  | "withdrawn";
+
+export type ApplicationStatus = ResumeRecordStatus | "accepted";
+
+export type ResumeSort = "date" | "ats_score" | "company";
+
+export interface DashboardActivityItem {
+  type: string;
+  at: string;
+  title: string;
+  subtitle: string;
+  meta: Record<string, unknown>;
+}
+
+export interface DashboardSummaryResponse {
+  display_name: string;
+  tier: string;
+  credit_balance: number;
+  next_billing_date: string | null;
+  subscription: {
+    id: string;
+    plan: string;
+    billing_cycle: string;
+    status: SubscriptionStatus;
+    trial_ends_at: string | null;
+    period_start: string;
+    period_end: string;
+    resumes_used: number;
+    resumes_limit: number;
+    searches_used: number;
+    searches_limit: number;
+    cancel_at_period_end: boolean;
+    paused_at: string | null;
+  } | null;
+  counts: {
+    resumes: number;
+    applications: number;
+    saved_jobs: number;
+  };
+  recent_activity: DashboardActivityItem[];
+  ats_trend: Array<{
+    date: string;
+    score: number;
+    resume_id: string;
+    jd_title: string;
+    jd_company: string;
+  }>;
+}
+
+export interface ResumeListItem {
+  id: string;
+  session_id: string;
+  jd_title: string;
+  jd_company: string;
+  tags: string[];
+  current_ats_score: number;
+  starting_ats_score: number;
+  ats_score_delta: number;
+  status: ResumeRecordStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResumeListResponse {
+  items: ResumeListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface SubscriptionCurrentResponse {
   /** null when user has no subscription (free tier) */
   subscription: {
