@@ -29,6 +29,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
@@ -581,3 +582,37 @@ async def test_pause_subscription_rejects_window_outside_7_to_90_days(
         await sub_service.pause_subscription(
             db_session, user=user, pause_until=too_long
         )
+
+
+async def test_pause_subscription_allows_yearly_cycle(
+    db_session: AsyncSession,
+) -> None:
+    from app.services.billing import subscription as sub_service
+
+    user = await _seed_user(db_session)
+    sub = await _seed_subscription(
+        db_session,
+        user=user,
+        plan=SubscriptionPlan.monthly,
+        billing_cycle=SubscriptionBillingCycle.yearly,
+        status=SubscriptionStatus.active,
+        stripe_subscription_id=f"sub_{uuid.uuid4().hex[:12]}",
+    )
+    await db_session.commit()
+
+    class _StripeSub:
+        def to_dict_recursive(self) -> dict[str, str]:
+            return {"id": sub.stripe_subscription_id}
+
+    with patch(
+        "app.services.billing.subscription.stripe.Subscription.modify",
+        return_value=_StripeSub(),
+    ) as modify_mock:
+        out = await sub_service.pause_subscription(
+            db_session,
+            user=user,
+            pause_until=datetime.now(timezone.utc) + timedelta(days=30),
+        )
+
+    modify_mock.assert_called_once()
+    assert out["id"] == sub.stripe_subscription_id

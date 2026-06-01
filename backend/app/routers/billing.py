@@ -450,11 +450,16 @@ async def subscriptions_unpause(
 ) -> dict[str, Any]:
     try:
         await sub_service.unpause_subscription(db, user=user)
-    except ValueError:
+    except ValueError as exc:
+        if "cannot unpause from status" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "invalid_unpause_state"},
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "no_subscription"},
-        )
+        ) from exc
     return {"ok": True, "pending_via_webhook": True}
 
 
