@@ -110,6 +110,28 @@ async def send_password_reset_email(
     return await _send(to_email, subject, body_text, body_html, token=token)
 
 
+async def send_account_deleted_email(
+    *,
+    to_email: str,
+    display_name: str | None = None,
+) -> dict[str, Any]:
+    name = display_name or to_email.split("@", 1)[0]
+    subject = "Your Smart Resume account has been deleted"
+    body_text = (
+        f"Hi {name},\n\n"
+        "Your Smart Resume account and associated data have been permanently deleted "
+        "as requested.\n\n"
+        "If you believe this was a mistake, please contact support."
+    )
+    body_html = _wrap_html(
+        f"<p>Hi {name},</p>"
+        "<p>Your Smart Resume account and associated data have been permanently "
+        "deleted as requested.</p>"
+        "<p>If you believe this was a mistake, please contact support.</p>"
+    )
+    return await _send(to_email, subject, body_text, body_html, token="")
+
+
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
@@ -183,6 +205,7 @@ __all__ = [
     "make_email_verification_token",
     "make_password_reset_token",
     "password_reset_link",
+    "send_account_deleted_email",
     "send_password_reset_email",
     "send_verification_email",
     "verification_link",

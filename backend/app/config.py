@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_S3_BUCKET_ATTACHMENTS: str = ""
+    S3_EXPORT_BUCKET: str = ""
+    INTERNAL_SCHEDULER_SECRET: str = ""
+    ACCOUNT_CLOSURE_GRACE_DAYS: int = 30
 
     @field_validator("APP_ENV")
     @classmethod
