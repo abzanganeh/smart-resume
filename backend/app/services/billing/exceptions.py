@@ -90,6 +90,37 @@ class WebhookPayloadError(BillingError):
     crashing or silently granting credits (§7.2 hardening)."""
 
 
+class SubscriptionPauseNotAllowedError(BillingError):
+    """Pause is requested for a plan whose cycle does not support pausing.
+
+    Per §19.8 only Monthly + Yearly cycles can be paused; Daily/Weekly
+    plans are too short-lived for the 7-day minimum window.  Routers
+    translate this to HTTP 422 ``pause_not_allowed`` so the frontend
+    can hide the pause button on those plans.
+    """
+
+    def __init__(self, plan: str, billing_cycle: str) -> None:
+        super().__init__(
+            f"pause not allowed for plan={plan!r} cycle={billing_cycle!r}"
+        )
+        self.plan = plan
+        self.billing_cycle = billing_cycle
+
+
+class RefundError(BillingError):
+    """Refund workflow could not be completed.
+
+    Routers translate this to HTTP 400 ``refund_failed``.  Carries the
+    ``stage`` (``stripe`` / ``ledger`` / ``email``) so the admin UI can
+    show which step failed.
+    """
+
+    def __init__(self, stage: str, message: str) -> None:
+        super().__init__(f"refund failed at {stage}: {message}")
+        self.stage = stage
+        self.message = message
+
+
 __all__ = [
     "AccountSuspendedError",
     "BillingCycleMismatchError",
@@ -97,6 +128,8 @@ __all__ = [
     "InsufficientCreditsError",
     "PlanLimitReachedError",
     "PriceUnresolvedError",
+    "RefundError",
+    "SubscriptionPauseNotAllowedError",
     "SubscriptionRequiredError",
     "WebhookPayloadError",
     "WebhookSignatureError",

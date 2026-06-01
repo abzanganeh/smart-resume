@@ -37,3 +37,23 @@ output "eventbridge_weekly_alert_rule_arn" {
   description = "EventBridge rule ARN for weekly saved-search alerts."
   value       = aws_cloudwatch_event_rule.alert_weekly.arn
 }
+
+output "notification_scheduler_lambda_arn" {
+  description = "ARN of the multi-purpose notification scheduler Lambda."
+  value       = aws_lambda_function.notification_scheduler.arn
+}
+
+output "eventbridge_grace_tick_rule_arn" {
+  description = "EventBridge rule ARN for the §7.6 grace-tick (every 15 minutes)."
+  value       = aws_cloudwatch_event_rule.billing_grace_tick.arn
+}
+
+output "eventbridge_price_sync_rule_arn" {
+  description = "EventBridge rule ARN for the nightly Stripe price-sync (§7.8)."
+  value       = aws_cloudwatch_event_rule.billing_price_sync.arn
+}
+
+output "eventbridge_notification_dispatch_rule_arn" {
+  description = "EventBridge rule ARN for the every-5-minute notification dispatch."
+  value       = aws_cloudwatch_event_rule.notify_dispatch.arn
+}

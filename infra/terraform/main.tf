@@ -245,3 +245,106 @@ resource "aws_lambda_permission" "alert_weekly" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.alert_weekly.arn
 }
+
+# ---------------------------------------------------------------------------
+# Lambda — notification scheduler (Step 31 + Step 37 hardening)
+#
+# Multi-purpose worker driven by EventBridge.  The ``schedule`` field
+# in the event payload selects which workflow runs:
+#
+# - dispatch_notifications  (every 5 minutes) — fan out pending outbox rows
+# - grace_tick              (every 15 minutes) — §7.6 state machine
+# - stripe_price_sync       (nightly 03:00 UTC) — §7.8 drift detector
+# ---------------------------------------------------------------------------
+
+resource "aws_lambda_function" "notification_scheduler" {
+  function_name    = "${local.name_prefix}-notification-scheduler"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_notification_scheduler_zip
+  source_code_hash = filebase64sha256(var.lambda_notification_scheduler_zip)
+
+  environment {
+    variables = {
+      DATABASE_URL          = var.postgres_url
+      STRIPE_SECRET_KEY     = var.stripe_secret_key
+      RESEND_API_KEY        = var.resend_api_key
+      AWS_REGION            = var.aws_region
+      APP_ENV               = var.environment
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# dispatch_notifications — every 5 minutes
+resource "aws_cloudwatch_event_rule" "notify_dispatch" {
+  name                = "${local.name_prefix}-notify-dispatch"
+  description         = "Notification outbox dispatcher (every 5 minutes)"
+  schedule_expression = "rate(5 minutes)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "notify_dispatch" {
+  rule      = aws_cloudwatch_event_rule.notify_dispatch.name
+  target_id = "notification-dispatch"
+  arn       = aws_lambda_function.notification_scheduler.arn
+  input     = jsonencode({ schedule = "dispatch_notifications" })
+}
+
+resource "aws_lambda_permission" "notify_dispatch" {
+  statement_id  = "AllowEventBridgeNotifyDispatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notification_scheduler.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.notify_dispatch.arn
+}
+
+# grace_tick — every 15 minutes (§7.6)
+resource "aws_cloudwatch_event_rule" "billing_grace_tick" {
+  name                = "${local.name_prefix}-billing-grace-tick"
+  description         = "Billing grace-period state machine tick (§7.6)"
+  schedule_expression = "rate(15 minutes)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "billing_grace_tick" {
+  rule      = aws_cloudwatch_event_rule.billing_grace_tick.name
+  target_id = "grace-tick"
+  arn       = aws_lambda_function.notification_scheduler.arn
+  input     = jsonencode({ schedule = "grace_tick" })
+}
+
+resource "aws_lambda_permission" "billing_grace_tick" {
+  statement_id  = "AllowEventBridgeGraceTick"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notification_scheduler.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.billing_grace_tick.arn
+}
+
+# stripe_price_sync — nightly (§7.8)
+resource "aws_cloudwatch_event_rule" "billing_price_sync" {
+  name                = "${local.name_prefix}-billing-price-sync"
+  description         = "Nightly Stripe → PlanConfig drift detector (§7.8)"
+  schedule_expression = "cron(0 3 * * ? *)" # 03:00 UTC daily
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "billing_price_sync" {
+  rule      = aws_cloudwatch_event_rule.billing_price_sync.name
+  target_id = "price-sync"
+  arn       = aws_lambda_function.notification_scheduler.arn
+  input     = jsonencode({ schedule = "stripe_price_sync" })
+}
+
+resource "aws_lambda_permission" "billing_price_sync" {
+  statement_id  = "AllowEventBridgePriceSync"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notification_scheduler.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.billing_price_sync.arn
+}

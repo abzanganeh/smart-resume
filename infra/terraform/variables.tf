@@ -52,6 +52,26 @@ variable "lambda_alert_dispatcher_zip" {
   default     = "build/alert_dispatcher.zip"
 }
 
+variable "lambda_notification_scheduler_zip" {
+  description = "Path to the notification_scheduler deployment package (.zip)."
+  type        = string
+  default     = "build/notification_scheduler.zip"
+}
+
+variable "stripe_secret_key" {
+  description = "Stripe secret key consumed by the price-sync drift detector."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "resend_api_key" {
+  description = "Resend API key consumed by the notification dispatcher."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "lambda_runtime" {
   description = "Python runtime for Lambda functions."
   type        = string

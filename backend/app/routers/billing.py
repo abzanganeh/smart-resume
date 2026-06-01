@@ -52,6 +52,7 @@ from app.models.billing import (
 )
 from app.models.user import CreditTransaction, User
 from app.services.auth.dependencies import get_current_user
+from app.services.billing import refund as refund_service
 from app.services.billing import subscription as sub_service
 from app.services.billing import webhook_handler
 from app.services.billing.credits import get_balance
@@ -59,6 +60,9 @@ from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
     PriceUnresolvedError,
+    RefundError,
+    SubscriptionPauseNotAllowedError,
+    WebhookSignatureError,
 )
 from app.services.billing.llm_upgrade import (
     VALID_LLM_UPGRADE_CODES,
@@ -127,11 +131,27 @@ class ChangePlanRequest(BaseModel):
 
 
 class PauseRequest(BaseModel):
-    days: int = Field(
-        ...,
+    """Pause window — accepts either ``pause_until`` (preferred) or ``days``.
+
+    ``pause_until`` is the canonical contract per Step 37 / §19.8: it
+    encodes a deterministic resume point and lets the frontend show
+    "paused until 12 Aug" without recomputing from a relative day count.
+    The ``days`` shape is kept for backward compatibility with the
+    Step 7 dashboard implementation.
+    """
+
+    pause_until: datetime | None = Field(
+        default=None,
+        description="UTC timestamp when Stripe should resume billing.",
+    )
+    days: int | None = Field(
+        default=None,
         ge=1,
         le=365,
-        description="Number of days to pause; the service enforces 7..90.",
+        description=(
+            "Days from now until resume.  Service enforces 7..90; longer "
+            "windows are rejected with HTTP 400 invalid_pause_window."
+        ),
     )
 
 
@@ -162,6 +182,18 @@ class RefundRequestPayload(BaseModel):
         "chargeback",
     ] = "manual"
     note: str = Field("", max_length=2000)
+    within_24h: bool = Field(
+        default=False,
+        description=(
+            "When true, treat as self-service 24h refund (§18.3 row 1) "
+            "and call Stripe directly without admin queueing.  Service "
+            "validates the timestamp against the most recent "
+            "subscription's created_at."
+        ),
+    )
+    amount_usd: float | None = Field(default=None, ge=0)
+    payment_intent: str | None = Field(default=None, max_length=255)
+    charge: str | None = Field(default=None, max_length=255)
 
 
 # ---------------------------------------------------------------------------
@@ -359,26 +391,53 @@ async def subscriptions_pause(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    """Pause a subscription per §7.7 + §19.8.
+
+    Cycle constraint: only Monthly + Yearly base plans are eligible;
+    Daily / Weekly plans receive HTTP 422 ``pause_not_allowed``.
+    Window constraint: between ``SUBSCRIPTION_PAUSE_MIN_DAYS`` (7) and
+    ``SUBSCRIPTION_PAUSE_MAX_DAYS`` (90); out-of-range receives HTTP
+    400 ``invalid_pause_window``.
+
+    Persistent state changes happen only via the
+    ``customer.subscription.updated`` webhook (§7.6 row 5).
+    """
+    if payload.pause_until is None and payload.days is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "pause_until_or_days_required"},
+        )
     try:
-        await sub_service.pause_subscription(db, user=user, days=payload.days)
+        await sub_service.pause_subscription(
+            db,
+            user=user,
+            pause_until=payload.pause_until,
+            days=payload.days,
+        )
+    except SubscriptionPauseNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "pause_not_allowed",
+                "plan": exc.plan,
+                "billing_cycle": exc.billing_cycle,
+            },
+        ) from exc
     except ValueError as exc:
-        # The service raises ValueError for both "no subscription" and
-        # "days outside 7..90"; map to 400 for the validation case and
-        # 404 for the missing case.  We disambiguate by the message
-        # prefix.
-        if "between" in str(exc):
+        msg = str(exc)
+        if "between" in msg or "must be provided" in msg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
-                    "code": "invalid_pause_days",
+                    "code": "invalid_pause_window",
                     "min_days": settings.SUBSCRIPTION_PAUSE_MIN_DAYS,
                     "max_days": settings.SUBSCRIPTION_PAUSE_MAX_DAYS,
                 },
-            )
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "no_subscription"},
-        )
+        ) from exc
     return {"ok": True, "pending_via_webhook": True}
 
 
@@ -574,13 +633,62 @@ async def subscriptions_refund_request(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
-    """Queue a manual refund request for super-admin review (§18.3).
+    """Refund request entry point — auto-approves the 24h self-service path.
 
-    Stripe is *not* contacted from this route — admin approval flow in
-    Step 35 issues the actual ``stripe.Refund.create`` call and writes
-    the matching :class:`RefundRecord` plus :class:`CreditTransaction`
-    reversal.  Here we just persist the user-facing request.
+    Per §18.3:
+
+    - ``within_24h=True`` → call :func:`refund_service.self_service_refund`
+      which validates the window, calls Stripe directly, persists the
+      :class:`RefundRecord`, and writes an :class:`AdminAuditLog` row.
+    - Anything else → queue a pending :class:`RefundRecord` for
+      super-admin review (Step 35).  Stripe is **not** contacted on
+      this branch; the admin approval flow issues the actual
+      ``stripe.Refund.create`` call.
     """
+    if payload.within_24h or payload.reason == "self_service_24h":
+        try:
+            decision = await refund_service.self_service_refund(
+                db,
+                user=user,
+                amount_usd=payload.amount_usd,
+                reason_note=payload.note or "self-service 24h",
+                payment_intent=payload.payment_intent,
+                charge=payload.charge,
+                request_ip=request.client.host if request.client else "",
+                request_user_agent=request.headers.get("user-agent", ""),
+            )
+        except RefundError as exc:
+            if exc.stage == "window":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={"code": "refund_window_expired"},
+                ) from exc
+            if exc.stage == "lookup":
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"code": "no_subscription"},
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "refund_failed",
+                    "stage": exc.stage,
+                    "message": exc.message,
+                },
+            ) from exc
+        log.info(
+            "billing.refund_self_service_completed",
+            user_id=str(user.id),
+            record_id=str(decision.record_id),
+            stripe_refund_id=decision.stripe_refund_id,
+        )
+        return {
+            "ok": True,
+            "auto_approved": True,
+            "id": str(decision.record_id),
+            "stripe_refund_id": decision.stripe_refund_id,
+        }
+
     sub = (
         await db.execute(
             select(Subscription)
@@ -597,7 +705,7 @@ async def subscriptions_refund_request(
         # filled in by the admin approval flow.  Preserve uniqueness
         # via the row id.
         stripe_refund_id=f"pending_{uuid.uuid4().hex}",
-        amount_usd=0,
+        amount_usd=payload.amount_usd if payload.amount_usd is not None else 0,
         reason=RefundReason(payload.reason),
         initiated_by=RefundInitiator.user,
     )

@@ -14,7 +14,7 @@ Python SDK.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import stripe
@@ -25,11 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.billing import (
     Subscription,
+    SubscriptionBillingCycle,
+    SubscriptionPlan,
     SubscriptionStatus,
 )
 from app.models.user import User
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
+    SubscriptionPauseNotAllowedError,
 )
 from app.services.billing.price_resolver import resolve_price_id
 
@@ -194,40 +197,82 @@ async def change_plan(
 
 
 # ---------------------------------------------------------------------------
-# Pause / Unpause
+# Pause / Unpause  (§7.7, §19.8)
 # ---------------------------------------------------------------------------
+
+# Pause is only meaningful for plans whose period is at least the 7-day
+# minimum pause window — anything shorter would expire before the pause
+# itself elapses.  Per §19.8 only Monthly + Yearly base cycles qualify;
+# Daily and Weekly plans are rejected at the service layer with
+# :class:`SubscriptionPauseNotAllowedError` (HTTP 422).
+_PAUSE_ELIGIBLE_PLANS: frozenset[SubscriptionPlan] = frozenset(
+    {SubscriptionPlan.monthly}
+)
+
+
+def _assert_pause_eligible(sub: Subscription) -> None:
+    if sub.plan not in _PAUSE_ELIGIBLE_PLANS:
+        raise SubscriptionPauseNotAllowedError(
+            plan=sub.plan.value,
+            billing_cycle=sub.billing_cycle.value,
+        )
 
 
 async def pause_subscription(
     session: AsyncSession,
     *,
     user: User,
-    days: int,
+    pause_until: datetime | None = None,
+    days: int | None = None,
 ) -> dict[str, Any]:
-    """Activate Stripe pause_collection for a fixed window (§7.7).
+    """Activate Stripe ``pause_collection`` on the user's subscription.
 
-    The 7-day minimum and 90-day maximum are enforced here so we never
-    submit an invalid request to Stripe.
+    Per §7.7 + §19.8:
+
+    - ``pause_until`` must be at most ``SUBSCRIPTION_PAUSE_MAX_DAYS``
+      (90 days) from now and at least ``SUBSCRIPTION_PAUSE_MIN_DAYS``
+      (7 days).  ``ValueError`` is raised when out of range.
+    - Only Monthly + Yearly base plans are eligible — Daily / Weekly
+      plans raise :class:`SubscriptionPauseNotAllowedError` which the
+      router maps to HTTP 422 ``pause_not_allowed``.
+    - The DB row is **not** mutated here — the authoritative state
+      change comes from the ``customer.subscription.updated`` webhook
+      (§7.6 row 5) which our handler turns into ``status='paused'``.
+
+    Either ``pause_until`` (preferred) or ``days`` may be supplied.
+    Supplying both is allowed when they agree; mismatched values raise
+    ``ValueError`` so callers can't accidentally desync them.
     """
     _configure_stripe()
-    if (
-        days < settings.SUBSCRIPTION_PAUSE_MIN_DAYS
-        or days > settings.SUBSCRIPTION_PAUSE_MAX_DAYS
-    ):
+
+    now_dt = datetime.now(timezone.utc)
+    if pause_until is None and days is None:
+        raise ValueError("either pause_until or days must be provided")
+
+    if pause_until is not None:
+        if pause_until.tzinfo is None:
+            pause_until = pause_until.replace(tzinfo=timezone.utc)
+        delta_seconds = (pause_until - now_dt).total_seconds()
+    else:
+        delta_seconds = float(days) * 86400.0
+        pause_until = now_dt + timedelta(seconds=delta_seconds)
+
+    min_seconds = settings.SUBSCRIPTION_PAUSE_MIN_DAYS * 86400
+    max_seconds = settings.SUBSCRIPTION_PAUSE_MAX_DAYS * 86400
+    if delta_seconds < min_seconds or delta_seconds > max_seconds:
         raise ValueError(
-            f"pause days must be between "
+            f"pause window must be between "
             f"{settings.SUBSCRIPTION_PAUSE_MIN_DAYS} and "
-            f"{settings.SUBSCRIPTION_PAUSE_MAX_DAYS}"
+            f"{settings.SUBSCRIPTION_PAUSE_MAX_DAYS} days"
         )
+
     sub = await _entitled_subscription_for(session, user_id=user.id)
     if sub is None:
         raise ValueError("no entitled subscription to pause")
-    resume_at = int(
-        (
-            datetime.now(timezone.utc).timestamp()
-            + days * 86400
-        )
-    )
+
+    _assert_pause_eligible(sub)
+
+    resume_at = int(pause_until.timestamp())
     updated = await _run_in_thread(
         stripe.Subscription.modify,
         sub.stripe_subscription_id,
@@ -244,10 +289,24 @@ async def unpause_subscription(
     *,
     user: User,
 ) -> dict[str, Any]:
+    """Clear ``pause_collection`` so Stripe resumes billing immediately.
+
+    Mirrors :func:`pause_subscription` — DB state flips when the
+    ``customer.subscription.updated`` webhook arrives.
+    """
     _configure_stripe()
     sub = await _latest_subscription_for(session, user_id=user.id)
     if sub is None:
         raise ValueError("no subscription to unpause")
+    if sub.status not in {
+        SubscriptionStatus.paused,
+        SubscriptionStatus.active,
+    }:
+        # Stripe would silently no-op; surface a clearer error for tests
+        # and admin tooling.
+        raise ValueError(
+            f"cannot unpause from status={sub.status.value!r}"
+        )
     updated = await _run_in_thread(
         stripe.Subscription.modify,
         sub.stripe_subscription_id,
