@@ -27,6 +27,7 @@ from app.routers import (
     export,
     fit,
     jobs,
+    legal,
     llm,
     notifications,
     phases,
@@ -205,6 +206,7 @@ app.include_router(llm.router)
 # Step 35 - admin domain
 app.include_router(admin.router)
 app.include_router(public_config.router)
+app.include_router(legal.router)
 
 
 # ---------------------------------------------------------------------------
