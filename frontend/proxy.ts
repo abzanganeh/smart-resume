@@ -7,6 +7,7 @@
  */
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
+import { decodeSignedAdminSession } from "@/lib/admin/token"
 
 // Prefix-match protected routes.
 const PROTECTED_PREFIXES = [
@@ -23,10 +24,24 @@ const PROTECTED_PREFIXES = [
 
 // Routes where authenticated users should NOT linger (redirect to /dashboard).
 const AUTH_ONLY_PATHS = ["/auth"]
+const ADMIN_AUTH_PATH = "/admin/auth"
+const ADMIN_COOKIE = "sr_admin"
 
-export default auth(function proxy(req) {
+export default auth(async function proxy(req) {
   const { pathname } = req.nextUrl
   const session = req.auth
+
+  // ── Separate admin guard (isolated from user NextAuth session) ────────────
+  if (pathname.startsWith("/admin") && !pathname.startsWith(ADMIN_AUTH_PATH)) {
+    const cookie = req.cookies.get(ADMIN_COOKIE)?.value
+    if (!cookie) {
+      return NextResponse.redirect(new URL(ADMIN_AUTH_PATH, req.url))
+    }
+    const adminSession = await decodeSignedAdminSession(cookie)
+    if (!adminSession || Date.now() > adminSession.expires_at) {
+      return NextResponse.redirect(new URL(ADMIN_AUTH_PATH, req.url))
+    }
+  }
 
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix + "/") || pathname.startsWith(prefix),
