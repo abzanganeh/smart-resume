@@ -756,6 +756,8 @@ export type ResumeRecordStatus =
   | "rejected"
   | "withdrawn";
 
+export type ApplicationStatus = ResumeRecordStatus | "accepted";
+
 export type ResumeSort = "date" | "ats_score" | "company";
 
 export interface DashboardActivityItem {

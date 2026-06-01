@@ -22,6 +22,7 @@ from app.models.dashboard import (
     ResumeRecord,
     ResumeRecordStatus,
 )
+from app.models.tracker import Application
 from app.models.jobs import SavedJob
 from app.models.session import PhaseStatus
 from app.models.user import User
@@ -221,6 +222,14 @@ async def dashboard_summary(
         )
     ).scalar_one()
 
+    application_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Application)
+            .where(Application.user_id == user.id)
+        )
+    ).scalar_one()
+
     free_credits = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
 
     subscription_payload: dict[str, Any] | None = None
@@ -258,7 +267,7 @@ async def dashboard_summary(
         subscription=subscription_payload,
         counts={
             "resumes": resume_count,
-            "applications": 0,
+            "applications": application_count,
             "saved_jobs": saved_jobs_count,
         },
         recent_activity=[ActivityItem(**item) for item in activity],
@@ -374,6 +383,11 @@ async def get_resume(
             .order_by(AtsScoreHistory.triggered_at)
         )
     ).scalars().all()
+    linked = (
+        await db.execute(
+            select(Application.id).where(Application.resume_record_id == record.id)
+        )
+    ).scalar_one_or_none()
     base = _record_to_list_item(record)
     return ResumeDetailResponse(
         **base.model_dump(),
@@ -387,7 +401,7 @@ async def get_resume(
             }
             for h in history
         ],
-        linked_application_id=None,
+        linked_application_id=linked,
     )
 
 
