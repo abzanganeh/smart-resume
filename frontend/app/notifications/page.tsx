@@ -12,7 +12,7 @@ import {
   NOTIFICATION_CATEGORIES,
   type NotificationItem,
 } from "@/lib/notifications";
-import { clsx } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type Tab = "all" | "unread" | string;
 
@@ -96,7 +96,7 @@ export default function NotificationsPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={clsx(
+            className={cn(
               "px-3 py-1.5 rounded-lg text-sm capitalize",
               tab === t
                 ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
@@ -111,7 +111,7 @@ export default function NotificationsPage() {
             key={c.id}
             type="button"
             onClick={() => setTab(c.id)}
-            className={clsx(
+            className={cn(
               "px-3 py-1.5 rounded-lg text-sm",
               tab === c.id
                 ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
@@ -134,7 +134,7 @@ export default function NotificationsPage() {
           {items.map((item) => (
             <li
               key={item.id}
-              className={clsx(
+              className={cn(
                 "border border-slate-800 rounded-xl p-4 flex gap-3",
                 !item.read_at && "bg-slate-900/80"
               )}

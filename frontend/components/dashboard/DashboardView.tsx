@@ -389,8 +389,8 @@ export function DashboardView({ token }: { token: string }) {
                   width={760}
                   height={144}
                   data={sparklineData}
-                  onClick={(state) => {
-                    const payload = state.activePayload?.[0]?.payload as
+                  onClick={(state: unknown) => {
+                    const payload = (state as { activePayload?: Array<{ payload?: unknown }> } | null)?.activePayload?.[0]?.payload as
                       | { date: string; score: number }
                       | undefined
                     if (!payload) return
