@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, desc, select
 from sqlalchemy.exc import IntegrityError
@@ -43,6 +43,7 @@ from app.services.tracker.notifications import (
     schedule_follow_up_reminder,
 )
 from app.services.tracker.s3 import (
+    AttachmentStorageError,
     delete_attachment,
     generate_download_url,
     upload_attachment,
@@ -581,21 +582,34 @@ async def upload_application_attachment(
     user: Annotated[User, Depends(get_current_user)],
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    app = await get_owned_application(db, user.id, application_id)
-    content = await file.read()
-    size_bytes = len(content)
+    app = (
+        await db.execute(
+            select(Application)
+            .where(Application.id == application_id, Application.user_id == user.id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if app is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    stream = file.file
+    stream.seek(0, 2)
+    size_bytes = stream.tell()
+    stream.seek(0)
     await validate_attachment_upload(db, app.id, size_bytes)
 
     content_type = file.content_type or "application/octet-stream"
     filename = file.filename or "attachment"
-    s3_key = upload_attachment(
-        user_id=user.id,
-        application_id=app.id,
-        filename=filename,
-        content_type=content_type,
-        body=content,
-        size_bytes=size_bytes,
-    )
+    try:
+        s3_key = upload_attachment(
+            user_id=user.id,
+            application_id=app.id,
+            filename=filename,
+            content_type=content_type,
+            body=stream,
+            size_bytes=size_bytes,
+        )
+    except AttachmentStorageError as exc:
+        raise HTTPException(status_code=502, detail=f"Attachment upload failed: {exc}") from exc
     att = ApplicationAttachment(
         id=uuid.uuid4(),
         application_id=app.id,
@@ -616,7 +630,10 @@ async def upload_application_attachment(
             ) from exc
         raise
     app.updated_at = _utcnow()
-    download_url = generate_download_url(s3_key, filename=filename)
+    try:
+        download_url = generate_download_url(s3_key, filename=filename)
+    except AttachmentStorageError:
+        download_url = None
     return _attachment_to_dict(att, download_url=download_url)
 
 

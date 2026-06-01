@@ -290,6 +290,10 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
+        sa.CheckConstraint("size_bytes > 0", name="ck_attachment_size_positive"),
+        sa.CheckConstraint(
+            "size_bytes <= 5242880", name="ck_attachment_size_under_5mb"
+        ),
     )
     op.create_index(
         "ix_application_attachments_application_id",
@@ -297,14 +301,14 @@ def upgrade() -> None:
         ["application_id"],
     )
 
-    # Enforce max 5 attachments per application at DB level via trigger.
+    # Enforce max 5 attachments per application at DB level via constraint trigger.
     op.execute(
         """
         CREATE OR REPLACE FUNCTION check_application_attachment_limit()
         RETURNS TRIGGER AS $$
         BEGIN
             IF (SELECT COUNT(*) FROM application_attachments
-                WHERE application_id = NEW.application_id) >= 5 THEN
+                WHERE application_id = NEW.application_id) > 5 THEN
                 RAISE EXCEPTION 'max_attachments_exceeded';
             END IF;
             RETURN NEW;
@@ -314,8 +318,9 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER trg_application_attachment_limit
-        BEFORE INSERT ON application_attachments
+        CREATE CONSTRAINT TRIGGER trg_application_attachment_limit
+        AFTER INSERT ON application_attachments
+        DEFERRABLE INITIALLY IMMEDIATE
         FOR EACH ROW EXECUTE FUNCTION check_application_attachment_limit();
         """
     )

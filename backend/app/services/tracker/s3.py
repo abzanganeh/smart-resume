@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import BinaryIO
 
 import boto3
 from botocore.exceptions import ClientError
@@ -33,7 +34,7 @@ def upload_attachment(
     application_id: uuid.UUID,
     filename: str,
     content_type: str,
-    body: bytes,
+    body: BinaryIO,
     size_bytes: int,
 ) -> str:
     bucket = settings.AWS_S3_BUCKET_ATTACHMENTS
@@ -43,12 +44,13 @@ def upload_attachment(
     key = build_attachment_key(user_id, application_id, filename)
     client = _s3_client()
     try:
-        client.put_object(
+        client.upload_fileobj(
+            Fileobj=body,
             Bucket=bucket,
             Key=key,
-            Body=body,
-            ContentType=content_type,
-            ContentLength=size_bytes,
+            ExtraArgs={
+                "ContentType": content_type,
+            },
         )
     except ClientError as exc:
         raise AttachmentStorageError(str(exc)) from exc

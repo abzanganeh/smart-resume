@@ -28,6 +28,7 @@ const REJECTION_REASONS = [
 ]
 
 const INTERVIEW_FORMATS = ["phone", "video", "onsite", "take_home", "other"]
+const INTERVIEW_OUTCOMES = ["pending", "passed", "failed", "no_show"]
 
 export default function ApplicationDetailPage({
   params,
@@ -422,6 +423,18 @@ export default function ApplicationDetailPage({
             }
             className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
           />
+          <select
+            value={roundForm.outcome}
+            onChange={(e) => setRoundForm((f) => ({ ...f, outcome: e.target.value }))}
+            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+          >
+            <option value="">Outcome (optional)</option>
+            {INTERVIEW_OUTCOMES.map((outcome) => (
+              <option key={outcome} value={outcome}>
+                {outcome}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             disabled={saving}
