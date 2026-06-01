@@ -485,7 +485,11 @@ function SessionContent() {
                   Run keyword analysis
                 </button>
               )}
-              <KeywordDashboard output={keywords} streaming={isStreaming && !showProgress} />
+              <KeywordDashboard
+                output={keywords}
+                streaming={isStreaming && !showProgress}
+                claimedKeywords={sessionClaimedKeywords}
+              />
               {keywords && !isStreaming && (
                 <button
                   onClick={() => goTo("audit")}

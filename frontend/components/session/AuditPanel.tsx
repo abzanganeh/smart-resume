@@ -162,7 +162,15 @@ export function AuditPanel({
       {/* Score */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
         <div>
-          <p className="text-slate-400 text-sm">Audit Score</p>
+          <p className="text-slate-400 text-sm flex items-center gap-1.5">
+            Original resume audit score
+            <span
+              title="Measures how well your current resume matches the job. The ATS score (Phase 4) measures the tailored version."
+              className="cursor-help text-slate-600 hover:text-slate-400"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </span>
+          </p>
           <p className={cn("text-3xl font-bold mt-0.5", scoreColor)}>
             {output.overall_score}
             <span className="text-slate-500 text-lg font-normal"> / 100</span>
