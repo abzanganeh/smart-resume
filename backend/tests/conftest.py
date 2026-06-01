@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.limiter import limiter
 from app.main import app
 from app.services.auth import session as redis_session
+from app.services.admin_auth import tokens as admin_tokens
 from app.services.session_store import reset_redis_keys_for_tests
 from app.db.engine import get_db
 
@@ -49,9 +50,12 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     engine = create_async_engine(url, echo=False, pool_pre_ping=True)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as session:
-        # Wipe identity + billing tables so tests are isolated regardless
-        # of run order.  Order matters when CASCADE is in play but we
-        # use RESTART IDENTITY CASCADE which handles the FK closure.
+        # Wipe identity + billing + admin tables so tests are isolated
+        # regardless of run order.  RESTART IDENTITY CASCADE handles the
+        # FK closure automatically.  ``admin_audit_log`` cannot be
+        # truncated normally because the append-only trigger blocks
+        # DELETE/UPDATE; TRUNCATE bypasses the trigger so we keep it
+        # in the list.
         await session.execute(
             text(
                 "TRUNCATE TABLE "
@@ -61,11 +65,12 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "fit_analyses, master_resume_chunks, master_resumes, "
                 "web_push_subscriptions, notification_preferences, "
                 "export_jobs, closure_requests, "
+                "announcements, feature_flags, admin_invites, "
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
                 "credit_transactions, subscriptions, plan_configs, "
                 "llm_configs, "
-                "auth_audit_log, refresh_tokens, users "
+                "auth_audit_log, refresh_tokens, users, admin_users "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -92,10 +97,12 @@ async def app_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, No
 
     app.dependency_overrides[get_db] = _override_db
     redis_session._reset_for_tests()  # type: ignore[attr-defined]
+    admin_tokens._reset_for_tests()
     await reset_redis_keys_for_tests()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
     app.dependency_overrides.pop(get_db, None)
     redis_session._reset_for_tests()  # type: ignore[attr-defined]
+    admin_tokens._reset_for_tests()
     await reset_redis_keys_for_tests()
