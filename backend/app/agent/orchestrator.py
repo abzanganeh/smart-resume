@@ -185,6 +185,24 @@ async def run_phase(
 
         await session_store.save_phase_output(session_id, phase, output)
 
+        # Fix 3 — when Phase 2 completes, mark downstream phases stale so the
+        # user sees a warning dot on the Rewrite / QA tabs.  Only stale a phase
+        # when its output already exists (phases that have never run stay clean).
+        if phase == 2:
+            session = await session_store.get_session(session_id)
+            if session is not None:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                changed = False
+                if session.phase3_output is not None:
+                    session.phase3_stale_since = now
+                    changed = True
+                if session.phase4_output is not None:
+                    session.phase4_stale_since = now
+                    changed = True
+                if changed:
+                    await session_store.update_session(session)
+
         # Step 27 — persist ResumeRecord + ATS history after Phase 4.
         if phase == 4 and session.user_id:
             try:

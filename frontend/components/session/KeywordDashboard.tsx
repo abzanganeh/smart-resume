@@ -1,12 +1,14 @@
 "use client";
 
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, Info, XCircle } from "lucide-react";
 import { type KeywordExtractionOutput, type Keyword } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Props {
   output: KeywordExtractionOutput | null;
   streaming: boolean;
+  /** Claimed keywords saved by the user in AuditPanel — used to recompute coverage. */
+  claimedKeywords?: string[];
 }
 
 const TIER_CONFIG = {
@@ -36,7 +38,7 @@ function KeywordCard({ kw }: { kw: Keyword }) {
   );
 }
 
-export function KeywordDashboard({ output, streaming }: Props) {
+export function KeywordDashboard({ output, streaming, claimedKeywords = [] }: Props) {
   if (!output && streaming) {
     return (
       <div className="flex items-center gap-2 text-slate-400 py-8">
@@ -48,30 +50,61 @@ export function KeywordDashboard({ output, streaming }: Props) {
 
   if (!output) return null;
 
+  // Build a normalised set of claimed keywords for fast lookup.
+  const claimedSet = new Set(claimedKeywords.map((k) => k.toLowerCase()));
+
   const mustHavePresent = output.must_have_keywords.filter((k) => k.present_in_resume).length;
   const mustHaveTotal = output.must_have_keywords.length;
+
+  // Recompute coverage to include claimed keywords so the bar updates in real time.
+  const claimedBoost = output.must_have_keywords.filter(
+    (k) => !k.present_in_resume && claimedSet.has(k.term.toLowerCase())
+  ).length;
+  const effectivePresent = mustHavePresent + claimedBoost;
   const coveragePct = mustHaveTotal > 0 ? Math.round((mustHavePresent / mustHaveTotal) * 100) : 0;
+  const claimedPct = mustHaveTotal > 0 ? Math.round((claimedBoost / mustHaveTotal) * 100) : 0;
 
   return (
     <div className="space-y-6">
       {/* Coverage bar */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-slate-300 text-sm font-medium">Must-have keyword coverage</span>
-          <span className="text-amber-400 font-bold">{mustHavePresent} / {mustHaveTotal}</span>
+          <span className="text-slate-300 text-sm font-medium flex items-center gap-1.5">
+            Keyword match in original resume
+            <span
+              title="This shows how many must-have keywords appear in your uploaded resume. Your ATS score (shown after rewrite) measures the tailored version."
+              className="cursor-help text-slate-500 hover:text-slate-300"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </span>
+          </span>
+          <span className="text-amber-400 font-bold">{effectivePresent} / {mustHaveTotal}</span>
         </div>
-        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+        {/* Stacked bar: original match + claimed boost */}
+        <div className="h-2 bg-slate-700 rounded-full overflow-hidden flex">
           <div
-            className="h-full bg-amber-400 rounded-full transition-all duration-500"
+            className="h-full bg-amber-400 transition-all duration-500"
             style={{ width: `${coveragePct}%` }}
           />
+          {claimedBoost > 0 && (
+            <div
+              className="h-full bg-amber-400/40 border border-amber-400/60 transition-all duration-500"
+              style={{ width: `${claimedPct}%` }}
+              title={`+${claimedBoost} keyword${claimedBoost > 1 ? "s" : ""} you claimed — included after rewrite`}
+            />
+          )}
         </div>
+        {claimedBoost > 0 && (
+          <p className="text-amber-400/70 text-xs mt-1">
+            +{claimedBoost} claimed keyword{claimedBoost > 1 ? "s" : ""} (outlined) will be incorporated in the rewrite
+          </p>
+        )}
         <p className="text-slate-500 text-xs mt-1.5">
           {mustHaveTotal === 0
             ? "No must-have keywords were extracted — use Retry or try a stronger model."
-            : mustHaveTotal - mustHavePresent > 0
-            ? `${mustHaveTotal - mustHavePresent} must-have keyword${mustHaveTotal - mustHavePresent > 1 ? "s" : ""} will be added by the rewrite.`
-            : "All must-have keywords are already in your resume."}
+            : mustHaveTotal - effectivePresent > 0
+            ? `${mustHaveTotal - effectivePresent} must-have keyword${mustHaveTotal - effectivePresent > 1 ? "s" : ""} will be added by the rewrite.`
+            : "All must-have keywords are already covered."}
         </p>
       </div>
 
