@@ -142,6 +142,9 @@ class Settings(BaseSettings):
     JOB_CACHE_TTL_UNIQUE_SECONDS: int = 86400
     JOB_CACHE_SQS_URL: str = ""
     AWS_REGION: str = "us-east-1"
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_S3_BUCKET_ATTACHMENTS: str = ""
 
     @field_validator("APP_ENV")
     @classmethod

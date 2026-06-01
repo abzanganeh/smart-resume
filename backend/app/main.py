@@ -16,7 +16,7 @@ from app.config import settings
 from app.db.engine import async_session_factory
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
-from app.routers import auth, billing, cover_letter, dashboard, export, fit, jobs, llm, phases, profile, resume, sessions
+from app.routers import auth, billing, cover_letter, dashboard, export, fit, jobs, llm, phases, profile, resume, sessions, tracker
 from app.services.billing.bootstrap import (
     assert_canonical_codes_resolve,
     seed_plan_configs_if_empty,
@@ -171,6 +171,7 @@ app.include_router(cover_letter.router)
 app.include_router(fit.router)
 app.include_router(jobs.router)
 app.include_router(dashboard.router)
+app.include_router(tracker.router)
 app.include_router(export.router)
 app.include_router(llm.router)
 
