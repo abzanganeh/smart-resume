@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2, Plus, GripVertical } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
 import { listResumes } from "@/lib/dashboard"
@@ -22,6 +22,9 @@ export default function TrackerPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [pendingMoves, setPendingMoves] = useState<Record<string, ApplicationStatus>>({})
+  const pendingStatusRef = useRef<Record<string, ApplicationStatus>>({})
+  const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [form, setForm] = useState({
     mode: "manual" as "manual" | "resume",
     resume_record_id: "",
@@ -58,6 +61,12 @@ export default function TrackerPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    return () => {
+      Object.values(debounceRef.current).forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!token) return
@@ -81,16 +90,31 @@ export default function TrackerPage() {
 
   async function moveApplication(appId: string, newStatus: ApplicationStatus) {
     if (!token) return
+    const currentStatus = apps.find((a) => a.id === appId)?.status
+    if (!currentStatus || currentStatus === newStatus) return
     const prev = apps
     setApps((items) =>
       items.map((a) => (a.id === appId ? { ...a, status: newStatus } : a)),
     )
-    try {
-      await patchApplication(token, appId, { status: newStatus })
-    } catch (err) {
-      setApps(prev)
-      setError(err instanceof Error ? err.message : "Failed to update status")
+    pendingStatusRef.current[appId] = newStatus
+    setPendingMoves((curr) => ({ ...curr, [appId]: newStatus }))
+    if (debounceRef.current[appId]) {
+      clearTimeout(debounceRef.current[appId])
     }
+    debounceRef.current[appId] = setTimeout(async () => {
+      try {
+        await patchApplication(token, appId, { status: pendingStatusRef.current[appId] })
+      } catch (err) {
+        setApps(prev)
+        setError(err instanceof Error ? err.message : "Failed to update status")
+      } finally {
+        setPendingMoves((curr) => {
+          const next = { ...curr }
+          delete next[appId]
+          return next
+        })
+      }
+    }, 250)
   }
 
   function onDrop(column: ApplicationStatus) {
@@ -263,6 +287,9 @@ export default function TrackerPage() {
                             {app.jd_title}
                           </Link>
                           <p className="text-xs text-slate-500 truncate">{app.jd_company}</p>
+                          {pendingMoves[app.id] && (
+                            <p className="text-[11px] text-amber-400 mt-1">Saving status...</p>
+                          )}
                         </div>
                       </div>
                     </article>
