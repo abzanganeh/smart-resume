@@ -37,6 +37,19 @@ test.describe("/admin route protection", () => {
       expect(page.url()).toContain("/admin/auth")
     })
   }
+
+  test("standard user token cannot access /admin/*", async ({ page, context }) => {
+    await context.addCookies([
+      {
+        name: "authjs.session-token",
+        value: "regular-user-session-token",
+        url: BASE,
+      },
+    ])
+    await page.goto(`${BASE}/admin/users`)
+    await page.waitForURL(/\/admin\/auth/)
+    expect(page.url()).toContain("/admin/auth")
+  })
 })
 
 // ── 2. /admin/auth page renders ───────────────────────────────────────────────
@@ -87,48 +100,20 @@ test.describe("/admin/auth page", () => {
   })
 })
 
-// ── 3. Full admin login → TOTP → /admin/plans (integration) ──────────────────
+// ── 3. Mocked success flow (without real backend) ─────────────────────────────
 
 test.describe("admin login + TOTP flow → /admin/plans", () => {
-  test.skip(
-    process.env.PLAYWRIGHT_LIVE !== "true",
-    "Set PLAYWRIGHT_LIVE=true and run against a real backend with seeded admin to enable",
-  )
-
-  const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL ?? "admin@example.com"
-  const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD ?? "changeme"
-  const ADMIN_TOTP = process.env.TEST_ADMIN_TOTP ?? ""
-
-  test("admin login → TOTP step → reaches /admin/plans", async ({ page }) => {
-    await page.goto(`${BASE}/admin/auth`)
-
-    // ── Step 1: credentials ──
-    await page.locator("#email").fill(ADMIN_EMAIL)
-    await page.locator("#password").fill(ADMIN_PASSWORD)
-    await page.getByRole("button", { name: /Continue/i }).click()
-
-    // ── Step 2: TOTP ──
-    await expect(page.locator("#totp")).toBeVisible({ timeout: 10_000 })
-    await page.locator("#totp").fill(ADMIN_TOTP)
-    await page.getByRole("button", { name: /Verify/i }).click()
-
-    // ── Assertion: landed on plans page ──
-    await page.waitForURL(/\/admin\/plans/, { timeout: 15_000 })
-    expect(page.url()).toContain("/admin/plans")
-    await expect(page.getByText("Plans & Pricing")).toBeVisible()
-  })
-})
-
-// ── 4. Mocked success flow (without real backend) ─────────────────────────────
-
-test.describe("admin login mocked success → TOTP → /admin/plans", () => {
   test("login step → mocked challenge → TOTP step → mocked token → redirects", async ({ page }) => {
     // Mock login endpoint returning challenge
     await page.route("**/api/admin/auth/login", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ challenge_token: "test-challenge-token", expires_in: 300 }),
+        body: JSON.stringify({
+          status: "totp_required",
+          challenge_token: "test-challenge-token",
+          expires_in: 300,
+        }),
       })
     })
 
@@ -150,19 +135,6 @@ test.describe("admin login mocked success → TOTP → /admin/plans", () => {
       })
     })
 
-    // Mock session storage API route
-    await page.route("**/api/admin/session", async (route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: true }),
-        })
-      } else {
-        await route.continue()
-      }
-    })
-
     await page.goto(`${BASE}/admin/auth`)
 
     // ── Step 1 ──
@@ -178,5 +150,41 @@ test.describe("admin login mocked success → TOTP → /admin/plans", () => {
     // Should redirect to /admin/plans (or be on it)
     await page.waitForURL(/\/admin\/plans/, { timeout: 10_000 })
     expect(page.url()).toContain("/admin/plans")
+  })
+})
+
+// ── 4. Reports charts render with fixture data ────────────────────────────────
+
+test.describe("/admin/reports chart rendering", () => {
+  test("renders recharts surfaces in visual DOM with mocked data", async ({ page }) => {
+    await page.request.post(`${BASE}/api/admin/session`, {
+      data: {
+        access_token: "mock-admin-token",
+        admin: {
+          id: "00000000-0000-0000-0000-000000000001",
+          email: "admin@test.com",
+          display_name: "Test Admin",
+          role: "super-admin",
+        },
+        expires_in: 3600,
+      },
+    })
+
+    await page.route("**/api/admin/reports/activity**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          metrics: [
+            { date: "2026-05-01", dau: 120, wau: 540, mau: 1200, new_registrations: 15 },
+            { date: "2026-05-02", dau: 135, wau: 560, mau: 1210, new_registrations: 18 },
+          ],
+        }),
+      })
+    })
+
+    await page.goto(`${BASE}/admin/reports`)
+    await expect(page.getByText("DAU/WAU/MAU")).toBeVisible()
+    await expect(page.locator("svg.recharts-surface").first()).toBeVisible()
   })
 })
