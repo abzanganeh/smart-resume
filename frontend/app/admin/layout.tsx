@@ -101,6 +101,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const toastTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   // Load session once on mount
   useEffect(() => {
@@ -127,8 +128,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const showAuditToast = useCallback((auditLogId: string) => {
     const id = crypto.randomUUID()
     setToasts((prev) => [...prev, { id, message: `✓ Audited (id: ${auditLogId})` }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000)
+    const timeout = setTimeout(
+      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+      5000,
+    )
+    toastTimersRef.current.push(timeout)
   }, [])
+
+  useEffect(
+    () => () => {
+      toastTimersRef.current.forEach(clearTimeout)
+    },
+    [],
+  )
 
   async function handleLogout() {
     if (session?.access_token) {

@@ -12,6 +12,10 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import type { AdminSessionInfo } from "@/lib/admin/types"
+import {
+  decodeSignedAdminSession,
+  encodeSignedAdminSession,
+} from "@/lib/admin/token"
 
 const COOKIE_NAME = "sr_admin"
 const ONE_HOUR = 3600
@@ -20,15 +24,14 @@ export async function GET(req: NextRequest) {
   const raw = req.cookies.get(COOKIE_NAME)?.value
   if (!raw) return NextResponse.json({ error: "no session" }, { status: 401 })
 
-  try {
-    const session = JSON.parse(Buffer.from(raw, "base64").toString("utf-8"))
-    if (Date.now() > session.expires_at) {
-      return NextResponse.json({ error: "expired" }, { status: 401 })
-    }
-    return NextResponse.json(session)
-  } catch {
+  const session = await decodeSignedAdminSession(raw)
+  if (!session) {
     return NextResponse.json({ error: "invalid session" }, { status: 401 })
   }
+  if (Date.now() > session.expires_at) {
+    return NextResponse.json({ error: "expired" }, { status: 401 })
+  }
+  return NextResponse.json(session)
 }
 
 export async function POST(req: NextRequest) {
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
     expires_at,
   }
 
-  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64")
+  const encoded = await encodeSignedAdminSession(payload)
 
   const res = NextResponse.json({ ok: true })
   res.cookies.set(COOKIE_NAME, encoded, {

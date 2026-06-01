@@ -7,6 +7,11 @@ import { adminLogin, adminVerifyTotp } from "@/lib/admin/api"
 import { storeAdminSession } from "@/lib/admin/session"
 
 type Step = "credentials" | "totp"
+type AuthHint = {
+  enrollment_qr_svg?: string | null
+  enrollment_uri?: string | null
+  enrollment_secret?: string | null
+}
 
 // ── Admin Auth Page ───────────────────────────────────────────────────────────
 
@@ -26,6 +31,7 @@ export default function AdminAuthPage() {
   // TOTP step
   const [challengeToken, setChallengeToken] = useState("")
   const [totpCode, setTotpCode] = useState("")
+  const [authHint, setAuthHint] = useState<AuthHint | null>(null)
 
   const [error, setError] = useState<string | null>(
     reason === "expired" ? "Your admin session has expired. Please sign in again." : null,
@@ -39,6 +45,22 @@ export default function AdminAuthPage() {
     startTransition(async () => {
       try {
         const res = await adminLogin(email, password)
+        if (res.status === "enrollment_required") {
+          setAuthHint({
+            enrollment_qr_svg: res.enrollment_qr_svg ?? null,
+            enrollment_uri: res.enrollment_uri ?? null,
+            enrollment_secret: res.enrollment_secret ?? null,
+          })
+          setError(
+            "TOTP enrollment required for this admin account. Scan the QR, then enter the 6-digit code.",
+          )
+        } else {
+          setAuthHint(null)
+        }
+        if (!res.challenge_token) {
+          setError("Authentication challenge missing. Please retry sign-in.")
+          return
+        }
         setChallengeToken(res.challenge_token)
         setStep("totp")
       } catch (err) {
@@ -164,6 +186,28 @@ export default function AdminAuthPage() {
         {/* ── TOTP form ─────────────────────────────────────────────────── */}
         {step === "totp" && (
           <form onSubmit={handleTotp} className="space-y-4">
+            {authHint && (
+              <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-slate-400">
+                  First-time setup: scan this QR code in your authenticator app.
+                </p>
+                {authHint.enrollment_qr_svg ? (
+                  <div
+                    className="bg-white rounded-md p-2 inline-block"
+                    dangerouslySetInnerHTML={{ __html: authHint.enrollment_qr_svg }}
+                  />
+                ) : authHint.enrollment_uri ? (
+                  <code className="text-[11px] text-amber-300 break-all block">
+                    {authHint.enrollment_uri}
+                  </code>
+                ) : null}
+                {authHint.enrollment_secret ? (
+                  <p className="text-[11px] text-slate-500">
+                    Secret: <code>{authHint.enrollment_secret}</code>
+                  </p>
+                ) : null}
+              </div>
+            )}
             <div>
               <label className="block text-sm text-slate-300 mb-1.5" htmlFor="totp">
                 Authenticator code
@@ -201,6 +245,7 @@ export default function AdminAuthPage() {
               onClick={() => {
                 setStep("credentials")
                 setTotpCode("")
+                setAuthHint(null)
                 setError(null)
               }}
               className="w-full text-slate-500 hover:text-slate-300 text-sm py-2 transition-colors"

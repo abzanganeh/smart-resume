@@ -21,8 +21,12 @@ export type AdminRole = "super-admin" | "support-agent" | "read-only-analyst"
 
 export interface AdminLoginResponse {
   /** Challenge token for the mandatory TOTP step */
-  challenge_token: string
-  expires_in: number
+  status: "totp_required" | "enrollment_required"
+  challenge_token?: string
+  expires_in?: number
+  enrollment_qr_svg?: string | null
+  enrollment_uri?: string | null
+  enrollment_secret?: string | null
 }
 
 export interface AdminTotpResponse {

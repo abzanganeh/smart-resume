@@ -195,6 +195,7 @@ function ActivityChart({
 
   if (loading) return <ChartSpinner />
   if (error) return <ChartError msg={error} />
+  if (data.length === 0) return <ChartEmpty label="No activity data in range." />
 
   return (
     <>
@@ -249,6 +250,9 @@ function FunnelChartView({
     { name: "First export", value: data.first_export, fill: COLORS.violet },
     { name: "Subscribed", value: data.subscribed, fill: COLORS.red },
   ]
+  if (funnelData.every((d) => d.value <= 0)) {
+    return <ChartEmpty label="No funnel data in range." />
+  }
 
   return (
     <>
@@ -292,6 +296,7 @@ function RevenueChart({
 
   if (loading) return <ChartSpinner />
   if (error) return <ChartError msg={error} />
+  if (data.length === 0) return <ChartEmpty label="No revenue data in range." />
 
   return (
     <>
@@ -344,6 +349,9 @@ function LLMCostChart({
   if (error) return <ChartError msg={error} />
 
   const filtered = tierFilter === "all" ? data : data.filter((d) => d.tier === tierFilter)
+  if (filtered.length === 0) {
+    return <ChartEmpty label="No LLM cost data in range." />
+  }
 
   return (
     <>
@@ -404,6 +412,7 @@ function ChurnChart({
 
   if (loading) return <ChartSpinner />
   if (error) return <ChartError msg={error} />
+  if (data.length === 0) return <ChartEmpty label="No churn data in range." />
 
   return (
     <>
@@ -436,6 +445,14 @@ function ChartError({ msg }: { msg: string }) {
   return (
     <div className="flex items-center justify-center h-80 text-red-400 text-sm">
       {msg}
+    </div>
+  )
+}
+
+function ChartEmpty({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center h-80 text-slate-500 text-sm">
+      {label}
     </div>
   )
 }
