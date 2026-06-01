@@ -1,12 +1,28 @@
 import { byokHeaders } from "./keyStore";
+import { getSession } from "next-auth/react";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Attach the NextAuth bearer token on every API call when a session exists.
+  // Falls back gracefully for anonymous (unauthenticated) usage.
+  let authHeader: Record<string, string> = {};
+  try {
+    const nextAuthSession = await getSession();
+    const token = (nextAuthSession as { backendAccessToken?: string } | null)
+      ?.backendAccessToken;
+    if (token) {
+      authHeader = { Authorization: `Bearer ${token}` };
+    }
+  } catch {
+    // getSession() may throw during SSR or in non-browser contexts; ignore.
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...byokHeaders(),
+      ...authHeader,
       ...(init?.headers ?? {}),
     },
     ...init,
@@ -24,6 +40,11 @@ export async function createSession(): Promise<{ session_id: string }> {
   return request("/api/sessions", { method: "POST" });
 }
 
+export interface BulletFixPayload {
+  original: string;
+  suggestion: string;
+}
+
 export async function checkSession(
   sessionId: string
 ): Promise<{
@@ -35,6 +56,9 @@ export async function checkSession(
   stale: Record<string, string | null>;
   stale_since?: string | null;
   phase1_complete: boolean;
+  user_claimed_keywords: string[];
+  user_extra_notes: string;
+  bullet_fixes: BulletFixPayload[];
 }> {
   return request(`/api/sessions/${sessionId}`);
 }
@@ -57,10 +81,21 @@ export async function uploadResumeFile(
 ): Promise<{ parsed: ParsedResume }> {
   const form = new FormData();
   form.append("file", file);
+
+  let authHeader: Record<string, string> = {};
+  try {
+    const nextAuthSession = await getSession();
+    const token = (nextAuthSession as { backendAccessToken?: string } | null)
+      ?.backendAccessToken;
+    if (token) authHeader = { Authorization: `Bearer ${token}` };
+  } catch {
+    // ignore
+  }
+
   const res = await fetch(`${BASE}/api/sessions/${sessionId}/resume`, {
     method: "POST",
-    // byokHeaders for file uploads (no Content-Type override — browser sets multipart boundary)
-    headers: byokHeaders(),
+    // No Content-Type override — browser sets multipart boundary automatically.
+    headers: { ...byokHeaders(), ...authHeader },
     body: form,
   });
   if (!res.ok) {
@@ -82,7 +117,7 @@ export async function pasteResumeText(
 
 export async function saveAdditions(
   sessionId: string,
-  payload: { claimed_keywords: string[]; extra_notes: string }
+  payload: { claimed_keywords: string[]; extra_notes: string; bullet_fixes?: BulletFixPayload[] }
 ): Promise<{ ok: boolean; claimed: number }> {
   return request<{ ok: boolean; claimed: number }>(
     `/api/sessions/${sessionId}/additions`,

@@ -15,6 +15,13 @@ from app.models.rewrite import ResumeVersion, TailoredResumeOutput
 from app.models.userinfo import UserInfo
 
 
+class BulletFix(BaseModel):
+    """A user-supplied correction for a specific bullet flagged in Phase 2."""
+
+    original: str
+    suggestion: str
+
+
 class PhaseStatus(str, Enum):
     pending = "pending"
     running = "running"
@@ -57,6 +64,8 @@ class Session(BaseModel):
     # User-declared additions: skills/keywords they have but weren't in the original resume
     user_claimed_keywords: list[str] = []
     user_extra_notes: str = ""  # free-text: "I also have experience with X and Y"
+    # User-supplied corrections for specific Phase 2 bullet flags (Fix 4).
+    bullet_fixes: list[BulletFix] = []
 
     phase1_status: PhaseStatus = PhaseStatus.pending
     phase1_output: KeywordExtractionOutput | None = None

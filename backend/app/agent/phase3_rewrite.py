@@ -295,6 +295,17 @@ async def run(
         additions_section += (
             f"\nADDITIONAL CONTEXT FROM CANDIDATE:\n{session.user_extra_notes.strip()}\n"
         )
+    # Fix 4 — inject user-supplied bullet corrections into the Phase 3 prompt.
+    if session.bullet_fixes:
+        fixes_block = "\n".join(
+            f"  - Original: {bf.original}\n    Suggested fix: {bf.suggestion}"
+            for bf in session.bullet_fixes
+        )
+        additions_section += (
+            f"\nUSER-REQUESTED BULLET CORRECTIONS "
+            f"(the candidate has rewritten these bullets from the audit — use these "
+            f"corrected versions as the basis and polish them with JD keywords):\n{fixes_block}\n"
+        )
 
     # Compose the system prompt — append the retrieval instructions when
     # we have chunks to pin the LLM against.
