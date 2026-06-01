@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notifications import Notification, NotificationDeliveryStatus
@@ -33,12 +33,7 @@ async def dispatch_pending_notifications(
         select(Notification)
         .where(Notification.delivery_status == NotificationDeliveryStatus.pending)
         .where(Notification.sent_at.is_(None))
-        .where(
-            or_(
-                Notification.scheduled_at.is_(None),
-                Notification.scheduled_at <= now_dt,
-            )
-        )
+        .where(Notification.scheduled_at <= now_dt)
         .order_by(Notification.scheduled_at.asc().nullsfirst())
         .with_for_update(skip_locked=True)
     )
