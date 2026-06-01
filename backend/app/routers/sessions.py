@@ -75,6 +75,10 @@ async def check_session(session_id: str):
         "stale": stale,
         "stale_since": session.stale_since.isoformat() if session.stale_since else None,
         "phase1_complete": session.phase1_status.value == "done",
+        # Fix 2: expose user additions so the UI can survive a full page refresh.
+        "user_claimed_keywords": session.user_claimed_keywords,
+        "user_extra_notes": session.user_extra_notes,
+        "bullet_fixes": [bf.model_dump() for bf in session.bullet_fixes],
     }
 
 
