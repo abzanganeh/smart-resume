@@ -489,59 +489,12 @@ class PlanConfig(Base):
     )
 
 
-class NotificationChannel(str, enum.Enum):
-    in_app = "in_app"
-    email = "email"
-
-
-class NotificationStatus(str, enum.Enum):
-    pending = "pending"
-    sent = "sent"
-    failed = "failed"
-
-
-class Notification(Base):
-    """Minimal notification outbox row used by billing jobs.
-
-    Step 31 will expand this model.  Step 6 needs a durable row so
-    grace-expiry and trial reminders are persisted transactionally.
-    """
-
-    __tablename__ = "notifications"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    type: Mapped[str] = mapped_column(String(80), nullable=False)
-    channel: Mapped[NotificationChannel] = mapped_column(
-        _pg_enum(NotificationChannel, "notification_channel"),
-        nullable=False,
-    )
-    status: Mapped[NotificationStatus] = mapped_column(
-        _pg_enum(NotificationStatus, "notification_status"),
-        nullable=False,
-        default=NotificationStatus.pending,
-        server_default=NotificationStatus.pending.value,
-    )
-    payload: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
-    scheduled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        default=_utcnow,
-        server_default=text("now()"),
-    )
-
+# Notification platform models live in app.models.notifications (Step 31).
+from app.models.notifications import (  # noqa: F401
+    Notification,
+    NotificationChannel,
+    NotificationStatus,
+)
 
 class AdminAuditLog(Base):
     """Minimal admin audit row needed by billing failure paths.

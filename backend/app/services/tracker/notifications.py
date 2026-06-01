@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing import Notification, NotificationChannel, NotificationStatus
+from app.models.notifications import Notification, NotificationChannel
 from app.models.tracker import Application, ApplicationStatus
+from app.services.notifications.factory import build_notification
 
 
 def _company(app: Application) -> str:
@@ -32,52 +33,45 @@ async def emit_status_change_notifications(
         "title": app.jd_title,
         "old_status": old_status.value,
         "new_status": new_status.value,
+        "url": f"/tracker/{app.id}",
     }
 
     if new_status == ApplicationStatus.offer:
+        headline = f"Congratulations! Log your offer details for {company}"
         session.add(
-            Notification(
-                id=uuid.uuid4(),
+            build_notification(
                 user_id=app.user_id,
                 type="application_offer_congrats",
                 channel=NotificationChannel.in_app,
-                status=NotificationStatus.pending,
-                payload={
-                    **base_payload,
-                    "headline": f"Congratulations! Log your offer details for {company}",
-                },
+                category="application_offer",
+                title=headline,
+                data={**base_payload, "headline": headline},
             )
         )
         session.add(
-            Notification(
-                id=uuid.uuid4(),
+            build_notification(
                 user_id=app.user_id,
                 type="application_offer_congrats",
                 channel=NotificationChannel.email,
-                status=NotificationStatus.pending,
-                payload={
-                    **base_payload,
-                    "headline": f"Congratulations! Log your offer details for {company}",
-                },
+                category="application_offer",
+                title=headline,
+                data={**base_payload, "headline": headline},
             )
         )
         return
 
     if new_status == ApplicationStatus.applied:
         scheduled = datetime.now(timezone.utc)
+        headline = f"Any updates on your application at {company}?"
         session.add(
-            Notification(
-                id=uuid.uuid4(),
+            build_notification(
                 user_id=app.user_id,
                 type="application_follow_up_idle",
                 channel=NotificationChannel.in_app,
-                status=NotificationStatus.pending,
+                category="application_nudge",
+                title=headline,
                 scheduled_at=scheduled,
-                payload={
-                    **base_payload,
-                    "headline": f"Any updates on your application at {company}?",
-                    "idle_days": 14,
-                },
+                data={**base_payload, "headline": headline, "idle_days": 14},
             )
         )
 
@@ -89,18 +83,19 @@ async def create_custom_reminder(
     scheduled_at: datetime,
     message: str,
 ) -> Notification:
-    notification = Notification(
-        id=uuid.uuid4(),
+    notification = build_notification(
         user_id=app.user_id,
         type="application_custom_reminder",
         channel=NotificationChannel.in_app,
-        status=NotificationStatus.pending,
+        category="application_follow_up",
+        title=message,
         scheduled_at=scheduled_at,
-        payload={
+        data={
             "application_id": str(app.id),
             "company": _company(app),
             "title": app.jd_title,
             "headline": message,
+            "url": f"/tracker/{app.id}",
         },
     )
     session.add(notification)
@@ -114,35 +109,33 @@ async def schedule_follow_up_reminder(
     app: Application,
     follow_up_date: datetime,
 ) -> None:
+    headline = f"Time to follow up on your application at {_company(app)}"
+    payload = {
+        "application_id": str(app.id),
+        "company": _company(app),
+        "title": app.jd_title,
+        "headline": headline,
+        "url": f"/tracker/{app.id}",
+    }
     session.add(
-        Notification(
-            id=uuid.uuid4(),
+        build_notification(
             user_id=app.user_id,
             type="application_follow_up",
             channel=NotificationChannel.in_app,
-            status=NotificationStatus.pending,
+            category="application_follow_up",
+            title=headline,
             scheduled_at=follow_up_date,
-            payload={
-                "application_id": str(app.id),
-                "company": _company(app),
-                "title": app.jd_title,
-                "headline": f"Time to follow up on your application at {_company(app)}",
-            },
+            data=payload,
         )
     )
     session.add(
-        Notification(
-            id=uuid.uuid4(),
+        build_notification(
             user_id=app.user_id,
             type="application_follow_up",
             channel=NotificationChannel.email,
-            status=NotificationStatus.pending,
+            category="application_follow_up",
+            title=headline,
             scheduled_at=follow_up_date,
-            payload={
-                "application_id": str(app.id),
-                "company": _company(app),
-                "title": app.jd_title,
-                "headline": f"Time to follow up on your application at {_company(app)}",
-            },
+            data=payload,
         )
     )
