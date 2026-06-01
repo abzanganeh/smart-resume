@@ -14,10 +14,12 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.db.engine import async_session_factory
+from app.dependencies.admin_auth import AdminDefaultDenyMiddleware
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
 from app.routers import (
     account,
+    admin,
     auth,
     billing,
     cover_letter,
@@ -29,10 +31,12 @@ from app.routers import (
     notifications,
     phases,
     profile,
+    public_config,
     resume,
     sessions,
     tracker,
 )
+from app.services.admin_auth.bootstrap import bootstrap_super_admin
 from app.services.billing.bootstrap import (
     assert_canonical_codes_resolve,
     seed_plan_configs_if_empty,
@@ -70,13 +74,14 @@ if settings.SENTRY_DSN:
 async def lifespan(app: FastAPI):
     await init_redis()
     # Seed PlanConfig + assert all 10 canonical billing codes resolve
-    # (IMPLEMENTATION_PLAN §7.2).  Failures here are logged at WARN and
-    # tolerated in local/development; CI's staging gate fails on any gap.
+    # (IMPLEMENTATION_PLAN section 7.2).  Failures here are logged at
+    # WARN and tolerated in local/development; CI's staging gate fails
+    # on any gap.
     if settings.DATABASE_URL:
         try:
             async with async_session_factory() as db_session:
                 await seed_plan_configs_if_empty(db_session)
-                # Step 19 — seed LLMConfig rows so the Phase 3 router
+                # Step 19 - seed LLMConfig rows so the Phase 3 router
                 # always resolves a (provider, model) pair without
                 # waiting for an admin write.
                 await seed_llm_configs_if_empty(db_session)
@@ -86,6 +91,10 @@ async def lifespan(app: FastAPI):
                         "startup_price_gap: unresolved Stripe pricing codes: "
                         + ", ".join(unresolved)
                     )
+                # Step 35 - bootstrap super-admin (IMPLEMENTATION_PLAN
+                # section 8.4.3).  pg_advisory_xact_lock keeps parallel
+                # boots from racing to insert two super-admin rows.
+                await bootstrap_super_admin(db_session)
                 await db_session.commit()
         except Exception as exc:  # noqa: BLE001 - boot-time best effort
             log.warning("billing.bootstrap.skipped", error=str(exc))
@@ -104,6 +113,11 @@ app = FastAPI(title="Smart Resume Agent API", version="1.0.0", lifespan=lifespan
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# IMPORTANT: middleware are executed in REVERSE order of registration.
+# We add CORS LAST so it runs first (closest to the wire).  The
+# AdminDefaultDenyMiddleware is registered BEFORE CORS so the 403 for
+# missing RBAC gates comes after CORS adds its allowlist headers.
+app.add_middleware(AdminDefaultDenyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -129,11 +143,7 @@ def _cors_headers(request: Request) -> dict[str, str]:
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Ensure HTTPException responses (404, 422, etc.) always carry CORS headers.
-
-    Also forwards any ``exc.headers`` (e.g. ``WWW-Authenticate``) so auth
-    routes can advertise the expected scheme on 401.
-    """
+    """Ensure HTTPException responses (404, 422, etc.) always carry CORS headers."""
     headers = _cors_headers(request)
     if exc.headers:
         headers.update(exc.headers)
@@ -192,6 +202,9 @@ app.include_router(notifications.router)
 app.include_router(account.router)
 app.include_router(export.router)
 app.include_router(llm.router)
+# Step 35 - admin domain
+app.include_router(admin.router)
+app.include_router(public_config.router)
 
 
 # ---------------------------------------------------------------------------

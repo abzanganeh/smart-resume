@@ -159,6 +159,30 @@ class Settings(BaseSettings):
     INTERNAL_SCHEDULER_SECRET: str = ""
     ACCOUNT_CLOSURE_GRACE_DAYS: int = 30
 
+    # ---------------------------------------------------------------
+    # Admin panel (Step 35 - IMPLEMENTATION_PLAN section 8.4)
+    # ---------------------------------------------------------------
+    # Bootstrap super-admin (section 8.4.3).  Empty BOOTSTRAP_SUPER_ADMIN_EMAIL
+    # disables the bootstrap hook entirely.  In staging/production an
+    # empty BOOTSTRAP_SUPER_ADMIN_PASSWORD aborts bootstrap with an audit
+    # entry; in local/development/ci a random password is generated and
+    # printed once to stdout.
+    BOOTSTRAP_SUPER_ADMIN_EMAIL: str = ""
+    BOOTSTRAP_SUPER_ADMIN_PASSWORD: str = ""
+    BOOTSTRAP_SUPER_ADMIN_DISPLAY_NAME: str = "Bootstrap Super Admin"
+
+    # Section 8.4.2 - Admin session TTLs.  Absolute 60 minutes,
+    # idle 15 minutes.  Admin sessions are NOT sliding.
+    ADMIN_SESSION_TTL_SECONDS: int = 60 * 60
+    ADMIN_SESSION_IDLE_TTL_SECONDS: int = 15 * 60
+    # admin_2fa_setup token TTL - first login before TOTP is enrolled.
+    ADMIN_2FA_SETUP_TTL_SECONDS: int = 15 * 60
+    # admin_challenge token TTL - issued on credentials login when 2FA
+    # is already enrolled, expects /api/admin/auth/2fa/verify next.
+    ADMIN_CHALLENGE_TTL_SECONDS: int = 15 * 60
+    # Invite acceptance token TTL - invited admin sets password + 2FA.
+    ADMIN_INVITE_TTL_SECONDS: int = 7 * 24 * 3600
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:

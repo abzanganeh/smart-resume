@@ -45,6 +45,7 @@ from app.db.base import Base  # noqa: E402
 
 # Explicitly import model modules here as they are added so their tables
 # are registered with Base.metadata:
+from app.models import admin as _admin_models  # noqa: F401, E402
 from app.models import billing as _billing_models  # noqa: F401, E402
 from app.models import jobs as _jobs_models  # noqa: F401, E402
 from app.models import llm_config as _llm_config_models  # noqa: F401, E402
