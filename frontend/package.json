@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/inject-sw-version.mjs",
+    "predev": "node scripts/inject-sw-version.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

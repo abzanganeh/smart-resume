@@ -7,6 +7,7 @@ import { ChevronDown, CreditCard, FileText, LogOut, Settings, Sparkles } from "l
 import { logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
 import { JobsNavItem } from "@/components/nav/JobsNavItem"
+import { NotificationBell } from "@/components/nav/NotificationBell"
 import { UsageWidget } from "@/components/nav/UsageWidget"
 
 export function NavBar() {
@@ -60,7 +61,12 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
-          {status === "authenticated" && session && <UsageWidget />}
+          {status === "authenticated" && session && (
+            <>
+              <NotificationBell />
+              <UsageWidget />
+            </>
+          )}
           {status === "loading" ? (
             <div className="w-20 h-7 bg-slate-800 rounded animate-pulse" />
           ) : status === "authenticated" && session ? (
@@ -170,6 +176,9 @@ function UserMenu({
             </DropdownItem>
             <DropdownItem href="/billing" icon={<CreditCard className="w-4 h-4" />}>
               Billing
+            </DropdownItem>
+            <DropdownItem href="/settings/notifications" icon={<Settings className="w-4 h-4" />}>
+              Notifications
             </DropdownItem>
             <DropdownItem href="/dashboard" icon={<FileText className="w-4 h-4" />}>
               My resumes

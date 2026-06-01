@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing import Notification
+from app.models.notifications import Notification
 from app.models.dashboard import ResumeRecord, ResumeRecordStatus
 from app.models.tracker import ApplicationAttachment
 from tests.integration.test_auth import REGISTER_PAYLOAD
@@ -165,7 +165,7 @@ async def test_status_offer_creates_congratulations_notification(
         )
     ).scalars().all()
     assert len(rows) >= 1
-    headlines = [(row.payload or {}).get("headline", "") for row in rows]
+    headlines = [row.title or (row.data or {}).get("headline", "") for row in rows]
     assert any("Congratulations" in headline for headline in headlines)
 
 

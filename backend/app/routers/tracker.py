@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.engine import get_db
 from app.limiter import limiter
-from app.models.billing import Notification, NotificationStatus
+from app.models.notifications import Notification, NotificationDeliveryStatus
 from app.models.tracker import (
     Application,
     ApplicationAttachment,
@@ -710,7 +710,7 @@ async def list_reminders(
     app_id = str(application_id)
     results: list[ReminderResponse] = []
     for row in rows:
-        payload = row.payload or {}
+        payload = row.data or {}
         if payload.get("application_id") != app_id:
             continue
         results.append(
@@ -718,7 +718,7 @@ async def list_reminders(
                 id=row.id,
                 scheduled_at=row.scheduled_at or row.created_at,
                 message=payload.get("headline", ""),
-                status=row.status.value,
+                status=row.delivery_status.value,
             )
         )
     return results
@@ -744,7 +744,7 @@ async def create_reminder(
         id=notification.id,
         scheduled_at=notification.scheduled_at or body.scheduled_at,
         message=body.message,
-        status=notification.status.value,
+        status=notification.delivery_status.value,
     )
 
 
@@ -772,7 +772,7 @@ async def delete_reminder(
     payload = row.payload or {}
     if payload.get("application_id") != str(application_id):
         raise HTTPException(status_code=404, detail="Reminder not found")
-    if row.status != NotificationStatus.pending:
+    if row.delivery_status != NotificationDeliveryStatus.pending:
         raise HTTPException(status_code=409, detail="Reminder already sent")
     await db.delete(row)
     return {"ok": True}
