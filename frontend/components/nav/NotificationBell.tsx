@@ -10,9 +10,9 @@ import {
   markNotificationRead,
   type NotificationItem,
 } from "@/lib/notifications";
-import { clsx } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
-const POLL_MS = Number(process.env.NEXT_PUBLIC_NOTIFICATION_POLL_MS) || 60_000;
+const POLL_MS = 60_000;
 
 export function NotificationBell() {
   const { data: session } = useSession();
@@ -122,7 +122,7 @@ export function NotificationBell() {
                   <button
                     type="button"
                     onClick={() => onItemClick(item)}
-                    className={clsx(
+                    className={cn(
                       "w-full text-left px-3 py-2.5 hover:bg-slate-800/80 transition-colors",
                       !item.read_at && "bg-slate-800/40"
                     )}

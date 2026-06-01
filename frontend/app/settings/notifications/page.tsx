@@ -13,7 +13,7 @@ import {
   type NotificationPreferences,
 } from "@/lib/notifications";
 import { registerWebPush } from "@/lib/notifications/web-push";
-import { clsx } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function NotificationSettingsPage() {
   const { session, status } = useRequireAuth("/settings/notifications");
@@ -190,7 +190,7 @@ export default function NotificationSettingsPage() {
           type="button"
           onClick={enablePush}
           disabled={pushBusy || prefs.web_push_enabled}
-          className={clsx(
+          className={cn(
             "px-4 py-2 rounded-lg text-sm font-medium",
             prefs.web_push_enabled
               ? "bg-slate-800 text-slate-400 cursor-default"

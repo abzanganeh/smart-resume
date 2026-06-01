@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
-import random
+import secrets
 import string
 
 import structlog
@@ -20,16 +22,33 @@ _memory: dict[str, str] = {}
 
 
 def _code() -> str:
-    return "".join(random.choices(string.digits, k=6))
+    alphabet = string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(6))
+
+
+def _hash_code(*, code: str, salt: str, user_id: str) -> str:
+    secret = settings.AUTH_SECRET or settings.BYOK_ENCRYPTION_KEY or "dev-sms-secret"
+    digest = hashlib.sha256(f"{secret}:{user_id}:{salt}:{code}".encode("utf-8")).hexdigest()
+    return digest
 
 
 async def store_pending_code(user_id: str, phone: str) -> str:
     code = _code()
-    payload = json.dumps({"phone": phone, "code": code})
+    salt = secrets.token_hex(8)
+    code_hash = _hash_code(code=code, salt=salt, user_id=user_id)
+    payload = json.dumps({"phone": phone, "salt": salt, "code_hash": code_hash})
     key = _KEY_FMT.format(user_id=user_id)
     r = session_store._redis_client  # type: ignore[attr-defined]
     if r is not None:
-        await r.setex(key, _TTL_SECONDS, payload)
+        await r.hset(
+            key,
+            mapping={
+                "phone": phone,
+                "salt": salt,
+                "code_hash": code_hash,
+            },
+        )
+        await r.expire(key, _TTL_SECONDS)
     else:
         _memory[key] = payload
     return code
@@ -60,18 +79,43 @@ async def send_verification_sms(phone: str, code: str) -> dict:
 async def verify_code(user_id: str, code: str) -> tuple[bool, str | None]:
     key = _KEY_FMT.format(user_id=user_id)
     r = session_store._redis_client  # type: ignore[attr-defined]
-    raw: str | None = None
+    submitted = code.strip()
     if r is not None:
-        raw = await r.get(key)
-        if raw:
-            await r.delete(key)
-    else:
-        raw = _memory.pop(key, None)
+        salt = await r.hget(key, "salt")
+        if not salt:
+            return False, None
+        candidate = _hash_code(code=submitted, salt=salt, user_id=user_id)
+        script = """
+local key = KEYS[1]
+local expected = ARGV[1]
+local stored = redis.call('HGET', key, 'code_hash')
+if not stored then
+  return {'0', ''}
+end
+local phone = redis.call('HGET', key, 'phone') or ''
+if stored == expected then
+  redis.call('DEL', key)
+  return {'1', phone}
+end
+return {'0', phone}
+"""
+        raw = await r.eval(script, 1, key, candidate)
+        ok = str(raw[0]) == "1"
+        phone = str(raw[1]) if len(raw) > 1 and raw[1] else None
+        return ok, phone
+
+    raw = _memory.get(key)
     if not raw:
         return False, None
     data = json.loads(raw)
-    if data.get("code") != code.strip():
+    candidate = _hash_code(
+        code=submitted,
+        salt=data.get("salt", ""),
+        user_id=user_id,
+    )
+    if not hmac.compare_digest(candidate, data.get("code_hash", "")):
         return False, data.get("phone")
+    _memory.pop(key, None)
     return True, data.get("phone")
 
 
