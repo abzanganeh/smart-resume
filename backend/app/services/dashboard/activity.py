@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing import Notification
+from app.models.notifications import Notification
 from app.models.dashboard import AtsRecalcType, AtsScoreHistory, ResumeRecord
 from app.models.jobs import JobSearchLog, SavedJob
 from app.models.user import CreditTransaction
@@ -107,13 +107,13 @@ async def build_recent_activity(
         )
     ).scalars().all()
     for note in notif_rows:
-        payload = note.payload or {}
+        data = note.data or {}
         events.append(
             {
                 "type": "notification",
                 "at": note.created_at,
-                "title": payload.get("title") or note.type.replace("_", " ").title(),
-                "subtitle": payload.get("body", ""),
+                "title": note.title or data.get("title") or note.type.replace("_", " ").title(),
+                "subtitle": note.body or data.get("body", ""),
                 "meta": {"notification_type": note.type},
             }
         )
