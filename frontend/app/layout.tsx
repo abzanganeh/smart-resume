@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/nav/NavBar";
 import { SessionProvider } from "@/components/nav/SessionProvider";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -14,10 +15,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 antialiased`}>
+      <body className={`${inter.className} bg-slate-950 antialiased flex min-h-screen flex-col`}>
         <SessionProvider>
           <NavBar />
-          {children}
+          <div className="flex-1">{children}</div>
+          <SiteFooter />
         </SessionProvider>
       </body>
     </html>

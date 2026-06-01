@@ -2041,6 +2041,9 @@ async def admin_refunds_list(
 class RefundDecisionRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
     amount_usd: float | None = Field(None, ge=0)
+    payment_intent: str | None = Field(None, max_length=255)
+    charge: str | None = Field(None, max_length=255)
+    credit_reverse_delta: int = Field(0, ge=0, le=1000)
 
 
 @router.post("/refunds/{refund_id}/approve", response_model=AuditedResponse)
@@ -2054,41 +2057,44 @@ async def admin_refunds_approve(
         AdminUser, Depends(require_admin_role(AdminRole.super_admin))
     ],
 ) -> AuditedResponse:
-    row = (
-        await db.execute(
-            select(RefundRecord).where(RefundRecord.id == refund_id).with_for_update()
+    """Approve a queued refund and execute the Stripe refund.
+
+    Delegates to :mod:`app.services.billing.refund` so the Stripe call,
+    the :class:`RefundRecord` mutation, the credit reversal, the audit
+    log row, and the user notification all happen in one transaction
+    (§7.6 / §18.3).
+    """
+    from app.services.billing import refund as refund_service
+    from app.services.billing.exceptions import RefundError
+
+    try:
+        decision = await refund_service.approve_refund(
+            db,
+            record_id=refund_id,
+            admin_id=admin.id,
+            amount_usd=body.amount_usd,
+            reason_note=body.reason,
+            payment_intent=body.payment_intent,
+            charge=body.charge,
+            credit_reverse_delta=body.credit_reverse_delta,
+            request_ip=_client_ip(request),
+            request_user_agent=_request_user_agent(request),
         )
-    ).scalar_one_or_none()
-    if row is None:
+    except RefundError as exc:
+        if exc.stage == "lookup":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "refund_not_found"},
+            ) from exc
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "refund_not_found"},
-        )
-    before_snap = {
-        "stripe_refund_id": row.stripe_refund_id,
-        "amount_usd": float(row.amount_usd),
-    }
-    # Stripe call itself is delegated to a follow-up worker (Step 37);
-    # here we mark the row approved so downstream picks it up.  Replace
-    # the placeholder id with an admin-approval id - the webhook
-    # handler will swap in the real Stripe id when refunds settle.
-    row.amount_usd = body.amount_usd if body.amount_usd is not None else row.amount_usd
-    row.initiated_by = RefundInitiator.admin
-    row.admin_id = admin.id
-    if row.stripe_refund_id.startswith("pending_"):
-        row.stripe_refund_id = f"approved_{uuid.uuid4().hex}"
-    await db.flush()
-    audit_row = await write_admin_audit(
-        db,
-        actor_admin_id=admin.id,
-        action="refund_approved",
-        target_kind="refund_record",
-        target_id=str(row.id),
-        before=before_snap,
-        after={"reason": body.reason, "amount_usd": float(row.amount_usd)},
-        **_audit_ctx(request),
-    )
-    return AuditedResponse(audit_log_id=audit_row.id)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "refund_failed",
+                "stage": exc.stage,
+                "message": exc.message,
+            },
+        ) from exc
+    return AuditedResponse(audit_log_id=decision.audit_id)
 
 
 @router.post("/refunds/{refund_id}/deny", response_model=AuditedResponse)
@@ -2102,32 +2108,25 @@ async def admin_refunds_deny(
         AdminUser, Depends(require_admin_role(AdminRole.super_admin))
     ],
 ) -> AuditedResponse:
-    row = (
-        await db.execute(
-            select(RefundRecord).where(RefundRecord.id == refund_id).with_for_update()
+    """Deny a queued refund and email the user the denial reason."""
+    from app.services.billing import refund as refund_service
+    from app.services.billing.exceptions import RefundError
+
+    try:
+        decision = await refund_service.deny_refund(
+            db,
+            record_id=refund_id,
+            admin_id=admin.id,
+            reason_note=body.reason,
+            request_ip=_client_ip(request),
+            request_user_agent=_request_user_agent(request),
         )
-    ).scalar_one_or_none()
-    if row is None:
+    except RefundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "refund_not_found"},
-        )
-    before_snap = {"stripe_refund_id": row.stripe_refund_id}
-    row.admin_id = admin.id
-    if row.stripe_refund_id.startswith("pending_"):
-        row.stripe_refund_id = f"denied_{uuid.uuid4().hex}"
-    await db.flush()
-    audit_row = await write_admin_audit(
-        db,
-        actor_admin_id=admin.id,
-        action="refund_denied",
-        target_kind="refund_record",
-        target_id=str(row.id),
-        before=before_snap,
-        after={"reason": body.reason},
-        **_audit_ctx(request),
-    )
-    return AuditedResponse(audit_log_id=audit_row.id)
+        ) from exc
+    return AuditedResponse(audit_log_id=decision.audit_id)
 
 
 # ---------------------------------------------------------------------------
