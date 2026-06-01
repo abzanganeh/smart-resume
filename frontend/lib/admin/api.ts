@@ -84,7 +84,20 @@ export async function adminLogin(
     const msg = await parseError(res)
     throw new Error(msg)
   }
-  return res.json() as Promise<AdminLoginResponse>
+  const data = (await res.json()) as Partial<AdminLoginResponse>
+  if (data.status === "enrollment_required") {
+    return {
+      status: "enrollment_required",
+      enrollment_qr_svg: data.enrollment_qr_svg ?? null,
+      enrollment_uri: data.enrollment_uri ?? null,
+      enrollment_secret: data.enrollment_secret ?? null,
+    }
+  }
+  return {
+    status: "totp_required",
+    challenge_token: data.challenge_token ?? "",
+    expires_in: data.expires_in ?? 300,
+  }
 }
 
 export async function adminVerifyTotp(
@@ -271,7 +284,7 @@ export async function adjustUserCredits(
   payload: CreditAdjustPayload,
 ): Promise<AuditedResponse<{ new_balance: number }>> {
   return req(`/api/admin/users/${userId}/credits`, token, {
-    method: "POST",
+    method: "PATCH",
     body: JSON.stringify(payload),
   })
 }
@@ -282,7 +295,7 @@ export async function suspendUser(
   reason: string,
 ): Promise<AuditedResponse<{ suspended_at: string }>> {
   return req(`/api/admin/users/${userId}/suspend`, token, {
-    method: "POST",
+    method: "PATCH",
     body: JSON.stringify({ reason }),
   })
 }
@@ -292,7 +305,7 @@ export async function unsuspendUser(
   userId: string,
 ): Promise<AuditedResponse<{ suspended_at: null }>> {
   return req(`/api/admin/users/${userId}/unsuspend`, token, {
-    method: "POST",
+    method: "PATCH",
     body: JSON.stringify({}),
   })
 }
@@ -308,7 +321,10 @@ export async function closeUserAccount(
   token: string,
   userId: string,
 ): Promise<AuditedResponse<{ closure_requested_at: string }>> {
-  return req(`/api/admin/users/${userId}/close`, token, { method: "POST", body: JSON.stringify({}) })
+  return req(`/api/admin/users/${userId}/close`, token, {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
 }
 
 export async function deleteUserImmediately(
@@ -316,7 +332,8 @@ export async function deleteUserImmediately(
   userId: string,
 ): Promise<AuditedResponse<{ deleted: true }>> {
   return req(`/api/admin/users/${userId}/delete-immediately`, token, {
-    method: "DELETE",
+    method: "POST",
+    body: JSON.stringify({}),
   })
 }
 
