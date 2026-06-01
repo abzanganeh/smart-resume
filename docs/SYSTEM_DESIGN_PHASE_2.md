@@ -1457,8 +1457,8 @@ RESEND_API_KEY=
 RESEND_FROM_EMAIL=noreply@zanganehai.com
 
 # Admin bootstrap (one-time; ignored after first super-admin exists)
-ADMIN_BOOTSTRAP_EMAIL=
-ADMIN_BOOTSTRAP_INVITE_TTL_HOURS=72
+BOOTSTRAP_SUPER_ADMIN_EMAIL=
+ADMIN_INVITE_TTL_SECONDS=604800
 
 # Observability
 SENTRY_DSN=
@@ -2045,7 +2045,7 @@ POST /api/account/delete-immediately     — emergency hard delete; super-admin 
 
 **Goal:** Full control over pricing, plans, LLM assignments, feature flags, announcements, user accounts, refunds, and reports — **no hardcoded values anywhere in the codebase**.
 
-Admins authenticate through a separate `/admin/auth` flow. **2FA is mandatory.** Admin sessions are **1-hour TTL** (no sliding renewal) and bound to the originating IP. The first super-admin is seeded from `ADMIN_BOOTSTRAP_EMAIL` at first deploy; subsequent admins are created from the panel and receive an invite email.
+Admins authenticate through a separate `/admin/auth` flow. **2FA is mandatory.** Admin sessions are **1-hour TTL** (no sliding renewal) and bound to the originating IP. The first super-admin is seeded from `BOOTSTRAP_SUPER_ADMIN_EMAIL` at first deploy; subsequent admins are created from the panel and receive an invite email.
 
 #### Admin roles
 
