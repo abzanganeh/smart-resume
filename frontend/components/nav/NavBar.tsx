@@ -53,6 +53,7 @@ export function NavBar() {
             <NavLink href="/profile">Edit master resume</NavLink>
             <NavLink href="/fit">Job fit</NavLink>
             <NavLink href="/dashboard">Dashboard</NavLink>
+            <NavLink href="/tracker">Tracker</NavLink>
             <JobsNavItem />
           </div>
         )}
