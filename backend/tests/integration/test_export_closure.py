@@ -6,6 +6,7 @@ import io
 import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,7 +24,7 @@ from app.models.export import (
 )
 from app.models.master_resume import MasterResume
 from app.models.user import AuthProvider, User
-from app.services.export.assembler import assemble_export_zip, process_export_job
+from app.services.export.assembler import build_export_zip, process_export_job
 from app.services.export.closure import cancel_closure, run_closure_tick, schedule_closure
 from tests.integration.test_auth import REGISTER_PAYLOAD
 
@@ -85,7 +86,24 @@ async def test_export_zip_contains_required_files(
     )
     await db_session.flush()
 
-    zip_bytes = await assemble_export_zip(db_session, user_id)
+    fake_session = SimpleNamespace(phase3_output=object(), cover_letter_output=object())
+    with patch("app.services.export.assembler.get_session", return_value=fake_session):
+        with patch("app.services.export.assembler.render_pdf", return_value=b"resume-pdf"):
+            with patch("app.services.export.assembler.render_docx", return_value=b"resume-docx"):
+                with patch("app.services.export.assembler.render_txt", return_value="resume-txt"):
+                    with patch(
+                        "app.services.export.assembler.render_cover_letter_pdf",
+                        return_value=b"cl-pdf",
+                    ):
+                        with patch(
+                            "app.services.export.assembler.render_cover_letter_docx",
+                            return_value=b"cl-docx",
+                        ):
+                            with patch(
+                                "app.services.export.assembler.render_cover_letter_txt",
+                                return_value="cl-txt",
+                            ):
+                                zip_bytes = await build_export_zip(db_session, user_id)
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         names = set(zf.namelist())
         assert "applications.csv" in names
@@ -99,6 +117,12 @@ async def test_export_zip_contains_required_files(
         assert "master_resume.txt" in names
         assert "master_resume.docx" in names
         assert "master_resume.pdf" in names
+        assert "resumes/acme_backend_engineer/resume.pdf" in names
+        assert "resumes/acme_backend_engineer/resume.docx" in names
+        assert "resumes/acme_backend_engineer/resume.txt" in names
+        assert "cover_letters/acme_backend_engineer/cover_letter.pdf" in names
+        assert "cover_letters/acme_backend_engineer/cover_letter.docx" in names
+        assert "cover_letters/acme_backend_engineer/cover_letter.txt" in names
 
 
 async def test_export_presigned_url_valid_24h(

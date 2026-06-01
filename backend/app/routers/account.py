@@ -94,11 +94,15 @@ async def _run_export_background(job_id: uuid.UUID) -> None:
 
 
 def _job_response(job: ExportJob) -> ExportJobResponse:
+    presigned_url = job.presigned_url
+    expires_at = job.presigned_url_expires_at
+    if expires_at is not None and expires_at <= datetime.now(timezone.utc):
+        presigned_url = None
     return ExportJobResponse(
         id=job.id,
         status=job.status.value,
-        presigned_url=job.presigned_url,
-        presigned_url_expires_at=job.presigned_url_expires_at,
+        presigned_url=presigned_url,
+        presigned_url_expires_at=expires_at,
         error=job.error,
         created_at=job.created_at,
         completed_at=job.completed_at,
@@ -189,14 +193,14 @@ async def list_exports(
     ).scalars().all()
     return [
         ExportListItem(
-            id=j.id,
-            status=j.status.value,
-            presigned_url=j.presigned_url,
-            presigned_url_expires_at=j.presigned_url_expires_at,
-            created_at=j.created_at,
-            completed_at=j.completed_at,
+            id=jr.id,
+            status=jr.status,
+            presigned_url=jr.presigned_url,
+            presigned_url_expires_at=jr.presigned_url_expires_at,
+            created_at=jr.created_at,
+            completed_at=jr.completed_at,
         )
-        for j in rows
+        for jr in [_job_response(j) for j in rows]
     ]
 
 
