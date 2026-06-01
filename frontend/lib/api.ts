@@ -40,6 +40,11 @@ export async function createSession(): Promise<{ session_id: string }> {
   return request("/api/sessions", { method: "POST" });
 }
 
+export interface BulletFixPayload {
+  original: string;
+  suggestion: string;
+}
+
 export async function checkSession(
   sessionId: string
 ): Promise<{
@@ -51,6 +56,9 @@ export async function checkSession(
   stale: Record<string, string | null>;
   stale_since?: string | null;
   phase1_complete: boolean;
+  user_claimed_keywords: string[];
+  user_extra_notes: string;
+  bullet_fixes: BulletFixPayload[];
 }> {
   return request(`/api/sessions/${sessionId}`);
 }
@@ -109,7 +117,7 @@ export async function pasteResumeText(
 
 export async function saveAdditions(
   sessionId: string,
-  payload: { claimed_keywords: string[]; extra_notes: string }
+  payload: { claimed_keywords: string[]; extra_notes: string; bullet_fixes?: BulletFixPayload[] }
 ): Promise<{ ok: boolean; claimed: number }> {
   return request<{ ok: boolean; claimed: number }>(
     `/api/sessions/${sessionId}/additions`,

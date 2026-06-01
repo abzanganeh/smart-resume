@@ -8,6 +8,7 @@ from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
 from app.models.resume import ParsedResume
+from app.models.session import BulletFix
 from app.models.userinfo import UserInfo
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
@@ -145,16 +146,20 @@ async def save_userinfo(session_id: str, body: UserInfo):
 class AdditionsRequest(BaseModel):
     claimed_keywords: list[str] = []
     extra_notes: str = ""
+    # Fix 4: persist user-supplied bullet corrections.
+    bullet_fixes: list[BulletFix] = []
 
 
 @router.patch("/{session_id}/additions")
 async def save_additions(session_id: str, body: AdditionsRequest):
-    """Save keywords/skills the user claims to have that weren't in the original resume."""
+    """Save keywords/skills the user claims to have that weren't in the original resume,
+    plus optional free-text notes and per-bullet fix suggestions."""
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     session.user_claimed_keywords = body.claimed_keywords
     session.user_extra_notes = body.extra_notes
+    session.bullet_fixes = body.bullet_fixes
     await update_session(session)
     return {"ok": True, "claimed": len(body.claimed_keywords)}
 
