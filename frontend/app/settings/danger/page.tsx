@@ -51,8 +51,8 @@ export default function DangerZonePage() {
     load();
   }, [load]);
 
-  async function handleExport() {
-    if (!token) return;
+  async function handleExport(): Promise<boolean> {
+    if (!token) return false;
     setExportBusy(true);
     setError(null);
     setDownloadUrl(null);
@@ -60,9 +60,15 @@ export default function DangerZonePage() {
       const { job_id } = await startExport(token);
       const { promise } = pollExportUntilReady(token, job_id);
       const job = await promise;
-      if (job.presigned_url) setDownloadUrl(job.presigned_url);
+      if (job.presigned_url) {
+        setDownloadUrl(job.presigned_url);
+        return true;
+      }
+      setError("Export completed but no download URL was returned.");
+      return false;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
+      return false;
     } finally {
       setExportBusy(false);
     }
@@ -71,7 +77,8 @@ export default function DangerZonePage() {
   async function handleClose(skipExport: boolean) {
     if (!token) return;
     if (!skipExport) {
-      await handleExport();
+      const ok = await handleExport();
+      if (!ok) return;
       setCloseStep("confirm");
       return;
     }
