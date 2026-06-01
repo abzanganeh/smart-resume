@@ -84,6 +84,16 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "noreply@zanganehai.com"
 
+    # Web push (VAPID) — §19.5 / IMPLEMENTATION_PLAN §6b
+    WEB_PUSH_VAPID_PUBLIC_KEY: str = ""
+    WEB_PUSH_VAPID_PRIVATE_KEY: str = ""
+    WEB_PUSH_VAPID_SUBJECT: str = "mailto:notifications@zanganehai.com"
+
+    # SMS (Twilio) — interview reminders only
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+
     # Base URL of the frontend, used to build email links (verify/reset/etc.)
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 
