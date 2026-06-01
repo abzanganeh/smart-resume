@@ -214,8 +214,16 @@ async def run_closure_tick(
     ).scalars().all()
 
     for closure in due_rows:
-        if await execute_closure(session, user_id=closure.user_id):
-            deleted.append(closure.user_id)
+        try:
+            if await execute_closure(session, user_id=closure.user_id):
+                deleted.append(closure.user_id)
+        except Exception as exc:  # noqa: BLE001
+            # Keep the tick progressing for other users if one account fails.
+            log.error(
+                "closure.tick.failed_user",
+                user_id=str(closure.user_id),
+                error=str(exc),
+            )
 
     if deleted or reminders_sent:
         await session.flush()

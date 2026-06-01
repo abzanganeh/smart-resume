@@ -22,13 +22,9 @@ from app.models.export import ExportJob, ExportJobStatus, EXPORT_PRESIGNED_TTL_S
 from app.models.jobs import JobCache, SavedJob, SavedSearch
 from app.models.master_resume import MasterResume
 from app.models.notifications import Notification, NotificationPreference
-from app.models.tracker import Application, InterviewRound, OfferDetail
+from app.models.tracker import Application
 from app.models.user import AuthAuditLog, User
-from app.services.export.storage import (
-    ExportStorageError,
-    generate_export_download_url,
-    upload_export_zip,
-)
+from app.services.export.storage import generate_export_download_url, upload_export_zip
 from app.services.export_service import (
     render_cover_letter_docx,
     render_cover_letter_pdf,
@@ -81,7 +77,7 @@ def _write_csv(zf: zipfile.ZipFile, name: str, headers: list[str], rows: list[li
     zf.writestr(name, buf.getvalue())
 
 
-async def assemble_export_zip(session: AsyncSession, user_id: uuid.UUID) -> bytes:
+async def build_export_zip(session: AsyncSession, user_id: uuid.UUID) -> bytes:
     """Collect all user data per §19.6 manifest into an in-memory ZIP."""
     user = (
         await session.execute(select(User).where(User.id == user_id))
@@ -425,7 +421,7 @@ async def process_export_job(session: AsyncSession, job_id: uuid.UUID) -> None:
     await session.flush()
 
     try:
-        zip_bytes = await assemble_export_zip(session, job.user_id)
+        zip_bytes = await build_export_zip(session, job.user_id)
         s3_key = upload_export_zip(
             user_id=job.user_id,
             job_id=job.id,
@@ -461,7 +457,7 @@ async def process_export_job(session: AsyncSession, job_id: uuid.UUID) -> None:
         )
         await session.flush()
         log.info("export.job.completed", job_id=str(job.id), user_id=str(job.user_id))
-    except (ExportStorageError, Exception) as exc:
+    except Exception as exc:
         job.status = ExportJobStatus.failed
         job.error = str(exc)[:2000]
         job.completed_at = datetime.now(timezone.utc)
@@ -474,4 +470,6 @@ async def process_export_job(session: AsyncSession, job_id: uuid.UUID) -> None:
         )
 
 
-__all__ = ["assemble_export_zip", "process_export_job"]
+assemble_export_zip = build_export_zip
+
+__all__ = ["assemble_export_zip", "build_export_zip", "process_export_job"]
