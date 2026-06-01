@@ -1,14 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, Plus, Save } from "lucide-react";
-import { saveAdditions, patchAuditOutput, type AuditOutput } from "@/lib/api";
+import { saveAdditions, patchAuditOutput, type AuditOutput, type BulletFixPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Props {
   output: AuditOutput | null;
   streaming: boolean;
   sessionId: string;
+  /** Claimed keywords restored from the server on mount. */
+  initialClaimedKeywords?: string[];
+  /** Extra notes restored from the server on mount. */
+  initialExtraNotes?: string;
+  /** Bullet fixes restored from the server on mount. */
+  initialBulletFixes?: BulletFixPayload[];
   onAdditionsSaved?: () => void;
   onReaudit?: () => void;
   onAuditEdited?: (stale: Record<string, string | null>) => void;
@@ -20,18 +26,74 @@ const SEVERITY_CONFIG = {
   low: { icon: Info, cls: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
 };
 
-export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onReaudit, onAuditEdited }: Props) {
-  const [claimedKeywords, setClaimedKeywords] = useState<Set<string>>(new Set());
-  const [extraNotes, setExtraNotes] = useState("");
+export function AuditPanel({
+  output,
+  streaming,
+  sessionId,
+  initialClaimedKeywords,
+  initialExtraNotes,
+  initialBulletFixes,
+  onAdditionsSaved,
+  onReaudit,
+  onAuditEdited,
+}: Props) {
+  const [claimedKeywords, setClaimedKeywords] = useState<Set<string>>(
+    () => new Set(initialClaimedKeywords ?? [])
+  );
+  const [extraNotes, setExtraNotes] = useState(initialExtraNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
-  // Per-bullet fix drafts: key = `${i}`, value = user-typed corrected bullet
-  const [bulletFixes, setBulletFixes] = useState<Record<number, string>>({});
+
+  // Per-bullet fix drafts: key = bullet index, value = corrected text.
+  const [bulletFixes, setBulletFixes] = useState<Record<number, string>>(() => {
+    const initial: Record<number, string> = {};
+    (initialBulletFixes ?? []).forEach((bf, idx) => {
+      initial[idx] = bf.suggestion;
+    });
+    return initial;
+  });
   const [expandedFix, setExpandedFix] = useState<number | null>(null);
   const [summaryDraft, setSummaryDraft] = useState("");
   const [editingSummary, setEditingSummary] = useState(false);
   const [summarySaving, setSummarySaving] = useState(false);
   const fixRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+
+  // Re-hydrate when session data arrives from the parent (e.g. first render or refresh).
+  useEffect(() => {
+    if (initialClaimedKeywords && initialClaimedKeywords.length > 0) {
+      setClaimedKeywords(new Set(initialClaimedKeywords));
+    }
+    if (initialExtraNotes) {
+      setExtraNotes(initialExtraNotes);
+    }
+  }, [initialClaimedKeywords, initialExtraNotes]);
+
+  // Debounced auto-save bullet fixes whenever they change (500 ms).
+  const bulletFixDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (bulletFixDebounceRef.current) clearTimeout(bulletFixDebounceRef.current);
+    bulletFixDebounceRef.current = setTimeout(() => {
+      if (!output) return;
+      const fixes: BulletFixPayload[] = Object.entries(bulletFixes)
+        .filter(([, suggestion]) => suggestion.trim())
+        .map(([idxStr, suggestion]) => {
+          const idx = Number(idxStr);
+          const original = output.bullet_issues?.[idx]?.original ?? "";
+          return { original, suggestion };
+        });
+      void saveAdditions(sessionId, {
+        claimed_keywords: Array.from(claimedKeywords),
+        extra_notes: extraNotes,
+        bullet_fixes: fixes,
+      });
+    }, 500);
+    return () => {
+      if (bulletFixDebounceRef.current) clearTimeout(bulletFixDebounceRef.current);
+    };
+    // Only re-run when bulletFixes change (not on every claimedKeywords/extraNotes change
+    // to avoid competing debounces — the explicit "Save my additions" button covers those).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulletFixes]);
 
   async function saveSummaryEdit() {
     if (!output) return;
@@ -73,9 +135,17 @@ export function AuditPanel({ output, streaming, sessionId, onAdditionsSaved, onR
   async function handleSave() {
     setSaving(true);
     try {
+      const fixes: BulletFixPayload[] = Object.entries(bulletFixes)
+        .filter(([, suggestion]) => suggestion.trim())
+        .map(([idxStr, suggestion]) => {
+          const idx = Number(idxStr);
+          const original = output?.bullet_issues?.[idx]?.original ?? "";
+          return { original, suggestion };
+        });
       await saveAdditions(sessionId, {
         claimed_keywords: Array.from(claimedKeywords),
         extra_notes: extraNotes.trim(),
+        bullet_fixes: fixes,
       });
       setSavedOk(true);
       onAdditionsSaved?.();

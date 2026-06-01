@@ -59,6 +59,10 @@ function SessionContent() {
   const [audit, setAudit] = useState<AuditOutput | null>(null);
   const [tailored, setTailored] = useState<TailoredResumeOutput | null>(null);
   const [qa, setQa] = useState<QAOutput | null>(null);
+  // Fix 2: hydrate claimed keywords / extra notes / bullet fixes from session on load.
+  const [sessionClaimedKeywords, setSessionClaimedKeywords] = useState<string[]>([]);
+  const [sessionExtraNotes, setSessionExtraNotes] = useState("");
+  const [sessionBulletFixes, setSessionBulletFixes] = useState<import("@/lib/api").BulletFixPayload[]>([]);
   const [costInfo, setCostInfo] = useState<{ cost_formatted: string; provider: string; model: string } | null>(null);
   const [resumeVersion, setResumeVersion] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
@@ -150,6 +154,10 @@ function SessionContent() {
     if (s.cover_letter) {
       setCoverLetter(s.cover_letter);
     }
+    // Fix 2: restore user additions so AuditPanel survives a page refresh.
+    if (s.user_claimed_keywords?.length) setSessionClaimedKeywords(s.user_claimed_keywords);
+    if (s.user_extra_notes) setSessionExtraNotes(s.user_extra_notes);
+    if (s.bullet_fixes?.length) setSessionBulletFixes(s.bullet_fixes);
   }, [applyPhaseOutput]);
 
   const goTo = (s: Step) => {
@@ -513,6 +521,9 @@ function SessionContent() {
                 output={audit}
                 streaming={isStreaming && !showProgress}
                 sessionId={sessionId}
+                initialClaimedKeywords={sessionClaimedKeywords}
+                initialExtraNotes={sessionExtraNotes}
+                initialBulletFixes={sessionBulletFixes}
                 onReaudit={() => runCurrentPhase({ force: true })}
                 onAuditEdited={(nextStale) => setStale((prev) => ({ ...prev, ...nextStale }))}
               />
