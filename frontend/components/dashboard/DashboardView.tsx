@@ -38,6 +38,7 @@ import {
   getDashboardSummary,
   listResumes,
 } from "@/lib/dashboard"
+import { listExports, type ExportListItem } from "@/lib/account"
 import { isSubscriptionActive } from "@/lib/billing"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
@@ -143,10 +144,17 @@ export function DashboardView({ token }: { token: string }) {
     jd_title?: string
     jd_company?: string
   } | null>(null)
+  const [exports, setExports] = useState<ExportListItem[]>([])
 
   const loadSummary = useCallback(async () => {
     const data = await getDashboardSummary(token)
     setSummary(data)
+    try {
+      const history = await listExports(token)
+      setExports(history)
+    } catch {
+      setExports([])
+    }
   }, [token])
 
   const loadResumes = useCallback(async () => {
@@ -459,6 +467,38 @@ export function DashboardView({ token }: { token: string }) {
           </div>
         </section>
       </div>
+
+      {exports.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Data exports</h2>
+            <Link href="/settings/danger" className="text-xs text-amber-400 hover:text-amber-300">
+              Manage exports
+            </Link>
+          </div>
+          <ul className="bg-slate-900/80 border border-slate-800 rounded-xl divide-y divide-slate-800">
+            {exports.map((exp) => (
+              <li key={exp.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div>
+                  <span className="text-slate-200 capitalize">{exp.status}</span>
+                  <span className="text-slate-500 ml-2">{formatDate(exp.created_at)}</span>
+                </div>
+                {exp.status === "ready" && exp.presigned_url && (
+                  <a
+                    href={exp.presigned_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-white">
