@@ -32,7 +32,7 @@ export async function registerWebPush(accessToken: string): Promise<boolean> {
   if (!subscription) {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) as unknown as BufferSource,
     });
   }
 

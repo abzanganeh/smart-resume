@@ -177,7 +177,7 @@ function SessionContent() {
       try {
         await triggerPhase(sessionId, phase, {
           force: options?.force,
-          scope: options?.scope ?? null,
+          scope: options?.scope,
           llmTier: phase === 3 ? llmTier : undefined,
         });
         connect(phaseEventsUrl(sessionId, phase));

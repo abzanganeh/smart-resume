@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { Suspense, useEffect, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, useSession } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
@@ -29,7 +29,7 @@ type View = "login" | "register" | "2fa"
 
 // ── Auth Page ─────────────────────────────────────────────────────────────────
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session, status } = useSession()
@@ -534,6 +534,20 @@ export default function AuthPage() {
         </p>
       </div>
     </main>
+  )
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4">
+          <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
+        </main>
+      }
+    >
+      <AuthPageContent />
+    </Suspense>
   )
 }
 

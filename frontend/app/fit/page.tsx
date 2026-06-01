@@ -411,7 +411,7 @@ function FitPageContent() {
     setAnalyzing(true);
     setProgressMsg("Starting analysis…");
 
-    let textToAnalyze = jdText.trim();
+    const textToAnalyze = jdText.trim();
 
     if (inputTab === "paste" && !textToAnalyze) {
       setError("Paste a job description.");
