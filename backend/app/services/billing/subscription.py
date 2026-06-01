@@ -208,10 +208,16 @@ async def change_plan(
 _PAUSE_ELIGIBLE_PLANS: frozenset[SubscriptionPlan] = frozenset(
     {SubscriptionPlan.monthly}
 )
+_PAUSE_ELIGIBLE_CYCLES: frozenset[SubscriptionBillingCycle] = frozenset(
+    {SubscriptionBillingCycle.recurring, SubscriptionBillingCycle.yearly}
+)
 
 
 def _assert_pause_eligible(sub: Subscription) -> None:
-    if sub.plan not in _PAUSE_ELIGIBLE_PLANS:
+    if (
+        sub.plan not in _PAUSE_ELIGIBLE_PLANS
+        or sub.billing_cycle not in _PAUSE_ELIGIBLE_CYCLES
+    ):
         raise SubscriptionPauseNotAllowedError(
             plan=sub.plan.value,
             billing_cycle=sub.billing_cycle.value,
