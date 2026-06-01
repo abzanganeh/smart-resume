@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, AlertTriangle, XCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, AlertCircle, Info } from "lucide-react";
 import { type QAOutput, type QAItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,7 @@ export function QAChecklist({ output, streaming }: Props) {
       {/* Overall status */}
       <div className={cn("flex items-center gap-3 rounded-xl p-4 border", overallCfg.bg)}>
         <OverallIcon className={cn("w-6 h-6", overallCfg.cls)} />
-        <div>
+        <div className="flex-1">
           <p className={cn("font-semibold", overallCfg.cls)}>
             Overall:{" "}
             {output.overall_status
@@ -60,6 +60,24 @@ export function QAChecklist({ output, streaming }: Props) {
             <p className="text-green-400/70 text-sm">Your resume passes all quality checks. Ready to export.</p>
           )}
         </div>
+        {/* ATS score (Phase 4) — distinct from Phase 2 audit score */}
+        {typeof output.ats_score === "number" && (
+          <div className="text-right shrink-0">
+            <p className="text-slate-400 text-xs flex items-center justify-end gap-1">
+              Tailored resume ATS score
+              <span
+                title="Measures how well your tailored resume matches the job description."
+                className="cursor-help text-slate-600 hover:text-slate-400"
+              >
+                <Info className="w-3 h-3" />
+              </span>
+            </p>
+            <p className="text-2xl font-bold text-slate-100 mt-0.5">
+              {output.ats_score}
+              <span className="text-slate-500 text-sm font-normal"> / 100</span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Checklist items */}
