@@ -78,7 +78,7 @@ async def send_notification_push(
                 session, notification, user=user, prefs=prefs
             )
             return {
-                "sent": False,
+                "sent": bool(fallback.get("sent")),
                 "reason": "subscription_gone",
                 "email_fallback": fallback.get("sent", False),
             }

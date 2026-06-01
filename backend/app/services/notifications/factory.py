@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.models.notifications import (
@@ -38,7 +38,7 @@ def build_notification(
         title=resolved_title,
         body=resolved_body,
         data=payload,
-        scheduled_at=scheduled_at,
+        scheduled_at=scheduled_at or datetime.now(timezone.utc),
         delivery_status=NotificationDeliveryStatus.pending,
     )
 

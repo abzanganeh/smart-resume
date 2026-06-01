@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -123,14 +123,16 @@ async def handle_resend_bounce(
     bounced_at: datetime | None = None,
 ) -> bool:
     """Mark user email as bounced (Resend webhook)."""
-    user = (
-        await session.execute(select(User).where(User.email == email))
-    ).scalar_one_or_none()
-    if user is None:
+    ts = bounced_at or datetime.now(timezone.utc)
+    result = await session.execute(
+        update(User)
+        .where(User.email == email)
+        .values(email_bounced_at=ts)
+    )
+    if (result.rowcount or 0) == 0:
         return False
-    user.email_bounced_at = bounced_at or datetime.now(timezone.utc)
     await session.flush()
-    log.info("notifications.email.bounced", email=email, user_id=str(user.id))
+    log.info("notifications.email.bounced", email=email)
     return True
 
 

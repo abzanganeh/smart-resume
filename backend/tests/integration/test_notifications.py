@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -95,7 +94,7 @@ async def test_dispatch_web_push_410_deletes_subscription_and_email_fallback(
     prefs = NotificationPreference(
         id=uuid.uuid4(),
         user_id=user.id,
-        email_enabled_categories=["payment"],
+        email_enabled_categories=["application_interview"],
         in_app_enabled_categories=[],
         web_push_enabled=True,
     )
@@ -117,7 +116,7 @@ async def test_dispatch_web_push_410_deletes_subscription_and_email_fallback(
     response.status_code = 410
     exc = WebPushException("gone", response=response)
 
-    mock_email = MagicMock(return_value={"sent": True, "provider": "resend"})
+    mock_email = AsyncMock(return_value={"sent": True, "provider": "resend"})
     with patch("app.services.notifications.dispatcher.asyncio.sleep", return_value=None):
         with patch("app.services.notifications.push_adapter.webpush", side_effect=exc):
             with patch(
@@ -137,6 +136,7 @@ async def test_dispatch_web_push_410_deletes_subscription_and_email_fallback(
     ).scalars().all()
     assert remaining == []
     email_fn.assert_called_once()
+    assert note.delivery_status == NotificationDeliveryStatus.sent
 
 
 async def test_sms_verify_flow(
@@ -150,10 +150,7 @@ async def test_sms_verify_flow(
         "app.services.notifications.sms_verify.send_verification_sms",
         return_value={"sent": True, "provider": "dev-log"},
     ):
-        with patch(
-            "app.services.notifications.sms_verify.store_pending_code",
-            return_value="123456",
-        ):
+        with patch("app.services.notifications.sms_verify._code", return_value="123456"):
             r = await app_client.post(
                 "/api/notifications/sms/send-verification",
                 json={"phone": phone},
@@ -161,15 +158,11 @@ async def test_sms_verify_flow(
             )
     assert r.status_code == 200, r.text
 
-    with patch(
-        "app.services.notifications.sms_verify.verify_code",
-        return_value=(True, phone),
-    ):
-        r = await app_client.post(
-            "/api/notifications/sms/verify",
-            json={"code": "123456"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    r = await app_client.post(
+        "/api/notifications/sms/verify",
+        json={"code": "123456"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
     assert r.status_code == 200, r.text
 
     prefs = (
@@ -207,3 +200,26 @@ async def test_unread_count_after_in_app_notification(
     )
     assert r.status_code == 200, r.text
     assert r.json()["count"] >= 1
+
+
+async def test_resend_bounce_webhook_sets_email_bounced_at(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client)
+    _ = token
+    user = (
+        await db_session.execute(select(User).where(User.id == user_id))
+    ).scalar_one()
+    assert user.email_bounced_at is None
+
+    r = await app_client.post(
+        "/api/notifications/webhooks/resend",
+        json={
+            "type": "email.bounced",
+            "data": {"email": user.email},
+        },
+    )
+    assert r.status_code == 200, r.text
+    await db_session.refresh(user)
+    assert user.email_bounced_at is not None

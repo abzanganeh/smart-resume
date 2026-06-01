@@ -24,6 +24,7 @@ from app.models.notifications import (
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
 from app.services.notifications.preferences import get_or_create_preferences
+from app.services.notifications.email_adapter import handle_resend_bounce
 from app.services.notifications.sms_verify import (
     send_verification_sms,
     store_pending_code,
@@ -98,6 +99,12 @@ class SmsSendVerificationRequest(BaseModel):
 
 class SmsVerifyRequest(BaseModel):
     code: str = Field(..., min_length=4, max_length=8)
+
+
+class ResendWebhookPayload(BaseModel):
+    type: str | None = None
+    data: dict[str, Any] | None = None
+    email: str | None = None
 
 
 def _to_item(row: Notification) -> NotificationItem:
@@ -411,3 +418,20 @@ async def sms_verify(
     prefs.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return {"ok": True, "verified": True}
+
+
+@router.post("/api/notifications/webhooks/resend", include_in_schema=False)
+async def resend_webhook(
+    payload: ResendWebhookPayload,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    """Handle Resend async events; bounce marks user email as suppressed."""
+    event_type = (payload.type or "").lower()
+    if "bounce" not in event_type:
+        return {"ok": True, "updated": False}
+    data = payload.data or {}
+    email = payload.email or data.get("email") or data.get("to")
+    if not isinstance(email, str) or not email:
+        raise HTTPException(status_code=422, detail="Missing bounced email")
+    updated = await handle_resend_bounce(db, email=email.strip().lower())
+    return {"ok": True, "updated": updated}
