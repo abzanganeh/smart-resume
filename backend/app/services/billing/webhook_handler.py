@@ -408,18 +408,50 @@ async def handle_invoice_succeeded(
             stripe_subscription_id=stripe_sub_id,
         )
         return
-    if existing.status == SubscriptionStatus.grace:
+    was_grace = existing.status == SubscriptionStatus.grace
+    if was_grace:
         existing.status = SubscriptionStatus.active
         existing.payment_failed_at = None
     existing.last_event_created_at = _event_created_at(event)
     existing.updated_at = datetime.now(timezone.utc)
     await session.flush()
+    if was_grace:
+        # §7.6 row 2 — emit a payment_recovered notification on the
+        # transition.  Both in_app and email so the user sees it
+        # whether or not they're online.
+        recovery_data = {
+            "subscription_id": str(existing.id),
+            "stripe_subscription_id": stripe_sub_id,
+            "event_id": event["id"],
+            "url": "/billing",
+        }
+        for channel in (NotificationChannel.in_app, NotificationChannel.email):
+            session.add(
+                build_notification(
+                    user_id=existing.user_id,
+                    type="payment_recovered",
+                    channel=channel,
+                    category="payment",
+                    title="Payment restored",
+                    body="Your payment succeeded and your subscription is active again.",
+                    data=recovery_data,
+                )
+            )
+        await session.flush()
 
 
 async def handle_invoice_failed(
     session: AsyncSession, event: dict[str, Any]
 ) -> None:
-    """Event #6 — kick off / extend grace state per §7.6."""
+    """Event #6 — kick off / extend grace state per §7.6.
+
+    Day 0 (the very first failure that flips status to ``grace``)
+    emits a ``payment_failure_started`` notification.  Subsequent
+    failures inside the same window only refresh
+    ``payment_failed_at`` and rely on the grace tick to produce 24h /
+    60h reminders so we don't double-spam the user when Stripe retries
+    rapidly.
+    """
     obj = event["data"]["object"]
     stripe_sub_id = obj.get("subscription")
     if not stripe_sub_id:
@@ -441,6 +473,12 @@ async def handle_invoice_failed(
             stripe_subscription_id=stripe_sub_id,
         )
         return
+
+    was_grace = existing.status == SubscriptionStatus.grace
+    enters_grace = existing.status in {
+        SubscriptionStatus.trialing,
+        SubscriptionStatus.active,
+    }
     if existing.status in {
         SubscriptionStatus.trialing,
         SubscriptionStatus.active,
@@ -451,6 +489,34 @@ async def handle_invoice_failed(
     existing.last_event_created_at = _event_created_at(event)
     existing.updated_at = datetime.now(timezone.utc)
     await session.flush()
+
+    if enters_grace and not was_grace:
+        # Day 0 banner per §7.6 row 1.
+        notif_data = {
+            "subscription_id": str(existing.id),
+            "stripe_subscription_id": stripe_sub_id,
+            "event_id": event["id"],
+            "payment_failed_at": existing.payment_failed_at.isoformat()
+            if existing.payment_failed_at
+            else None,
+            "url": "/billing",
+        }
+        for channel in (NotificationChannel.in_app, NotificationChannel.email):
+            session.add(
+                build_notification(
+                    user_id=existing.user_id,
+                    type="payment_failure_started",
+                    channel=channel,
+                    category="payment",
+                    title="Payment failed — update your card",
+                    body=(
+                        "We couldn't charge your card.  Please update your "
+                        "billing details within 72 hours to keep access."
+                    ),
+                    data=notif_data,
+                )
+            )
+        await session.flush()
 
 
 async def handle_trial_will_end(
