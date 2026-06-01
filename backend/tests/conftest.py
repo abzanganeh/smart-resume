@@ -60,6 +60,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "ats_score_history, resume_records, "
                 "fit_analyses, master_resume_chunks, master_resumes, "
                 "web_push_subscriptions, notification_preferences, "
+                "export_jobs, closure_requests, "
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
                 "credit_transactions, subscriptions, plan_configs, "
