@@ -40,13 +40,13 @@ from app.models.billing import (
     CreditKind,
     LLMUpgradeBillingCycle,
     LLMUpgradeTier,
-    Notification,
-    NotificationChannel,
     Subscription,
     SubscriptionBillingCycle,
     SubscriptionPlan,
     SubscriptionStatus,
 )
+from app.models.notifications import NotificationChannel
+from app.services.notifications.factory import build_notification
 from app.models.user import User
 from app.services.billing.credits import grant_credit
 from app.services.billing.exceptions import WebhookPayloadError
@@ -475,30 +475,32 @@ async def handle_trial_will_end(
         return
     # Persist notification outbox rows now; Step 31 delivery worker will
     # fan them out to concrete channels/providers.
+    trial_data = {
+        "subscription_id": str(existing.id),
+        "stripe_subscription_id": stripe_sub_id,
+        "event_id": event["id"],
+        "url": "/billing",
+    }
     session.add(
-        Notification(
-            id=uuid.uuid4(),
+        build_notification(
             user_id=existing.user_id,
             type="subscription_trial_will_end",
             channel=NotificationChannel.in_app,
-            payload={
-                "subscription_id": str(existing.id),
-                "stripe_subscription_id": stripe_sub_id,
-                "event_id": event["id"],
-            },
+            category="subscription",
+            title="Your trial ends soon",
+            body="Your free trial is ending in 3 days.",
+            data=trial_data,
         )
     )
     session.add(
-        Notification(
-            id=uuid.uuid4(),
+        build_notification(
             user_id=existing.user_id,
             type="subscription_trial_will_end",
             channel=NotificationChannel.email,
-            payload={
-                "subscription_id": str(existing.id),
-                "stripe_subscription_id": stripe_sub_id,
-                "event_id": event["id"],
-            },
+            category="subscription",
+            title="Your trial ends soon",
+            body="Your free trial is ending in 3 days.",
+            data=trial_data,
         )
     )
     existing.last_event_created_at = _event_created_at(event)
