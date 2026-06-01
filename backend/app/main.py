@@ -17,6 +17,7 @@ from app.db.engine import async_session_factory
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
 from app.routers import (
+    account,
     auth,
     billing,
     cover_letter,
@@ -188,6 +189,7 @@ app.include_router(jobs.router)
 app.include_router(dashboard.router)
 app.include_router(tracker.router)
 app.include_router(notifications.router)
+app.include_router(account.router)
 app.include_router(export.router)
 app.include_router(llm.router)
 
