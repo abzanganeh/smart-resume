@@ -26,13 +26,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.billing import (
-    AdminAuditLog,
-    Notification,
-    NotificationChannel,
-    Subscription,
-    SubscriptionStatus,
-)
+from app.models.billing import AdminAuditLog, Subscription, SubscriptionStatus
+from app.models.notifications import NotificationChannel
+from app.services.notifications.factory import build_notification
 
 log = structlog.get_logger("billing.grace_tick")
 
@@ -76,12 +72,14 @@ async def run_grace_tick(
         sub.updated_at = now_dt
         expired.append(sub.id)
         session.add(
-            Notification(
-                id=uuid.uuid4(),
+            build_notification(
                 user_id=sub.user_id,
                 type="subscription_expired",
                 channel=NotificationChannel.in_app,
-                payload={
+                category="subscription",
+                title="Your subscription has expired",
+                body="Your grace period ended without a successful payment.",
+                data={
                     "subscription_id": str(sub.id),
                     "reason": "grace_window_elapsed",
                     "payment_failed_at": (
@@ -89,6 +87,7 @@ async def run_grace_tick(
                         if sub.payment_failed_at
                         else None
                     ),
+                    "url": "/billing",
                 },
             )
         )
