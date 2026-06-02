@@ -4,18 +4,28 @@ import { useCallback, useState } from "react"
 import { AlertCircle, FileText, Mic, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { VoiceTab } from "@/components/shared/VoiceTab"
+import { StoryRecorder } from "@/components/profile/StoryRecorder"
 
 interface Props {
   onSubmit: (payload: { file?: File; text?: string }) => Promise<void>
   token: string
   loading: boolean
   compact?: boolean
+  defaultStory?: boolean
+  onStoryComplete?: () => void
 }
 
-type Mode = "upload" | "paste" | "voice"
+type Mode = "story" | "upload" | "paste" | "voice"
 
-export function ProfileUploadZone({ onSubmit, token, loading, compact = false }: Props) {
-  const [mode, setMode]       = useState<Mode>("upload")
+const TABS: { id: Mode; label: string }[] = [
+  { id: "story",  label: "🎙 Tell your story" },
+  { id: "upload", label: "Upload file" },
+  { id: "paste",  label: "Paste text" },
+  { id: "voice",  label: "Record voice" },
+]
+
+export function ProfileUploadZone({ onSubmit, token, loading, compact = false, defaultStory = false, onStoryComplete }: Props) {
+  const [mode, setMode]       = useState<Mode>(defaultStory ? "story" : "upload")
   const [dragging, setDragging] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [pasteText, setPasteText] = useState("")
@@ -57,24 +67,34 @@ export function ProfileUploadZone({ onSubmit, token, loading, compact = false }:
       )}
 
       {/* Mode tabs */}
-      <div className="flex gap-2">
-        {(["upload", "paste", "voice"] as Mode[]).map((m) => (
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((tab) => (
           <button
-            key={m}
+            key={tab.id}
             type="button"
-            onClick={() => { setMode(m); setError(null) }}
+            onClick={() => { setMode(tab.id); setError(null) }}
             className={cn(
               "px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5",
-              mode === m
+              mode === tab.id
                 ? "bg-amber-400 text-slate-900"
                 : "bg-slate-800 text-slate-300 hover:bg-slate-700",
             )}
           >
-            {m === "voice" && <Mic className="w-3.5 h-3.5" />}
-            {m === "upload" ? "Upload file" : m === "paste" ? "Paste text" : "Record voice"}
+            {tab.id === "voice" && <Mic className="w-3.5 h-3.5" />}
+            {tab.label}
           </button>
         ))}
       </div>
+
+      {/* Story */}
+      {mode === "story" && (
+        <StoryRecorder
+          token={token}
+          onSaved={() => {
+            onStoryComplete?.()
+          }}
+        />
+      )}
 
       {/* Upload */}
       {mode === "upload" && (
