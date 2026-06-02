@@ -12,11 +12,12 @@ interface Props {
   sessionId: string;
   token?: string; // backend JWT — needed for voice fallback + saved-resume tabs
   onParsed: (parsed: ParsedResume) => void;
+  hasMasterResume?: boolean;
 }
 
 type Mode = "upload" | "paste" | "voice" | "saved";
 
-export function ResumeUploader({ sessionId, token, onParsed }: Props) {
+export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: Props) {
   const [mode, setMode]       = useState<Mode>("upload");
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -129,6 +130,27 @@ export function ResumeUploader({ sessionId, token, onParsed }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Story mode promotional card */}
+      {!hasMasterResume && (
+        <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex items-start gap-3">
+          <span className="text-2xl">🎙</span>
+          <div className="flex-1 space-y-1">
+            <p className="text-white font-medium text-sm">Don&apos;t have a resume file yet?</p>
+            <p className="text-slate-400 text-xs">
+              Build your master profile by telling your story first — 10–20 minutes of speaking → a complete resume.
+            </p>
+          </div>
+          <a
+            href={`/profile?mode=story&return=/session/new`}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 px-3 py-1.5 bg-amber-400 text-slate-900 text-xs font-semibold rounded-lg hover:bg-amber-300 transition-colors"
+          >
+            Go to Story Mode →
+          </a>
+        </div>
+      )}
+
       {/* Mode tabs */}
       <div className="flex flex-wrap gap-2">
         {TABS.filter((t) => !t.needsToken || token).map((t) => (

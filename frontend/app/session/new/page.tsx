@@ -44,6 +44,7 @@ function NewSessionContent() {
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("gpt-4o");
   const [aiReady, setAiReady] = useState(false);
+  const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     async function initSession() {
@@ -94,6 +95,26 @@ function NewSessionContent() {
 
     const jdId = searchParams.get("jd_id");
     const token = session?.backendAccessToken;
+
+    // Check if user has a master resume (for story mode promo card)
+    if (token) {
+      void (async () => {
+        try {
+          const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+          const res = await fetch(`${BASE}/api/profile/resume`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const profile = await res.json() as { chunk_count?: number };
+            setHasMasterResume((profile.chunk_count ?? 0) > 0);
+          } else {
+            setHasMasterResume(false);
+          }
+        } catch {
+          setHasMasterResume(false);
+        }
+      })();
+    }
     if (jdId && token) {
       void (async () => {
         try {
@@ -229,9 +250,14 @@ function NewSessionContent() {
             <div>
               <h1 className="text-xl font-bold mb-1">Upload your resume</h1>
               <p className="text-slate-400 text-sm mb-6">
-                Supports PDF, DOCX, and plain text. Max 5 MB.
+                Upload a file, paste text, record by voice, or reuse your saved master resume.
               </p>
-              <ResumeUploader sessionId={sessionId} onParsed={handleResumeParsed} />
+              <ResumeUploader
+                sessionId={sessionId}
+                token={session?.backendAccessToken ?? undefined}
+                onParsed={handleResumeParsed}
+                hasMasterResume={hasMasterResume}
+              />
             </div>
           )}
 

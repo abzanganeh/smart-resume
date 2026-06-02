@@ -76,6 +76,7 @@ class QuotaAction(str, enum.Enum):
     section_regen = "section_regen"
     job_search = "job_search"
     fit_analysis = "fit_analysis"
+    story_build = "story_build"
 
 
 # Actions that may be paid by *free* tier credits (§18.3 table).  Job
@@ -86,6 +87,7 @@ FREE_CREDIT_ACTIONS: frozenset[QuotaAction] = frozenset(
         QuotaAction.ats_recalc,
         QuotaAction.cover_letter,
         QuotaAction.section_regen,
+        QuotaAction.story_build,
     }
 )
 # Actions that count against the resume counter (§18.3 "Resumes / period").
@@ -326,6 +328,72 @@ async def check_quota_for_section_regen(
     )
 
 
+async def check_quota_for_story(
+    session: AsyncSession,
+    *,
+    user: User,
+    whisper_path: bool,
+    byok_active: bool,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Quota for story-mode resume generation.
+
+    Credit cost:
+      - BYOK (any browser):           0 credits — user pays their own LLM costs
+      - Platform LLM + Web Speech:    0 credits — transcription is browser-native; LLM cost ~$0.001
+      - Platform LLM + Whisper:       2 credits — Whisper transcription costs ~$0.12 for 20 min
+
+    Subscribers always pay 0 credits for story builds (subscription covers usage).
+    """
+    if user.is_suspended:
+        raise AccountSuspendedError("account_suspended")
+
+    # BYOK users: always free
+    if byok_active:
+        return QuotaDecision(
+            action=QuotaAction.story_build,
+            charged_to="byok",
+        )
+
+    # Subscribers: free within subscription
+    sub = await _active_subscription_for(session, user_id=user.id)
+    now = datetime.now(timezone.utc)
+    if sub is not None and _within_period(sub, now=now) and sub.status != SubscriptionStatus.paused:
+        return QuotaDecision(
+            action=QuotaAction.story_build,
+            charged_to="subscription",
+            subscription_id=sub.id,
+        )
+
+    # Web Speech path: free for free users
+    if not whisper_path:
+        return QuotaDecision(
+            action=QuotaAction.story_build,
+            charged_to="free_web_speech",
+        )
+
+    # Whisper path: costs 2 credits — consume_credit deducts 1 at a time, so call twice
+    WHISPER_CREDIT_COST = 2
+    last_row = None
+    for _ in range(WHISPER_CREDIT_COST):
+        try:
+            last_row = await consume_credit(
+                session,
+                user_id=user.id,
+                credit_kind=CreditKind.free,
+                reason=QuotaAction.story_build.value,
+                session_id=session_id,
+            )
+        except InsufficientCreditsError:
+            raise
+
+    return QuotaDecision(
+        action=QuotaAction.story_build,
+        charged_to="free_credit",
+        credit_transaction_id=last_row.id if last_row else None,
+    )
+
+
 __all__ = [
     "FREE_CREDIT_ACTIONS",
     "PLAN_RESUMES_PER_PERIOD",
@@ -337,4 +405,5 @@ __all__ = [
     "check_and_increment_quota",
     "check_quota_for_cover_letter",
     "check_quota_for_section_regen",
+    "check_quota_for_story",
 ]
