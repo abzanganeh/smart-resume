@@ -176,7 +176,10 @@ async def trigger_phase(
         if uid is not None and not await has_any_live_chunk(db, user_id=uid):
             raise HTTPException(
                 status_code=409,
-                detail={"code": "master_resume_required"},
+                detail={
+                    "code": "master_resume_required",
+                    "message": "Upload your master resume on the Profile page before running the rewrite.",
+                },
             )
 
     if body.scope is not None and user_id:

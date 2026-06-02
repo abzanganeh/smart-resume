@@ -10,6 +10,7 @@ import {
   checkSession,
   getLLMUpgradeStatus,
   createLLMUpgradeCheckout,
+  ApiError,
   type PhaseRunScope,
   type KeywordExtractionOutput,
   type AuditOutput,
@@ -66,6 +67,7 @@ function SessionContent() {
   const [costInfo, setCostInfo] = useState<{ cost_formatted: string; provider: string; model: string } | null>(null);
   const [resumeVersion, setResumeVersion] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
   const [expiryWarning, setExpiryWarning] = useState(false);
   const [phaseRunning, setPhaseRunning] = useState(false);
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -88,6 +90,7 @@ function SessionContent() {
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
+  const tailoredBackupRef = useRef<TailoredResumeOutput | null>(null);
 
   const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
 
@@ -98,6 +101,13 @@ function SessionContent() {
   useEffect(() => {
     phase4RecalcRef.current = phase4RecalcActive;
   }, [phase4RecalcActive]);
+
+  // Keep a backup of the latest tailored state so we can restore it if Phase 3 fails.
+  useEffect(() => {
+    if (tailored !== null) {
+      tailoredBackupRef.current = tailored;
+    }
+  }, [tailored]);
 
   const recordAtsScore = useCallback((qaOut: QAOutput) => {
     if (typeof qaOut.ats_score === "number") {
@@ -172,11 +182,18 @@ function SessionContent() {
 
       const phase = PHASE_FOR_STEP[targetStep];
       setRunError(null);
+      setRunErrorCode(null);
       setPhaseRunning(true);
       if (options?.force) {
         if (targetStep === "keywords") setKeywords(null);
         if (targetStep === "audit") setAudit(null);
-        if (targetStep === "rewrite") setTailored(null);
+        if (targetStep === "rewrite") {
+          // Save the current tailored output so we can restore it if Phase 3 fails.
+          // setTailored is a state setter, so we read the backup from the ref that
+          // mirrors the latest tailored state.
+          tailoredBackupRef.current = tailoredBackupRef.current; // already up-to-date via useEffect
+          setTailored(null);
+        }
         if (targetStep === "export") setQa(null);
       }
       setProgressLog([]);
@@ -194,7 +211,13 @@ function SessionContent() {
         runInFlightRef.current = false;
         setPhase4RecalcActive(false);
         setAtsRecalcRunning(false);
+        const errorCode = e instanceof ApiError ? e.code : undefined;
+        setRunErrorCode(errorCode ?? null);
         setRunError(e instanceof Error ? e.message : "Failed to start phase.");
+        // Restore the tailored resume if Phase 3 failed — don't leave the user with a blank rewrite.
+        if (targetStep === "rewrite" && tailoredBackupRef.current) {
+          setTailored(tailoredBackupRef.current);
+        }
       }
     },
     [sessionId, connect, reset, llmTier]
@@ -286,7 +309,8 @@ function SessionContent() {
   }, [sessionId, hydrateFromSession]);
 
   const refreshLLMStatus = useCallback(async () => {
-    if (!authSession?.backendAccessToken) return;
+    // Don't call subscription endpoints when token is absent or expired.
+    if (!authSession?.backendAccessToken || authSession.error === "TokenExpired") return;
     try {
       const status = await getLLMUpgradeStatus(authSession.backendAccessToken);
       setLlmStatus(status);
@@ -320,7 +344,7 @@ function SessionContent() {
 
   const handleCheckout = useCallback(
     async (code: LLMUpgradeCheckoutCode) => {
-      if (!authSession?.backendAccessToken) return;
+      if (!authSession?.backendAccessToken || authSession.error === "TokenExpired") return;
       setCheckoutBusyCode(code);
       try {
         const origin =
@@ -364,6 +388,7 @@ function SessionContent() {
     setPhaseRunning(false);
     setProgressLog([]);
     setRunError(null);
+    setRunErrorCode(null);
     reset();
   }, [step, reset]);
 
@@ -436,15 +461,26 @@ function SessionContent() {
             <div className="flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               {runError}
-              <button
-                onClick={() => {
-                  setRunError(null);
-                  runCurrentPhase({ force: true });
-                }}
-                className="ml-auto underline hover:no-underline"
-              >
-                Retry
-              </button>
+              {runErrorCode === "master_resume_required" ? (
+                <Link
+                  href="/profile"
+                  className="ml-auto whitespace-nowrap underline hover:no-underline"
+                  onClick={() => setRunError(null)}
+                >
+                  Upload master resume →
+                </Link>
+              ) : (
+                <button
+                  onClick={() => {
+                    setRunError(null);
+                    setRunErrorCode(null);
+                    runCurrentPhase({ force: true });
+                  }}
+                  className="ml-auto underline hover:no-underline"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
