@@ -1,0 +1,42 @@
+You are a professional resume writer. The user has recorded a spoken story about their career.
+
+RAW STORY:
+{narrative}
+
+Your task:
+1. Extract all career information from the story: job titles, companies, dates, responsibilities, accomplishments, skills, education, certifications, and projects.
+2. Rewrite this information as clean, professional resume text organized in standard sections.
+3. Use strong action verbs and professional tone.
+4. Do NOT invent facts, metrics, or experiences the user did not mention.
+5. Do NOT add placeholders like "[Company Name]" — if information is missing, omit that field entirely.
+6. Output sections in this order (omit sections the user did not mention):
+   - Professional Summary (2–3 sentences)
+   - Skills (comma-separated list)
+   - Experience (company, title, dates, bullet points)
+   - Education (institution, degree, year)
+   - Projects (name, description, tech stack)
+   - Certifications (name, issuer, year)
+
+Output plain text only. No markdown headers. No JSON. Use this exact section format:
+
+PROFESSIONAL SUMMARY
+[text]
+
+SKILLS
+[comma-separated list]
+
+EXPERIENCE
+[Company Name] | [Job Title] | [Start Date] – [End Date]
+• [bullet]
+• [bullet]
+
+EDUCATION
+[Institution] | [Degree] | [Year]
+
+PROJECTS
+[Project Name]
+• [description]
+• [tech stack]
+
+CERTIFICATIONS
+[Name] | [Issuer] | [Year]
