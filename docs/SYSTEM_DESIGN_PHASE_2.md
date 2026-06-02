@@ -220,26 +220,35 @@ Priority: BYOK header key → session provider/model → `.env` defaults. Placeh
 
 ### Key components
 
-| Component | Path |
-|---|---|
-| `ApiKeySettings` | `components/wizard/ApiKeySettings.tsx` |
-| `LLMProviderPicker` | `components/wizard/LLMProviderPicker.tsx` |
-| `ResumeUploader` | `components/wizard/ResumeUploader.tsx` |
-| `JDInput` | `components/wizard/JDInput.tsx` |
-| `UserInfoForm` | `components/wizard/UserInfoForm.tsx` |
-| `KeywordDashboard` | `components/session/KeywordDashboard.tsx` |
-| `AuditPanel` | `components/session/AuditPanel.tsx` |
-| `ResumeDiff` | `components/session/ResumeDiff.tsx` |
-| `InlineEditor` | `components/session/InlineEditor.tsx` |
-| `VersionHistory` | `components/session/VersionHistory.tsx` |
-| `QAChecklist` | `components/session/QAChecklist.tsx` |
-| `ExportButtons` | `components/session/ExportButtons.tsx` |
+| Component | Path | Notes |
+|---|---|---|
+| `ApiKeySettings` | `components/wizard/ApiKeySettings.tsx` | |
+| `LLMProviderPicker` | `components/wizard/LLMProviderPicker.tsx` | |
+| `ResumeUploader` | `components/wizard/ResumeUploader.tsx` | Upload / Paste / Voice / Use-saved tabs |
+| `JDInput` | `components/wizard/JDInput.tsx` | |
+| `UserInfoForm` | `components/wizard/UserInfoForm.tsx` | |
+| `KeywordDashboard` | `components/session/KeywordDashboard.tsx` | |
+| `AuditPanel` | `components/session/AuditPanel.tsx` | Claimed keywords; no "Recalculate" button |
+| `ATSGuidancePanel` | `components/session/ATSGuidancePanel.tsx` | ATS score, score history, quick wins, blocking issues |
+| `ScoreHistory` | `components/session/ScoreHistory.tsx` | Last-3-runs history with baseline/current/delta |
+| `ResumeChat` | `components/session/ResumeChat.tsx` | Chat panel for targeted resume edits via LLM |
+| `ProgressLog` | `components/session/ProgressLog.tsx` | SSE progress log; `scrollIntoView { block: "nearest" }` |
+| `ResumeDiff` | `components/session/ResumeDiff.tsx` | |
+| `InlineEditor` | `components/session/InlineEditor.tsx` | |
+| `VersionHistory` | `components/session/VersionHistory.tsx` | |
+| `QAChecklist` | `components/session/QAChecklist.tsx` | |
+| `ExportButtons` | `components/session/ExportButtons.tsx` | |
+| `ProfileUploadZone` | `components/profile/ProfileUploadZone.tsx` | Upload / Paste / Voice tabs; delegates to `VoiceTab` |
+| `VoiceTab` | `components/shared/VoiceTab.tsx` | Shared voice UI; Web Speech API primary; Whisper fallback |
 
-### Client libraries
+### Client libraries & hooks
 
-- `lib/api.ts` — typed fetch wrappers; attaches BYOK headers
+- `lib/api.ts` — typed fetch wrappers; attaches BYOK + `Authorization: Bearer` headers; `ApiError` class with `errorCode`
 - `lib/keyStore.ts` — `sessionStorage` read/write for provider/model/key
 - `lib/sse.ts` — `useSSE()` hook for phase event streams
+- `lib/profile.ts` — master resume API helpers; `transcribeProfileAudio()`
+- `hooks/useVoiceRecorder.ts` — voice recording state machine; Web Speech API (live transcript) or MediaRecorder (fallback)
+- `types/speech.d.ts` — Web Speech API TypeScript type declarations
 
 ### UI notes
 
@@ -261,22 +270,30 @@ Priority: BYOK header key → session provider/model → `.env` defaults. Placeh
 | `GET` | `/api/llm/providers` | All providers, models, `has_env_key` |
 | `POST` | `/api/llm/verify` | Test provider/model/key (always 200 + `{ valid, message }`) |
 | `POST` | `/api/sessions` | Create session → `{ session_id }` |
-| `GET` | `/api/sessions/{id}` | Hydrate session + phase statuses/outputs |
+| `GET` | `/api/sessions/{id}` | Hydrate session + phase statuses/outputs + `user_claimed_keywords` + `bullet_fixes` |
 | `PATCH` | `/api/sessions/{id}/tailored` | Overwrite full `phase3_output` |
 | `POST` | `/api/sessions/{id}/resume` | Multipart upload → parse |
 | `POST` | `/api/sessions/{id}/resume/text` | Paste resume text → parse |
 | `POST` | `/api/sessions/{id}/userinfo` | Save `UserInfo` |
-| `PATCH` | `/api/sessions/{id}/additions` | Save `user_claimed_keywords`, `user_extra_notes` |
-| `POST` | `/api/sessions/{id}/jd` | Save JD (+ optional URL fetch via httpx) |
+| `PATCH` | `/api/sessions/{id}/additions` | Save `user_claimed_keywords`, `user_extra_notes`, `bullet_fixes` |
+| `POST` | `/api/sessions/{id}/jd` | Save JD (+ URL fetch with HTML stripping); clears all phase outputs |
 | `POST` | `/api/sessions/{id}/phases/{n}/run` | Queue phase run (202) |
 | `GET` | `/api/sessions/{id}/phases/{n}/events` | SSE stream |
+| `POST` | `/api/sessions/{id}/chat` | Chat with LLM to edit tailored resume; returns `ChatResponse` with patches |
 | `PATCH` | `/api/sessions/{id}/resume/tailored` | Inline edit + version snapshot |
 | `GET` | `/api/sessions/{id}/resume/versions` | List version metadata |
 | `GET` | `/api/sessions/{id}/export?format=pdf\|docx\|txt` | Download tailored resume |
+| `POST` | `/api/profile/resume` | Upload / paste master resume; chunking + embedding (resilient to embed failure) |
+| `GET` | `/api/profile/resume` | Raw text + parsed sections + `last_embedded_at` + `embedding_warning` |
+| `POST` | `/api/profile/resume/transcribe` | Multipart audio → OpenAI Whisper → `{ text }` (Whisper fallback only) |
 
 **Resume parsing:** Raw text extracted with pdfplumber / python-docx, then structured via a dedicated LLM call to `ParsedResume`.
 
-**JD URL fetch:** Basic HTTP GET; response body truncated to `MAX_JD_CHARS`. No HTML-to-text extraction.
+**JD URL fetch:** HTTP GET → HTML stripped to plain text via `html_parser.py`; minimum 200-char content check before Phase 1; truncated to `MAX_JD_CHARS`. Phase outputs cleared on JD change.
+
+**Chat endpoint** (`/api/sessions/{id}/chat`): accepts `messages[]` + `tailored_resume`; calls LLM with BYOK credentials; returns `ChatResponse` containing free-text explanation and `patches[]` (field-level edits to `TailoredResumeOutput`). Client applies patches and saves via `PATCH /api/sessions/{id}/tailored`.
+
+**Transcription endpoint** (`/api/profile/resume/transcribe`): used only when the browser does not support the Web Speech API (Firefox, Safari). Chrome/Edge use the browser-native `SpeechRecognition` API and never call this endpoint.
 
 ---
 
@@ -405,25 +422,35 @@ smart-resume/
 ├── frontend/
 │   ├── app/
 │   │   ├── page.tsx
+│   │   ├── dashboard/page.tsx
+│   │   ├── profile/page.tsx
+│   │   ├── auth/page.tsx
 │   │   └── session/
 │   │       ├── new/page.tsx
 │   │       └── [id]/page.tsx
 │   ├── components/
-│   │   ├── wizard/               ← ApiKeySettings, ResumeUploader, JDInput, UserInfoForm, …
-│   │   └── session/              ← KeywordDashboard, AuditPanel, ResumeDiff, …
-│   └── lib/                      ← api.ts, keyStore.ts, sse.ts
+│   │   ├── wizard/               ← ApiKeySettings, ResumeUploader (Upload/Paste/Voice/Saved), JDInput, UserInfoForm
+│   │   ├── session/              ← KeywordDashboard, AuditPanel, ATSGuidancePanel, ScoreHistory, ResumeChat, ProgressLog, ResumeDiff, …
+│   │   ├── profile/              ← ProfileUploadZone (Upload/Paste/Voice tabs)
+│   │   ├── shared/               ← VoiceTab (Web Speech API + Whisper fallback)
+│   │   └── nav/                  ← UsageWidget, NotificationBell, SiteFooter
+│   ├── hooks/
+│   │   └── useVoiceRecorder.ts   ← voice state machine; Web Speech API primary
+│   ├── types/
+│   │   └── speech.d.ts           ← Web Speech API TypeScript declarations
+│   └── lib/                      ← api.ts (ApiError class), keyStore.ts, sse.ts, profile.ts
 │
 └── backend/
     ├── app/                      ← import as `app.*`
     │   ├── main.py
     │   ├── config.py
     │   ├── quality_rules.py
-    │   ├── agent/                ← orchestrator, phase1–4, prompts/
-    │   ├── llm/                  ← factory, structured, providers/
-    │   ├── models/
-    │   ├── parsers/
-    │   ├── routers/              ← sessions, resume, phases, export, llm
-    │   ├── services/             ← session_store, export_service
+    │   ├── agent/                ← orchestrator, phase1–4, chat.py, prompts/
+    │   ├── llm/                  ← factory, structured (_inline_refs), providers/ (gemini_adapter with schema sanitizer)
+    │   ├── models/               ← session, resume, qa, chat, master_resume, …
+    │   ├── parsers/              ← pdfplumber, docx, html_parser (HTML→plain text)
+    │   ├── routers/              ← sessions (+chat), resume (+transcribe), phases, export, llm, profile
+    │   ├── services/             ← session_store, export_service, master_resume/crud.py, retrieval/, billing/
     │   └── templates/resume.html
     ├── pyproject.toml
     ├── uv.lock
@@ -2417,3 +2444,383 @@ POST /api/subscriptions/unpause     — end pause early
 *Release Phase 3 (Job Search) target: 2026 Q4*
 *Release Phase 4 (Dashboard / Tracker / Admin) target: 2027 Q1*
 *Last updated: 2026-05-30*
+
+---
+
+## 20. Implemented (Jun 2026) — Phase 2 Features, LLM Hardening & Voice Refactor
+
+> This section documents features and fixes that were **actually shipped** (merged to `fix/phase1-inconsistencies`) between late May and early Jun 2026 across two work sessions. All items here are live in the repository; §18–19 remain the roadmap for what is still planned.
+
+---
+
+### 20.1 Authentication & Token Handling
+
+- **NextAuth.js JWT propagation:** All session and phase API calls now send `Authorization: Bearer {backendAccessToken}` when a user is logged in. Anonymous (unauthenticated) calls continue to work without the header.
+- **Token expiry guards:** `UsageWidget`, `NotificationBell`, and `session/[id]/page.tsx` detect `session.error === "TokenExpired"` and call `NextAuth.update()` before any API call. Components silently skip API calls on stale tokens to prevent 401 flood.
+- **`ApiError` class (`lib/api.ts`):** Custom error class that carries both the HTTP status and a backend `errorCode` string (e.g. `master_resume_required`). Frontend components branch on `errorCode` to show specific actionable messages.
+
+---
+
+### 20.2 LLM Structured Output Hardening
+
+- **`_inline_refs` (`llm/structured.py`):** Flattens `$defs` / `$ref` pointers from Pydantic-generated JSON Schemas before sending them to providers (OpenRouter / Llama, Gemini). Prevents `"Unknown field: $defs"` errors from strict providers.
+- **Gemini schema sanitizer (`llm/providers/gemini_adapter.py`):** Strips JSON Schema fields Gemini rejects (`title`, `default`, `additionalProperties`) and converts `anyOf` null-unions to `nullable: true`. Prevents `"Unknown field: title"` errors from Gemini SDK.
+- **BYOK bypass in Phase 3 (`agent/orchestrator.py`):** `_resolve_phase3_llm()` checks whether BYOK credentials exist on the session before routing to the platform tier system. If BYOK is active and the requested tier is `"standard"`, the BYOK `fallback_llm` is used directly. Prevents `"API key not valid"` errors when user-provided OpenAI keys were being overridden by the platform's Gemini key.
+- **Phase 4 QA retries (`agent/phase4_qa.py`):** `accept_result` validator retries the LLM call up to 3 times if `ats_score` and `score_ceiling` are both 0. Prevents silent 0/100 ATS displays.
+- **`QAOutput` model validator (`models/qa.py`):** `@model_validator(mode="before")` sanitizes LLM output for `quick_wins` (drops entries missing `impact="high"` or `fix_effort="one_click"`) and `blocking_issues` (sorts by severity). Prevents Pydantic validation failures from causing empty ATS guidance.
+
+---
+
+### 20.3 Phase 4 Keyword Suggestion Accuracy
+
+- **Existing-skills injection (`agent/phase4_qa.py`):** The Phase 4 prompt explicitly receives the current skills list so the LLM does not suggest adding keywords already present.
+- **Full-resume text post-processing (`agent/phase4_qa.py → _collect_resume_text()`):** After the LLM returns suggestions, a Python post-processing pass collects all text in the tailored resume (summary, skills, bullets, projects, education) into a corpus. Any suggested keyword that appears in the corpus is dropped from `quick_wins` or rephrased to "Reinforce X in Experience/Summary." Prevents LLM hallucination of "missing" skills that are demonstrably present.
+- **Phase 4 prompt (`agent/prompts/phase4.txt`):** Tightened rules: if a keyword appears in the Skills section, do NOT suggest adding it; only create a blocking_issue for sections where it is genuinely absent.
+
+---
+
+### 20.4 JD Ingestion Fixes
+
+- **HTML stripping (`parsers/html_parser.py`):** Strips HTML tags and extracts plain text from JD content. Applied to both `POST /api/sessions/{id}/jd` (URL fetch) and the fit analysis route. Prevents JS-rendered pages (e.g. Jobright.ai) from storing raw HTML as the JD.
+- **Minimum JD length guard (`agent/phase1_keywords.py`):** If `jd_text` is less than 200 characters after stripping, Phase 1 raises a `RuntimeError` ("JD too short") rather than hallucinating keywords from the resume.
+- **Phase output invalidation on JD change (`routers/resume.py`):** When a new JD is submitted, `phase1_output`, `phase2_output`, `phase3_output`, and `phase4_output` are cleared and statuses reset. Prevents stale phase outputs from a prior JD being displayed against a new one.
+
+---
+
+### 20.5 Master Resume & Profile Page
+
+- **Embedding failure resilience (`services/master_resume/crud.py → _insert_chunks()`):** If the embedding API call fails (e.g. OpenAI key invalid), the function catches `EmbeddingConfigurationError` / `EmbeddingProviderError`, stores zero-vectors, and sets `resume.last_embedded_at = None`. Upload succeeds; semantic retrieval is degraded but not broken.
+- **`embedding_warning` field (`routers/profile.py`):** `POST /api/profile/resume` returns `{"embedding_warning": "..."}` when embedding failed. Frontend displays a dismissable warning banner.
+- **Retrieval service graceful fallback (`services/retrieval/retrieval_service.py → retrieve_for_jd()`):** Returns an empty `RetrievalResult` instead of raising `MasterResumeRequiredError` when no master resume chunks exist. Also returns empty result when JD embedding fails. Phase 3 proceeds without retrieval context rather than failing.
+- **Phase 3 master resume optional (`routers/phases.py`, `agent/orchestrator.py`):** Removed the explicit check that blocked Phase 3 when no master resume was uploaded. Users can run Phase 3 without a master resume.
+
+---
+
+### 20.6 Chat Panel
+
+**New files:** `backend/app/agent/chat.py`, `backend/app/agent/prompts/chat.txt`, `backend/app/models/chat.py`, `frontend/components/session/ResumeChat.tsx`
+
+- `POST /api/sessions/{id}/chat` — accepts `{ messages: ChatMessage[], tailored_resume: TailoredResumeOutput }` with BYOK credentials; calls the chat LLM; returns `ChatResponse { explanation: str, patches: ResumePatch[] }`.
+- `ResumePatch` — `{ section, index, field, value }` — field-level edit instruction. Client applies patches to the local `TailoredResumeOutput` copy, then saves via `PATCH /api/sessions/{id}/tailored`.
+- `ResumeChat.tsx` — chat panel shown alongside the tailored resume on the Rewrite tab. Users type requests ("add a metric to bullet 2 of SecureAuth"); diffs shown inline with Accept/Reject per patch; `scrollIntoView { block: "nearest" }` prevents page jumps.
+
+---
+
+### 20.7 ATS Guidance & Score History
+
+- **`ATSGuidancePanel.tsx`:** Displays ATS score, score ceiling, per-run history (last 3 runs), quick wins list with Accept / Skip per item, and blocking issues sorted by severity.
+- **`ScoreHistory` component:** Replaces the former `TrendSparkline`. Shows baseline score, current score, and delta (e.g. "↑ +12 pts"). Ceiling shown as "Up to N/100 achievable."
+- **Quick wins UX:** Each quick win has Accept / Skip toggles. "Apply selected" applies all accepted wins to the resume. Accepted wins are not re-suggested on the next ATS recalculation.
+
+---
+
+### 20.8 UI Polish & Bug Fixes
+
+- **No page jumps on Run buttons:** `ProgressLog.tsx` and `ResumeChat.tsx` use `scrollIntoView({ block: "nearest" })`. `router.replace()` in `session/[id]/page.tsx` uses `{ scroll: false }`.
+- **Audit panel cleanup:** Removed "Recalculate Audit Score" button from `AuditPanel.tsx`. Replaced with "Saved. Head to the Tailored Rewrite tab to run the rewrite with these additions." ATS recalculation lives only on the Rewrite tab.
+- **BYOK badge vs. LLM tier selector:** When BYOK credentials are active in the session, the Rewrite tab shows a "Your keys" badge instead of the platform tier selector (Standard / Better / Best). Prevents user confusion about which key is being used.
+- **Master resume error flow:** `ApiError` with `errorCode = "master_resume_required"` shows a targeted banner with an "Upload master resume" link instead of a generic Retry button. Tailored resume state is preserved in a `useRef` so it is not lost on error.
+
+---
+
+### 20.9 Voice Upload — Web Speech API Refactor
+
+**Problem:** The initial voice tab called `POST /api/profile/resume/transcribe` (OpenAI Whisper) for all browsers. Users with Gemini, Anthropic, or OpenRouter BYOK keys received `401 — OpenAI authentication failed` because no OpenAI key was available.
+
+**Solution:** Two-path voice recording via `hooks/useVoiceRecorder.ts` and `components/shared/VoiceTab.tsx`:
+
+| Browser | Primary path | API key required | Live text |
+|---|---|---|---|
+| Chrome / Edge | Web Speech API (`SpeechRecognition`) | **None** | Yes — real-time |
+| Firefox / Safari | MediaRecorder → `POST /api/profile/resume/transcribe` (Whisper) | OpenAI key | No |
+
+**`useVoiceRecorder` hook states:** `idle → speaking` (Web Speech) or `idle → recording` (MediaRecorder) `→ transcribing → preview → idle`.
+
+**Live text display (Web Speech path):** Final words shown in white; current interim phrase shown italic/gray. Words appear as the user speaks — no submit required until ready.
+
+**`VoiceTab` component (`components/shared/VoiceTab.tsx`):** Reusable across `ProfileUploadZone` and `ResumeUploader`. Receives `onTranscript(text)` callback; parent decides what to do with the text (save master resume vs. parse for session).
+
+**Whisper fallback disclosure:** When Web Speech API is not available, the UI shows: *"Your browser doesn't support live transcription. We'll use AI transcription (2 credits) — or switch to Chrome to record for free."* (credit charging for the Whisper path is not yet wired; the disclosure text is shown but 0 credits are consumed in the current build — see §21.3.)
+
+**`types/speech.d.ts`:** Global TypeScript declarations for `SpeechRecognition`, `SpeechRecognitionEvent`, and `SpeechRecognitionErrorEvent` (not in standard `lib: ["dom"]`).
+
+---
+
+## 21. Roadmap — Release Phase 5: Story Mode ("Tell your story. Get a professional resume.")
+
+> **Status: Planned.** Nothing in this section has been implemented yet. This is the next feature milestone.
+
+### 21.1 Overview & Value Proposition
+
+**Tagline:** *"Tell your story. Get a professional resume."*
+
+Story Mode is the primary onboarding path for users who do not have a formatted resume. Instead of uploading or pasting a document, the user speaks naturally about their career — jobs, accomplishments, projects, skills — over 10–20 minutes. The platform converts the raw spoken narrative into a structured master resume via a two-step LLM pipeline.
+
+This is the product's **flagship differentiator**: no other tool lets you start from conversation. It should be visible everywhere a first-time user lands.
+
+---
+
+### 21.2 User Flow
+
+```
+User lands on /profile (or clicks "Tell your story" from wizard/dashboard)
+  │
+  ▼
+Story Mode tab (default tab for users with no master resume)
+  │
+  ▼
+Segment recording loop (up to 30 × 60-second segments)
+  │  Per segment:
+  │  ├─ Chrome/Edge: SpeechRecognition → live text appears
+  │  └─ Firefox/Safari: MediaRecorder → Whisper → text appears
+  │  User can edit, delete, or re-record any segment before moving on
+  │
+  ▼
+"Generate resume from story" button (enabled when ≥ 1 segment exists)
+  │
+  ▼
+Backend: POST /api/profile/resume/from-story
+  Step 1 — story_to_resume LLM call (narrative → resume draft text)
+  Step 2 — existing parse_resume pipeline (draft text → ParsedResume JSON)
+  Step 3 — chunking + embedding (existing master resume infrastructure)
+  │
+  ▼
+/profile page shows parsed master resume sections
+User can edit chunks, re-embed, and proceed to start sessions
+```
+
+---
+
+### 21.3 Recording Constraints & UX
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Max segments | 30 | 20-min cap at 60 s/segment; covers 10+ jobs |
+| Segment duration | 60 seconds | Comfortable cognitive unit; natural pause point |
+| Hard cap | 30 minutes | 30 × 60 s; beyond this, content repeats |
+| Recommended target | 15 minutes | Shown to user as "Estimated time for most people" |
+| Audio retention | None | Audio is discarded after transcription; only text is stored |
+| Segment edit | Per-segment textarea | Editable before moving to the next segment |
+| Re-record | Per-segment | Re-records that segment only; does not affect others |
+
+**UX elements during recording:**
+- Segment counter: "Segment 4 / 30"
+- Total time bar: "5:23 / 30:00"
+- Soft warning at 18:00: "2 minutes left — wrap up your story"
+- Hard stop at 30:00 with "Generate resume from story" prompt
+
+**UX elements per segment block (after recording):**
+- Segment transcript (editable `<textarea>`)
+- [Re-record] [Delete] buttons
+- Segment is collapsed with a preview line when the next segment starts
+
+**Credit disclosure (shown before recording starts):**
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Chrome / Edge (detected)                            │
+│  Live transcription — free, no API key needed.       │
+│  Generating your resume from story: 0 credits.       │
+│                                          [Start]     │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│  Firefox / Safari (detected)                         │
+│  AI transcription via Whisper: 2 credits per story.  │
+│  Or switch to Chrome to record for free.             │
+│                                          [Start — 2 credits] │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+### 21.4 Backend: New Endpoint `POST /api/profile/resume/from-story`
+
+```python
+# Request body
+class StoryToResumeRequest(BaseModel):
+    segments: list[str]          # transcript text per segment, ordered
+    raw_narrative: bool = True   # always True from this endpoint
+    language: str = "en"         # for future multilingual support
+
+# Response (same as POST /api/profile/resume)
+# { id, raw_text, chunk_count, last_embedded_at, chunks[], embedding_warning? }
+```
+
+**Two-step LLM pipeline:**
+
+```
+Step 1 — story_to_resume(narrative_text: str) → draft_resume_text: str
+  Prompt: "The user dictated a career story. Extract companies, dates, roles,
+           accomplishments, skills, and education. Output clean resume text in
+           standard sections (Summary, Skills, Experience, Education, Projects).
+           Do NOT invent facts. Do NOT add metrics the user did not mention."
+  Model: Gemini Flash-Lite (platform default) or session BYOK key
+  Input: all segments joined with "\n\n---\n\n" separator
+  Output: structured plain-text resume (not JSON)
+  Max input tokens: ~4,000 (≈30 min of speech at 130 wpm)
+  Max output tokens: 1,500
+
+Step 2 — existing parse_resume(text: str) → ParsedResume JSON
+  Reuses backend/app/agent/phase_parse.py (or whichever parse routine
+  handles POST /api/profile/resume/text). No changes needed.
+
+Step 3 — chunking + embedding
+  Reuses services/master_resume/crud.py (existing, resilient to embed failure)
+```
+
+**Error handling:**
+- If Step 1 LLM fails → HTTP 502 with `{ code: "story_conversion_failed", message: "..." }`
+- If Step 2 parse fails → HTTP 502 with `{ code: "parse_failed" }`
+- If embedding fails → succeeds with `embedding_warning` (same as existing profile upload)
+
+**Prompt file:** `backend/app/agent/prompts/story_to_resume.txt`
+
+---
+
+### 21.5 Credit Logic
+
+| Path | Browser | Credits consumed | Notes |
+|---|---|---|---|
+| BYOK (any provider) | Any | **0** | User's own key; no platform cost |
+| Platform LLM + Web Speech | Chrome / Edge | **0** | Free — transcription is browser-native; LLM cost < $0.001 written off as acquisition |
+| Platform LLM + Whisper fallback | Firefox / Safari | **2** | Whisper ≈ $0.12 for 20 min; 2 credits ≈ $0.20 equivalent |
+
+**New quota action:** `story_build` added to `QuotaAction` enum and `FREE_CREDIT_ACTIONS`. Consumed before calling the backend story pipeline. Disclosure shown in UI before recording starts (see §21.3).
+
+**Revisit:** Reduce Firefox/Safari cost from 2 credits to 1 credit once embedding costs and usage patterns are clear.
+
+---
+
+### 21.6 Promotional Surfaces
+
+#### Landing page hero
+
+Primary CTA for unauthenticated users:
+
+> *Start with your story.*
+> Talk about your jobs, skills, and experience — out loud, naturally. Smart Resume turns it into a polished, ATS-ready resume.
+> **[Start for free →]**
+
+#### Dashboard empty state
+
+Shown when user is logged in and has **no master resume**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Ready to build your master resume?                          │
+│  Skip the formatting. Just tell your story.                  │
+│  Talk for 10–20 minutes about your career —                 │
+│  we'll turn it into your professional profile.              │
+│                                                              │
+│  [Start your story →]           [Upload file instead]        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Session wizard — `/session/new?step=resume`
+
+Promotional card shown **above** the Upload/Paste/Voice tabs, visible only when the user has no saved master resume:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🎙  Don't have a resume file yet?                           │
+│  Build your master profile by telling your story first.     │
+│  10–20 minutes of talking → a complete resume profile.      │
+│  [Go to Story Mode →]  (opens /profile?mode=story in new tab)│
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Deep-link:** `/profile?mode=story&return=/session/new` — profile page reads `mode` param on mount and activates Story tab; reads `return` param and redirects there after successful save.
+
+#### Profile page tab order (no master resume)
+
+Default tab order for first-time users: **"Tell your story" | Upload file | Paste text**
+
+Upload file is the fallback for power users; Story is the default onboarding path.
+
+---
+
+### 21.7 New Frontend Files
+
+| File | Purpose |
+|---|---|
+| `components/profile/StoryRecorder.tsx` | Segmented recording UI: segment list, per-segment transcript, record/re-record/delete controls, progress bar, credit disclosure |
+| `components/profile/StorySegment.tsx` | Single segment block: transcript textarea, re-record / delete buttons, collapsed preview |
+| `lib/story.ts` | `submitStory(segments, token, byokKey?)` — calls `POST /api/profile/resume/from-story` |
+
+**Modifications:**
+- `components/profile/ProfileUploadZone.tsx` — add "Tell your story" as default first tab; import `StoryRecorder`
+- `app/profile/page.tsx` — read `?mode=story` URL param; auto-activate story tab on mount; read `?return=` and redirect after save
+- `app/dashboard/page.tsx` — show story CTA block when `has_master_resume = false`
+- `app/session/new/page.tsx` — show promotional card above resume-step tabs when no master resume
+
+---
+
+### 21.8 New Backend Files
+
+| File | Purpose |
+|---|---|
+| `backend/app/agent/story.py` | `story_to_resume(narrative: str, llm_client) → str` — Step 1 LLM call |
+| `backend/app/agent/prompts/story_to_resume.txt` | Prompt for story → resume draft conversion |
+| `backend/app/models/story.py` | `StoryToResumeRequest`, `StorySegment` Pydantic models |
+
+**Modified:**
+- `backend/app/routers/profile.py` — add `POST /api/profile/resume/from-story`
+- `backend/app/services/billing/quota.py` — add `story_build` to `QuotaAction`; wire credit check
+
+---
+
+### 21.9 Tests
+
+#### Backend
+
+| Test | File | What it checks |
+|---|---|---|
+| `test_story_to_resume_llm` | `tests/unit/test_story.py` | `story_to_resume()` called with joined segments; LLM mock returns draft text |
+| `test_story_endpoint_happy_path` | `tests/integration/test_profile.py` | `POST /api/profile/resume/from-story` → 200 + `chunk_count > 0` |
+| `test_story_endpoint_too_short` | `tests/integration/test_profile.py` | Segment list with < 50 words total → HTTP 422 |
+| `test_story_endpoint_too_many_segments` | `tests/integration/test_profile.py` | 31 segments → HTTP 422 |
+| `test_story_endpoint_llm_failure` | `tests/integration/test_profile.py` | LLM mock raises → HTTP 502 with `story_conversion_failed` |
+| `test_story_credits_web_speech_path` | `tests/unit/test_quota.py` | `story_build` consumes 0 credits on free platform path |
+| `test_story_credits_whisper_path` | `tests/unit/test_quota.py` | `story_build` consumes 2 credits when Whisper flag is set |
+| `test_story_credits_byok` | `tests/unit/test_quota.py` | `story_build` consumes 0 credits when BYOK key present |
+| `test_story_prompt_file_exists` | `tests/unit/test_story.py` | `story_to_resume.txt` exists and contains required placeholder `{narrative}` |
+
+#### Frontend
+
+| Test | File | What it checks |
+|---|---|---|
+| `StoryRecorder renders idle state` | `tests/components/StoryRecorder.test.tsx` | Shows credit disclosure + "Start" button |
+| `StoryRecorder segment counter` | `tests/components/StoryRecorder.test.tsx` | After 2 segments recorded, shows "Segment 2 / 30" |
+| `StoryRecorder blocks at 30 segments` | `tests/components/StoryRecorder.test.tsx` | "Record" button disabled at segment 30 |
+| `StoryRecorder time warning at 18 min` | `tests/components/StoryRecorder.test.tsx` | Soft warning text appears at 18:00 |
+| `StorySegment re-record clears transcript` | `tests/components/StorySegment.test.tsx` | Re-record resets segment text to "" |
+| `submitStory posts to correct endpoint` | `tests/lib/story.test.ts` | `fetch` called with `POST /api/profile/resume/from-story` and correct body |
+| `Profile page activates story tab on ?mode=story` | `tests/pages/profile.test.tsx` | Story tab is active when `?mode=story` in URL |
+| `Dashboard shows story CTA when no master resume` | `tests/pages/dashboard.test.tsx` | CTA block visible when `has_master_resume = false` |
+| `Wizard shows story promo card when no master resume` | `tests/pages/session-new.test.tsx` | Promo card visible; hidden when master resume exists |
+
+---
+
+### 21.10 Build Order
+
+| Step | Area | Deliverable |
+|---|---|---|
+| 1 | Backend | `story_to_resume.txt` prompt; `agent/story.py` with unit tests |
+| 2 | Backend | `models/story.py` Pydantic models |
+| 3 | Backend | `quota.py` — add `story_build` action + credit routing + tests |
+| 4 | Backend | `routers/profile.py` — `POST /api/profile/resume/from-story` + integration tests |
+| 5 | Frontend | `lib/story.ts` — `submitStory()` helper |
+| 6 | Frontend | `StorySegment.tsx` — single editable segment block |
+| 7 | Frontend | `StoryRecorder.tsx` — full segmented recording UI with disclosure, counter, time bar |
+| 8 | Frontend | `ProfileUploadZone.tsx` — add Story as default first tab |
+| 9 | Frontend | `app/profile/page.tsx` — `?mode=story` param + `?return=` redirect |
+| 10 | Frontend | `app/dashboard/page.tsx` — story CTA empty state |
+| 11 | Frontend | `app/session/new/page.tsx` — promotional card |
+| 12 | Both | End-to-end test: record 3 segments → generate resume → verify `chunk_count > 0` |
+| 13 | Both | Credit flow test: Whisper path → 2 credits deducted; BYOK → 0 |
+
+---
+
+*§20 added: 2026-06-02*
+*§21 added: 2026-06-02*
