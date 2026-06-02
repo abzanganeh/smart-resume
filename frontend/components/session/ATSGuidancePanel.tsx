@@ -81,12 +81,19 @@ function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
   );
 }
 
-function TrendSparkline({ scores }: { scores: number[] }) {
+function ScoreHistory({ scores }: { scores: number[] }) {
   if (scores.length < 2) return null;
 
-  const w = 120;
-  const h = 32;
-  const pad = 4;
+  const baseline = scores[0];
+  const latest = scores[scores.length - 1];
+  const delta = latest - baseline;
+  const trendUp = delta > 0;
+  const unchanged = delta === 0;
+
+  // Mini sparkline
+  const w = 80;
+  const h = 24;
+  const pad = 3;
   const min = Math.min(...scores, 0);
   const max = Math.max(...scores, 100);
   const range = max - min || 1;
@@ -99,36 +106,64 @@ function TrendSparkline({ scores }: { scores: number[] }) {
     })
     .join(" ");
 
-  const latest = scores[scores.length - 1];
-  const prev = scores[scores.length - 2];
-  const trendUp = latest >= prev;
+  const lineColor = trendUp ? "#4ade80" : unchanged ? "#64748b" : "#f87171";
 
   return (
-    <div className="flex items-center gap-2">
-      <svg width={w} height={h} className="overflow-visible">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={trendUp ? "#4ade80" : "#f87171"}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {scores.map((s, i) => {
-          const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
-          const y = h - pad - ((s - min) / range) * (h - pad * 2);
-          return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r={3}
-              fill={i === scores.length - 1 ? (trendUp ? "#4ade80" : "#f87171") : "#64748b"}
-            />
-          );
-        })}
-      </svg>
-      <span className="text-[10px] text-slate-500">Last {scores.length} runs</span>
+    <div className="space-y-1.5">
+      {/* Baseline → current comparison */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-slate-500">Baseline</span>
+          <span className="font-bold tabular-nums text-slate-400">{baseline}</span>
+          <span className="text-slate-600">→</span>
+          <span className="font-bold tabular-nums text-slate-200">Now {latest}</span>
+        </div>
+        {!unchanged && (
+          <span
+            className={cn(
+              "text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded",
+              trendUp
+                ? "bg-emerald-400/15 text-emerald-400"
+                : "bg-red-400/15 text-red-400",
+            )}
+          >
+            {trendUp ? "↑" : "↓"} {trendUp ? "+" : ""}{delta} pts
+          </span>
+        )}
+        {unchanged && (
+          <span className="text-[11px] text-slate-600 bg-slate-700/40 px-1.5 py-0.5 rounded">
+            no change
+          </span>
+        )}
+      </div>
+
+      {/* Mini sparkline + run count */}
+      <div className="flex items-center gap-2">
+        <svg width={w} height={h} className="overflow-visible shrink-0">
+          <polyline
+            points={points}
+            fill="none"
+            stroke={lineColor}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {scores.map((s, i) => {
+            const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+            const y = h - pad - ((s - min) / range) * (h - pad * 2);
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={2.5}
+                fill={i === scores.length - 1 ? lineColor : "#475569"}
+              />
+            );
+          })}
+        </svg>
+        <span className="text-[10px] text-slate-600">{scores.length} recalculations</span>
+      </div>
     </div>
   );
 }
@@ -325,12 +360,17 @@ export function ATSGuidancePanel({
               ATS Score
             </h2>
           </div>
-          <p className="text-slate-400 text-sm">
-            Up to <span className="text-amber-400 font-semibold">{output.score_ceiling}</span> achievable
-            with current master resume
-          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-slate-400">Ceiling</span>
+            <span className="text-amber-400 font-semibold">{output.score_ceiling}/100</span>
+            <span className="text-slate-600 text-xs">
+              ({output.score_ceiling - output.ats_score > 0
+                ? `${output.score_ceiling - output.ats_score} pts gap`
+                : "at ceiling"})
+            </span>
+          </div>
           {scoreHistory.length >= 2 && (
-            <TrendSparkline scores={scoreHistory} />
+            <ScoreHistory scores={scoreHistory} />
           )}
         </div>
       </div>
