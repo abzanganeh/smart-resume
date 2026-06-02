@@ -5,6 +5,9 @@ import json
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
+from app.agent import chat as chat_agent
+from app.llm.factory import get_llm_client
+from app.models.chat import ChatRequest, ChatResponse
 from app.models.rewrite import TailoredResumeOutput
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.session_store import create_session, get_session, update_session
@@ -98,3 +101,13 @@ async def save_tailored_edits(session_id: str, body: TailoredEditRequest):
         raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}")
     await update_session(session)
     return {"ok": True}
+
+
+@router.post("/{session_id}/chat", response_model=ChatResponse)
+async def chat_with_resume(session_id: str, body: ChatRequest) -> ChatResponse:
+    """Free-form chat to request targeted resume edits. Returns a reply and structured patches."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    llm = get_llm_client()
+    return await chat_agent.run(session, body, llm)

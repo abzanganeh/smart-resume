@@ -37,7 +37,9 @@ import {
   LLMTierSelector,
   LLMUpgradePurchaseModal,
 } from "@/components/session/LLMTierSelector";
-import { AlertCircle, ChevronRight } from "lucide-react";
+import { AlertCircle, ChevronRight, MessageSquare, Sparkles } from "lucide-react";
+import { ResumeChat } from "@/components/session/ResumeChat";
+import { saveTailoredResume } from "@/lib/api";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
 
@@ -68,6 +70,7 @@ function SessionContent() {
   const [resumeVersion, setResumeVersion] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
+  const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
   const [expiryWarning, setExpiryWarning] = useState(false);
   const [phaseRunning, setPhaseRunning] = useState(false);
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -641,17 +644,75 @@ function SessionContent() {
                     onClearSuggestion={() => setAppliedSuggestion(null)}
                   />
                 </div>
-                {(qa || atsRecalcRunning) && (
-                  <div className="lg:w-80 shrink-0">
-                    <ATSGuidancePanel
-                      output={qa}
-                      streaming={atsRecalcRunning}
-                      scoreHistory={atsScoreHistory}
-                      variant="sidebar"
-                      onApplySuggestion={setAppliedSuggestion}
-                    />
+
+                {/* Right sidebar — ATS Guidance + Chat (tabbed) */}
+                <div className="lg:w-80 shrink-0 flex flex-col border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60" style={{ height: "fit-content", minHeight: 400 }}>
+                  {/* Tab bar */}
+                  <div className="flex border-b border-slate-700 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab("ats")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
+                        sidebarTab === "ats"
+                          ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      ATS Guidance
+                      {qa && (
+                        <span className="ml-0.5 tabular-nums text-[10px]">{qa.ats_score}/100</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab("chat")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
+                        sidebarTab === "chat"
+                          ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Chat
+                    </button>
                   </div>
-                )}
+
+                  {/* Tab content */}
+                  {sidebarTab === "ats" ? (
+                    <div className="p-4">
+                      {(qa || atsRecalcRunning) ? (
+                        <ATSGuidancePanel
+                          output={qa}
+                          streaming={atsRecalcRunning}
+                          scoreHistory={atsScoreHistory}
+                          variant="sidebar"
+                          onApplySuggestion={setAppliedSuggestion}
+                        />
+                      ) : (
+                        <p className="text-slate-500 text-xs py-4 text-center">
+                          Run QA &amp; Export to see your ATS score and guidance.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col" style={{ height: 520 }}>
+                      <ResumeChat
+                        sessionId={sessionId}
+                        tailored={tailored}
+                        onApplyPatch={async (_patch, updatedTailored) => {
+                          setTailored(updatedTailored);
+                          setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+                          try {
+                            await saveTailoredResume(sessionId, updatedTailored);
+                          } catch {
+                            // Local state is already updated; patch will persist on next manual save.
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               {tailored && !isStreaming && (
                 <button
