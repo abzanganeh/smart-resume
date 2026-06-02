@@ -145,6 +145,7 @@ export function DashboardView({ token }: { token: string }) {
     jd_company?: string
   } | null>(null)
   const [exports, setExports] = useState<ExportListItem[]>([])
+  const [hasMasterResume, setHasMasterResume] = useState<boolean | null>(null)
 
   const loadSummary = useCallback(async () => {
     const data = await getDashboardSummary(token)
@@ -154,6 +155,20 @@ export function DashboardView({ token }: { token: string }) {
       setExports(history)
     } catch {
       setExports([])
+    }
+    try {
+      const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+      const res = await fetch(`${BASE}/api/profile/resume`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const profile = await res.json() as { chunk_count?: number }
+        setHasMasterResume((profile.chunk_count ?? 0) > 0)
+      } else {
+        setHasMasterResume(false)
+      }
+    } catch {
+      setHasMasterResume(false)
     }
   }, [token])
 
@@ -317,6 +332,32 @@ export function DashboardView({ token }: { token: string }) {
           <Bell className="w-5 h-5" />
         </button>
       </header>
+
+      {hasMasterResume === false && (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex-1 space-y-1">
+            <p className="text-white font-semibold text-lg">Ready to build your master resume?</p>
+            <p className="text-slate-400 text-sm">
+              Skip the formatting. Just tell your story — jobs, skills, and experience out loud.
+              We&apos;ll turn it into a professional profile in 10–15 minutes.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0">
+            <a
+              href="/profile?mode=story"
+              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors text-sm text-center"
+            >
+              Start your story →
+            </a>
+            <a
+              href="/profile"
+              className="px-5 py-2 text-slate-400 hover:text-white text-sm text-center transition-colors"
+            >
+              Upload file instead
+            </a>
+          </div>
+        </div>
+      )}
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
