@@ -908,3 +908,50 @@ export interface SubscriptionCurrentResponse {
   /** Free credit balance (relevant when subscription is null) */
   credit_balance: number;
 }
+
+// ── Resume Chat ──────────────────────────────────────────────────────────────
+
+export interface ResumePatch {
+  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects";
+  description: string;
+  // Summary
+  new_summary?: string;
+  // Skills
+  add_skills?: string[];
+  remove_skills?: string[];
+  // Experience bullet
+  company?: string;
+  bullet_old?: string;
+  bullet_new?: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  patches: ResumePatch[];
+}
+
+/** Overwrite the full tailored resume (used by chat agent after applying a patch). */
+export async function saveTailoredResume(
+  sessionId: string,
+  tailored: TailoredResumeOutput,
+): Promise<{ ok: boolean }> {
+  return request(`/api/sessions/${sessionId}/tailored`, {
+    method: "PATCH",
+    body: JSON.stringify({ tailored_output: tailored }),
+  });
+}
+
+export async function chatWithResume(
+  sessionId: string,
+  payload: { message: string; history: ChatMessage[] },
+): Promise<ChatResponse> {
+  return request(`/api/sessions/${sessionId}/chat`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
