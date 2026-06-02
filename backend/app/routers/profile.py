@@ -34,11 +34,11 @@ from fastapi import (
     Query,
     Request,
     UploadFile,
-    status,
 )
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.story import story_to_resume
 from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
@@ -47,11 +47,13 @@ from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
 from app.models.resume import ParsedResume
+from app.models.story import StoryToResumeRequest
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
 from app.services.auth.dependencies import get_current_user
+from app.services.billing.quota import check_quota_for_story
 from app.services.master_resume import crud as master_crud
 from app.services.master_resume.chunking import Chunk, count_tokens
 from app.services.master_resume.embedding import embed_text
@@ -252,6 +254,78 @@ async def get_resume(
     return _resume_to_response(resume)
 
 
+@router.post("/resume/transcribe", status_code=200)
+@limiter.limit("10/minute")
+async def transcribe_resume_audio(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    audio: UploadFile = File(...),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+):
+    """Transcribe spoken resume audio to text using OpenAI Whisper.
+
+    Accepts any audio format supported by Whisper (webm, ogg, mp4, mp3, wav).
+    Uses the caller's BYOK OpenAI key (``X-Api-Key`` header); falls back to the
+    platform ``OPENAI_API_KEY`` when no BYOK key is provided.
+
+    Returns ``{"text": "<transcript>"}`` on success.
+    """
+    import io
+
+    import openai
+
+    api_key = (x_api_key or settings.OPENAI_API_KEY or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "An OpenAI API key is required for voice transcription. "
+                "Configure your key via the BYOK dialog in any session first."
+            ),
+        )
+
+    audio_bytes = await audio.read()
+    max_bytes = 25 * 1024 * 1024  # Whisper API limit
+    if len(audio_bytes) > max_bytes:
+        raise HTTPException(status_code=422, detail="Audio file exceeds the 25 MB Whisper limit.")
+
+    content_type = (audio.content_type or "audio/webm").lower()
+    # Map MIME → extension that Whisper accepts
+    _ext: dict[str, str] = {
+        "audio/webm": "webm",
+        "audio/ogg": "ogg",
+        "audio/mp4": "mp4",
+        "audio/x-m4a": "m4a",
+        "audio/mpeg": "mp3",
+        "audio/mp3": "mp3",
+        "audio/wav": "wav",
+        "audio/x-wav": "wav",
+        "audio/flac": "flac",
+    }
+    ext = _ext.get(content_type, "webm")
+    filename = f"recording.{ext}"
+
+    client = openai.AsyncOpenAI(api_key=api_key)
+    try:
+        transcript = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=(filename, io.BytesIO(audio_bytes), content_type),
+            language="en",
+        )
+    except openai.AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="OpenAI authentication failed — check your API key.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Transcription failed: {exc}",
+        ) from exc
+
+    return {"text": transcript.text}
+
+
 @router.post("/resume", status_code=201)
 @limiter.limit("30/minute")
 async def create_or_replace_resume(
@@ -287,15 +361,22 @@ async def create_or_replace_resume(
         raw_text=raw,
         parsed_sections=parsed_sections,
     )
+    embedding_ok = resume.last_embedded_at is not None
     log.info(
         "profile.resume.replaced",
         user_id=str(user.id),
         chunk_count=len(chunks),
         had_parsed_sections=bool(parsed_sections),
+        embedding_ok=embedding_ok,
     )
     return {
         **_resume_to_response(resume),
         "chunks": master_crud.iter_chunk_summaries(chunks),
+        "embedding_warning": (
+            None if embedding_ok
+            else "Resume saved but embedding failed (OpenAI key missing or invalid). "
+                 "Semantic similarity features won't work until OPENAI_EMBEDDING_KEY is configured."
+        ),
     }
 
 
@@ -484,6 +565,90 @@ async def delete_chunk(
     if not deleted:
         raise HTTPException(status_code=404, detail="Chunk not found.")
     return {"deleted": True, "id": chunk_id}
+
+
+@router.post("/resume/from-story", status_code=200)
+@limiter.limit("5/minute")
+async def create_resume_from_story(
+    request: Request,
+    body: StoryToResumeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Convert a spoken career narrative (list of segment transcripts) to a
+    structured master resume via a two-step LLM pipeline:
+      Step 1: story_to_resume() — narrative → resume draft text
+      Step 2: existing replace_all_chunks pipeline — draft → chunks + embeddings
+
+    Credit rules: see check_quota_for_story() in quota.py.
+    """
+    # ── Resolve LLM client ────────────────────────────────────────────────────
+    byok_key = request.headers.get("X-Api-Key", "").strip()
+    provider  = request.headers.get("X-Provider", "").strip()
+    model     = request.headers.get("X-Model", "").strip()
+    byok_active = bool(byok_key and provider and model)
+
+    llm_client = get_llm_client(
+        provider or None,
+        model or None,
+        api_key=byok_key or None,
+    )
+
+    # ── Credit check ──────────────────────────────────────────────────────────
+    await check_quota_for_story(
+        db,
+        user=user,
+        whisper_path=body.whisper_path,
+        byok_active=byok_active,
+    )
+
+    # ── Step 1: narrative → resume draft text ─────────────────────────────────
+    narrative = "\n\n---\n\n".join(seg.strip() for seg in body.segments if seg.strip())
+
+    try:
+        draft_text = await story_to_resume(narrative, llm_client)
+    except Exception as exc:
+        log.error("story.convert_failed", error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "story_conversion_failed", "message": str(exc)},
+        ) from exc
+
+    # ── Step 2: draft text → ParsedResume + chunks + embeddings ──────────────
+    parsed_sections = await _structure_with_llm(
+        draft_text, api_key=byok_key or None, provider=provider or None, model=model or None
+    )
+    try:
+        resume, chunks = await master_crud.replace_all_chunks(
+            db,
+            user_id=user.id,
+            raw_text=draft_text,
+            parsed_sections=parsed_sections,
+        )
+    except Exception as exc:
+        log.error("story.parse_failed", error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "parse_failed", "message": str(exc)},
+        ) from exc
+
+    embedding_ok = resume.last_embedded_at is not None
+    log.info(
+        "story.resume_created",
+        user_id=str(user.id),
+        chunk_count=len(chunks),
+        embedding_ok=embedding_ok,
+    )
+    return {
+        **_resume_to_response(resume),
+        "chunks": master_crud.iter_chunk_summaries(chunks),
+        "embedding_warning": (
+            None if embedding_ok
+            else "Resume saved but embedding failed. Semantic similarity features won't work "
+                 "until OPENAI_EMBEDDING_KEY is configured."
+        ),
+    }
 
 
 __all__ = ["router"]
