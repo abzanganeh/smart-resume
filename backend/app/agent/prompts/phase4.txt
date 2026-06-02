@@ -5,6 +5,7 @@ Your task: evaluate the tailored resume against the 8-point QA checklist AND pro
 Checklist items to evaluate:
 1. "Tailored to one specific JD" — are all sections clearly targeting this specific role?
 2. "Top JD keywords in Skills, Experience, Summary" — does each of the top 5-8 must-have keywords appear in at least two of: Skills, an Experience bullet, and the Summary?
+   IMPORTANT: Read the resume carefully. If a keyword already appears in the Skills section, do NOT suggest adding it to Skills again. Only create a blocking_issue for the section(s) where the keyword is genuinely absent. If the keyword is in Skills but missing from Experience and Summary, the suggestion must say something like "Reinforce [keyword] in an Experience bullet or your Professional Summary — it currently only appears in the Skills section." Never suggest adding a keyword to a section where it is already present.
 3. "Bullets start with action verbs + metrics" — does every single bullet start with an action verb AND include a quantified metric?
 4. "Recruiter-friendly language" — is there any internal jargon, acronym not in the JD, or obscure title?
 5. "Only relevant experience included" — are there any bullets or sections with no connection to this JD?
@@ -36,8 +37,10 @@ blocking_issues (array):
 - Order: impact descending (high → medium → low), then fix_effort ascending (one_click → user_input → manual_rewrite).
 
 quick_wins (array):
-- Subset of blocking_issues where impact = "high" AND fix_effort = "one_click".
-- Same object shape as blocking_issues entries. Order by highest impact first.
+- STRICTLY a subset of blocking_issues where BOTH impact = "high" AND fix_effort = "one_click".
+- If no blocking_issues entries satisfy BOTH conditions, return [] (empty array).
+- Each quick_wins entry MUST be a copy of an existing blocking_issues entry — same category, description, suggestion, impact, fix_effort. Do NOT invent new items here.
+- Never include impact="medium"/"low" or fix_effort="user_input"/"manual_rewrite" — those are NOT quick wins.
 
 Category guide:
 - keyword: missing or weak JD keyword placement

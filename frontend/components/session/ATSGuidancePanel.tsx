@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Sparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Sparkles, X, Zap } from "lucide-react";
 import { type BlockingIssue, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -81,12 +81,19 @@ function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
   );
 }
 
-function TrendSparkline({ scores }: { scores: number[] }) {
+function ScoreHistory({ scores }: { scores: number[] }) {
   if (scores.length < 2) return null;
 
-  const w = 120;
-  const h = 32;
-  const pad = 4;
+  const baseline = scores[0];
+  const latest = scores[scores.length - 1];
+  const delta = latest - baseline;
+  const trendUp = delta > 0;
+  const unchanged = delta === 0;
+
+  // Mini sparkline
+  const w = 80;
+  const h = 24;
+  const pad = 3;
   const min = Math.min(...scores, 0);
   const max = Math.max(...scores, 100);
   const range = max - min || 1;
@@ -99,68 +106,142 @@ function TrendSparkline({ scores }: { scores: number[] }) {
     })
     .join(" ");
 
-  const latest = scores[scores.length - 1];
-  const prev = scores[scores.length - 2];
-  const trendUp = latest >= prev;
+  const lineColor = trendUp ? "#4ade80" : unchanged ? "#64748b" : "#f87171";
 
   return (
-    <div className="flex items-center gap-2">
-      <svg width={w} height={h} className="overflow-visible">
-        <polyline
-          points={points}
-          fill="none"
-          stroke={trendUp ? "#4ade80" : "#f87171"}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {scores.map((s, i) => {
-          const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
-          const y = h - pad - ((s - min) / range) * (h - pad * 2);
-          return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r={3}
-              fill={i === scores.length - 1 ? (trendUp ? "#4ade80" : "#f87171") : "#64748b"}
-            />
-          );
-        })}
-      </svg>
-      <span className="text-[10px] text-slate-500">Last {scores.length} runs</span>
+    <div className="space-y-1.5">
+      {/* Baseline → current comparison */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-slate-500">Baseline</span>
+          <span className="font-bold tabular-nums text-slate-400">{baseline}</span>
+          <span className="text-slate-600">→</span>
+          <span className="font-bold tabular-nums text-slate-200">Now {latest}</span>
+        </div>
+        {!unchanged && (
+          <span
+            className={cn(
+              "text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded",
+              trendUp
+                ? "bg-emerald-400/15 text-emerald-400"
+                : "bg-red-400/15 text-red-400",
+            )}
+          >
+            {trendUp ? "↑" : "↓"} {trendUp ? "+" : ""}{delta} pts
+          </span>
+        )}
+        {unchanged && (
+          <span className="text-[11px] text-slate-600 bg-slate-700/40 px-1.5 py-0.5 rounded">
+            no change
+          </span>
+        )}
+      </div>
+
+      {/* Mini sparkline + run count */}
+      <div className="flex items-center gap-2">
+        <svg width={w} height={h} className="overflow-visible shrink-0">
+          <polyline
+            points={points}
+            fill="none"
+            stroke={lineColor}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {scores.map((s, i) => {
+            const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+            const y = h - pad - ((s - min) / range) * (h - pad * 2);
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={2.5}
+                fill={i === scores.length - 1 ? lineColor : "#475569"}
+              />
+            );
+          })}
+        </svg>
+        <span className="text-[10px] text-slate-600">{scores.length} recalculations</span>
+      </div>
     </div>
   );
 }
 
+type WinState = "neutral" | "accepted" | "declined";
+
 function QuickWinCard({
   issue,
-  onApply,
+  state,
+  onAccept,
+  onDecline,
 }: {
   issue: BlockingIssue;
-  onApply?: (suggestion: string) => void;
+  state: WinState;
+  onAccept: () => void;
+  onDecline: () => void;
 }) {
+  const isAccepted = state === "accepted";
+  const isDeclined = state === "declined";
+
   return (
-    <div className="bg-emerald-400/5 border border-emerald-400/20 rounded-xl p-3 space-y-2">
+    <div
+      className={cn(
+        "border rounded-xl p-3 space-y-2 transition-colors",
+        isAccepted
+          ? "bg-emerald-400/10 border-emerald-400/40"
+          : isDeclined
+          ? "bg-slate-800/30 border-slate-700/40 opacity-50"
+          : "bg-emerald-400/5 border-emerald-400/20",
+      )}
+    >
       <div className="flex items-start gap-2">
-        <Zap className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+        <Zap
+          className={cn(
+            "w-4 h-4 shrink-0 mt-0.5",
+            isAccepted ? "text-emerald-400" : isDeclined ? "text-slate-600" : "text-emerald-400",
+          )}
+        />
         <div className="flex-1 min-w-0">
           <span className="text-[10px] uppercase tracking-wide text-emerald-400/80 font-semibold">
             {CATEGORY_LABELS[issue.category]}
           </span>
-          <p className="text-slate-200 text-sm mt-0.5">{issue.description}</p>
+          <p className={cn("text-sm mt-0.5", isDeclined ? "text-slate-500 line-through" : "text-slate-200")}>
+            {issue.description}
+          </p>
           <p className="text-slate-400 text-xs mt-1">{issue.suggestion}</p>
         </div>
       </div>
-      {onApply && (
+
+      {/* Accept / Decline toggle */}
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => onApply(issue.suggestion)}
-          className="w-full px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+          onClick={onAccept}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+            isAccepted
+              ? "bg-emerald-500 text-white"
+              : "bg-slate-700/60 text-slate-300 hover:bg-emerald-600/40 hover:text-emerald-300",
+          )}
         >
-          Apply
+          <Check className="w-3 h-3" />
+          {isAccepted ? "Accepted" : "Accept"}
         </button>
-      )}
+        <button
+          type="button"
+          onClick={onDecline}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+            isDeclined
+              ? "bg-slate-600 text-slate-400"
+              : "bg-slate-700/60 text-slate-300 hover:bg-red-900/30 hover:text-red-400",
+          )}
+        >
+          <X className="w-3 h-3" />
+          {isDeclined ? "Skipped" : "Skip"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -224,6 +305,27 @@ export function ATSGuidancePanel({
   variant = "primary",
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [winStates, setWinStates] = useState<Record<number, WinState>>({});
+
+  function setWinState(idx: number, next: WinState) {
+    setWinStates((prev) => ({
+      ...prev,
+      [idx]: prev[idx] === next ? "neutral" : next,
+    }));
+  }
+
+  function applyAccepted() {
+    const quickWins = output?.quick_wins ?? [];
+    const accepted = quickWins
+      .filter((_, i) => winStates[i] === "accepted")
+      .map((issue) => `• [${CATEGORY_LABELS[issue.category]}] ${issue.suggestion}`);
+    if (accepted.length > 0) {
+      onApplySuggestion?.(accepted.join("\n"));
+    }
+    setWinStates({});
+  }
+
+  const acceptedCount = Object.values(winStates).filter((s) => s === "accepted").length;
 
   if (streaming && !output) {
     return (
@@ -258,12 +360,19 @@ export function ATSGuidancePanel({
               ATS Score
             </h2>
           </div>
-          <p className="text-slate-400 text-sm">
-            Up to <span className="text-amber-400 font-semibold">{output.score_ceiling}</span> achievable
-            with current master resume
-          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <span className="text-slate-400">Ceiling</span>
+            <span className="text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>
+            {(output.score_ceiling ?? 0) > 0 && (
+              <span className="text-slate-600 text-xs">
+                ({(output.score_ceiling ?? 0) - output.ats_score > 0
+                  ? `${(output.score_ceiling ?? 0) - output.ats_score} pts gap`
+                  : "at ceiling"})
+              </span>
+            )}
+          </div>
           {scoreHistory.length >= 2 && (
-            <TrendSparkline scores={scoreHistory} />
+            <ScoreHistory scores={scoreHistory} />
           )}
         </div>
       </div>
@@ -271,13 +380,34 @@ export function ATSGuidancePanel({
       {/* Quick wins */}
       {quickWins.length > 0 && (
         <section>
-          <h3 className="text-emerald-400 font-semibold text-sm mb-2 flex items-center gap-1.5">
-            <Zap className="w-4 h-4" />
-            Quick wins
-          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-emerald-400 font-semibold text-sm flex items-center gap-1.5">
+              <Zap className="w-4 h-4" />
+              Quick wins
+            </h3>
+            {acceptedCount > 0 && (
+              <button
+                type="button"
+                onClick={applyAccepted}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+              >
+                <Check className="w-3 h-3" />
+                Apply {acceptedCount} selected
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Accept the wins you want, then click &ldquo;Apply selected&rdquo; to add them to your resume.
+          </p>
           <div className="space-y-2">
             {quickWins.map((issue, i) => (
-              <QuickWinCard key={i} issue={issue} onApply={onApplySuggestion} />
+              <QuickWinCard
+                key={i}
+                issue={issue}
+                state={winStates[i] ?? "neutral"}
+                onAccept={() => setWinState(i, "accepted")}
+                onDecline={() => setWinState(i, "declined")}
+              />
             ))}
           </div>
         </section>

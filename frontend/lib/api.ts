@@ -3,6 +3,18 @@ import { getSession } from "next-auth/react";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Structured API error that preserves the backend error code for UI branching. */
+export class ApiError extends Error {
+  code: string | undefined;
+  status: number;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Attach the NextAuth bearer token on every API call when a session exists.
   // Falls back gracefully for anonymous (unauthenticated) usage.
@@ -29,7 +41,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.detail ?? `HTTP ${res.status}`);
+    const detail = body?.detail;
+    let message: string;
+    let errorCode: string | undefined;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (detail && typeof detail === "object") {
+      // FastAPI sometimes returns structured detail (e.g. {code, message, ...}).
+      // Prefer a human-readable field; fall back to JSON so we never show "[object Object]".
+      const d = detail as Record<string, unknown>;
+      errorCode = typeof d.code === "string" ? d.code : undefined;
+      const candidate = d.message ?? d.error ?? d.code;
+      message =
+        typeof candidate === "string" ? candidate : JSON.stringify(detail);
+    } else {
+      message = `HTTP ${res.status}`;
+    }
+    throw new ApiError(message, res.status, errorCode);
   }
   return res.json() as Promise<T>;
 }
@@ -879,4 +907,51 @@ export interface SubscriptionCurrentResponse {
   } | null;
   /** Free credit balance (relevant when subscription is null) */
   credit_balance: number;
+}
+
+// ── Resume Chat ──────────────────────────────────────────────────────────────
+
+export interface ResumePatch {
+  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects";
+  description: string;
+  // Summary
+  new_summary?: string;
+  // Skills
+  add_skills?: string[];
+  remove_skills?: string[];
+  // Experience bullet
+  company?: string;
+  bullet_old?: string;
+  bullet_new?: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  patches: ResumePatch[];
+}
+
+/** Overwrite the full tailored resume (used by chat agent after applying a patch). */
+export async function saveTailoredResume(
+  sessionId: string,
+  tailored: TailoredResumeOutput,
+): Promise<{ ok: boolean }> {
+  return request(`/api/sessions/${sessionId}/tailored`, {
+    method: "PATCH",
+    body: JSON.stringify({ tailored_output: tailored }),
+  });
+}
+
+export async function chatWithResume(
+  sessionId: string,
+  payload: { message: string; history: ChatMessage[] },
+): Promise<ChatResponse> {
+  return request(`/api/sessions/${sessionId}/chat`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
