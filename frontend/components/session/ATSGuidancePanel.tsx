@@ -362,12 +362,14 @@ export function ATSGuidancePanel({
           </div>
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-slate-400">Ceiling</span>
-            <span className="text-amber-400 font-semibold">{output.score_ceiling}/100</span>
-            <span className="text-slate-600 text-xs">
-              ({output.score_ceiling - output.ats_score > 0
-                ? `${output.score_ceiling - output.ats_score} pts gap`
-                : "at ceiling"})
-            </span>
+            <span className="text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>
+            {(output.score_ceiling ?? 0) > 0 && (
+              <span className="text-slate-600 text-xs">
+                ({(output.score_ceiling ?? 0) - output.ats_score > 0
+                  ? `${(output.score_ceiling ?? 0) - output.ats_score} pts gap`
+                  : "at ceiling"})
+              </span>
+            )}
           </div>
           {scoreHistory.length >= 2 && (
             <ScoreHistory scores={scoreHistory} />
