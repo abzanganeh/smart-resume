@@ -1,40 +1,36 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { Upload, FileText, AlertCircle } from "lucide-react"
+import { AlertCircle, FileText, Mic, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { VoiceTab } from "@/components/shared/VoiceTab"
 
 interface Props {
   onSubmit: (payload: { file?: File; text?: string }) => Promise<void>
+  token: string
   loading: boolean
   compact?: boolean
 }
 
-export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props) {
-  const [mode, setMode] = useState<"upload" | "paste">("upload")
+type Mode = "upload" | "paste" | "voice"
+
+export function ProfileUploadZone({ onSubmit, token, loading, compact = false }: Props) {
+  const [mode, setMode]       = useState<Mode>("upload")
   const [dragging, setDragging] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
   const [pasteText, setPasteText] = useState("")
 
   const handleFile = useCallback(
     async (file: File) => {
       setError(null)
-      if (file.size > 5 * 1024 * 1024) {
-        setError("File exceeds 5MB limit.")
-        return
-      }
+      if (file.size > 5 * 1024 * 1024) { setError("File exceeds 5MB limit."); return }
       const allowed = [
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "text/plain",
       ]
-      if (!allowed.includes(file.type)) {
-        setError("Only PDF, DOCX, and TXT files are supported.")
-        return
-      }
-      try {
-        await onSubmit({ file })
-      } catch (e: unknown) {
+      if (!allowed.includes(file.type)) { setError("Only PDF, DOCX, and TXT files are supported."); return }
+      try { await onSubmit({ file }) } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed.")
       }
     },
@@ -44,9 +40,7 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
   const handlePaste = async () => {
     if (!pasteText.trim()) return
     setError(null)
-    try {
-      await onSubmit({ text: pasteText })
-    } catch (e: unknown) {
+    try { await onSubmit({ text: pasteText }) } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to process resume text.")
     }
   }
@@ -57,51 +51,37 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
         <div>
           <h2 className="text-lg font-semibold text-white">Master resume</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Upload or paste your full career history. We chunk and embed it for tailored sessions.
+            Upload or paste your full career history — or record it by voice.
           </p>
         </div>
       )}
 
+      {/* Mode tabs */}
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setMode("upload")}
-          className={cn(
-            "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-            mode === "upload"
-              ? "bg-amber-400 text-slate-900"
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700",
-          )}
-        >
-          Upload file
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("paste")}
-          className={cn(
-            "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-            mode === "paste"
-              ? "bg-amber-400 text-slate-900"
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700",
-          )}
-        >
-          Paste text
-        </button>
+        {(["upload", "paste", "voice"] as Mode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setMode(m); setError(null) }}
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5",
+              mode === m
+                ? "bg-amber-400 text-slate-900"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700",
+            )}
+          >
+            {m === "voice" && <Mic className="w-3.5 h-3.5" />}
+            {m === "upload" ? "Upload file" : m === "paste" ? "Paste text" : "Record voice"}
+          </button>
+        ))}
       </div>
 
-      {mode === "upload" ? (
+      {/* Upload */}
+      {mode === "upload" && (
         <div
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragging(true)
-          }}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragging(false)
-            const f = e.dataTransfer.files[0]
-            if (f) void handleFile(f)
-          }}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) void handleFile(f) }}
           className={cn(
             "border-2 border-dashed rounded-xl text-center cursor-pointer transition-colors",
             compact ? "p-6" : "p-10",
@@ -118,13 +98,13 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
             type="file"
             accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleFile(f)
-            }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }}
           />
         </div>
-      ) : (
+      )}
+
+      {/* Paste */}
+      {mode === "paste" && (
         <div className="space-y-3">
           <textarea
             value={pasteText}
@@ -134,9 +114,7 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
             className="w-full h-48 bg-slate-800 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600 disabled:opacity-60"
           />
           <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-xs">
-              {pasteText.length.toLocaleString()} characters
-            </span>
+            <span className="text-slate-500 text-xs">{pasteText.length.toLocaleString()} characters</span>
             <button
               type="button"
               onClick={() => void handlePaste()}
@@ -149,6 +127,18 @@ export function ProfileUploadZone({ onSubmit, loading, compact = false }: Props)
         </div>
       )}
 
+      {/* Voice — uses Web Speech API (live text, no key) in Chrome/Edge,
+               falls back to MediaRecorder + Whisper in other browsers */}
+      {mode === "voice" && (
+        <VoiceTab
+          token={token}
+          submitLabel={loading ? "Saving…" : "Save master resume"}
+          disabled={loading}
+          onTranscript={(text) => void onSubmit({ text })}
+        />
+      )}
+
+      {/* Global loading overlay */}
       {loading && (
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-950/75">
           <div className="flex items-center gap-2 text-slate-100 text-sm px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/90">
