@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2, RefreshCw, UserCircle, XCircle } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
 import { ChunkCard } from "@/components/profile/ChunkCard"
@@ -32,9 +33,14 @@ function formatTimestamp(iso: string | null): string {
   })
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { session, status } = useRequireAuth("/profile")
   const { data: clientSession } = useSession()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const returnUrl = searchParams.get("return")
+  const defaultStory = searchParams.get("mode") === "story"
 
   const token = clientSession?.backendAccessToken ?? session?.backendAccessToken
 
@@ -179,8 +185,17 @@ export default function ProfilePage() {
           <section className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6">
             <ProfileUploadZone
               onSubmit={handleUpload}
+              token={token ?? ""}
               loading={uploading}
               compact={liveCount > 0}
+              defaultStory={defaultStory}
+              onStoryComplete={() => {
+                if (returnUrl) {
+                  router.push(returnUrl)
+                } else {
+                  void loadProfile()
+                }
+              }}
             />
           </section>
 
@@ -284,5 +299,19 @@ export default function ProfilePage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+        </div>
+      }
+    >
+      <ProfilePageContent />
+    </Suspense>
   )
 }
