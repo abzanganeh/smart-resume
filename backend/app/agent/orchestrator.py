@@ -157,6 +157,10 @@ def _classify_error(exc: BaseException) -> str:
         return "llm_auth"
     if any(k in msg for k in ("context length", "context window", "token limit", "max tokens", "too long")):
         return "llm_context_length"
+    # Truncated output: LLM hit its output token cap and the JSON was cut off.
+    # This surfaces as a LLMParseError wrapping an EOF/unterminated-string error.
+    if any(k in msg for k in ("eof while parsing", "unexpected end of", "unterminated string")):
+        return "llm_output_truncated"
     if any(k in msg for k in ("invalid json", "json decode", "parse error", "jsondecodeerror", "failed to parse")):
         return "llm_parse_error"
     if any(k in msg for k in ("connection", "network", "connectionerror", "ssl")):
@@ -185,6 +189,12 @@ def _user_facing_error(exc: BaseException) -> str:
         "llm_context_length": (
             "Your resume or job description is too long for this model's context window. "
             "Try shortening the job description or reducing resume length, then retry."
+        ),
+        "llm_output_truncated": (
+            "The AI model's response was cut off before the JSON was complete — "
+            "this model has a short output limit (Llama 3.1 70B caps at ~4096 tokens). "
+            "Try switching to a model with a longer output window such as Gemini Flash or GPT-4o Mini, "
+            "or retry and the system will ask for a more compact response."
         ),
         "llm_parse_error": (
             "The AI model returned a response that could not be parsed. "
