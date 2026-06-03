@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Pencil, Check, X, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { clsx } from "clsx"
 import { useAdminSession, useAuditToast } from "@/app/admin/layout"
@@ -16,6 +17,7 @@ import type { PlanConfig, PlanCreatePayload, LLMAddonPricing } from "@/lib/admin
 // ── Plans Page ────────────────────────────────────────────────────────────────
 
 export default function AdminPlansPage() {
+  const router = useRouter()
   const { token } = useAdminSession()
   const { showAuditToast } = useAuditToast()
 
@@ -42,11 +44,16 @@ export default function AdminPlansPage() {
         getAdminPlans(token!),
         getAdminPlansHistory(token!),
       ])
-      setPlans(planData.plans)
-      setAddon(planData.addon_pricing)
-      setHistory(hist)
+      setPlans(planData.plans ?? [])
+      setAddon(planData.addon_pricing ?? null)
+      setHistory(Array.isArray(hist) ? hist : [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load plans")
+      const msg = e instanceof Error ? e.message : "Failed to load plans"
+      if (msg === "admin_setup_incomplete") {
+        router.replace("/admin/auth?reason=setup_password")
+        return
+      }
+      setError(msg)
     } finally {
       setLoading(false)
     }
