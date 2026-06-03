@@ -184,3 +184,141 @@ export async function streamCoach(
 
   return { complete: isComplete };
 }
+
+// ---------------------------------------------------------------------------
+// Coached Interview Mode (§23)
+// ---------------------------------------------------------------------------
+
+export interface InterviewMessage {
+  role: "interviewer" | "user";
+  text: string;
+}
+
+/**
+ * Stream the next interview question from the backend.
+ *
+ * Calls POST /api/profile/story/interview/next.
+ * Charges 1 credit on the very first question (empty history) for free users.
+ *
+ * @param history   Full conversation so far
+ * @param token     Auth JWT
+ * @param onDelta   Called with each streamed text fragment
+ * @param options   BYOK / model overrides
+ * @returns         { complete: boolean } — true when the interview is finished
+ */
+export async function streamInterviewQuestion(
+  history: InterviewMessage[],
+  token: string,
+  onDelta: (delta: string) => void,
+  options: {
+    byokApiKey?: string;
+    byokProvider?: string;
+    byokModel?: string;
+    sessionId?: string;
+  } = {},
+): Promise<{ complete: boolean }> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
+  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
+  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
+
+  const res = await fetch(`${BASE}/api/profile/story/interview/next`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      history,
+      session_id: options.sessionId ?? null,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { detail?: { message?: string; code?: string } | string };
+    const detail = body.detail;
+    const msg = typeof detail === "object"
+      ? (detail?.message ?? "Interview request failed")
+      : (detail ?? "Interview request failed");
+    const code = typeof detail === "object" ? detail?.code : undefined;
+    const err = new Error(msg) as Error & { code?: string };
+    err.code = code;
+    throw err;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body from interview endpoint");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let isComplete = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6).trim();
+      if (!raw) continue;
+      try {
+        const evt = JSON.parse(raw) as CoachDelta;
+        if (evt.error) throw new Error(`Interview error: ${evt.error}`);
+        if (evt.delta) onDelta(evt.delta);
+        if (evt.done) isComplete = evt.complete ?? false;
+      } catch {
+        // malformed SSE line — skip
+      }
+    }
+  }
+
+  return { complete: isComplete };
+}
+
+/**
+ * Submit completed interview Q&A to generate a resume.
+ *
+ * Calls POST /api/profile/story/interview/submit.
+ * No additional credit charged (already paid for the session via /next).
+ */
+export async function submitInterview(
+  history: InterviewMessage[],
+  token: string,
+  options: {
+    byokApiKey?: string;
+    byokProvider?: string;
+    byokModel?: string;
+    whisperPath?: boolean;
+  } = {},
+): Promise<StoryToResumeResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
+  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
+  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
+
+  const res = await fetch(`${BASE}/api/profile/story/interview/submit`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      history,
+      whisper_path: options.whisperPath ?? false,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { detail?: { message?: string } | string };
+    const msg = typeof body.detail === "object"
+      ? (body.detail?.message ?? "Interview submission failed")
+      : (body.detail ?? "Interview submission failed");
+    throw new Error(msg);
+  }
+
+  return res.json() as Promise<StoryToResumeResponse>;
+}

@@ -78,6 +78,7 @@ class QuotaAction(str, enum.Enum):
     fit_analysis = "fit_analysis"
     story_build = "story_build"
     story_coach = "story_coach"
+    story_interview = "story_interview"
 
 
 # Actions that may be paid by *free* tier credits (§18.3 table).  Job
@@ -90,6 +91,7 @@ FREE_CREDIT_ACTIONS: frozenset[QuotaAction] = frozenset(
         QuotaAction.section_regen,
         QuotaAction.story_build,
         QuotaAction.story_coach,
+        QuotaAction.story_interview,
     }
 )
 # Actions that count against the resume counter (§18.3 "Resumes / period").
@@ -445,6 +447,56 @@ async def check_quota_for_story_coach(
     )
 
 
+async def check_quota_for_story_interview(
+    session: AsyncSession,
+    *,
+    user: User,
+    byok_active: bool,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Quota for Coached Interview Mode (§23).
+
+    Cost:
+      - BYOK:           0 credits — user pays their own LLM costs
+      - Subscribers:    0 credits — included in subscription
+      - Free users:     1 credit per interview session (charged on the first
+                        question, not on session open)
+
+    One session = one complete coached interview from first question to submit.
+    """
+    if user.is_suspended:
+        raise AccountSuspendedError("account_suspended")
+
+    if byok_active:
+        return QuotaDecision(action=QuotaAction.story_interview, charged_to="byok")
+
+    now = datetime.now(timezone.utc)
+    sub = await _active_subscription_for(session, user_id=user.id)
+    if sub is not None and _within_period(sub, now=now) and sub.status != SubscriptionStatus.paused:
+        return QuotaDecision(
+            action=QuotaAction.story_interview,
+            charged_to="subscription",
+            subscription_id=sub.id,
+        )
+
+    try:
+        row = await consume_credit(
+            session,
+            user_id=user.id,
+            credit_kind=CreditKind.free,
+            reason=QuotaAction.story_interview.value,
+            session_id=session_id,
+        )
+    except InsufficientCreditsError:
+        raise
+
+    return QuotaDecision(
+        action=QuotaAction.story_interview,
+        charged_to="free_credit",
+        credit_transaction_id=row.id,
+    )
+
+
 __all__ = [
     "FREE_CREDIT_ACTIONS",
     "PLAN_RESUMES_PER_PERIOD",
@@ -458,4 +510,5 @@ __all__ = [
     "check_quota_for_section_regen",
     "check_quota_for_story",
     "check_quota_for_story_coach",
+    "check_quota_for_story_interview",
 ]

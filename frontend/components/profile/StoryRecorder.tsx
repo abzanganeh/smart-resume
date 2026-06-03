@@ -16,6 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Clock, Loader2, Mic, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { StoryCoach } from "./StoryCoach";
+import { StoryInterview } from "./StoryInterview";
+import { type StoryMode, StoryModeSelector } from "./StoryModeSelector";
 import { StorySegment } from "./StorySegment";
 import { polishResume, submitStory } from "@/lib/story";
 import { getStoredKey } from "@/lib/keyStore";
@@ -34,6 +36,7 @@ interface Props {
 type RecordingState = "idle" | "recording" | "re-recording";
 
 export function StoryRecorder({ token, onSaved }: Props) {
+  const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
   const [segments, setSegments] = useState<string[]>([]);
   const [recordingState, setRecordingState]     = useState<RecordingState>("idle");
   const [reRecordingIndex, setReRecordingIndex] = useState<number | null>(null);
@@ -343,7 +346,39 @@ export function StoryRecorder({ token, onSaved }: Props) {
     );
   }
 
-  // ── Credit disclosure (shown before first segment) ─────────────────────────
+  // ── Mode selector (shown before anything else) ─────────────────────────────
+  if (!storyMode) {
+    const storedKeyForMode = getStoredKey();
+    const isFreeUserForMode = !storedKeyForMode?.apiKey;
+    return (
+      <StoryModeSelector
+        isFreeUser={isFreeUserForMode}
+        onSelect={(mode) => {
+          if (mode === "interview") {
+            setStoryMode("interview");
+          } else {
+            setStoryMode("free");
+          }
+        }}
+      />
+    );
+  }
+
+  // ── Coached Interview Mode ──────────────────────────────────────────────────
+  if (storyMode === "interview") {
+    const storedKeyForInterview = getStoredKey();
+    const isFreeUserForInterview = !storedKeyForInterview?.apiKey;
+    return (
+      <StoryInterview
+        token={token}
+        isFreeUser={isFreeUserForInterview}
+        onSaved={onSaved}
+        onBack={() => setStoryMode(null)}
+      />
+    );
+  }
+
+  // ── Credit disclosure (shown before first segment in free story mode) ───────
   if (segments.length === 0 && !isRecordingAnything) {
     return (
       <div className="space-y-6">
