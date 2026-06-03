@@ -15,6 +15,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Clock, Loader2, Mic, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { StoryCoach } from "./StoryCoach";
+import { StoryInterview } from "./StoryInterview";
+import { type StoryMode, StoryModeSelector } from "./StoryModeSelector";
 import { StorySegment } from "./StorySegment";
 import { polishResume, submitStory } from "@/lib/story";
 import { getStoredKey } from "@/lib/keyStore";
@@ -33,12 +36,15 @@ interface Props {
 type RecordingState = "idle" | "recording" | "re-recording";
 
 export function StoryRecorder({ token, onSaved }: Props) {
+  const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
   const [segments, setSegments] = useState<string[]>([]);
   const [recordingState, setRecordingState]     = useState<RecordingState>("idle");
   const [reRecordingIndex, setReRecordingIndex] = useState<number | null>(null);
   const [totalMs, setTotalMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Index of the segment whose coach panel is open (null = none)
+  const [openCoachIndex, setOpenCoachIndex] = useState<number | null>(null);
   const [reviewText, setReviewText] = useState<string | null>(null);
   const [prevText, setPrevText] = useState<string | null>(null);
   const [polishInstruction, setPolishInstruction] = useState("");
@@ -340,10 +346,51 @@ export function StoryRecorder({ token, onSaved }: Props) {
     );
   }
 
-  // ── Credit disclosure (shown before first segment) ─────────────────────────
+  // ── Mode selector (shown before anything else) ─────────────────────────────
+  if (!storyMode) {
+    const storedKeyForMode = getStoredKey();
+    const isFreeUserForMode = !storedKeyForMode?.apiKey;
+    return (
+      <StoryModeSelector
+        isFreeUser={isFreeUserForMode}
+        onSelect={(mode) => {
+          if (mode === "interview") {
+            setStoryMode("interview");
+          } else {
+            setStoryMode("free");
+          }
+        }}
+      />
+    );
+  }
+
+  // ── Coached Interview Mode ──────────────────────────────────────────────────
+  if (storyMode === "interview") {
+    const storedKeyForInterview = getStoredKey();
+    const isFreeUserForInterview = !storedKeyForInterview?.apiKey;
+    return (
+      <StoryInterview
+        token={token}
+        isFreeUser={isFreeUserForInterview}
+        onSaved={onSaved}
+        onBack={() => setStoryMode(null)}
+      />
+    );
+  }
+
+  // ── Credit disclosure (shown before first segment in free story mode) ───────
   if (segments.length === 0 && !isRecordingAnything) {
     return (
       <div className="space-y-6">
+        {/* Back to mode selector */}
+        <button
+          type="button"
+          onClick={() => setStoryMode(null)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          ← Change mode
+        </button>
+
         <div className={cn(
           "rounded-xl border p-5 space-y-3",
           supportsWebSpeech ? "border-green-500/30 bg-green-500/5" : "border-amber-500/30 bg-amber-500/5",
@@ -377,6 +424,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
             <li>Record up to 30 segments of 60 seconds each (30 min total)</li>
             <li>Talk naturally — jobs, skills, accomplishments, education</li>
             <li>Edit any segment after recording</li>
+            <li>
+              <span className="text-indigo-400 font-medium">Optionally tap "Coach me ✨"</span> on
+              any segment — the AI asks one follow-up question to add missing metrics or outcomes
+            </li>
             <li>Click &ldquo;Generate resume from story&rdquo; when done</li>
           </ol>
           <p className="text-slate-500 text-xs pt-1">
@@ -401,9 +452,24 @@ export function StoryRecorder({ token, onSaved }: Props) {
     <div className="space-y-4">
       {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-1">
-        <span className="text-slate-400 text-sm">
-          <span className="text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400 text-sm">
+            <span className="text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
+          </span>
+          {/* Change mode — only when not recording and not submitting */}
+          {!isRecordingAnything && !submitting && (
+            <button
+              type="button"
+              onClick={() => {
+                setStoryMode(null);
+                setSegments([]);
+              }}
+              className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              ← Change mode
+            </button>
+          )}
+        </div>
         <span className={cn("text-sm tabular-nums font-mono", isWarning ? "text-amber-400" : "text-slate-400")}>
           {totalMinsLabel} / 30:00
           {isWarning && <span className="ml-2 text-amber-400 text-xs">⚠ Almost at limit</span>}
@@ -420,18 +486,39 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
       {/* Segment list */}
       <div className="space-y-3">
-        {segments.map((text, i) => (
-          <StorySegment
-            key={i}
-            index={i}
-            text={text}
-            isRecording={recordingState === "re-recording" && reRecordingIndex === i}
-            disabled={isRecordingAnything || submitting}
-            onChange={(newText) => setSegments((prev) => prev.map((s, j) => j === i ? newText : s))}
-            onReRecord={() => void startReRecord(i)}
-            onDelete={() => deleteSegment(i)}
-          />
-        ))}
+        {segments.map((text, i) => {
+          const storedKey = getStoredKey();
+          return (
+            <div key={i} className="space-y-2">
+              <StorySegment
+                index={i}
+                text={text}
+                isRecording={recordingState === "re-recording" && reRecordingIndex === i}
+                disabled={isRecordingAnything || submitting}
+                coachOpen={openCoachIndex === i}
+                onChange={(newText) => setSegments((prev) => prev.map((s, j) => j === i ? newText : s))}
+                onReRecord={() => void startReRecord(i)}
+                onDelete={() => deleteSegment(i)}
+                onCoach={() => setOpenCoachIndex((prev) => prev === i ? null : i)}
+              />
+              {openCoachIndex === i && (
+                <StoryCoach
+                  segmentText={text}
+                  token={token}
+                  isFreeUser={!storedKey?.apiKey}
+                  byokApiKey={storedKey?.apiKey}
+                  byokProvider={storedKey?.provider}
+                  byokModel={storedKey?.model}
+                  onAddAsSegment={(answerText) => {
+                    setSegments((prev) => [...prev, answerText]);
+                    setOpenCoachIndex(null);
+                  }}
+                  onClose={() => setOpenCoachIndex(null)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Current recording indicator (new segment) */}
