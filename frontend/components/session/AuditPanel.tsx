@@ -16,7 +16,6 @@ interface Props {
   /** Bullet fixes restored from the server on mount. */
   initialBulletFixes?: BulletFixPayload[];
   onAdditionsSaved?: () => void;
-  onReaudit?: () => void;
   onAuditEdited?: (stale: Record<string, string | null>) => void;
 }
 
@@ -34,7 +33,6 @@ export function AuditPanel({
   initialExtraNotes,
   initialBulletFixes,
   onAdditionsSaved,
-  onReaudit,
   onAuditEdited,
 }: Props) {
   const [claimedKeywords, setClaimedKeywords] = useState<Set<string>>(
@@ -342,23 +340,14 @@ export function AuditPanel({
               )}
             </div>
 
-            {/* After saving: prompt to re-audit */}
+            {/* After saving: confirmation only — re-audit lives in the rewrite tab */}
             {savedOk && (
               <div className="flex items-center gap-3 bg-emerald-900/20 border border-emerald-500/30 rounded-lg px-4 py-3">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                <div className="flex-1 text-xs text-slate-300">
+                <span className="text-xs text-slate-300">
                   <span className="text-emerald-400 font-semibold">Saved.</span>{" "}
-                  Recalculate your audit score with these additions applied.
-                </div>
-                {onReaudit && (
-                  <button
-                    type="button"
-                    onClick={onReaudit}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors whitespace-nowrap"
-                  >
-                    Recalculate Audit Score →
-                  </button>
-                )}
+                  Head to the Tailored Rewrite tab to run the rewrite with these additions.
+                </span>
               </div>
             )}
           </div>

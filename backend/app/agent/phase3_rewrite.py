@@ -249,20 +249,12 @@ async def run(
                 "phase": 3,
                 "message": "Selecting relevant master-resume chunks against this JD…",
             })
-            try:
-                retrieval_result = await _run_retrieval(user_uuid, jd_text)
-            except MasterResumeRequiredError:
-                # Propagate the structured 409 up the orchestrator —
-                # ``app/agent/orchestrator.py`` catches it and turns the
-                # SSE error event into ``{"code": "master_resume_required"}``
-                # so the frontend can route to ``/profile``.
-                raise
-            else:
-                await event_queue.put({
-                    "event": "retrieval",
-                    "phase": 3,
-                    "data": retrieval_result.to_trace(),
-                })
+            retrieval_result = await _run_retrieval(user_uuid, jd_text)
+            await event_queue.put({
+                "event": "retrieval",
+                "phase": 3,
+                "data": retrieval_result.to_trace(),
+            })
 
     # Estimate cost and surface it before the call.
     estimated_input = (len(resume_text) + len(jd_text)) // 3

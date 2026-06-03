@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { signIn, useSession } from "next-auth/react"
+import { signIn, useSession, getProviders } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
 import zxcvbn from "zxcvbn"
 import {
@@ -67,6 +67,17 @@ function AuthPageContent() {
   const [error, setError] = useState<string | null>(initialError)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [strength, setStrength] = useState(0)
+  const [ssoProviders, setSsoProviders] = useState<{ google?: boolean; github?: boolean }>({})
+
+  useEffect(() => {
+    getProviders().then((providers) => {
+      if (!providers) return
+      setSsoProviders({
+        google: Boolean(providers.google),
+        github: Boolean(providers.github),
+      })
+    })
+  }, [])
 
   function doRedirect(callbackUrl: string, emailVerifiedAt: string | null | undefined) {
     if (callbackUrl && callbackUrl !== "/auth") {
@@ -78,11 +89,13 @@ function AuthPageContent() {
     }
   }
 
-  // Redirect if already signed in
+  // Redirect if already signed in with a backend token
   useEffect(() => {
-    if (status === "authenticated" && session) {
+    if (status === "authenticated" && session?.backendAccessToken) {
       const callbackUrl = searchParams.get("callbackUrl") ?? ""
       doRedirect(callbackUrl, session.backendUser?.email_verified_at)
+    } else if (status === "authenticated" && session?.error) {
+      setError(friendlyError(session.error))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session])
@@ -333,26 +346,33 @@ function AuthPageContent() {
                 ))}
               </div>
 
-              {/* SSO buttons */}
-              <div className="space-y-3 mb-6">
-                <button
-                  type="button"
-                  onClick={() => handleSSO("google")}
-                  className="w-full flex items-center justify-center gap-3 bg-slate-800 border border-slate-700 text-slate-200 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
-                >
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSSO("github")}
-                  className="w-full flex items-center justify-center gap-3 bg-slate-800 border border-slate-700 text-slate-200 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
-                >
-                  <GitHubIcon />
-                  Continue with GitHub
-                </button>
-              </div>
+              {/* SSO buttons — only when real OAuth credentials are configured */}
+              {(ssoProviders.google || ssoProviders.github) && (
+                <div className="space-y-3 mb-6">
+                  {ssoProviders.google && (
+                    <button
+                      type="button"
+                      onClick={() => handleSSO("google")}
+                      className="w-full flex items-center justify-center gap-3 bg-slate-800 border border-slate-700 text-slate-200 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
+                    >
+                      <GoogleIcon />
+                      Continue with Google
+                    </button>
+                  )}
+                  {ssoProviders.github && (
+                    <button
+                      type="button"
+                      onClick={() => handleSSO("github")}
+                      className="w-full flex items-center justify-center gap-3 bg-slate-800 border border-slate-700 text-slate-200 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
+                    >
+                      <GitHubIcon />
+                      Continue with GitHub
+                    </button>
+                  )}
+                </div>
+              )}
 
+              {(ssoProviders.google || ssoProviders.github) && (
               <div className="relative mb-6">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-slate-700" />
@@ -361,6 +381,7 @@ function AuthPageContent() {
                   <span className="bg-slate-900 px-3 text-slate-500">or continue with email</span>
                 </div>
               </div>
+              )}
 
               {/* Email / password form */}
               <form
