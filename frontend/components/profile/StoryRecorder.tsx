@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Clock, Loader2, Mic, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { StoryCoach } from "./StoryCoach";
 import { StorySegment } from "./StorySegment";
 import { polishResume, submitStory } from "@/lib/story";
 import { getStoredKey } from "@/lib/keyStore";
@@ -39,6 +40,8 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [totalMs, setTotalMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Index of the segment whose coach panel is open (null = none)
+  const [openCoachIndex, setOpenCoachIndex] = useState<number | null>(null);
   const [reviewText, setReviewText] = useState<string | null>(null);
   const [prevText, setPrevText] = useState<string | null>(null);
   const [polishInstruction, setPolishInstruction] = useState("");
@@ -420,18 +423,39 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
       {/* Segment list */}
       <div className="space-y-3">
-        {segments.map((text, i) => (
-          <StorySegment
-            key={i}
-            index={i}
-            text={text}
-            isRecording={recordingState === "re-recording" && reRecordingIndex === i}
-            disabled={isRecordingAnything || submitting}
-            onChange={(newText) => setSegments((prev) => prev.map((s, j) => j === i ? newText : s))}
-            onReRecord={() => void startReRecord(i)}
-            onDelete={() => deleteSegment(i)}
-          />
-        ))}
+        {segments.map((text, i) => {
+          const storedKey = getStoredKey();
+          return (
+            <div key={i} className="space-y-2">
+              <StorySegment
+                index={i}
+                text={text}
+                isRecording={recordingState === "re-recording" && reRecordingIndex === i}
+                disabled={isRecordingAnything || submitting}
+                coachOpen={openCoachIndex === i}
+                onChange={(newText) => setSegments((prev) => prev.map((s, j) => j === i ? newText : s))}
+                onReRecord={() => void startReRecord(i)}
+                onDelete={() => deleteSegment(i)}
+                onCoach={() => setOpenCoachIndex((prev) => prev === i ? null : i)}
+              />
+              {openCoachIndex === i && (
+                <StoryCoach
+                  segmentText={text}
+                  token={token}
+                  isFreeUser={!storedKey?.apiKey}
+                  byokApiKey={storedKey?.apiKey}
+                  byokProvider={storedKey?.provider}
+                  byokModel={storedKey?.model}
+                  onAddAsSegment={(answerText) => {
+                    setSegments((prev) => [...prev, answerText]);
+                    setOpenCoachIndex(null);
+                  }}
+                  onClose={() => setOpenCoachIndex(null)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Current recording indicator (new segment) */}

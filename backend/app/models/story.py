@@ -1,6 +1,37 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
+
+
+class CoachMessage(BaseModel):
+    role: Literal["coach", "user"]
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+class CoachRequest(BaseModel):
+    segment_text: str = Field(
+        ...,
+        min_length=10,
+        max_length=5000,
+        description="Transcript of the segment being coached.",
+    )
+    history: list[CoachMessage] = Field(
+        default_factory=list,
+        description="Prior coach/user exchanges in this session (max 3 coach turns).",
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Optional session ID for credit-dedup / audit.",
+    )
+
+    @model_validator(mode="after")
+    def validate_exchange_count(self) -> "CoachRequest":
+        coach_turns = sum(1 for m in self.history if m.role == "coach")
+        if coach_turns > 3:
+            raise ValueError("Maximum 3 coaching exchanges per segment session.")
+        return self
 
 
 class PolishResumeRequest(BaseModel):
