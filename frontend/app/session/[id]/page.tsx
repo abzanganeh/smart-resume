@@ -37,7 +37,7 @@ import {
   LLMTierSelector,
   LLMUpgradePurchaseModal,
 } from "@/components/session/LLMTierSelector";
-import { AlertCircle, ChevronRight, MessageSquare, Sparkles } from "lucide-react";
+import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume } from "@/lib/api";
 import { getStoredKey } from "@/lib/keyStore";
@@ -84,6 +84,7 @@ function SessionContent() {
   const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
+  const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState<CoverLetterOutput | null>(null);
 
@@ -408,6 +409,7 @@ function SessionContent() {
     setRunError(null);
     setRunErrorCode(null);
     setRunErrorType(null);
+    setShowRecalcConfirm(false);
     reset();
   }, [step, reset]);
 
@@ -614,14 +616,40 @@ function SessionContent() {
                   </p>
                 </div>
                 {tailored && (
-                  <button
-                    type="button"
-                    onClick={() => recalculateAts()}
-                    disabled={atsRecalcRunning || phaseRunning}
-                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
-                  >
-                    {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {showRecalcConfirm ? (
+                      <>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-xs text-amber-300">
+                          <Zap className="w-3.5 h-3.5 shrink-0" />
+                          Costs 1 credit
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setShowRecalcConfirm(false); recalculateAts(); }}
+                          disabled={atsRecalcRunning || phaseRunning}
+                          className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-40"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowRecalcConfirm(false)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowRecalcConfirm(true)}
+                        disabled={atsRecalcRunning || phaseRunning}
+                        className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                      >
+                        {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               {byokEntry?.apiKey ? (
