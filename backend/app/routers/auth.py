@@ -23,7 +23,7 @@ from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +54,13 @@ from app.services.auth.exceptions import (
     TokenInvalidError,
     WeakPasswordError,
 )
-from app.services.auth.oauth import exchange_github_code, exchange_google_code
+from app.services.auth.oauth import (
+    exchange_github_code,
+    exchange_google_code,
+    fetch_github_profile_with_access_token,
+    fetch_google_profile_with_access_token,
+    verify_google_id_token,
+)
 from app.services.auth.password import (
     check_strength,
     hash_password,
@@ -108,8 +114,16 @@ class LoginRequest(BaseModel):
 
 class CallbackRequest(BaseModel):
     provider: Literal["google", "github"]
-    code: str = Field(..., min_length=1, max_length=4096)
-    redirect_uri: str = Field(..., max_length=1024)
+    code: str | None = Field(None, min_length=1, max_length=4096)
+    id_token: str | None = Field(None, min_length=1, max_length=8192)
+    access_token: str | None = Field(None, min_length=1, max_length=4096)
+    redirect_uri: str = Field(default="http://localhost:3000", max_length=1024)
+
+    @model_validator(mode="after")
+    def require_one_credential(self) -> "CallbackRequest":
+        if not any([self.code, self.id_token, self.access_token]):
+            raise ValueError("One of code, id_token, or access_token is required")
+        return self
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -510,9 +524,27 @@ async def oauth_callback(
 ) -> AuthSuccessResponse:
     try:
         if payload.provider == "google":
-            profile = await exchange_google_code(payload.code, payload.redirect_uri)
+            if payload.id_token:
+                profile = await verify_google_id_token(payload.id_token)
+            elif payload.access_token:
+                profile = await fetch_google_profile_with_access_token(payload.access_token)
+            else:
+                profile = await exchange_google_code(
+                    payload.code or "",
+                    payload.redirect_uri,
+                )
+        elif payload.id_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "oauth_failed", "message": "GitHub does not support id_token"},
+            )
+        elif payload.access_token:
+            profile = await fetch_github_profile_with_access_token(payload.access_token)
         else:
-            profile = await exchange_github_code(payload.code, payload.redirect_uri)
+            profile = await exchange_github_code(
+                payload.code or "",
+                payload.redirect_uri,
+            )
     except OAuthError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

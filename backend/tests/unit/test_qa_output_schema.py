@@ -93,18 +93,29 @@ def test_score_ceiling_must_not_be_below_ats_score() -> None:
         QAOutput.model_validate(payload)
 
 
-def test_blocking_issues_must_be_sorted_by_impact_then_effort() -> None:
+def test_blocking_issues_are_auto_sorted_by_impact_then_effort() -> None:
+    """Out-of-order LLM output is auto-corrected by the pre-validator,
+    not rejected (so we don't waste retries on cosmetic ordering)."""
     payload = _mock_phase4_payload()
     payload["blocking_issues"] = [
         payload["blocking_issues"][2],  # low
         payload["blocking_issues"][0],  # high one_click
         payload["blocking_issues"][1],  # high user_input
     ]
-    with pytest.raises(ValidationError):
-        QAOutput.model_validate(payload)
+
+    output = QAOutput.model_validate(payload)
+
+    assert [i.impact for i in output.blocking_issues] == ["high", "high", "low"]
+    assert [i.fix_effort for i in output.blocking_issues] == [
+        "one_click",
+        "user_input",
+        "manual_rewrite",
+    ]
 
 
-def test_quick_wins_must_be_high_one_click_subset_of_blocking_issues() -> None:
+def test_quick_wins_invalid_entries_are_dropped() -> None:
+    """LLM frequently mislabels quick_wins entries (e.g. user_input fix effort).
+    Auto-filter rather than fail the whole response."""
     payload = _mock_phase4_payload()
     payload["quick_wins"] = [
         {
@@ -115,5 +126,25 @@ def test_quick_wins_must_be_high_one_click_subset_of_blocking_issues() -> None:
             "fix_effort": "user_input",
         }
     ]
-    with pytest.raises(ValidationError):
-        QAOutput.model_validate(payload)
+
+    output = QAOutput.model_validate(payload)
+
+    assert output.quick_wins == []
+
+
+def test_quick_wins_not_in_blocking_issues_are_dropped() -> None:
+    """A quick_win must also exist in blocking_issues (single source of truth)."""
+    payload = _mock_phase4_payload()
+    payload["quick_wins"] = [
+        {
+            "category": "keyword",
+            "description": "Phantom quick win not present in blocking_issues.",
+            "suggestion": "Add some keyword.",
+            "impact": "high",
+            "fix_effort": "one_click",
+        }
+    ]
+
+    output = QAOutput.model_validate(payload)
+
+    assert output.quick_wins == []

@@ -170,15 +170,36 @@ async def submit_jd(session_id: str, body: JDRequest):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    import httpx
+    from app.parsers.html_parser import strip_html_to_text
+
     jd_text = body.jd_text
     if body.jd_url and not jd_text:
-        import httpx
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(body.jd_url)
-                jd_text = resp.text[: settings.MAX_JD_CHARS]
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                resp = await client.get(
+                    body.jd_url,
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; SmartResume/1.0)"},
+                )
+                jd_text = strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)
         except Exception:
             raise HTTPException(status_code=422, detail="Could not fetch JD from URL.")
+
+        # Catch JS-rendered pages that return a thin HTML shell with no
+        # readable text (Jobright, Greenhouse, Lever, etc.).
+        if len(jd_text.strip()) < 200:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "The job board page couldn't be scraped — it uses JavaScript rendering "
+                    "and returned no readable text. Please copy and paste the job description "
+                    "text directly into the JD field instead."
+                ),
+            )
+
+    # Strip HTML even from manually-pasted text (belt-and-suspenders).
+    if jd_text:
+        jd_text = strip_html_to_text(jd_text, max_chars=settings.MAX_JD_CHARS)
 
     if len(jd_text) > settings.MAX_JD_CHARS:
         raise HTTPException(
@@ -186,10 +207,22 @@ async def submit_jd(session_id: str, body: JDRequest):
             detail=f"Job description exceeds {settings.MAX_JD_CHARS:,} characters. Paste only the requirements section.",
         )
 
+    jd_changed = (session.jd_raw or "").strip() != jd_text.strip()
     session.jd_raw = jd_text
     if body.provider:
         session.provider = body.provider
     if body.model:
         session.model = body.model
+
+    # If the JD changed, all phase outputs are stale — wipe them so the
+    # user is not misled by results computed from the old job description.
+    if jd_changed:
+        session.phase1_output = None
+        session.phase2_output = None
+        session.phase3_output = None
+        session.phase4_output = None
+        session.phase3_stale_since = None
+        session.phase4_stale_since = None
+
     await update_session(session)
-    return {"ok": True}
+    return {"ok": True, "jd_changed": jd_changed}

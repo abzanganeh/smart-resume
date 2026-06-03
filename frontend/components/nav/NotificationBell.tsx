@@ -16,7 +16,8 @@ const POLL_MS = 60_000;
 
 export function NotificationBell() {
   const { data: session } = useSession();
-  const token = session?.backendAccessToken;
+  // Treat an expired backend token the same as no token — stop polling until re-auth.
+  const token = session?.error === "TokenExpired" ? undefined : session?.backendAccessToken;
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);

@@ -1,82 +1,123 @@
 # Smart Resume Agent
 
-An AI-powered web application that tailors your resume to any job description using ATS keyword analysis and evidence-based resume quality rules.
-
-> **No API key setup required.** Users enter their own key directly in the browser — it never leaves their device.
+An AI-powered resume tailoring platform. Upload your resume, paste a job description, and the agent rewrites your resume with exact JD phrasing and ATS-optimized keywords — without fabricating metrics.
 
 ---
 
 ## Quick Start
 
-### Run with Docker Compose (recommended)
+### Docker Compose (recommended)
 
 ```bash
+cp backend/.env.example backend/.env
+# Fill in at minimum: NEXTAUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GEMINI_API_KEY
 docker compose up
 ```
 
-Opens:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API docs: http://localhost:8000/docs
+| Service   | URL                          |
+|-----------|------------------------------|
+| App       | http://localhost:3000        |
+| API       | http://localhost:8000        |
+| API docs  | http://localhost:8000/docs   |
 
-No `.env` configuration needed for local use — just open the app, pick your AI provider, and paste your key in the UI.
+### Local development
 
-### Run locally (development)
-
-**Backend:**
+**Backend** (Python 3.12+, [uv](https://github.com/astral-sh/uv)):
 ```bash
 cd backend
+cp .env.example .env   # fill in required vars
 uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-**Frontend:**
+**Frontend** (Node 20+, pnpm):
 ```bash
 cd frontend
-cp .env.local.example .env.local
+cp .env.local.example .env.local   # fill in NEXTAUTH_* vars
 pnpm install
 pnpm dev
 ```
 
 ---
 
-## How API Keys Work (BYOK)
+## How It Works
 
-The app uses a **Bring Your Own Key** model:
+### 1 — Sign in
 
-1. In the Job Description step, open the **AI Provider & Key** card
-2. Pick a provider (OpenAI, Anthropic, Gemini, OpenRouter, or Ollama)
-3. Paste your API key (link to each provider's key dashboard is shown)
-4. Click **Use this provider**
+Sign in with Google (or any configured OAuth provider). Your account links uploaded resumes, sessions, and usage quota.
 
-Your key is stored in your browser's `sessionStorage` only — it disappears when you close the tab and is **never logged, stored, or sent anywhere except directly to the LLM API**.
+### 2 — Upload your master resume (optional but recommended)
 
-### Supported providers
+Go to **Profile → Upload Resume**. The master resume is chunked and embedded — Phase 3 draws from it when rewriting to ensure your real experience is used rather than the thin text in your session resume.
 
-| Provider | Key dashboard | Recommended model |
-|---|---|---|
-| OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | `gpt-4o` |
-| Anthropic | [console.anthropic.com](https://console.anthropic.com/) | `claude-3-5-sonnet-20241022` |
-| Google Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | `gemini-2.5-flash` |
-| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | any available model |
-| Ollama (local, free) | — install from [ollama.ai](https://ollama.ai) | `llama3.1:8b` |
+### 3 — Start a session
 
-### Self-hosting with a pre-configured key (optional)
+Paste or upload your resume and the job description. Optionally provide a JD URL — if the page is JavaScript-rendered (Jobright, Greenhouse, Lever, etc.) the app will warn you to paste the text directly.
 
-If you're deploying this for a team and want to pre-configure a key so users don't need their own, add it to `backend/.env`:
+Select your **AI model tier** for the rewrite:
+
+| Tier     | Model                    | Cost              |
+|----------|--------------------------|-------------------|
+| Standard | Gemini 2.5 Flash-Lite    | Included with plan |
+| Better   | Gemini 2.5 Flash         | +$0.898 / resume  |
+| Best     | Claude Sonnet 4.6        | +$2.99 / resume   |
+
+### 4 — Run the four phases
+
+Each phase has a **Run** button. Phases do not auto-trigger — cached outputs replay automatically without re-running unless you click Re-run.
+
+| Phase | Tab         | What it does                                                                 |
+|-------|-------------|------------------------------------------------------------------------------|
+| 1     | Audit       | Extracts must-have and nice-to-have ATS keywords from the JD                 |
+| 2     | Audit       | Gaps every missing keyword, weak bullet, and cliché in your current resume   |
+| 3     | Rewrite     | Rewrites with exact JD phrasing; never fabricates metrics                    |
+| 4     | QA & Export | Runs the 8-point quality checklist; computes your ATS score                  |
+
+Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
+
+### 5 — Review and iterate
+
+**Rewrite tab:**
+- Edit any section inline (Summary, Skills, Experience bullets, Education, Projects)
+- **Regenerate** individual sections or bullets via the AI
+- **Undo / Redo** through version history
+- **Chat panel** — type a freeform edit request (e.g. "add a metric to the second bullet") and the AI generates a patch you can accept or reject without re-running the full pipeline
+
+**ATS Guidance panel (Phase 4):**
+- ATS score with baseline → current delta (e.g. Baseline 60 → Now 65 ↑+5 pts)
+- Score ceiling based on your master resume content
+- **Quick wins** — one-click keyword and phrasing suggestions; accept the ones you want, then apply them all at once
+- **Blocking issues** — ranked by severity (high / medium)
+
+---
+
+## Authentication & Providers
+
+### OAuth setup (required)
 
 ```bash
-cd backend
-cp .env.example .env
-# Fill in the key for one provider, e.g.:
-# OPENAI_API_KEY=sk-...
-# LLM_PROVIDER=openai
-# LLM_MODEL=gpt-4o
+# backend/.env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+NEXTAUTH_SECRET=...          # any random 32-char string
+NEXTAUTH_URL=http://localhost:3000
 ```
 
-The UI will show a green "configured" badge on that provider. Users can still override it with their own key.
+### LLM providers
 
-### Adding a new LLM provider (3 steps)
+The platform ships with Gemini pre-configured. To add other providers or override models:
+
+```bash
+# backend/.env — any subset is valid
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=AIza...
+OPENROUTER_API_KEY=sk-or-...
+```
+
+Users can also supply their own key (BYOK) per session from the model picker in the UI. The key is held only in `sessionStorage` and never logged.
+
+### Adding a new LLM provider
 
 1. Create `backend/app/llm/providers/my_provider_adapter.py` — implement `LLMClient`
 2. Add a `case "my_provider":` block in `backend/app/llm/factory.py`
@@ -84,29 +125,38 @@ The UI will show a green "configured" badge on that provider. Users can still ov
 
 ---
 
-## How It Works
-
-The agent runs 4 sequential phases:
-
-| Phase | What it does |
-|---|---|
-| 1 — Keywords | Extracts must-have and nice-to-have ATS keywords from the JD |
-| 2 — Audit | Gaps every missing keyword, weak bullet, and cliché in your resume |
-| 3 — Rewrite | Rewrites with exact JD phrasing; never fabricates metrics |
-| 4 — QA | Runs the 8-point quality checklist before export |
-
-Each phase streams results to the browser via SSE as the AI works.
-
----
-
-## Session Notes
-
-- Sessions are anonymous — no account required
-- Sessions expire after **24 hours**; a warning banner appears at the 20-hour mark
-- Resume content is never logged or stored beyond the session TTL
-
----
-
 ## Architecture
 
-See `docs/SYSTEM_DESIGN.md` for the full architecture, API contracts, data models, and design decisions.
+```
+frontend/          Next.js 15 app (App Router, NextAuth.js, Tailwind)
+backend/
+  app/
+    agent/         Phase 1–4 LLM agents + Chat agent
+    routers/       FastAPI route handlers
+    models/        Pydantic schemas (session, keywords, QA, chat, …)
+    llm/           LLM client abstraction + provider adapters
+    parsers/       PDF / DOCX / HTML → plain text
+    services/      Subscription, notifications, profile, dashboard
+```
+
+Sessions are stored in Redis. Parsed resume chunks and embeddings are stored in Postgres (pgvector). See `docs/SYSTEM_DESIGN_PHASE_2.md` for the full architecture, API contracts, and data models.
+
+---
+
+## Key environment variables
+
+| Variable                   | Required | Description                                    |
+|----------------------------|----------|------------------------------------------------|
+| `NEXTAUTH_SECRET`          | Yes      | NextAuth signing secret (min 32 chars)         |
+| `NEXTAUTH_URL`             | Yes      | Public URL of the frontend                     |
+| `GOOGLE_CLIENT_ID`         | Yes      | Google OAuth client ID                         |
+| `GOOGLE_CLIENT_SECRET`     | Yes      | Google OAuth client secret                     |
+| `DATABASE_URL`             | Yes      | Postgres connection string                     |
+| `REDIS_URL`                | Yes      | Redis connection string                        |
+| `GEMINI_API_KEY`           | Yes*     | Default LLM provider key                       |
+| `BOOTSTRAP_SUPER_ADMIN_EMAIL` | No   | Email that gets super-admin role on first login |
+| `MAX_JD_CHARS`             | No       | Max job description length (default 20 000)    |
+
+\* At least one LLM provider key is required.
+
+Full variable reference: `backend/.env.example`

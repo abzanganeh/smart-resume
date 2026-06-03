@@ -25,7 +25,10 @@ import Google from "next-auth/providers/google"
 import GitHub from "next-auth/providers/github"
 import Credentials from "next-auth/providers/credentials"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const API_URL =
+  process.env.INTERNAL_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:8000"
 const NEXTAUTH_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
 const isLocalEnv =
   process.env.NEXT_PUBLIC_APP_ENV === "local" || process.env.NODE_ENV !== "production"
@@ -58,12 +61,7 @@ interface BackendAuthUser extends User {
 
 /**
  * Call the backend after an OAuth sign-in to create/sync the backend user.
- *
- * TODO (backend): POST /api/auth/callback currently re-exchanges the code
- * with the provider.  Once the backend can also accept a verified
- * `access_token` or `id_token`, remove the "code exchange" path and pass
- * the token directly.  Until then this call is expected to fail for OAuth
- * sign-ins and we fall through gracefully.
+ * NextAuth has already exchanged the auth code; pass id_token or access_token.
  */
 async function syncOAuthWithBackend(
   provider: string,
@@ -71,13 +69,17 @@ async function syncOAuthWithBackend(
   idToken: string | undefined,
   callbackUrl: string,
 ): Promise<{ access_token: string; expires_in: number; user: BackendUser } | null> {
-  const token = idToken ?? accessToken
-  if (!token) return null
+  if (!idToken && !accessToken) return null
   try {
     const res = await fetch(`${API_URL}/api/auth/callback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, code: token, redirect_uri: callbackUrl }),
+      body: JSON.stringify({
+        provider,
+        ...(idToken ? { id_token: idToken } : {}),
+        ...(accessToken ? { access_token: accessToken } : {}),
+        redirect_uri: callbackUrl,
+      }),
     })
     if (!res.ok) return null
     return res.json()
@@ -86,19 +88,61 @@ async function syncOAuthWithBackend(
   }
 }
 
+const PLACEHOLDER_OAUTH_CLIENT_IDS = new Set([
+  "local-google-id",
+  "local-github-id",
+  "playwright-google-client-id",
+  "playwright-github-client-id",
+])
+
+function oauthCredentialsConfigured(
+  clientId: string | undefined,
+  clientSecret: string | undefined,
+): boolean {
+  const id = clientId?.trim() ?? ""
+  const secret = clientSecret?.trim() ?? ""
+  if (!id || !secret) return false
+  return !PLACEHOLDER_OAUTH_CLIENT_IDS.has(id)
+}
+
+const googleOAuthConfigured = oauthCredentialsConfigured(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+)
+const githubOAuthConfigured = oauthCredentialsConfigured(
+  process.env.GITHUB_CLIENT_ID,
+  process.env.GITHUB_CLIENT_SECRET,
+)
+
+const oauthProviders = [
+  ...(googleOAuthConfigured
+    ? [
+        Google({
+          clientId: process.env.GOOGLE_CLIENT_ID!,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        }),
+      ]
+    : []),
+  ...(githubOAuthConfigured
+    ? [
+        GitHub({
+          clientId: process.env.GITHUB_CLIENT_ID!,
+          clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        }),
+      ]
+    : []),
+]
+
 // ── NextAuth config ───────────────────────────────────────────────────────────
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: nextAuthSecret,
+  trustHost:
+    process.env.AUTH_TRUST_HOST === "true" ||
+    process.env.AUTH_TRUST_HOST === "1" ||
+    isLocalEnv,
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-    }),
+    ...oauthProviders,
 
     /**
      * Primary credentials provider: email + password.

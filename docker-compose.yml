@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: smart_resume
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "${POSTGRES_HOST_PORT:-54325}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +19,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Internal only — backend reaches redis:6379 on the compose network.
+    # Set REDIS_HOST_PORT (e.g. 6380) in .env if you need host access for local backend dev.
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
 
@@ -50,8 +52,17 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+      - path: ./backend/.env
+        required: false
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - INTERNAL_API_URL=http://backend:8000
+      - NEXTAUTH_URL=http://localhost:3000
+      - AUTH_TRUST_HOST=true
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-local-docker-dev-secret-change-me}
     depends_on:
       - backend
 
