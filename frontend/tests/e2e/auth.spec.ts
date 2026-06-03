@@ -109,7 +109,7 @@ test.describe("register → email banner → login → onboarding", () => {
     await page.getByPlaceholder("••••••••••").fill(password)
     await page.getByRole("button", { name: "Sign in" }).click()
 
-    // 8. Should redirect to /onboarding on first login (email not yet verified)
+    // 8. Should redirect to /onboarding on first login (onboarding not yet completed)
     await page.waitForURL(/\/onboarding/, { timeout: 10_000 })
     await expect(page.getByText(/Welcome/)).toBeVisible()
   })

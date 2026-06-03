@@ -74,3 +74,61 @@ def test_story_build_in_free_credit_actions():
     """story_build must be in FREE_CREDIT_ACTIONS."""
     from app.services.billing.quota import FREE_CREDIT_ACTIONS
     assert QuotaAction.story_build in FREE_CREDIT_ACTIONS
+
+
+@pytest.mark.asyncio
+async def test_story_coach_second_segment_same_session_is_free():
+    """One credit per story build session — second coach call reuses the charge."""
+    from unittest.mock import patch
+    from app.services.billing.quota import (
+        _story_coach_build_already_charged,
+        check_quota_for_story_coach,
+    )
+
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+
+    with patch(
+        "app.services.billing.quota._story_coach_build_already_charged",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+        "app.services.billing.quota.consume_credit",
+    ) as mock_consume:
+        result = await check_quota_for_story_coach(
+            mock_db,
+            user=mock_user,
+            byok_active=False,
+            session_id="story-build-abc",
+        )
+
+    assert result.charged_to == "story_build_session_included"
+    mock_consume.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_story_coach_first_segment_charges_one_credit():
+    """First coach call in a story build session consumes 1 credit."""
+    from app.services.billing.quota import check_quota_for_story_coach
+
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+    mock_txn = MagicMock(id="txn-1")
+
+    with patch(
+        "app.services.billing.quota._story_coach_build_already_charged",
+        new_callable=AsyncMock,
+        return_value=False,
+    ), patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+        "app.services.billing.quota.consume_credit",
+        return_value=mock_txn,
+    ) as mock_consume:
+        result = await check_quota_for_story_coach(
+            mock_db,
+            user=mock_user,
+            byok_active=False,
+            session_id="story-build-abc",
+        )
+
+    assert result.charged_to == "free_credit"
+    mock_consume.assert_called_once()

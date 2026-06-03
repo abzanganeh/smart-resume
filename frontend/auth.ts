@@ -49,6 +49,8 @@ export interface BackendUser {
   has_totp: boolean
   closure_requested_at: string | null
   suspended_at: string | null
+  onboarding_completed_at: string | null
+  onboarding_ai_choice: "platform" | "byok" | null
 }
 
 interface BackendAuthUser extends User {
@@ -230,7 +232,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
 
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
+      if (trigger === "update" && session?.backendUser) {
+        token.backendUser = session.backendUser
+        return token
+      }
+
       // ── Initial sign-in ────────────────────────────────────────────────────
       if (user && (account?.provider === "credentials" || account?.provider === "token")) {
         const backendUser = user as BackendAuthUser

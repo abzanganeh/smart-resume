@@ -3,11 +3,12 @@
  *
  * Wraps every request with NextAuth's auth() to expose req.auth.
  * Protected routes redirect unauthenticated visitors to /auth.
- * Authenticated visitors hitting /auth are redirected to /dashboard.
+ * Authenticated visitors with incomplete onboarding go to /onboarding.
  */
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { decodeSignedAdminSession } from "@/lib/admin/token"
+import { isOnboardingExempt, needsOnboarding } from "@/lib/auth/onboarding"
 
 // Prefix-match protected routes.
 const PROTECTED_PREFIXES = [
@@ -53,8 +54,13 @@ export default auth(async function proxy(req) {
     return NextResponse.redirect(url)
   }
 
+  if (session?.backendUser && needsOnboarding(session.backendUser) && !isOnboardingExempt(pathname)) {
+    return NextResponse.redirect(new URL("/onboarding", req.url))
+  }
+
   if (AUTH_ONLY_PATHS.some((p) => pathname === p) && session) {
-    return NextResponse.redirect(new URL("/dashboard", req.url))
+    const dest = session.backendUser && needsOnboarding(session.backendUser) ? "/onboarding" : "/dashboard"
+    return NextResponse.redirect(new URL(dest, req.url))
   }
 
   return NextResponse.next()

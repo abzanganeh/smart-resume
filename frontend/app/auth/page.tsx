@@ -36,13 +36,14 @@ function AuthPageContent() {
 
   // Derive initial 2FA state directly from URL params (avoids setState-in-effect warning)
   const errorParam = searchParams.get("error") ?? ""
+  const modeParam = searchParams.get("mode")
   const initialTfa: TfaRequired | null = errorParam.startsWith("2fa_required:")
     ? (() => {
         const parts = errorParam.split(":")
         return { code: "2fa_required" as const, challenge_token: parts[1], expires_in: Number(parts[2] ?? 300) }
       })()
     : null
-  const initialView: View = initialTfa ? "2fa" : "login"
+  const initialView: View = initialTfa ? "2fa" : modeParam === "register" ? "register" : "login"
   const initialError: string | null = !initialTfa && errorParam ? friendlyError(errorParam) : null
 
   const [view, setView] = useState<View>(initialView)
@@ -79,10 +80,13 @@ function AuthPageContent() {
     })
   }, [])
 
-  function doRedirect(callbackUrl: string, emailVerifiedAt: string | null | undefined) {
-    if (callbackUrl && callbackUrl !== "/auth") {
+  function doRedirect(
+    callbackUrl: string,
+    onboardingCompletedAt: string | null | undefined,
+  ) {
+    if (callbackUrl && callbackUrl !== "/auth" && onboardingCompletedAt) {
       router.replace(callbackUrl)
-    } else if (!emailVerifiedAt) {
+    } else if (!onboardingCompletedAt) {
       router.replace("/onboarding")
     } else {
       router.replace("/dashboard")
@@ -93,7 +97,7 @@ function AuthPageContent() {
   useEffect(() => {
     if (status === "authenticated" && session?.backendAccessToken) {
       const callbackUrl = searchParams.get("callbackUrl") ?? ""
-      doRedirect(callbackUrl, session.backendUser?.email_verified_at)
+      doRedirect(callbackUrl, session.backendUser?.onboarding_completed_at)
     } else if (status === "authenticated" && session?.error) {
       setError(friendlyError(session.error))
     }
