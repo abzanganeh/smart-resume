@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+_US_STATE_RE = re.compile(r"^[A-Z]{2}$")
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -43,7 +46,7 @@ def _normalize_location(location_str: str | None) -> tuple[str | None, str | Non
         return parts[0], None
     if len(parts) == 2:
         return parts[0], parts[1]
-    if len(parts) >= 3 and len(parts[1]) == 2:
+    if len(parts) >= 3 and _US_STATE_RE.match(parts[1].upper()):
         return parts[0], parts[-1]
     return parts[0], parts[-1]
 
@@ -81,6 +84,7 @@ def _normalize_record(raw: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any
     elif isinstance(posted_raw, datetime):
         posted_date = posted_raw
     else:
+        log.warning("missing or unrecognised posted_date in raw record; defaulting to now")
         posted_date = now
 
     external_id = str(raw.get("id") or raw.get("jobId") or "")

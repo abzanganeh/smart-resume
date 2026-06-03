@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -15,6 +16,8 @@ from app.services.jobs.normalization import (
     normalize_location,
     normalize_salary,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _merge_sources(existing: list[str], incoming: str) -> list[str]:
@@ -52,6 +55,7 @@ def normalize_apify_record(
     elif isinstance(posted_raw, datetime):
         posted_date = posted_raw
     else:
+        log.warning("missing or unrecognised posted_date in raw record; defaulting to now")
         posted_date = now
 
     currency = raw.get("salary_currency") or raw.get("salaryCurrency")
