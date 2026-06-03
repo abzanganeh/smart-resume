@@ -23,7 +23,7 @@ class CoachRequest(BaseModel):
     )
     session_id: str | None = Field(
         default=None,
-        description="Optional session ID for credit-dedup / audit.",
+        description="Story build session ID — scopes the single coach credit per resume build.",
     )
 
     @model_validator(mode="after")

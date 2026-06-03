@@ -36,7 +36,7 @@ const MODES: ModeCard[] = [
       "Edit, re-record, or delete any segment",
       "Generate resume when you're ready",
     ],
-    cost: "Free (Chrome/Edge) · 2 credits (Firefox/Safari) · coaching: 1 cr/segment",
+    cost: "Free (Chrome/Edge) · 2 credits (Firefox/Safari) · coaching: 1 credit / resume build",
     costColor: "text-emerald-400",
   },
   {

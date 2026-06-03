@@ -44,7 +44,7 @@ from app.models.billing import (
     SubscriptionPlan,
     SubscriptionStatus,
 )
-from app.models.user import User
+from app.models.user import User, CreditTransaction
 from app.services.billing.credits import consume_credit
 from app.services.billing.exceptions import (
     AccountSuspendedError,
@@ -398,6 +398,26 @@ async def check_quota_for_story(
     )
 
 
+async def _story_coach_build_already_charged(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    story_session_id: str,
+) -> bool:
+    """True when this story build session already consumed the 1 coach credit."""
+    if not story_session_id.strip():
+        return False
+    row = await session.execute(
+        select(CreditTransaction.id)
+        .where(CreditTransaction.user_id == user_id)
+        .where(CreditTransaction.reason == QuotaAction.story_coach.value)
+        .where(CreditTransaction.session_id == story_session_id)
+        .where(CreditTransaction.delta < 0)
+        .limit(1)
+    )
+    return row.scalar_one_or_none() is not None
+
+
 async def check_quota_for_story_coach(
     session: AsyncSession,
     *,
@@ -410,9 +430,11 @@ async def check_quota_for_story_coach(
     Cost:
       - BYOK:           0 credits — user pays their own LLM costs
       - Subscribers:    0 credits — included in subscription (~$0.002 per call)
-      - Free users:     1 credit per coaching session (charged on first exchange)
+      - Free users:     1 credit per story build session (first coached segment
+                        only; further segments in the same session_id are free)
 
-    One session = one "Coach me" click on a segment (up to 3 exchanges inside).
+    One billed session = one resume build in Story Mode.  Up to 3 coach/user
+    exchanges per segment are included; session_id scopes the single credit.
     """
     if user.is_suspended:
         raise AccountSuspendedError("account_suspended")
@@ -427,6 +449,14 @@ async def check_quota_for_story_coach(
             action=QuotaAction.story_coach,
             charged_to="subscription",
             subscription_id=sub.id,
+        )
+
+    if session_id and await _story_coach_build_already_charged(
+        session, user_id=user.id, story_session_id=session_id
+    ):
+        return QuotaDecision(
+            action=QuotaAction.story_coach,
+            charged_to="story_build_session_included",
         )
 
     try:

@@ -9,7 +9,7 @@
  *  - After MAX_EXCHANGES (3) coach questions the input is locked.
  *  - [Add as segment] appends all user answers as a new segment text.
  *  - [Close] dismisses the panel without adding anything.
- *  - Free users: 1 credit charged on first exchange (backend handles this).
+ *  - Free users: 1 credit per story build session (backend handles dedup via session_id).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +24,9 @@ const COACH_MIC_DURATION_MS = 30_000;
 interface Props {
   segmentText: string;
   token: string;
+  storyBuildSessionId: string;
+  coachSessionUnlocked: boolean;
+  onCoachSessionUnlocked: () => void;
   isFreeUser: boolean;
   onAddAsSegment: (text: string) => void;
   onClose: () => void;
@@ -35,6 +38,9 @@ interface Props {
 export function StoryCoach({
   segmentText,
   token,
+  storyBuildSessionId,
+  coachSessionUnlocked,
+  onCoachSessionUnlocked,
   isFreeUser,
   onAddAsSegment,
   onClose,
@@ -48,7 +54,9 @@ export function StoryCoach({
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSegmentComplete, setIsSegmentComplete] = useState(false);
-  const [creditAccepted, setCreditAccepted] = useState(!isFreeUser);
+  const [creditAccepted, setCreditAccepted] = useState(
+    !isFreeUser || coachSessionUnlocked,
+  );
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -56,6 +64,13 @@ export function StoryCoach({
   const coachTurns = messages.filter((m) => m.role === "coach").length;
   const atLimit = coachTurns >= MAX_EXCHANGES;
   const userAnswers = messages.filter((m) => m.role === "user").map((m) => m.text);
+  const exchangesLeft = Math.max(0, MAX_EXCHANGES - coachTurns);
+
+  useEffect(() => {
+    if (coachSessionUnlocked) {
+      setCreditAccepted(true);
+    }
+  }, [coachSessionUnlocked]);
 
   // Voice recorder for 30-s micro answers (Web Speech or Whisper fallback)
   const {
@@ -96,8 +111,17 @@ export function StoryCoach({
             setStreamingText(accumulated);
             scrollBottom();
           },
-          { byokApiKey, byokProvider, byokModel },
+          {
+            byokApiKey,
+            byokProvider,
+            byokModel,
+            sessionId: storyBuildSessionId,
+          },
         );
+
+        if (history.length === 0 && isFreeUser && !coachSessionUnlocked) {
+          onCoachSessionUnlocked();
+        }
 
         // Commit streamed text as a coach message
         const coachText = accumulated.trim();
@@ -120,7 +144,7 @@ export function StoryCoach({
         inputRef.current?.focus();
       }
     },
-    [segmentText, token, byokApiKey, byokProvider, byokModel, scrollBottom],
+    [segmentText, token, byokApiKey, byokProvider, byokModel, scrollBottom, storyBuildSessionId, isFreeUser, coachSessionUnlocked, onCoachSessionUnlocked],
   );
 
   // Fire first question on mount (once credit accepted)
@@ -170,9 +194,10 @@ export function StoryCoach({
           Interview Coach
         </div>
         <p className="text-slate-300">
-          The coach will ask one follow-up question per exchange to help you add missing metrics and
-          outcomes. <span className="text-amber-400 font-medium">1 credit</span> is charged when
-          the first question is sent.
+          The coach asks follow-up questions (up to {MAX_EXCHANGES} per segment) to help you add
+          missing metrics and outcomes.{" "}
+          <span className="text-amber-400 font-medium">1 credit</span> unlocks coaching for this
+          entire resume build — all segments included.
         </p>
         <div className="flex gap-2">
           <button
@@ -203,7 +228,9 @@ export function StoryCoach({
           Interview Coach
           {coachTurns > 0 && (
             <span className="ml-1 text-xs text-slate-500 font-normal">
-              {coachTurns}/{MAX_EXCHANGES} questions
+              {exchangesLeft > 0
+                ? `${exchangesLeft} question${exchangesLeft === 1 ? "" : "s"} left on this segment`
+                : "No questions left on this segment"}
             </span>
           )}
         </div>
