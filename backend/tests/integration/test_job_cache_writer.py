@@ -36,7 +36,7 @@ def sqs_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JOB_CACHE_TTL_COMMON_SECONDS", "3600")
 
 
-def test_process_sqs_record_writes_job_cache(sqs_env, db_session) -> None:
+def test_process_sqs_record_writes_job_cache(sqs_env) -> None:
     body = json.dumps(
         {
             "query": "python developer",
