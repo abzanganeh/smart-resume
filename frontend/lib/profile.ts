@@ -136,6 +136,35 @@ export async function getProfileChunks(token: string): Promise<ProfileChunk[]> {
   return body.chunks
 }
 
+/**
+ * Transcribe a recorded audio blob to text using OpenAI Whisper.
+ * Passes the caller's BYOK API key as `X-Api-Key` when provided.
+ */
+export async function transcribeProfileAudio(
+  token: string,
+  audioBlob: Blob,
+  byokApiKey?: string,
+): Promise<{ text: string }> {
+  const form = new FormData()
+  // Give the blob a filename with the correct extension so Whisper can
+  // detect the codec.  MediaRecorder in Chrome emits audio/webm by default.
+  const ext = audioBlob.type.includes("ogg") ? "ogg"
+    : audioBlob.type.includes("mp4") ? "mp4"
+    : "webm"
+  form.append("audio", audioBlob, `recording.${ext}`)
+
+  const headers: Record<string, string> = authHeaders(token) as Record<string, string>
+  if (byokApiKey) headers["X-Api-Key"] = byokApiKey
+
+  const res = await fetch(`${BASE}/api/profile/resume/transcribe`, {
+    method: "POST",
+    headers,
+    body: form,
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json() as Promise<{ text: string }>
+}
+
 export async function uploadProfileResume(
   token: string,
   payload: { file?: File; text?: string },

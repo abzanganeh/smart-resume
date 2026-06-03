@@ -544,16 +544,35 @@ async def retrieve_for_jd(
     chunks, which is only possible when every section was non-critical
     and below threshold).
     """
-    # 0) Fast-fail when the user has not uploaded a master resume.
+    # 0) When the user has no master resume chunks, return an empty result
+    # so Phase 3 proceeds with only the session resume.  The master resume
+    # is an enhancement, not a requirement.
     if not await has_any_live_chunk(db, user_id=user_id):
-        raise MasterResumeRequiredError()
+        return RetrievalResult()
 
     runtime = await resolve_runtime_config(db)
 
     # 1) Embed the JD once.  ``embed_text`` returns a 1536-dim vector.
-    jd_vector = await embed_text(
-        jd_text or "", model=runtime.embedding_model
+    # If the embedding provider is unavailable (missing/invalid OpenAI key),
+    # fall back to an empty retrieval result so Phase 3 still runs with the
+    # session resume.  The master resume is an enhancement, not a requirement.
+    from app.services.master_resume.embedding import (
+        EmbeddingConfigurationError,
+        EmbeddingProviderError,
     )
+    try:
+        jd_vector = await embed_text(
+            jd_text or "", model=runtime.embedding_model
+        )
+    except (EmbeddingConfigurationError, EmbeddingProviderError) as exc:
+        log.warning(
+            "retrieval.jd_embed_failed_skip_retrieval",
+            user_id=str(user_id),
+            error=str(exc),
+        )
+        return RetrievalResult(
+            meta={"retrieval_skipped": "embedding_provider_unavailable"}
+        )
 
     selected_by_section: dict[str, list[_Candidate]] = {}
     all_skipped: list[SkippedChunk] = []
