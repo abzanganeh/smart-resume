@@ -3,6 +3,16 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, model_validator
 
 
+class PolishResumeRequest(BaseModel):
+    text: str = Field(..., min_length=50, description="Current resume draft text.")
+    instruction: str = Field(
+        ...,
+        min_length=5,
+        max_length=500,
+        description="Plain-English editing instruction, e.g. 'make the summary more senior'.",
+    )
+
+
 class StoryToResumeRequest(BaseModel):
     segments: list[str] = Field(
         ...,

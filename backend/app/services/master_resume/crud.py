@@ -35,7 +35,11 @@ from app.services.master_resume.chunking import (
     chunk_raw_text,
     count_tokens,
 )
-from app.services.master_resume.embedding import embed_texts
+from app.services.master_resume.embedding import (
+    EmbeddingConfigurationError,
+    EmbeddingProviderError,
+    embed_texts,
+)
 
 log = structlog.get_logger("master_resume.crud")
 
@@ -204,11 +208,26 @@ async def _insert_chunks(
     user_id: uuid.UUID,
     chunks: Sequence[Chunk],
 ) -> list[MasterResumeChunk]:
-    """Embed and insert ``chunks``; returns the inserted ORM rows."""
+    """Embed and insert ``chunks``; returns the inserted ORM rows.
+
+    If the embedding service is unavailable (missing OpenAI key or provider
+    error), chunks are saved with a zero-vector so the resume text is always
+    persisted.  The caller can trigger a re-embed once the key is configured.
+    """
     if not chunks:
         return []
 
-    vectors = await embed_texts([c.content for c in chunks])
+    try:
+        vectors = await embed_texts([c.content for c in chunks])
+    except (EmbeddingConfigurationError, EmbeddingProviderError) as exc:
+        log.warning(
+            "master_resume.embed_failed_fallback",
+            error=str(exc),
+            chunk_count=len(chunks),
+        )
+        from app.models.master_resume import EMBEDDING_DIM
+        vectors = [[0.0] * EMBEDDING_DIM for _ in chunks]
+        resume.last_embedded_at = None  # signal that embeddings are not valid
     now = _utcnow()
     rows: list[MasterResumeChunk] = []
     for chunk, vector in zip(chunks, vectors):

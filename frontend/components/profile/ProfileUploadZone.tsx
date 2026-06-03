@@ -1,9 +1,8 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { AlertCircle, FileText, Mic, Upload } from "lucide-react"
+import { AlertCircle, FileText, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { VoiceTab } from "@/components/shared/VoiceTab"
 import { StoryRecorder } from "@/components/profile/StoryRecorder"
 
 interface Props {
@@ -15,13 +14,12 @@ interface Props {
   onStoryComplete?: () => void
 }
 
-type Mode = "story" | "upload" | "paste" | "voice"
+type Mode = "story" | "upload" | "paste"
 
 const TABS: { id: Mode; label: string }[] = [
   { id: "story",  label: "🎙 Tell your story" },
   { id: "upload", label: "Upload file" },
   { id: "paste",  label: "Paste text" },
-  { id: "voice",  label: "Record voice" },
 ]
 
 export function ProfileUploadZone({ onSubmit, token, loading, compact = false, defaultStory = false, onStoryComplete }: Props) {
@@ -61,7 +59,7 @@ export function ProfileUploadZone({ onSubmit, token, loading, compact = false, d
         <div>
           <h2 className="text-lg font-semibold text-white">Master resume</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Upload or paste your full career history — or record it by voice.
+            Tell your story, upload a file, or paste text — we'll chunk and embed it automatically.
           </p>
         </div>
       )}
@@ -80,7 +78,6 @@ export function ProfileUploadZone({ onSubmit, token, loading, compact = false, d
                 : "bg-slate-800 text-slate-300 hover:bg-slate-700",
             )}
           >
-            {tab.id === "voice" && <Mic className="w-3.5 h-3.5" />}
             {tab.label}
           </button>
         ))}
@@ -145,17 +142,6 @@ export function ProfileUploadZone({ onSubmit, token, loading, compact = false, d
             </button>
           </div>
         </div>
-      )}
-
-      {/* Voice — uses Web Speech API (live text, no key) in Chrome/Edge,
-               falls back to MediaRecorder + Whisper in other browsers */}
-      {mode === "voice" && (
-        <VoiceTab
-          token={token}
-          submitLabel={loading ? "Saving…" : "Save master resume"}
-          disabled={loading}
-          onTranscript={(text) => void onSubmit({ text })}
-        />
       )}
 
       {/* Global loading overlay */}

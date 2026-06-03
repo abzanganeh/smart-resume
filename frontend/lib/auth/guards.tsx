@@ -2,21 +2,14 @@
 
 /**
  * Client-side auth guards.
- *
- * `useRequireAuth()` — a hook that redirects to /auth if the session is
- *   absent.  Use it at the top of any page component that requires login.
- *
- * `withAuth()` — an HOC that wraps a client component with the same guard.
- *   Prefer `useRequireAuth()` directly; the HOC is here for convenience.
  */
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, ComponentType } from "react"
 
 /**
- * Redirects to /auth (with callbackUrl) when the user is not signed in.
- * Returns `{ session, status }` so callers can render loading/authenticated
- * states themselves.
+ * Redirects to /auth when the user is not signed in OR when their backend
+ * token has expired. Returns `{ session, status }` for the caller to render.
  */
 export function useRequireAuth(callbackUrl?: string) {
   const { data: session, status } = useSession()
@@ -24,9 +17,17 @@ export function useRequireAuth(callbackUrl?: string) {
 
   useEffect(() => {
     if (status === "loading") return
+
+    const dest = callbackUrl ?? (typeof window !== "undefined" ? window.location.pathname : "/")
+    const authUrl = `/auth?callbackUrl=${encodeURIComponent(dest)}`
+
     if (!session) {
-      const dest = callbackUrl ?? (typeof window !== "undefined" ? window.location.pathname : "/")
-      router.replace(`/auth?callbackUrl=${encodeURIComponent(dest)}`)
+      router.replace(authUrl)
+      return
+    }
+
+    if (session.error === "TokenExpired") {
+      signOut({ callbackUrl: authUrl })
     }
   }, [session, status, router, callbackUrl])
 
@@ -35,7 +36,6 @@ export function useRequireAuth(callbackUrl?: string) {
 
 /**
  * Higher-order component that guards a client component behind auth.
- * Redirects unauthenticated users to /auth.
  */
 export function withAuth<P extends object>(
   Component: ComponentType<P>,

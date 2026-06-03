@@ -1,6 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
-# Install WeasyPrint system dependencies
+# Install WeasyPrint system dependencies (bookworm package names; trixie renamed gdk-pixbuf)
 RUN apt-get update && apt-get install -y \
     fonts-liberation \
     libglib2.0-0 \
@@ -15,7 +15,8 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml uv.lock* ./
+COPY pyproject.toml uv.lock* README.md ./
+COPY app ./app
 RUN uv sync --frozen --no-dev
 
 COPY . .

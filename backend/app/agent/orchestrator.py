@@ -56,6 +56,17 @@ async def _resolve_phase3_llm(
 
     requested = session.phase3_llm_tier or "standard"
 
+    # BYOK respect: if the user supplied their own API key for the session
+    # AND they did NOT explicitly upgrade to a premium tier, use their BYOK
+    # provider/model. The tier system (Standard=platform Gemini, Better=…,
+    # Best=Claude) is for users on platform-paid credits; BYOK users
+    # already pay their LLM bill directly. Without this guard, an OpenAI
+    # BYOK user on the default "standard" tier would silently route to
+    # the platform's Gemini key (which may not even be configured).
+    byok_key = (getattr(session, "byok_api_key", None) or "").strip()
+    if requested == "standard" and byok_key and session.provider and session.model:
+        return fallback_llm, None
+
     upgraded_llm: LLMClient | None = None
     async with async_session_factory() as db:
         try:
@@ -133,6 +144,72 @@ async def _resolve_phase3_llm(
         "model": decision.model_string,
     })
     return upgraded_llm, decision
+
+
+def _classify_error(exc: BaseException) -> str:
+    """Return a short machine-readable error class for the frontend."""
+    msg = str(exc).lower()
+    if any(k in msg for k in ("rate limit", "ratelimit", "429", "too many requests")):
+        return "llm_rate_limit"
+    if any(k in msg for k in ("timeout", "timed out", "read timeout", "connect timeout")):
+        return "llm_timeout"
+    if any(k in msg for k in ("api key", "apikey", "api_key", "unauthorized", "401", "403", "authentication")):
+        return "llm_auth"
+    if any(k in msg for k in ("context length", "context window", "token limit", "max tokens", "too long")):
+        return "llm_context_length"
+    # Truncated output: LLM hit its output token cap and the JSON was cut off.
+    # This surfaces as a LLMParseError wrapping an EOF/unterminated-string error.
+    if any(k in msg for k in ("eof while parsing", "unexpected end of", "unterminated string")):
+        return "llm_output_truncated"
+    if any(k in msg for k in ("invalid json", "json decode", "parse error", "jsondecodeerror", "failed to parse")):
+        return "llm_parse_error"
+    if any(k in msg for k in ("connection", "network", "connectionerror", "ssl")):
+        return "llm_network"
+    if any(k in msg for k in ("overloaded", "capacity", "503", "service unavailable")):
+        return "llm_overloaded"
+    return "phase_error"
+
+
+def _user_facing_error(exc: BaseException) -> str:
+    """Return a clean, user-facing error message for display in the UI."""
+    kind = _classify_error(exc)
+    messages = {
+        "llm_rate_limit": (
+            "The AI model hit its rate limit. Wait a moment and retry — "
+            "this is a temporary quota on the LLM provider's side, not a platform issue."
+        ),
+        "llm_timeout": (
+            "The AI model took too long to respond (timeout). "
+            "The LLM provider may be under load. Please retry."
+        ),
+        "llm_auth": (
+            "The AI model rejected the API key (authentication error). "
+            "If you supplied your own key, please check it in Settings → BYOK."
+        ),
+        "llm_context_length": (
+            "Your resume or job description is too long for this model's context window. "
+            "Try shortening the job description or reducing resume length, then retry."
+        ),
+        "llm_output_truncated": (
+            "The AI model's response was cut off before the JSON was complete — "
+            "this model has a short output limit (Llama 3.1 70B caps at ~4096 tokens). "
+            "Try switching to a model with a longer output window such as Gemini Flash or GPT-4o Mini, "
+            "or retry and the system will ask for a more compact response."
+        ),
+        "llm_parse_error": (
+            "The AI model returned a response that could not be parsed. "
+            "This is an LLM formatting issue — retrying usually resolves it."
+        ),
+        "llm_network": (
+            "Could not reach the AI model (network error). "
+            "Check your internet connection or try again shortly."
+        ),
+        "llm_overloaded": (
+            "The AI model is temporarily overloaded. "
+            "This is a provider-side issue — please wait a minute and retry."
+        ),
+    }
+    return messages.get(kind, "The AI step encountered an error. Please retry.")
 
 
 async def run_phase(
@@ -288,7 +365,13 @@ async def run_phase(
     except Exception as e:
         await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
         log.error("phase_error", session_id=session_id, phase=phase, error=str(e))
-        await event_queue.put({"event": "error", "phase": phase, "message": str(e)})
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "message": _user_facing_error(e),
+            "debug": str(e),
+            "error_type": _classify_error(e),
+        })
         raise
     finally:
         await session_store.release_phase_lock(session_id, phase)

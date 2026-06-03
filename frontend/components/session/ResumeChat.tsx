@@ -222,9 +222,12 @@ interface Props {
   sessionId: string;
   tailored: TailoredResumeOutput | null;
   onApplyPatch: (patch: ResumePatch, updatedTailored: TailoredResumeOutput) => void;
+  /** Pre-fills the input and focuses it. Clear after reading with onClearPrefill. */
+  prefillMessage?: string | null;
+  onClearPrefill?: () => void;
 }
 
-export function ResumeChat({ sessionId, tailored, onApplyPatch }: Props) {
+export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, onClearPrefill }: Props) {
   const [messages, setMessages] = useState<MessageEntry[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -232,8 +235,21 @@ export function ResumeChat({ sessionId, tailored, onApplyPatch }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages, loading]);
+
+  // When a prefill message is injected, populate the input and focus the textarea.
+  useEffect(() => {
+    if (!prefillMessage) return;
+    setInput(prefillMessage);
+    onClearPrefill?.();
+    setTimeout(() => {
+      inputRef.current?.focus();
+      // Place cursor at end
+      const len = prefillMessage.length;
+      inputRef.current?.setSelectionRange(len, len);
+    }, 50);
+  }, [prefillMessage, onClearPrefill]);
 
   function buildHistory(): ChatMessage[] {
     return messages.map((m) => ({ role: m.role, content: m.content }));
