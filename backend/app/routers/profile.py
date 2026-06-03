@@ -643,6 +643,7 @@ async def create_resume_from_story(
     return {
         **_resume_to_response(resume),
         "chunks": master_crud.iter_chunk_summaries(chunks),
+        "resume_text": draft_text,
         "embedding_warning": (
             None if embedding_ok
             else "Resume saved but embedding failed. Semantic similarity features won't work "

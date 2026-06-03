@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock, Mic, Sparkles } from "lucide-react";
+import { CheckCircle, Clock, Loader2, Mic, Sparkles } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { StorySegment } from "./StorySegment";
 import { submitStory } from "@/lib/story";
@@ -39,7 +39,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [totalMs, setTotalMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [reviewText, setReviewText] = useState<string | null>(null);
 
   const totalTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const totalStartRef  = useRef<number>(0);
@@ -147,14 +147,13 @@ export function StoryRecorder({ token, onSaved }: Props) {
     setError(null);
     try {
       const key = getStoredKey();
-      await submitStory(segments, token, {
+      const result = await submitStory(segments, token, {
         byokApiKey: key?.apiKey,
         byokProvider: key?.provider,
         byokModel: key?.model,
         whisperPath: !supportsWebSpeech,
       });
-      setSuccess(true);
-      onSaved();
+      setReviewText(result.resume_text ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate resume from story.");
     } finally {
@@ -166,6 +165,60 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const canAddSegment = segments.length < MAX_SEGMENTS && !isRecordingAnything && !submitting;
   const totalMinsLabel = `${Math.floor(totalMs / 60000)}:${String(Math.floor((totalMs % 60000) / 1000)).padStart(2, "0")}`;
   const isWarning = totalMs >= WARN_TOTAL_MS;
+
+  // ── Submitting overlay ─────────────────────────────────────────────────────
+  if (submitting) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+        <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
+        <p className="text-slate-300 font-medium">Crafting your resume from the story…</p>
+        <p className="text-slate-500 text-sm">This may take up to 30 seconds</p>
+      </div>
+    );
+  }
+
+  // ── Review state ───────────────────────────────────────────────────────────
+  if (reviewText !== null) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 text-green-400" />
+          <p className="text-green-400 font-semibold text-sm">
+            Resume crafted from your story
+          </p>
+        </div>
+        <p className="text-slate-400 text-sm">
+          Review and edit the resume below, then save it to your profile to use in the JD tailoring flow.
+        </p>
+        <textarea
+          value={reviewText}
+          onChange={(e) => setReviewText(e.target.value)}
+          rows={22}
+          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400/50"
+        />
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => onSaved()}
+            className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Save to Profile &amp; continue
+          </button>
+          <button
+            type="button"
+            onClick={() => setReviewText(null)}
+            className="px-5 py-3 border border-slate-700 hover:border-slate-500 bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl transition-colors text-sm"
+          >
+            Back
+          </button>
+        </div>
+        <p className="text-slate-600 text-xs">
+          Your resume is already saved to your profile — this view lets you confirm or edit before continuing.
+        </p>
+      </div>
+    );
+  }
 
   // ── Credit disclosure (shown before first segment) ─────────────────────────
   if (segments.length === 0 && !isRecordingAnything) {
@@ -338,12 +391,6 @@ export function StoryRecorder({ token, onSaved }: Props) {
       {error && (
         <div className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
           {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="text-green-400 text-sm bg-green-400/10 border border-green-400/20 rounded-lg p-3">
-          Your story has been turned into a professional profile. Redirecting…
         </div>
       )}
     </div>
