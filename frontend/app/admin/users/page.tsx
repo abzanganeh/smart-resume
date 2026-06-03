@@ -73,8 +73,8 @@ export default function AdminUsersPage() {
     setError(null)
     try {
       const res = await getAdminUsers(token!, { q: debouncedQuery || undefined, page, per_page: PER_PAGE })
-      setUsers(res.users)
-      setTotal(res.total)
+      setUsers(Array.isArray(res.users) ? res.users : [])
+      setTotal(res.total ?? 0)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users")
     } finally {

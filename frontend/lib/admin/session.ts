@@ -49,12 +49,15 @@ export async function storeAdminSession(
   admin: AdminSessionInfo,
   expires_in: number,
 ): Promise<void> {
-  await fetch(SESSION_ROUTE, {
+  const res = await fetch(SESSION_ROUTE, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ access_token, admin, expires_in }),
   })
+  if (!res.ok) {
+    throw new Error("admin_session_store_failed")
+  }
 }
 
 /**

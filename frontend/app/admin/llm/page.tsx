@@ -44,9 +44,9 @@ export default function AdminLLMPage() {
         getAdminLLMConfigs(token!),
         getAdminLLMHistory(token!),
       ])
-      setConfigs(res.configs)
-      setThreshold(res.similarity_threshold)
-      setHistory(hist)
+      setConfigs(Array.isArray(res.configs) ? res.configs : [])
+      setThreshold(res.similarity_threshold ?? 0.72)
+      setHistory(Array.isArray(hist) ? hist : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load LLM configs")
     } finally {

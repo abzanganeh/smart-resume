@@ -20,6 +20,23 @@ import {
 const COOKIE_NAME = "sr_admin"
 const ONE_HOUR = 3600
 
+/** Only mark cookies Secure when the browser reached us over HTTPS. */
+function cookieSecure(req: NextRequest): boolean {
+  const forwarded = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim()
+  if (forwarded) return forwarded === "https"
+  return req.nextUrl.protocol === "https:"
+}
+
+function cookieOptions(req: NextRequest, maxAge: number) {
+  return {
+    httpOnly: true,
+    secure: cookieSecure(req),
+    sameSite: "lax" as const,
+    maxAge,
+    path: "/",
+  }
+}
+
 export async function GET(req: NextRequest) {
   const raw = req.cookies.get(COOKIE_NAME)?.value
   if (!raw) return NextResponse.json({ error: "no session" }, { status: 401 })
@@ -51,24 +68,12 @@ export async function POST(req: NextRequest) {
   const encoded = await encodeSignedAdminSession(payload)
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(COOKIE_NAME, encoded, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: ONE_HOUR,
-    path: "/",
-  })
+  res.cookies.set(COOKIE_NAME, encoded, cookieOptions(req, ONE_HOUR))
   return res
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  })
+  res.cookies.set(COOKIE_NAME, "", cookieOptions(req, 0))
   return res
 }
