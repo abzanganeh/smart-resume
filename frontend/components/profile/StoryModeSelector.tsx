@@ -28,25 +28,27 @@ const MODES: ModeCard[] = [
     id: "free",
     icon: <BookOpen className="w-6 h-6" />,
     title: "Tell your story",
-    tagline: "Record your career in your own words",
+    tagline: "Record freely, coach yourself segment by segment",
     bullets: [
       "Record up to 30 × 60-second segments",
-      "Edit each segment before generating",
-      "Optional per-segment AI coaching",
-      "Generate resume when ready",
+      "Talk naturally — no script needed",
+      'Tap "Coach me ✨" after each segment — AI asks one follow-up to add missing metrics',
+      "Edit, re-record, or delete any segment",
+      "Generate resume when you're ready",
     ],
-    cost: "Free (Chrome/Edge) · 2 credits (Firefox/Safari)",
+    cost: "Free (Chrome/Edge) · 2 credits (Firefox/Safari) · coaching: 1 cr/segment",
     costColor: "text-emerald-400",
   },
   {
     id: "interview",
     icon: <MessageSquare className="w-6 h-6" />,
     title: "Coached interview",
-    tagline: "AI guides you through structured career questions",
+    tagline: "AI asks the questions — you just answer",
     bullets: [
-      "AI asks role, achievements, skills, education…",
-      "Follow-up questions when answers lack metrics",
-      "Answer by typing or speaking",
+      "AI asks up to 15 structured career questions",
+      "Covers: roles, achievements, leadership, skills, education",
+      "Automatic follow-up when answers lack metrics",
+      "Answer by typing or speaking (voice supported)",
       "Resume generated from your complete answers",
     ],
     cost: "1 credit per session (subscribers & BYOK: free)",
@@ -70,6 +72,10 @@ export function StoryModeSelector({ isFreeUser, onSelect }: Props) {
           Choose a mode — you can always switch by refreshing.
         </p>
       </div>
+
+      <p className="text-xs text-slate-500 text-center -mt-2">
+        Both modes support voice + text and end with comparing your resume to a job description.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {MODES.map((mode) => (
