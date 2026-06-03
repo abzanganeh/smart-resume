@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
 import { type BlockingIssue, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -347,6 +347,32 @@ export function ATSGuidancePanel({
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [winStates, setWinStates] = useState<Record<number, WinState>>({});
+  const [dismissedBlocking, setDismissedBlocking] = useState<Set<number>>(new Set());
+  const [dismissedWins, setDismissedWins] = useState<Set<number>>(new Set());
+
+  // Reset dismissed sets when the QA output changes (new run).
+  const outputRef = useRef(output);
+  useEffect(() => {
+    if (output !== outputRef.current) {
+      outputRef.current = output;
+      setDismissedBlocking(new Set());
+      setDismissedWins(new Set());
+      setWinStates({});
+    }
+  }, [output]);
+
+  function dismissBlocking(idx: number) {
+    setDismissedBlocking((prev) => new Set(prev).add(idx));
+  }
+
+  function dismissWin(idx: number) {
+    setDismissedWins((prev) => new Set(prev).add(idx));
+    setWinStates((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }
 
   function setWinState(idx: number, next: WinState) {
     setWinStates((prev) => ({
@@ -363,6 +389,12 @@ export function ATSGuidancePanel({
     if (accepted.length > 0) {
       onApplySuggestion?.(accepted.join("\n"));
     }
+    // Dismiss accepted items so they don't linger as suggestions.
+    setDismissedWins((prev) => {
+      const next = new Set(prev);
+      quickWins.forEach((_, i) => { if (winStates[i] === "accepted") next.add(i); });
+      return next;
+    });
     setWinStates({});
   }
 
@@ -385,8 +417,12 @@ export function ATSGuidancePanel({
     );
   }
 
-  const blocking = sortBlockingIssues(output.blocking_issues ?? []);
-  const quickWins = output.quick_wins ?? [];
+  const blocking = sortBlockingIssues(output.blocking_issues ?? [])
+    .map((issue, i) => ({ issue, origIdx: i }))
+    .filter(({ origIdx }) => !dismissedBlocking.has(origIdx));
+  const quickWins = (output.quick_wins ?? [])
+    .map((issue, i) => ({ issue, origIdx: i }))
+    .filter(({ origIdx }) => !dismissedWins.has(origIdx));
   const ringSize = variant === "sidebar" ? 72 : 96;
 
   const content = (
@@ -441,14 +477,16 @@ export function ATSGuidancePanel({
             Accept the wins you want, then click &ldquo;Apply selected&rdquo; to add them to your resume.
           </p>
           <div className="space-y-2">
-            {quickWins.map((issue, i) => (
+            {quickWins.map(({ issue, origIdx }) => (
               <QuickWinCard
-                key={i}
+                key={origIdx}
                 issue={issue}
-                state={winStates[i] ?? "neutral"}
-                onAccept={() => setWinState(i, "accepted")}
-                onDecline={() => setWinState(i, "declined")}
-                onSendToChat={onSendToChat}
+                state={winStates[origIdx] ?? "neutral"}
+                onAccept={() => setWinState(origIdx, "accepted")}
+                onDecline={() => dismissWin(origIdx)}
+                onSendToChat={onSendToChat
+                  ? (msg) => { dismissWin(origIdx); onSendToChat(msg); }
+                  : undefined}
               />
             ))}
           </div>
@@ -462,12 +500,14 @@ export function ATSGuidancePanel({
             Blocking issues ({blocking.length})
           </h3>
           <div className="space-y-1.5">
-            {blocking.map((issue, i) => (
+            {blocking.map(({ issue, origIdx }, renderIdx) => (
               <BlockingIssueRow
-                key={i}
+                key={origIdx}
                 issue={issue}
-                defaultOpen={i === 0 && variant === "primary"}
-                onSendToChat={onSendToChat}
+                defaultOpen={renderIdx === 0 && variant === "primary"}
+                onSendToChat={onSendToChat
+                  ? (msg) => { dismissBlocking(origIdx); onSendToChat(msg); }
+                  : undefined}
               />
             ))}
           </div>
