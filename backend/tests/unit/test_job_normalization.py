@@ -48,15 +48,27 @@ class TestNormalizeSalary:
     def test_unknown_currency_returns_none(self) -> None:
         assert normalize_salary(50_000, "JPY") is None
 
+    def test_none_amount_returns_none(self) -> None:
+        assert normalize_salary(None, "USD") is None
+
+    def test_none_currency_returns_none(self) -> None:
+        assert normalize_salary(50_000, None) is None
+
+
+class TestNormalizeLocation:
     @pytest.mark.parametrize(
         ("location", "city", "country"),
         [
             ("Toronto, Canada", "Toronto", "Canada"),
             ("Austin, TX, United States", "Austin", "United States"),
             ("Remote", "Remote", None),
+            ("", None, None),
         ],
     )
-    def test_location_heuristic(
+    def test_heuristic_split(
         self, location: str, city: str | None, country: str | None
     ) -> None:
         assert normalize_location(location) == (city, country)
+
+    def test_none_input_returns_none_tuple(self) -> None:
+        assert normalize_location(None) == (None, None)
