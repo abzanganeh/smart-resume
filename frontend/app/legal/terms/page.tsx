@@ -14,8 +14,8 @@ export default function TermsPage() {
     <LegalPageShell title="Terms of Service" lastUpdated={LAST_UPDATED}>
       <p>
         These Terms of Service (&quot;Terms&quot;) govern your access to and use
-        of Smart Resume Agent (the &quot;Service&quot;), provided by Hamed
-        Zangane (&quot;Smart Resume&quot;, &quot;we&quot;, &quot;us&quot;).  By
+        of Smart Resume Agent (the &quot;Service&quot;), provided by Alireza
+        Barzin Zanganeh (&quot;Smart Resume&quot;, &quot;we&quot;, &quot;us&quot;).  By
         creating an account or using the Service you agree to these Terms.  If
         you do not agree, do not use the Service.
       </p>
