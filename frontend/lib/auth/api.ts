@@ -39,6 +39,8 @@ export interface BackendUser {
   has_totp: boolean
   closure_requested_at: string | null
   suspended_at: string | null
+  onboarding_completed_at: string | null
+  onboarding_ai_choice: "platform" | "byok" | null
 }
 
 export interface AuthSuccess {
@@ -115,6 +117,25 @@ export async function fetchMe(accessToken: string): Promise<BackendUser> {
   const res = await fetch(`${BASE}/api/auth/me`, {
     headers: authHeaders(accessToken),
     credentials: "include",
+  })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
+export interface OnboardingPatchPayload {
+  ai_choice?: "platform" | "byok"
+  complete?: boolean
+}
+
+export async function patchOnboarding(
+  accessToken: string,
+  payload: OnboardingPatchPayload,
+): Promise<BackendUser> {
+  const res = await fetch(`${BASE}/api/auth/onboarding`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
