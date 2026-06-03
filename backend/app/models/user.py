@@ -202,6 +202,12 @@ class User(Base):
     job_default_filters: Mapped[dict] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
+    onboarding_completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    onboarding_ai_choice: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True
+    )
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user",

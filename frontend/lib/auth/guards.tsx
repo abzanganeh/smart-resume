@@ -6,10 +6,12 @@
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, ComponentType } from "react"
+import { isOnboardingExempt, needsOnboarding } from "@/lib/auth/onboarding"
 
 /**
  * Redirects to /auth when the user is not signed in OR when their backend
- * token has expired. Returns `{ session, status }` for the caller to render.
+ * token has expired. When onboarding is incomplete, redirects to /onboarding
+ * except on exempt paths (profile, session wizard).
  */
 export function useRequireAuth(callbackUrl?: string) {
   const { data: session, status } = useSession()
@@ -28,6 +30,17 @@ export function useRequireAuth(callbackUrl?: string) {
 
     if (session.error === "TokenExpired") {
       signOut({ callbackUrl: authUrl })
+      return
+    }
+
+    const path = typeof window !== "undefined" ? window.location.pathname : dest
+    if (
+      session.backendUser &&
+      needsOnboarding(session.backendUser) &&
+      path &&
+      !isOnboardingExempt(path)
+    ) {
+      router.replace("/onboarding")
     }
   }, [session, status, router, callbackUrl])
 

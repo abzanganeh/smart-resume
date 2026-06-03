@@ -165,6 +165,13 @@ class MeResponse(BaseModel):
     has_totp: bool
     closure_requested_at: datetime | None
     suspended_at: datetime | None
+    onboarding_completed_at: datetime | None
+    onboarding_ai_choice: str | None
+
+
+class OnboardingPatchRequest(BaseModel):
+    ai_choice: Literal["platform", "byok"] | None = None
+    complete: bool = False
 
 
 class SessionInfo(BaseModel):
@@ -239,6 +246,8 @@ def _me(user: User) -> MeResponse:
         has_totp=user.has_totp,
         closure_requested_at=user.closure_requested_at,
         suspended_at=user.suspended_at,
+        onboarding_completed_at=user.onboarding_completed_at,
+        onboarding_ai_choice=user.onboarding_ai_choice,
     )
 
 
@@ -756,6 +765,33 @@ async def me(
     user: Annotated[User, Depends(get_current_user)],
 ) -> MeResponse:
     _attach_closure_header(request, response)
+    return _me(user)
+
+
+# 7b. PATCH /onboarding ----------------------------------------------------
+@router.patch("/onboarding")
+@limiter.limit("30/minute")
+async def patch_onboarding(
+    request: Request,
+    body: OnboardingPatchRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MeResponse:
+    if body.ai_choice is not None:
+        user.onboarding_ai_choice = body.ai_choice
+
+    if body.complete:
+        choice = body.ai_choice or user.onboarding_ai_choice
+        if choice not in ("platform", "byok"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "ai_choice_required"},
+            )
+        user.onboarding_ai_choice = choice
+        user.onboarding_completed_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(user)
     return _me(user)
 
 
