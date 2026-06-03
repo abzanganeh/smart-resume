@@ -30,7 +30,12 @@ from app.services.billing.exceptions import (
     AccountSuspendedError,
     InsufficientCreditsError,
 )
-from app.services.billing.quota import check_quota_for_section_regen
+from app.services.billing.quota import (
+    check_and_increment_quota,
+    check_quota_for_section_regen,
+    QuotaAction,
+)
+from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
 from app.services.session_store import get_session, reset_phase, update_session
 
@@ -166,21 +171,9 @@ async def trigger_phase(
     if phase_status == PhaseStatus.running:
         raise HTTPException(status_code=409, detail=f"Phase {phase} is already running.")
 
-    if phase == 3 and session.user_id:
-        import uuid as uuid_mod
-
-        try:
-            uid = uuid_mod.UUID(session.user_id)
-        except ValueError:
-            uid = None
-        if uid is not None and not await has_any_live_chunk(db, user_id=uid):
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "master_resume_required",
-                    "message": "Upload your master resume on the Profile page before running the rewrite.",
-                },
-            )
+    # Master resume is optional — Phase 3 runs with the session resume when
+    # no chunks are present, so we no longer block here. The retrieval
+    # service handles zero-chunk gracefully by skipping the retrieval step.
 
     if body.scope is not None and user_id:
         try:
@@ -199,6 +192,31 @@ async def trigger_phase(
                     raise HTTPException(status_code=403, detail={"code": "account_suspended"})
                 except InsufficientCreditsError:
                     raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+
+    # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
+    if phase == 4 and user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+        if uid is not None:
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            if user is not None:
+                try:
+                    await check_and_increment_quota(
+                        db,
+                        user=user,
+                        action=QuotaAction.ats_recalc,
+                        session_id=session_id,
+                    )
+                    await db.commit()
+                except AccountSuspendedError:
+                    raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError) as exc:
+                    raise HTTPException(
+                        status_code=402,
+                        detail={"code": "insufficient_credits", "action": "ats_recalc"},
+                    ) from exc
 
     if x_provider and session.provider != x_provider:
         session.provider = x_provider
