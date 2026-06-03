@@ -721,8 +721,9 @@ async def story_coach_endpoint(
     """Stream one follow-up question from the interview coach (§22).
 
     - BYOK / subscribers: 0 credits.
-    - Free users: 1 credit per coaching session (deducted on the first exchange,
-      identified by history being empty).
+    - Free users: 1 credit per story build session (deducted on the first
+      coached segment when history is empty).  Further segments in the same
+      session_id reuse that credit.  Requires session_id for free platform users.
     - Max {MAX_EXCHANGES} exchanges per segment enforced here.
 
     Returns: SSE stream of {"delta": str} events, finished by {"done": true}.
@@ -743,8 +744,16 @@ async def story_coach_endpoint(
     model     = request.headers.get("X-Model", "").strip()
     byok_active = bool(byok_key)
 
-    # Charge 1 credit on the very first exchange (history is empty)
+    # Charge 1 credit on the first coached segment of a story build session.
     if not body.history:
+        if not byok_active and not body.session_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "session_id_required",
+                    "message": "Story build session ID is required for coaching.",
+                },
+            )
         try:
             await check_quota_for_story_coach(
                 session,
@@ -762,6 +771,7 @@ async def story_coach_endpoint(
                     "message": "You need at least 1 credit to start a coaching session.",
                 },
             )
+        await session.commit()
 
     llm_client = get_llm_client(
         provider or None,
@@ -846,6 +856,7 @@ async def story_interview_next(
                     "message": "You need at least 1 credit to start a coached interview session.",
                 },
             )
+        await session.commit()
 
     llm_client = get_llm_client(
         provider or None,

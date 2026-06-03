@@ -27,6 +27,30 @@ const MAX_SEGMENTS = 30;
 const SEGMENT_DURATION_MS = 60_000;
 const WARN_TOTAL_MS = 18 * 60 * 1000;
 const MAX_TOTAL_MS  = 30 * 60 * 1000;
+const STORY_BUILD_ID_KEY = "sr_story_build_id";
+
+function coachPaidKey(storyBuildSessionId: string) {
+  return `sr_coach_paid:${storyBuildSessionId}`;
+}
+
+function readStoryBuildSessionId(): string {
+  if (typeof window === "undefined") return "";
+  let id = sessionStorage.getItem(STORY_BUILD_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(STORY_BUILD_ID_KEY, id);
+  }
+  return id;
+}
+
+function resetStoryBuildSessionId(): string {
+  const id = crypto.randomUUID();
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(STORY_BUILD_ID_KEY, id);
+    sessionStorage.removeItem(coachPaidKey(id));
+  }
+  return id;
+}
 
 interface Props {
   token: string;
@@ -45,12 +69,26 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Index of the segment whose coach panel is open (null = none)
   const [openCoachIndex, setOpenCoachIndex] = useState<number | null>(null);
+  const [storyBuildSessionId, setStoryBuildSessionId] = useState("");
+  const [coachSessionUnlocked, setCoachSessionUnlocked] = useState(false);
   const [reviewText, setReviewText] = useState<string | null>(null);
   const [prevText, setPrevText] = useState<string | null>(null);
   const [polishInstruction, setPolishInstruction] = useState("");
   const [polishing, setPolishing] = useState(false);
   const [polishError, setPolishError] = useState<string | null>(null);
   const polishInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const id = readStoryBuildSessionId();
+    setStoryBuildSessionId(id);
+    setCoachSessionUnlocked(sessionStorage.getItem(coachPaidKey(id)) === "1");
+  }, []);
+
+  const markCoachSessionUnlocked = useCallback(() => {
+    if (!storyBuildSessionId) return;
+    sessionStorage.setItem(coachPaidKey(storyBuildSessionId), "1");
+    setCoachSessionUnlocked(true);
+  }, [storyBuildSessionId]);
 
   const totalTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const totalStartRef  = useRef<number>(0);
@@ -463,6 +501,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
               onClick={() => {
                 setStoryMode(null);
                 setSegments([]);
+                const nextId = resetStoryBuildSessionId();
+                setStoryBuildSessionId(nextId);
+                setCoachSessionUnlocked(false);
+                setOpenCoachIndex(null);
               }}
               className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
             >
@@ -501,10 +543,13 @@ export function StoryRecorder({ token, onSaved }: Props) {
                 onDelete={() => deleteSegment(i)}
                 onCoach={() => setOpenCoachIndex((prev) => prev === i ? null : i)}
               />
-              {openCoachIndex === i && (
+              {openCoachIndex === i && storyBuildSessionId && (
                 <StoryCoach
                   segmentText={text}
                   token={token}
+                  storyBuildSessionId={storyBuildSessionId}
+                  coachSessionUnlocked={coachSessionUnlocked}
+                  onCoachSessionUnlocked={markCoachSessionUnlocked}
                   isFreeUser={!storedKey?.apiKey}
                   byokApiKey={storedKey?.apiKey}
                   byokProvider={storedKey?.provider}
