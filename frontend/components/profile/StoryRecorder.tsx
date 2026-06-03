@@ -382,6 +382,15 @@ export function StoryRecorder({ token, onSaved }: Props) {
   if (segments.length === 0 && !isRecordingAnything) {
     return (
       <div className="space-y-6">
+        {/* Back to mode selector */}
+        <button
+          type="button"
+          onClick={() => setStoryMode(null)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        >
+          ← Change mode
+        </button>
+
         <div className={cn(
           "rounded-xl border p-5 space-y-3",
           supportsWebSpeech ? "border-green-500/30 bg-green-500/5" : "border-amber-500/30 bg-amber-500/5",
@@ -415,6 +424,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
             <li>Record up to 30 segments of 60 seconds each (30 min total)</li>
             <li>Talk naturally — jobs, skills, accomplishments, education</li>
             <li>Edit any segment after recording</li>
+            <li>
+              <span className="text-indigo-400 font-medium">Optionally tap "Coach me ✨"</span> on
+              any segment — the AI asks one follow-up question to add missing metrics or outcomes
+            </li>
             <li>Click &ldquo;Generate resume from story&rdquo; when done</li>
           </ol>
           <p className="text-slate-500 text-xs pt-1">
@@ -439,9 +452,24 @@ export function StoryRecorder({ token, onSaved }: Props) {
     <div className="space-y-4">
       {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-1">
-        <span className="text-slate-400 text-sm">
-          <span className="text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400 text-sm">
+            <span className="text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
+          </span>
+          {/* Change mode — only when not recording and not submitting */}
+          {!isRecordingAnything && !submitting && (
+            <button
+              type="button"
+              onClick={() => {
+                setStoryMode(null);
+                setSegments([]);
+              }}
+              className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+            >
+              ← Change mode
+            </button>
+          )}
+        </div>
         <span className={cn("text-sm tabular-nums font-mono", isWarning ? "text-amber-400" : "text-slate-400")}>
           {totalMinsLabel} / 30:00
           {isWarning && <span className="ml-2 text-amber-400 text-xs">⚠ Almost at limit</span>}
