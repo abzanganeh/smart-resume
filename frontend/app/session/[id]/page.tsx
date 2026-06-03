@@ -37,9 +37,10 @@ import {
   LLMTierSelector,
   LLMUpgradePurchaseModal,
 } from "@/components/session/LLMTierSelector";
-import { AlertCircle, ChevronRight, MessageSquare, Sparkles } from "lucide-react";
+import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume } from "@/lib/api";
+import { getStoredKey } from "@/lib/keyStore";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
 
@@ -70,7 +71,9 @@ function SessionContent() {
   const [resumeVersion, setResumeVersion] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
+  const [runErrorType, setRunErrorType] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
+  const [chatPrefill, setChatPrefill] = useState<string | null>(null);
   const [expiryWarning, setExpiryWarning] = useState(false);
   const [phaseRunning, setPhaseRunning] = useState(false);
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -81,6 +84,7 @@ function SessionContent() {
   const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
+  const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState<CoverLetterOutput | null>(null);
 
@@ -88,6 +92,15 @@ function SessionContent() {
   const [llmStatus, setLlmStatus] = useState<LLMUpgradeStatus | null>(null);
   const [purchaseTier, setPurchaseTier] = useState<Exclude<LLMTier, "standard"> | null>(null);
   const [checkoutBusyCode, setCheckoutBusyCode] = useState<LLMUpgradeCheckoutCode | null>(null);
+  // BYOK key (from sessionStorage) — when present, Phase 3 routes through
+  // the user's own LLM and the platform tier picker is irrelevant.
+  const [byokEntry, setByokEntry] = useState<ReturnType<typeof getStoredKey>>(null);
+  useEffect(() => {
+    setByokEntry(getStoredKey());
+    function onStorage() { setByokEntry(getStoredKey()); }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const { data: authSession } = useSession();
   const runInFlightRef = useRef(false);
@@ -175,7 +188,8 @@ function SessionContent() {
 
   const goTo = (s: Step) => {
     setStep(s);
-    router.replace(`/session/${sessionId}?step=${s}`);
+    // scroll: false prevents Next.js from jumping to top on soft navigation
+    router.replace(`/session/${sessionId}?step=${s}`, { scroll: false });
   };
 
   const runPhase = useCallback(
@@ -186,6 +200,7 @@ function SessionContent() {
       const phase = PHASE_FOR_STEP[targetStep];
       setRunError(null);
       setRunErrorCode(null);
+      setRunErrorType(null);
       setPhaseRunning(true);
       if (options?.force) {
         if (targetStep === "keywords") setKeywords(null);
@@ -285,6 +300,7 @@ function SessionContent() {
       runInFlightRef.current = false;
       setPhase4RecalcActive(false);
       setAtsRecalcRunning(false);
+      setRunErrorType(lastEvent.error_type ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
   }, [lastEvent, applyPhaseOutput]);
@@ -392,6 +408,8 @@ function SessionContent() {
     setProgressLog([]);
     setRunError(null);
     setRunErrorCode(null);
+    setRunErrorType(null);
+    setShowRecalcConfirm(false);
     reset();
   }, [step, reset]);
 
@@ -461,13 +479,20 @@ function SessionContent() {
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
           {runError && (
-            <div className="flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              {runError}
+            <div className="flex items-start gap-2 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+              <div className="flex-1 min-w-0">
+                {runErrorType?.startsWith("llm_") && (
+                  <span className="inline-block text-amber-400 text-xs font-semibold uppercase tracking-wide mr-2 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5 mb-1">
+                    AI model error
+                  </span>
+                )}
+                <span className="text-red-300">{runError}</span>
+              </div>
               {runErrorCode === "master_resume_required" ? (
                 <Link
                   href="/profile"
-                  className="ml-auto whitespace-nowrap underline hover:no-underline"
+                  className="ml-auto whitespace-nowrap underline hover:no-underline text-red-400"
                   onClick={() => setRunError(null)}
                 >
                   Upload master resume →
@@ -477,9 +502,10 @@ function SessionContent() {
                   onClick={() => {
                     setRunError(null);
                     setRunErrorCode(null);
+                    setRunErrorType(null);
                     runCurrentPhase({ force: true });
                   }}
-                  className="ml-auto underline hover:no-underline"
+                  className="ml-auto underline hover:no-underline text-red-400"
                 >
                   Retry
                 </button>
@@ -567,7 +593,6 @@ function SessionContent() {
                 initialClaimedKeywords={sessionClaimedKeywords}
                 initialExtraNotes={sessionExtraNotes}
                 initialBulletFixes={sessionBulletFixes}
-                onReaudit={() => runCurrentPhase({ force: true })}
                 onAuditEdited={(nextStale) => setStale((prev) => ({ ...prev, ...nextStale }))}
               />
               {audit && !isStreaming && (
@@ -591,23 +616,62 @@ function SessionContent() {
                   </p>
                 </div>
                 {tailored && (
-                  <button
-                    type="button"
-                    onClick={() => recalculateAts()}
-                    disabled={atsRecalcRunning || phaseRunning}
-                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
-                  >
-                    {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {showRecalcConfirm ? (
+                      <>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-xs text-amber-300">
+                          <Zap className="w-3.5 h-3.5 shrink-0" />
+                          Costs 1 credit
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setShowRecalcConfirm(false); recalculateAts(); }}
+                          disabled={atsRecalcRunning || phaseRunning}
+                          className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-40"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowRecalcConfirm(false)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowRecalcConfirm(true)}
+                        disabled={atsRecalcRunning || phaseRunning}
+                        className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                      >
+                        {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-              <LLMTierSelector
-                value={llmTier}
-                status={llmStatus}
-                disabled={phaseRunning}
-                onChange={setLlmTier}
-                onRequestPurchase={handleRequestPurchase}
-              />
+              {byokEntry?.apiKey ? (
+                <div className="mb-4 px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/40 text-xs text-slate-300 flex items-center gap-3">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold text-[10px] uppercase tracking-wide">
+                    BYOK
+                  </span>
+                  <span>
+                    Using your <span className="text-slate-100 font-medium">{byokEntry.provider}</span> key
+                    {byokEntry.model ? <> · <span className="text-slate-100 font-medium">{byokEntry.model}</span></> : null}.
+                    Platform tier upgrades are not applied when you supply your own key.
+                  </span>
+                </div>
+              ) : (
+                <LLMTierSelector
+                  value={llmTier}
+                  status={llmStatus}
+                  disabled={phaseRunning}
+                  onChange={setLlmTier}
+                  onRequestPurchase={handleRequestPurchase}
+                />
+              )}
               {!tailored && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
@@ -688,6 +752,10 @@ function SessionContent() {
                           scoreHistory={atsScoreHistory}
                           variant="sidebar"
                           onApplySuggestion={setAppliedSuggestion}
+                          onSendToChat={(msg) => {
+                            setChatPrefill(msg);
+                            setSidebarTab("chat");
+                          }}
                         />
                       ) : (
                         <p className="text-slate-500 text-xs py-4 text-center">
@@ -700,6 +768,8 @@ function SessionContent() {
                       <ResumeChat
                         sessionId={sessionId}
                         tailored={tailored}
+                        prefillMessage={chatPrefill}
+                        onClearPrefill={() => setChatPrefill(null)}
                         onApplyPatch={async (_patch, updatedTailored) => {
                           setTailored(updatedTailored);
                           setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
@@ -751,6 +821,11 @@ function SessionContent() {
                   variant="primary"
                   onApplySuggestion={(text) => {
                     setAppliedSuggestion(text);
+                    goTo("rewrite");
+                  }}
+                  onSendToChat={(msg) => {
+                    setChatPrefill(msg);
+                    setSidebarTab("chat");
                     goTo("rewrite");
                   }}
                 />

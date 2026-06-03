@@ -13,10 +13,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock, Mic, Sparkles } from "lucide-react";
+import { CheckCircle, Clock, Loader2, Mic, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { StorySegment } from "./StorySegment";
-import { submitStory } from "@/lib/story";
+import { polishResume, submitStory } from "@/lib/story";
 import { getStoredKey } from "@/lib/keyStore";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +39,12 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [totalMs, setTotalMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [reviewText, setReviewText] = useState<string | null>(null);
+  const [prevText, setPrevText] = useState<string | null>(null);
+  const [polishInstruction, setPolishInstruction] = useState("");
+  const [polishing, setPolishing] = useState(false);
+  const [polishError, setPolishError] = useState<string | null>(null);
+  const polishInputRef = useRef<HTMLTextAreaElement>(null);
 
   const totalTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const totalStartRef  = useRef<number>(0);
@@ -147,14 +152,13 @@ export function StoryRecorder({ token, onSaved }: Props) {
     setError(null);
     try {
       const key = getStoredKey();
-      await submitStory(segments, token, {
+      const result = await submitStory(segments, token, {
         byokApiKey: key?.apiKey,
         byokProvider: key?.provider,
         byokModel: key?.model,
         whisperPath: !supportsWebSpeech,
       });
-      setSuccess(true);
-      onSaved();
+      setReviewText(result.resume_text ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate resume from story.");
     } finally {
@@ -162,10 +166,179 @@ export function StoryRecorder({ token, onSaved }: Props) {
     }
   };
 
+  const handlePolish = async () => {
+    if (!polishInstruction.trim() || !reviewText || polishing) return;
+    setPolishing(true);
+    setPolishError(null);
+    setPrevText(reviewText);
+    try {
+      const key = getStoredKey();
+      const result = await polishResume(reviewText, polishInstruction.trim(), token, {
+        byokApiKey: key?.apiKey,
+        byokProvider: key?.provider,
+        byokModel: key?.model,
+      });
+      setReviewText(result.text);
+      setPolishInstruction("");
+    } catch (e) {
+      setPolishError(e instanceof Error ? e.message : "Polish failed. Try again.");
+      setPrevText(null);
+    } finally {
+      setPolishing(false);
+      setTimeout(() => polishInputRef.current?.focus(), 50);
+    }
+  };
+
   const isRecordingAnything = recordingState !== "idle";
   const canAddSegment = segments.length < MAX_SEGMENTS && !isRecordingAnything && !submitting;
   const totalMinsLabel = `${Math.floor(totalMs / 60000)}:${String(Math.floor((totalMs % 60000) / 1000)).padStart(2, "0")}`;
   const isWarning = totalMs >= WARN_TOTAL_MS;
+
+  // ── Submitting overlay ─────────────────────────────────────────────────────
+  if (submitting) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+        <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
+        <p className="text-slate-300 font-medium">Crafting your resume from the story…</p>
+        <p className="text-slate-500 text-sm">This may take up to 30 seconds</p>
+      </div>
+    );
+  }
+
+  // ── Review state ───────────────────────────────────────────────────────────
+  if (reviewText !== null) {
+    return (
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-green-400" />
+            <p className="text-green-400 font-semibold text-sm">Resume crafted from your story</p>
+          </div>
+          {prevText && (
+            <button
+              type="button"
+              onClick={() => { setReviewText(prevText); setPrevText(null); }}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-400 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Undo last polish
+            </button>
+          )}
+        </div>
+
+        <p className="text-slate-400 text-sm">
+          Review and edit below. Use the AI assistant to refine any section, then save to your profile.
+        </p>
+
+        {/* Editable resume textarea */}
+        <textarea
+          value={reviewText}
+          onChange={(e) => { setReviewText(e.target.value); setPrevText(null); }}
+          rows={18}
+          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400/50"
+        />
+
+        {/* AI Polish panel */}
+        <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-semibold text-slate-300">Polish with AI</span>
+            <span className="text-xs text-slate-600 ml-auto">Free — no credits used</span>
+          </div>
+
+          {/* Example prompts */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Make the summary more senior",
+              "Add stronger metrics to experience",
+              "Make bullets more concise",
+              "Improve the skills section",
+            ].map((ex) => (
+              <button
+                key={ex}
+                type="button"
+                disabled={polishing}
+                onClick={() => {
+                  setPolishInstruction(ex);
+                  setTimeout(() => polishInputRef.current?.focus(), 30);
+                }}
+                className="text-xs px-2.5 py-1 rounded-full border border-slate-700 text-slate-400 hover:border-amber-400/50 hover:text-amber-300 transition-colors disabled:opacity-40"
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+
+          {/* Instruction input */}
+          <div className="flex gap-2">
+            <textarea
+              ref={polishInputRef}
+              value={polishInstruction}
+              onChange={(e) => setPolishInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void handlePolish();
+                }
+              }}
+              disabled={polishing}
+              placeholder="Tell AI what to change… (Enter to send)"
+              rows={2}
+              className="flex-1 resize-none bg-slate-900 border border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed"
+            />
+            <button
+              type="button"
+              onClick={() => void handlePolish()}
+              disabled={polishing || !polishInstruction.trim()}
+              className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 disabled:opacity-40 transition-colors shrink-0 self-end"
+            >
+              {polishing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+
+          {polishError && (
+            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+              {polishError}
+            </p>
+          )}
+
+          {polishing && (
+            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Applying changes…
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => onSaved()}
+            className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Save to Profile &amp; continue
+          </button>
+          <button
+            type="button"
+            onClick={() => { setReviewText(null); setPrevText(null); }}
+            className="px-5 py-3 border border-slate-700 hover:border-slate-500 bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl transition-colors text-sm"
+          >
+            Back
+          </button>
+        </div>
+        <p className="text-slate-600 text-xs">
+          Your resume is already saved — this view lets you refine it before continuing to the JD flow.
+        </p>
+      </div>
+    );
+  }
 
   // ── Credit disclosure (shown before first segment) ─────────────────────────
   if (segments.length === 0 && !isRecordingAnything) {
@@ -338,12 +511,6 @@ export function StoryRecorder({ token, onSaved }: Props) {
       {error && (
         <div className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
           {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="text-green-400 text-sm bg-green-400/10 border border-green-400/20 rounded-lg p-3">
-          Your story has been turned into a professional profile. Redirecting…
         </div>
       )}
     </div>

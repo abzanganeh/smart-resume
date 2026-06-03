@@ -16,7 +16,10 @@ export function ProgressLog({ messages, done }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only within the log container — block: "nearest" prevents
+    // the page-level scroll-to-top jump some browsers do when the
+    // target is above the viewport.
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages.length]);
 
   if (!messages.length) {

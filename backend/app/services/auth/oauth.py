@@ -39,6 +39,61 @@ _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
+async def _google_profile_from_access_token(
+    access_token: str,
+    *,
+    client: httpx.AsyncClient,
+) -> NormalisedOAuthProfile:
+    user_resp = await client.get(
+        _GOOGLE_USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if user_resp.status_code >= 400:
+        raise OAuthError(f"Google userinfo failed: {user_resp.text}")
+    return _normalise_google(user_resp.json())
+
+
+async def verify_google_id_token(
+    id_token: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> NormalisedOAuthProfile:
+    if not settings.GOOGLE_CLIENT_ID:
+        raise OAuthError("Google OAuth is not configured")
+
+    owns_client = client is None
+    client = client or httpx.AsyncClient(timeout=10.0)
+    try:
+        resp = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": id_token},
+        )
+        if resp.status_code >= 400:
+            raise OAuthError(f"Google id_token verification failed: {resp.text}")
+        profile = resp.json()
+        if profile.get("aud") != settings.GOOGLE_CLIENT_ID:
+            raise OAuthError("Google id_token audience mismatch")
+    finally:
+        if owns_client:
+            await client.aclose()
+
+    return _normalise_google(profile)
+
+
+async def fetch_google_profile_with_access_token(
+    access_token: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> NormalisedOAuthProfile:
+    owns_client = client is None
+    client = client or httpx.AsyncClient(timeout=10.0)
+    try:
+        return await _google_profile_from_access_token(access_token, client=client)
+    finally:
+        if owns_client:
+            await client.aclose()
+
+
 async def exchange_google_code(
     code: str,
     redirect_uri: str,
@@ -65,18 +120,10 @@ async def exchange_google_code(
         if not access_token:
             raise OAuthError("Google token response missing access_token")
 
-        user_resp = await client.get(
-            _GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if user_resp.status_code >= 400:
-            raise OAuthError(f"Google userinfo failed: {user_resp.text}")
-        profile = user_resp.json()
+        return await _google_profile_from_access_token(access_token, client=client)
     finally:
         if owns_client:
             await client.aclose()
-
-    return _normalise_google(profile)
 
 
 def _normalise_google(profile: dict[str, Any]) -> NormalisedOAuthProfile:
@@ -101,6 +148,57 @@ def _normalise_google(profile: dict[str, Any]) -> NormalisedOAuthProfile:
 _GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 _GITHUB_USER_URL = "https://api.github.com/user"
 _GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
+
+
+async def _github_profile_from_access_token(
+    access_token: str,
+    *,
+    client: httpx.AsyncClient,
+) -> NormalisedOAuthProfile:
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    user_resp = await client.get(_GITHUB_USER_URL, headers=headers)
+    if user_resp.status_code >= 400:
+        raise OAuthError(f"GitHub user fetch failed: {user_resp.text}")
+    user = user_resp.json()
+
+    email = user.get("email")
+    if not email:
+        emails_resp = await client.get(_GITHUB_EMAILS_URL, headers=headers)
+        if emails_resp.status_code >= 400:
+            raise OAuthError(
+                "GitHub primary email is private and email scope was not granted"
+            )
+        for entry in emails_resp.json():
+            if entry.get("primary") and entry.get("verified"):
+                email = entry.get("email")
+                break
+
+    if not email:
+        raise OAuthError("Could not resolve a verified GitHub email")
+
+    return {
+        "email": email.lower().strip(),
+        "provider_id": str(user["id"]),
+        "display_name": user.get("name") or user.get("login") or email.split("@", 1)[0],
+    }
+
+
+async def fetch_github_profile_with_access_token(
+    access_token: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> NormalisedOAuthProfile:
+    owns_client = client is None
+    client = client or httpx.AsyncClient(timeout=10.0)
+    try:
+        return await _github_profile_from_access_token(access_token, client=client)
+    finally:
+        if owns_client:
+            await client.aclose()
 
 
 async def exchange_github_code(
@@ -135,41 +233,10 @@ async def exchange_github_code(
                 f"GitHub token response missing access_token: {token_body}"
             )
 
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        user_resp = await client.get(_GITHUB_USER_URL, headers=headers)
-        if user_resp.status_code >= 400:
-            raise OAuthError(f"GitHub user fetch failed: {user_resp.text}")
-        user = user_resp.json()
-
-        email = user.get("email")
-        if not email:
-            # GitHub returns null when the user keeps email private — fall
-            # back to the emails endpoint and pick the primary+verified row.
-            emails_resp = await client.get(_GITHUB_EMAILS_URL, headers=headers)
-            if emails_resp.status_code >= 400:
-                raise OAuthError(
-                    "GitHub primary email is private and email scope was not granted"
-                )
-            for entry in emails_resp.json():
-                if entry.get("primary") and entry.get("verified"):
-                    email = entry.get("email")
-                    break
+        return await _github_profile_from_access_token(access_token, client=client)
     finally:
         if owns_client:
             await client.aclose()
-
-    if not email:
-        raise OAuthError("Could not resolve a verified GitHub email")
-
-    return {
-        "email": email.lower().strip(),
-        "provider_id": str(user["id"]),
-        "display_name": user.get("name") or user.get("login") or email.split("@", 1)[0],
-    }
 
 
 __all__ = [
@@ -177,4 +244,7 @@ __all__ = [
     "OAuthProvider",
     "exchange_github_code",
     "exchange_google_code",
+    "fetch_github_profile_with_access_token",
+    "fetch_google_profile_with_access_token",
+    "verify_google_id_token",
 ]

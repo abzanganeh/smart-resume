@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <p>
         This Privacy Policy explains how Smart Resume Agent (&quot;we&quot;,
         &quot;us&quot;) collects, uses, shares, and protects your information.
-        Smart Resume is operated by Hamed Zangane.  Our Data Protection
+        Smart Resume is operated by Alireza Barzin Zanganeh.  Our Data Protection
         Officer (DPO) can be reached at{" "}
         <a href="mailto:privacy@zanganehai.com">privacy@zanganehai.com</a>.
       </p>

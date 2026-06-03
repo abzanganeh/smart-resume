@@ -42,7 +42,7 @@ export default function AdminAnnouncementsPage() {
     setError(null)
     try {
       const res = await getAdminAnnouncements(token!)
-      setAnnouncements(res.announcements)
+      setAnnouncements(Array.isArray(res.announcements) ? res.announcements : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load announcements")
     } finally {

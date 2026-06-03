@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, Sparkles, X, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
 import { type BlockingIssue, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,8 @@ interface Props {
   streaming?: boolean;
   scoreHistory?: number[];
   onApplySuggestion?: (suggestion: string) => void;
+  /** Called when user wants to send a suggestion directly to the chat. */
+  onSendToChat?: (message: string) => void;
   /** Primary = full-width top section (Phase 4); sidebar = compact collapsible panel (Phase 3). */
   variant?: "primary" | "sidebar";
 }
@@ -175,14 +177,20 @@ function QuickWinCard({
   state,
   onAccept,
   onDecline,
+  onSendToChat,
 }: {
   issue: BlockingIssue;
   state: WinState;
   onAccept: () => void;
   onDecline: () => void;
+  onSendToChat?: (message: string) => void;
 }) {
   const isAccepted = state === "accepted";
   const isDeclined = state === "declined";
+
+  function buildChatMessage() {
+    return `Apply this quick win to my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nHow to fix: ${issue.suggestion}`;
+  }
 
   return (
     <div
@@ -213,8 +221,8 @@ function QuickWinCard({
         </div>
       </div>
 
-      {/* Accept / Decline toggle */}
-      <div className="flex gap-2">
+      {/* Accept / Decline / Fix with AI */}
+      <div className="flex gap-2 flex-wrap">
         <button
           type="button"
           onClick={onAccept}
@@ -241,13 +249,35 @@ function QuickWinCard({
           <X className="w-3 h-3" />
           {isDeclined ? "Skipped" : "Skip"}
         </button>
+        {onSendToChat && (
+          <button
+            type="button"
+            onClick={() => onSendToChat(buildChatMessage())}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
+          >
+            <MessageSquare className="w-3 h-3" />
+            Fix with AI
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function BlockingIssueRow({ issue, defaultOpen }: { issue: BlockingIssue; defaultOpen?: boolean }) {
+function BlockingIssueRow({
+  issue,
+  defaultOpen,
+  onSendToChat,
+}: {
+  issue: BlockingIssue;
+  defaultOpen?: boolean;
+  onSendToChat?: (message: string) => void;
+}) {
   const [open, setOpen] = useState(defaultOpen ?? false);
+
+  function buildChatMessage() {
+    return `Fix this issue in my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nSuggestion: ${issue.suggestion}`;
+  }
 
   return (
     <div className="border border-slate-700 rounded-lg overflow-hidden">
@@ -275,7 +305,7 @@ function BlockingIssueRow({ issue, defaultOpen }: { issue: BlockingIssue; defaul
         )}
       </button>
       {open && (
-        <div className="px-3 py-2.5 border-t border-slate-700 bg-slate-900/40 space-y-1">
+        <div className="px-3 py-2.5 border-t border-slate-700 bg-slate-900/40 space-y-2">
           <p className="text-slate-400 text-xs">
             <span className="text-slate-500 font-medium">Suggestion: </span>
             {issue.suggestion}
@@ -283,6 +313,16 @@ function BlockingIssueRow({ issue, defaultOpen }: { issue: BlockingIssue; defaul
           <p className="text-[10px] text-slate-600">
             Fix effort: {issue.fix_effort.replace(/_/g, " ")}
           </p>
+          {onSendToChat && (
+            <button
+              type="button"
+              onClick={() => onSendToChat(buildChatMessage())}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
+            >
+              <MessageSquare className="w-3 h-3" />
+              Fix with AI →
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -302,10 +342,37 @@ export function ATSGuidancePanel({
   streaming = false,
   scoreHistory = [],
   onApplySuggestion,
+  onSendToChat,
   variant = "primary",
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [winStates, setWinStates] = useState<Record<number, WinState>>({});
+  const [dismissedBlocking, setDismissedBlocking] = useState<Set<number>>(new Set());
+  const [dismissedWins, setDismissedWins] = useState<Set<number>>(new Set());
+
+  // Reset dismissed sets when the QA output changes (new run).
+  const outputRef = useRef(output);
+  useEffect(() => {
+    if (output !== outputRef.current) {
+      outputRef.current = output;
+      setDismissedBlocking(new Set());
+      setDismissedWins(new Set());
+      setWinStates({});
+    }
+  }, [output]);
+
+  function dismissBlocking(idx: number) {
+    setDismissedBlocking((prev) => new Set(prev).add(idx));
+  }
+
+  function dismissWin(idx: number) {
+    setDismissedWins((prev) => new Set(prev).add(idx));
+    setWinStates((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }
 
   function setWinState(idx: number, next: WinState) {
     setWinStates((prev) => ({
@@ -322,6 +389,12 @@ export function ATSGuidancePanel({
     if (accepted.length > 0) {
       onApplySuggestion?.(accepted.join("\n"));
     }
+    // Dismiss accepted items so they don't linger as suggestions.
+    setDismissedWins((prev) => {
+      const next = new Set(prev);
+      quickWins.forEach((_, i) => { if (winStates[i] === "accepted") next.add(i); });
+      return next;
+    });
     setWinStates({});
   }
 
@@ -344,8 +417,12 @@ export function ATSGuidancePanel({
     );
   }
 
-  const blocking = sortBlockingIssues(output.blocking_issues ?? []);
-  const quickWins = output.quick_wins ?? [];
+  const blocking = sortBlockingIssues(output.blocking_issues ?? [])
+    .map((issue, i) => ({ issue, origIdx: i }))
+    .filter(({ origIdx }) => !dismissedBlocking.has(origIdx));
+  const quickWins = (output.quick_wins ?? [])
+    .map((issue, i) => ({ issue, origIdx: i }))
+    .filter(({ origIdx }) => !dismissedWins.has(origIdx));
   const ringSize = variant === "sidebar" ? 72 : 96;
 
   const content = (
@@ -400,13 +477,16 @@ export function ATSGuidancePanel({
             Accept the wins you want, then click &ldquo;Apply selected&rdquo; to add them to your resume.
           </p>
           <div className="space-y-2">
-            {quickWins.map((issue, i) => (
+            {quickWins.map(({ issue, origIdx }) => (
               <QuickWinCard
-                key={i}
+                key={origIdx}
                 issue={issue}
-                state={winStates[i] ?? "neutral"}
-                onAccept={() => setWinState(i, "accepted")}
-                onDecline={() => setWinState(i, "declined")}
+                state={winStates[origIdx] ?? "neutral"}
+                onAccept={() => setWinState(origIdx, "accepted")}
+                onDecline={() => dismissWin(origIdx)}
+                onSendToChat={onSendToChat
+                  ? (msg) => { dismissWin(origIdx); onSendToChat(msg); }
+                  : undefined}
               />
             ))}
           </div>
@@ -420,8 +500,15 @@ export function ATSGuidancePanel({
             Blocking issues ({blocking.length})
           </h3>
           <div className="space-y-1.5">
-            {blocking.map((issue, i) => (
-              <BlockingIssueRow key={i} issue={issue} defaultOpen={i === 0 && variant === "primary"} />
+            {blocking.map(({ issue, origIdx }, renderIdx) => (
+              <BlockingIssueRow
+                key={origIdx}
+                issue={issue}
+                defaultOpen={renderIdx === 0 && variant === "primary"}
+                onSendToChat={onSendToChat
+                  ? (msg) => { dismissBlocking(origIdx); onSendToChat(msg); }
+                  : undefined}
+              />
             ))}
           </div>
         </section>

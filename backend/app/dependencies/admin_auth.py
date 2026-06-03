@@ -164,15 +164,27 @@ async def get_current_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "admin_suspended"},
         )
-    if admin.must_change_password or admin.must_enroll_2fa:
+    if admin.must_enroll_2fa:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "admin_setup_incomplete",
                 "must_change_password": admin.must_change_password,
-                "must_enroll_2fa": admin.must_enroll_2fa,
+                "must_enroll_2fa": True,
             },
         )
+    if admin.must_change_password:
+        # Allow the mandatory first-login password rotation while every
+        # other admin route stays blocked until the flag is cleared.
+        if request.url.path != "/api/admin/auth/change-password":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "admin_setup_incomplete",
+                    "must_change_password": True,
+                    "must_enroll_2fa": False,
+                },
+            )
     request.state.admin = admin
     request.state.admin_session_claims = claims
     return admin

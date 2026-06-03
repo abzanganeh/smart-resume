@@ -174,10 +174,29 @@ async def run(
 ) -> KeywordExtractionOutput:
     await event_queue.put({"event": "progress", "phase": 1, "message": "Analyzing job description…"})
 
+    from app.parsers.html_parser import strip_html_to_text
+
     resume_text = session.resume_raw or ""
-    jd_text = session.jd_raw or ""
+    # Strip HTML from jd_raw in case the URL fetcher stored raw HTML
+    # (e.g. Jobright, Greenhouse, or other JS-rendered job boards).
+    raw_jd = session.jd_raw or ""
+    jd_text = strip_html_to_text(raw_jd)
+
     if not jd_text.strip():
         raise RuntimeError("Job description is empty.")
+
+    # Guard against JS-rendered pages that return a thin HTML shell with
+    # no readable text (Jobright, Greenhouse, Lever, etc.). Fewer than 200
+    # characters after stripping is a strong signal the scraper got nothing
+    # useful — refusing here prevents the LLM from hallucinating keywords
+    # from the resume when there is no JD content to work with.
+    MIN_JD_CHARS = 200
+    if len(jd_text.strip()) < MIN_JD_CHARS:
+        raise RuntimeError(
+            "The job description URL returned a page-loading shell with no readable text "
+            "(the site uses JavaScript rendering). "
+            "Please paste the job description text directly into the JD field."
+        )
 
     resume_text, jd_text = truncate_to_fit(llm, resume_text, jd_text)
 
