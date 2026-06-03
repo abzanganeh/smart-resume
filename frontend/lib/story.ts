@@ -4,6 +4,7 @@ export interface StoryToResumeResponse {
   id: string;
   chunk_count: number;
   last_embedded_at: string | null;
+  resume_text: string | null;
   embedding_warning: string | null;
 }
 
