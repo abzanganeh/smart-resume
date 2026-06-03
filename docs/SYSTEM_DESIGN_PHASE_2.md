@@ -2824,3 +2824,208 @@ Upload file is the fallback for power users; Story is the default onboarding pat
 
 *§20 added: 2026-06-02*
 *§21 added: 2026-06-02*
+
+---
+
+## §22 — Story Mode Interview Coach (In-Recording Chatbot)
+
+### 22.1 Overview
+
+After each recorded segment the user can optionally tap **"Coach me"** to open a lightweight AI chat panel. The coach reviews what the user just said and asks one targeted follow-up question to draw out missing detail — metrics, team sizes, outcomes, dates. The user can answer by typing or by recording another micro-segment. The coach never generates resume text; it only asks questions. Resume generation stays in the existing `POST /api/profile/resume/from-story` pipeline.
+
+This is distinct from the existing **AI Polish chatbot** (post-generation, edits resume sections) and the existing **ResumeChat** (post-pipeline Q&A about the tailored resume).
+
+---
+
+### 22.2 User Journey
+
+```
+[Record segment N — 60 s]
+        │
+        ▼
+[Segment card: transcript shown]
+   ┌────┴──────────────────────┐
+   │  [Edit]  [Re-record]      │
+   │  [Coach me ✨]            │  ← new button
+   └───────────────────────────┘
+        │ tap "Coach me"
+        ▼
+[Coach panel slides in below segment]
+  "Great — you mentioned leading a migration to Kubernetes.
+   How many engineers were on that team, and what was
+   the timeline from kickoff to production?"
+        │
+        ▼
+  User types answer  OR  taps mic (mini recorder, 30 s max)
+        │
+        ▼
+  [Add as segment]  →  appended as Segment N+1 (pre-filled with answer)
+  [Close]           →  dismiss, keep original segment
+```
+
+The coach panel is **per-segment**, **on-demand** (never auto-opened), and limited to **3 exchanges per segment** to prevent runaway credit use.
+
+---
+
+### 22.3 Backend — `POST /api/profile/story/coach`
+
+#### Request
+```json
+{
+  "segment_text": "I led the migration of our monolith to Kubernetes...",
+  "history": [
+    { "role": "coach", "text": "How many engineers were on that team?" },
+    { "role": "user",  "text": "About 6, plus 2 contractors." }
+  ],
+  "session_id": "optional — for rate-limiting"
+}
+```
+
+#### Response (streaming SSE, same pattern as ResumeChat)
+```
+data: {"delta": "That's a solid team size."}
+data: {"delta": " What was the timeline"}
+data: {"delta": " from kickoff to production?"}
+data: {"done": true}
+```
+
+#### Prompt — `backend/app/agent/prompts/story_coach.txt`
+```
+You are a career interview coach helping a user record their career story for a resume.
+
+The user just said:
+{segment_text}
+
+Prior conversation:
+{history}
+
+Your job:
+1. Read what the user said carefully.
+2. Identify the single most important missing detail that would make this experience stronger on a resume:
+   - Missing metrics or numbers (team size, revenue, percentage improvement, timeline)
+   - Vague outcomes ("improved performance" → "by how much?")
+   - Missing scope ("led the project" → "how many people? what budget?")
+3. Ask ONE short, specific, conversational question to draw out that detail.
+4. Keep it under 30 words.
+5. Do NOT suggest what the answer should be.
+6. Do NOT add filler ("Great!", "Excellent!") — go straight to the question.
+7. If the segment already has strong metrics and outcomes, say: "This segment looks complete — nothing missing here."
+```
+
+#### Quota
+| User type | Cost |
+|---|---|
+| BYOK | 0 credits |
+| Subscriber | 0 credits (coach calls are included in subscription; very low LLM cost ~$0.002/call) |
+| Free, Web Speech path | **1 credit per coach session** (per segment, not per exchange) |
+| Free, Whisper path | 1 credit per coach session (Whisper cost already charged separately at story start) |
+
+One credit per segment-coach-session (not per exchange within the session). Max 3 exchanges → capped at 3 × ~500 tokens ≈ ~$0.002 per session at GPT-4o-mini pricing.
+
+---
+
+### 22.4 Cost Evaluation
+
+| LLM | Input tokens (est.) | Output tokens (est.) | Cost per coach call |
+|---|---|---|---|
+| GPT-4o-mini (default) | ~600 (prompt + segment + history) | ~50 (short question) | ~$0.0003 |
+| GPT-4o | ~600 | ~50 | ~$0.003 |
+| Claude Haiku | ~600 | ~50 | ~$0.0002 |
+
+**Worst case per story session** (30 segments, all coached, 3 exchanges each):  
+30 × 3 × $0.0003 = **$0.027** (< 3 cents) using GPT-4o-mini.
+
+**Revenue per credit charged:**  
+1 credit ≈ $0.10 retail value (10 credits = ~$1). Coach session costs ~$0.001. Margin: **~99%**.
+
+**Recommendation:** Always use `gpt-4o-mini` (or equivalent cheap model) for coach calls, regardless of the user's selected LLM tier for resume generation. Coach is a small Q&A call, not a generation task.
+
+---
+
+### 22.5 New Files
+
+| File | Purpose |
+|---|---|
+| `backend/app/agent/prompts/story_coach.txt` | Coach system prompt |
+| `backend/app/agent/story_coach.py` | `coach_segment(segment_text, history) → AsyncGenerator[str]` |
+| `backend/app/routers/profile.py` (extend) | `POST /api/profile/story/coach` SSE endpoint |
+| `backend/tests/unit/test_story_coach.py` | Unit tests for prompt rendering + quota |
+| `backend/tests/integration/test_story_coach_api.py` | Integration tests for endpoint |
+| `frontend/components/profile/StoryCoach.tsx` | Coach panel component (slides in below segment) |
+| `frontend/lib/story.ts` (extend) | `streamCoach(segmentText, history, token)` SSE helper |
+| `frontend/tests/components/StoryCoach.test.ts` | Unit tests |
+
+---
+
+### 22.6 Frontend — `StoryCoach` Component
+
+```
+Props:
+  segmentText: string          — the segment being coached
+  token: string                — auth token
+  onAddAsSegment(text: string) — callback: append coach answer as new segment
+  onClose()                    — dismiss panel
+
+State:
+  messages: { role: "coach" | "user"; text: string }[]
+  input: string
+  streaming: boolean
+  exchangeCount: number        — max 3, then lock input
+
+Behaviour:
+  - On mount: immediately streams first coach question (no user action needed)
+  - Input: text area + optional 30-s mic button (reuses useVoiceRecorder)
+  - [Send] submits user reply, streams next coach question
+  - After exchange 3: show "You've reached the max exchanges for this segment."
+    + [Add as segment] button that concatenates all user answers into a new segment text
+  - Cost disclosure: show "1 credit per coaching session" for free users before first call
+```
+
+---
+
+### 22.7 `StoryRecorder` Integration
+
+Add **"Coach me ✨"** button to each `StorySegment` card (visible after recording, before or after editing). Clicking opens `<StoryCoach>` inline below that segment. Only one coach panel open at a time (opening another auto-closes the previous).
+
+---
+
+### 22.8 Quota Integration
+
+Add `QuotaAction.story_coach` to `quota.py`:
+- Charge **1 free credit** per coach session for free users (deducted at first message, not on panel open)
+- Subscribers and BYOK: `charged_to = "subscription"` / `"byok"` with 0 credit cost
+- Endpoint returns `402 insufficient_credits` if free user has 0 credits → UI shows upgrade prompt
+
+---
+
+### 22.9 Test Plan
+
+| Test | Type | What it checks |
+|---|---|---|
+| `coach_segment streams question` | Unit | Non-empty string yielded, ends without error |
+| `coach_segment respects max_exchanges` | Unit | Returns sentinel after 3 exchanges |
+| `POST /api/profile/story/coach 200` | Integration | SSE stream with `{"delta": ...}` events |
+| `POST /api/profile/story/coach 402` | Integration | Free user with 0 credits gets 402 |
+| `POST /api/profile/story/coach 429` | Integration | Rate limiter fires after 10/min |
+| `StoryCoach renders first question on mount` | Frontend unit | Streaming starts immediately |
+| `StoryCoach locks after 3 exchanges` | Frontend unit | Input disabled, "Add as segment" shown |
+| `StoryCoach onAddAsSegment called with combined text` | Frontend unit | Callback receives concatenated user answers |
+
+---
+
+### 22.10 Build Order
+
+| Step | Area | Deliverable |
+|---|---|---|
+| 1 | Backend | `story_coach.txt` prompt + `agent/story_coach.py` + unit tests |
+| 2 | Backend | `quota.py` — add `story_coach` action |
+| 3 | Backend | `routers/profile.py` — `POST /api/profile/story/coach` SSE + integration tests |
+| 4 | Frontend | `lib/story.ts` — `streamCoach()` SSE helper |
+| 5 | Frontend | `StoryCoach.tsx` component with streaming, exchange limit, Add-as-segment |
+| 6 | Frontend | `StorySegment.tsx` — add "Coach me" button, wire `StoryCoach` |
+| 7 | Frontend | `StoryRecorder.tsx` — single-open coach panel management |
+| 8 | Both | End-to-end: record segment → coach → add answer as segment → generate resume |
+
+---
+
+*§22 added: 2026-06-03*

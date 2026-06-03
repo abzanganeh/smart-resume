@@ -1,5 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, Download, FileText, Key, Search, Sparkles, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  Briefcase,
+  CheckCircle,
+  Download,
+  FileText,
+  Layers,
+  MessageSquare,
+  Mic,
+  Search,
+  Sparkles,
+  Star,
+  Zap,
+} from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -9,41 +23,181 @@ export default function LandingPage() {
       <section className="max-w-4xl mx-auto px-6 pt-24 pb-16 text-center">
         <div className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-300 mb-8">
           <Sparkles className="w-4 h-4 text-amber-400" />
-          ATS-optimized · JD-specific · Your API key, your cost
+          ATS-optimized · Evidence-based · Never fabricates metrics
         </div>
         <h1 className="text-5xl font-bold tracking-tight mb-6 leading-tight">
-          Tailor your resume to{" "}
-          <span className="text-amber-400">every job description</span>
-          <br />in minutes.
+          Your entire job search,{" "}
+          <span className="text-amber-400">powered by AI.</span>
         </h1>
         <p className="text-xl text-slate-400 mb-4 max-w-2xl mx-auto">
-          Smart Resume Agent extracts every ATS keyword, audits your resume, rewrites it with
-          exact JD phrasing, and exports a download-ready PDF — all without fabricating a word.
+          Build your master resume by speaking, tailor it to every job description in minutes, find
+          matching jobs, write cover letters, and track every application — all in one place.
         </p>
         <p className="text-sm text-slate-500 mb-10 max-w-xl mx-auto">
-          Powered by <strong className="text-slate-300">your own AI API key</strong> — we never store it,
-          never charge you for AI calls. Gemini and Ollama have free tiers.
+          Start free · No credit card · Use our models or bring your own API key
         </p>
-        <Link
-          href="/auth"
-          className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
-        >
-          Get started free
-          <ArrowRight className="w-5 h-5" />
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link
+            href="/auth"
+            className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
+          >
+            Get started free
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+          <Link
+            href="/auth"
+            className="inline-flex items-center gap-2 border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white font-medium px-6 py-3.5 rounded-lg transition-colors text-base"
+          >
+            Sign in
+          </Link>
+        </div>
         <p className="mt-4 text-slate-500 text-sm">Free account · 6 credits included · No credit card required</p>
       </section>
 
-      {/* Provider badges */}
-      <section className="max-w-3xl mx-auto px-6 pb-16">
-        <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Works with</p>
+      {/* How it works */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <h2 className="text-center text-2xl font-semibold mb-3 text-slate-200">How it works</h2>
+        <p className="text-center text-slate-500 text-sm mb-12">From zero to tailored resume in under 15 minutes.</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          {[
+            {
+              step: "1",
+              icon: <Mic className="w-5 h-5 text-indigo-400" />,
+              title: "Build your master resume",
+              desc: "Upload a file, speak your career story (we transcribe it), or let the AI interview you with structured career questions.",
+              accent: "indigo",
+            },
+            {
+              step: "2",
+              icon: <Search className="w-5 h-5 text-amber-400" />,
+              title: "Paste a job description",
+              desc: "The agent extracts every must-have and nice-to-have ATS keyword from the JD.",
+              accent: "amber",
+            },
+            {
+              step: "3",
+              icon: <Sparkles className="w-5 h-5 text-amber-400" />,
+              title: "AI rewrites your resume",
+              desc: "Four-phase pipeline: keyword audit → gap analysis → evidence-based rewrite → ATS quality check.",
+              accent: "amber",
+            },
+            {
+              step: "4",
+              icon: <Download className="w-5 h-5 text-emerald-400" />,
+              title: "Export & apply",
+              desc: "Download a clean PDF or DOCX. Generate a matching cover letter. Track your application in one click.",
+              accent: "emerald",
+            },
+          ].map((item) => (
+            <div
+              key={item.step}
+              className="rounded-xl p-5 border bg-slate-800/60 border-slate-700 space-y-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-slate-700 text-slate-300">
+                  {item.step}
+                </span>
+                {item.icon}
+              </div>
+              <h3 className="font-semibold text-slate-100 text-sm">{item.title}</h3>
+              <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Feature grid */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <h2 className="text-center text-2xl font-semibold mb-3 text-slate-200">Everything in one platform</h2>
+        <p className="text-center text-slate-500 text-sm mb-12">
+          Not just a resume rewriter — a full job-search co-pilot.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[
+            {
+              icon: <Mic className="w-5 h-5 text-indigo-400" />,
+              title: "Story Mode",
+              desc: "Speak your career into the mic. Choose free recording with per-segment AI coaching, or a fully structured coached interview where the AI asks the questions.",
+              badge: null,
+            },
+            {
+              icon: <Layers className="w-5 h-5 text-amber-400" />,
+              title: "Master Resume",
+              desc: "A permanent semantic store of your experience. Every tailored resume draws from it — so rewrites use your real skills, not hallucinations.",
+              badge: null,
+            },
+            {
+              icon: <Sparkles className="w-5 h-5 text-amber-400" />,
+              title: "ATS Optimization",
+              desc: "Phase 1 extracts every keyword. Phase 4 scores your resume against the JD and gives you one-click quick-win suggestions to close gaps.",
+              badge: null,
+            },
+            {
+              icon: <MessageSquare className="w-5 h-5 text-violet-400" />,
+              title: "AI Chat & Inline Editing",
+              desc: 'Chat panel for freeform edits ("add a metric to the second bullet"), per-section regeneration, undo/redo version history.',
+              badge: null,
+            },
+            {
+              icon: <FileText className="w-5 h-5 text-sky-400" />,
+              title: "Cover Letter Generator",
+              desc: "One click generates a tailored cover letter from your master resume and the job description. Edit inline, export as PDF.",
+              badge: null,
+            },
+            {
+              icon: <Search className="w-5 h-5 text-emerald-400" />,
+              title: "Job Search",
+              desc: "Search matching jobs directly from the platform. Set preferences, block companies, and save listings to your tracker in one click.",
+              badge: null,
+            },
+            {
+              icon: <Briefcase className="w-5 h-5 text-orange-400" />,
+              title: "Application Tracker",
+              desc: "Kanban-style board tracks every application from Applied → Interview → Offer → Closed. Notes, attachments, and status history.",
+              badge: null,
+            },
+            {
+              icon: <Star className="w-5 h-5 text-pink-400" />,
+              title: "Job Fit Score",
+              desc: "Semantic similarity between your master resume and any job description — before you spend a credit tailoring.",
+              badge: null,
+            },
+            {
+              icon: <Zap className="w-5 h-5 text-amber-400" />,
+              title: "BYOK Support",
+              desc: "Bring your own OpenAI, Anthropic, Gemini, or OpenRouter key. Your key never leaves your browser session.",
+              badge: null,
+            },
+          ].map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-xl border border-slate-700 bg-slate-800/40 p-5 space-y-2"
+            >
+              <div className="flex items-center gap-2">
+                {feature.icon}
+                <h3 className="font-semibold text-slate-100 text-sm">{feature.title}</h3>
+                {feature.badge && (
+                  <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700">
+                    {feature.badge}
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-400 text-xs leading-relaxed">{feature.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* AI providers */}
+      <section className="max-w-3xl mx-auto px-6 pb-24">
+        <p className="text-center text-slate-500 text-xs uppercase tracking-widest mb-6">Supported AI providers</p>
         <div className="flex flex-wrap justify-center gap-3">
           {[
-            { name: "Google Gemini", emoji: "✨", badge: "Free tier", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
-            { name: "OpenRouter", emoji: "🔀", badge: "Free models", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
-            { name: "Ollama", emoji: "🦙", badge: "100% free", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
-            { name: "OpenAI", emoji: "⚡", badge: "Pay-as-you-go", badgeColor: "bg-slate-800 text-slate-400 border-slate-700" },
-            { name: "Anthropic", emoji: "🧠", badge: "Pay-as-you-go", badgeColor: "bg-slate-800 text-slate-400 border-slate-700" },
+            { name: "Google Gemini", emoji: "✨", badge: "Platform default", badgeColor: "bg-indigo-900/50 text-indigo-300 border-indigo-700" },
+            { name: "Claude (Anthropic)", emoji: "🧠", badge: "Best quality", badgeColor: "bg-purple-900/50 text-purple-300 border-purple-700" },
+            { name: "OpenAI", emoji: "⚡", badge: "BYOK", badgeColor: "bg-slate-800 text-slate-400 border-slate-700" },
+            { name: "OpenRouter", emoji: "🔀", badge: "BYOK · Free models", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
+            { name: "Ollama", emoji: "🦙", badge: "BYOK · Local · Free", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
           ].map((p) => (
             <div key={p.name} className="flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2.5">
               <span className="text-lg">{p.emoji}</span>
@@ -56,113 +210,22 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="max-w-4xl mx-auto px-6 pb-24">
-        <h2 className="text-center text-2xl font-semibold mb-3 text-slate-200">How it works</h2>
-        <p className="text-center text-slate-500 text-sm mb-12">Five steps, entirely in your browser.</p>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {[
-            {
-              icon: <Key className="w-5 h-5 text-violet-400" />,
-              step: "1",
-              title: "Choose your AI",
-              desc: "Pick a provider and paste your API key. We guide you step-by-step. Key stays in your browser only.",
-              highlight: true,
-            },
-            {
-              icon: <FileText className="w-5 h-5 text-amber-400" />,
-              step: "2",
-              title: "Upload resume",
-              desc: "PDF, DOCX, or plain text. Max 5 MB.",
-              highlight: false,
-            },
-            {
-              icon: <Search className="w-5 h-5 text-amber-400" />,
-              step: "3",
-              title: "Paste job description",
-              desc: "The agent extracts every must-have ATS keyword.",
-              highlight: false,
-            },
-            {
-              icon: <Sparkles className="w-5 h-5 text-amber-400" />,
-              step: "4",
-              title: "AI rewrite",
-              desc: "Rewritten with exact JD phrasing. Never fabricates metrics.",
-              highlight: false,
-            },
-            {
-              icon: <Download className="w-5 h-5 text-amber-400" />,
-              step: "5",
-              title: "Download",
-              desc: "QA checklist, then export PDF or DOCX.",
-              highlight: false,
-            },
-          ].map((item) => (
-            <div
-              key={item.step}
-              className={`rounded-xl p-5 border ${
-                item.highlight
-                  ? "bg-violet-950/40 border-violet-700/60 ring-1 ring-violet-600/30"
-                  : "bg-slate-800 border-slate-700"
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  item.highlight ? "bg-violet-700 text-white" : "bg-slate-700 text-slate-300"
-                }`}>
-                  {item.step}
-                </span>
-                {item.icon}
-              </div>
-              <h3 className="font-semibold text-slate-100 mb-1 text-sm">{item.title}</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Cost callout */}
+      {/* Quality guarantee */}
       <section className="max-w-3xl mx-auto px-6 pb-24">
-        <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-8 text-center">
-          <Zap className="w-8 h-8 text-amber-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-3">Zero cost to run this site</h2>
-          <p className="text-slate-400 text-sm max-w-lg mx-auto mb-6">
-            Your API key goes directly to the LLM provider. This app acts as a middleman for
-            orchestration only — it <strong className="text-slate-200">never bills you</strong>, never stores
-            your key, and disappears when the tab closes.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+        <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-8">
+          <h2 className="text-xl font-semibold mb-6 text-center">Built on quality rules, not guesswork</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              {
-                emoji: "✨",
-                name: "Google Gemini",
-                detail: "Free tier via AI Studio — 1,500 requests/day. No credit card needed.",
-                recommended: true,
-              },
-              {
-                emoji: "🦙",
-                name: "Ollama (local)",
-                detail: "Runs entirely on your machine. Completely free. Requires ~8 GB RAM.",
-                recommended: false,
-              },
-              {
-                emoji: "🔀",
-                name: "OpenRouter",
-                detail: "Free models available (Llama 3, Mistral). Pay-as-you-go for premium.",
-                recommended: false,
-              },
-            ].map((p) => (
-              <div key={p.name} className="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">{p.emoji}</span>
-                  <span className="font-semibold text-slate-100 text-sm">{p.name}</span>
-                  {p.recommended && (
-                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700">
-                      Recommended
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{p.detail}</p>
+              "Never fabricates metrics — only uses content from your master resume",
+              "8-point QA checklist before every export",
+              "ATS score with before/after delta so you see the improvement",
+              "Every rewrite is evidence-sourced to your actual experience",
+              "Inline editor + per-section AI regeneration — full control",
+              "Undo / redo through complete version history",
+            ].map((point) => (
+              <div key={point} className="flex items-start gap-2.5">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-slate-300 text-sm leading-relaxed">{point}</p>
               </div>
             ))}
           </div>
@@ -170,15 +233,19 @@ export default function LandingPage() {
       </section>
 
       {/* CTA footer */}
-      <section className="text-center pb-24">
+      <section className="text-center pb-24 px-6">
+        <h2 className="text-2xl font-semibold mb-3 text-slate-100">Ready to land your next role?</h2>
+        <p className="text-slate-400 text-sm mb-8 max-w-md mx-auto">
+          Start with 6 free credits. No credit card, no commitment. Cancel any time.
+        </p>
         <Link
           href="/auth"
           className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
         >
-          Start tailoring your resume
+          Start for free
           <ArrowRight className="w-5 h-5" />
         </Link>
-        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes of setup. Free account, 6 credits included.</p>
+        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes to get your first tailored resume.</p>
       </section>
 
     </main>
