@@ -53,6 +53,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const interviewStartRef = useRef(false);
 
   const storedKey = getStoredKey();
   const byokApiKey  = storedKey?.apiKey;
@@ -80,6 +81,10 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
 
   const fireNextQuestion = useCallback(
     async (currentHistory: InterviewMessage[]) => {
+      // Prevent Strict Mode double-fetch on the very first question only
+      if (currentHistory.length === 0 && interviewStartRef.current) return;
+      if (currentHistory.length === 0) interviewStartRef.current = true;
+
       setStreamingText("");
       setIsStreaming(true);
       setError(null);
@@ -98,6 +103,12 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         );
 
         const questionText = accumulated.trim();
+        if (!questionText) {
+          throw new Error(
+            "The AI returned an empty response. Try again, or add your own API key under Settings → API key.",
+          );
+        }
+
         const nextHistory: InterviewMessage[] = [
           ...currentHistory,
           { role: "interviewer", text: questionText },
@@ -110,6 +121,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         }
       } catch (err: unknown) {
         const e = err as Error & { code?: string };
+        if (currentHistory.length === 0) interviewStartRef.current = false;
         if (e.code === "insufficient_credits") {
           setError("You need at least 1 credit to start a coached interview. Upgrade to continue.");
           setPhase("credit-disclosure");
@@ -127,11 +139,10 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
 
   // Start the interview on mount (or after credit accepted)
   useEffect(() => {
-    if (phase === "interviewing" && history.length === 0 && !isStreaming) {
-      fireNextQuestion([]);
+    if (phase === "interviewing" && history.length === 0 && !isStreaming && !error) {
+      void fireNextQuestion([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, history.length, isStreaming, error, fireNextQuestion]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -203,10 +214,14 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => { setError(null); setPhase("interviewing"); }}
+            onClick={() => {
+              setError(null);
+              interviewStartRef.current = false;
+              setPhase("interviewing");
+            }}
             className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 font-medium transition-colors"
           >
-            Use 1 credit · Start interview
+            Start interview (uses 1 credit)
           </button>
           <button
             type="button"

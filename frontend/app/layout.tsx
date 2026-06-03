@@ -7,8 +7,9 @@ import { SessionProvider } from "@/components/nav/SessionProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Smart Resume Agent",
-  description: "Tailor your resume to every job description with AI",
+  title: "Smart Resume Agent — AI job search co-pilot",
+  description:
+    "Build your master resume by voice, tailor it to every job description, find matching jobs, write cover letters, and track applications — all in one place.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

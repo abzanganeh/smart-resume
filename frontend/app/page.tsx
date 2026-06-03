@@ -34,14 +34,15 @@ export default function LandingPage() {
           matching jobs, write cover letters, and track every application — all in one place.
         </p>
         <p className="text-sm text-slate-500 mb-10 max-w-xl mx-auto">
-          Start free · No credit card · Use our models or bring your own API key
+          Create a free account in under a minute — 6 credits included, no credit card.
+          Use our AI models or bring your own API key.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="/auth"
+            href="/auth?mode=register"
             className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
           >
-            Get started free
+            Create free account
             <ArrowRight className="w-5 h-5" />
           </Link>
           <Link
@@ -51,7 +52,14 @@ export default function LandingPage() {
             Sign in
           </Link>
         </div>
-        <p className="mt-4 text-slate-500 text-sm">Free account · 6 credits included · No credit card required</p>
+        <p className="mt-4 text-slate-500 text-sm">
+          New here?{" "}
+          <Link href="/auth?mode=register" className="text-amber-400 hover:text-amber-300 font-medium">
+            Register free
+          </Link>
+          {" · "}
+          6 credits on signup · No credit card required
+        </p>
       </section>
 
       {/* How it works */}
@@ -236,16 +244,24 @@ export default function LandingPage() {
       <section className="text-center pb-24 px-6">
         <h2 className="text-2xl font-semibold mb-3 text-slate-100">Ready to land your next role?</h2>
         <p className="text-slate-400 text-sm mb-8 max-w-md mx-auto">
-          Start with 6 free credits. No credit card, no commitment. Cancel any time.
+          Create your free account and get 6 credits to tailor your first resume. No credit card, no commitment.
         </p>
-        <Link
-          href="/auth"
-          className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
-        >
-          Start for free
-          <ArrowRight className="w-5 h-5" />
-        </Link>
-        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes to get your first tailored resume.</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link
+            href="/auth?mode=register"
+            className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold px-8 py-3.5 rounded-lg hover:bg-amber-300 transition-colors text-lg"
+          >
+            Create free account
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+          <Link
+            href="/auth"
+            className="text-slate-400 hover:text-slate-200 text-sm font-medium transition-colors"
+          >
+            Already have an account? Sign in
+          </Link>
+        </div>
+        <p className="mt-4 text-slate-500 text-sm">Takes about 2 minutes to register and get your first tailored resume.</p>
       </section>
 
     </main>

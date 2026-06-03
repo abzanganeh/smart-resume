@@ -97,6 +97,61 @@ export interface CoachDelta {
   error?: string;
 }
 
+/** Parse one SSE `data:` payload; throws on server error events. */
+function consumeSseDataLine(
+  raw: string,
+  onDelta: (delta: string) => void,
+  label: "Coach" | "Interview",
+): { done: boolean; complete: boolean } {
+  let evt: CoachDelta;
+  try {
+    evt = JSON.parse(raw) as CoachDelta;
+  } catch {
+    return { done: false, complete: false };
+  }
+  if (evt.error) {
+    throw new Error(
+      label === "Coach"
+        ? "The coach could not respond. Check that AI is configured, or add your API key."
+        : "The interview could not start. Check that AI is configured, or add your API key.",
+    );
+  }
+  if (evt.delta) onDelta(evt.delta);
+  if (evt.done) {
+    return { done: true, complete: evt.complete ?? false };
+  }
+  return { done: false, complete: false };
+}
+
+async function readSseStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onDelta: (delta: string) => void,
+  label: "Coach" | "Interview",
+): Promise<{ complete: boolean }> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let isComplete = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const raw = line.slice(6).trim();
+      if (!raw) continue;
+      const result = consumeSseDataLine(raw, onDelta, label);
+      if (result.done) isComplete = result.complete;
+    }
+  }
+
+  return { complete: isComplete };
+}
+
 /**
  * Stream one coaching question from the backend.
  *
@@ -153,36 +208,7 @@ export async function streamCoach(
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body from coach endpoint");
 
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let isComplete = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const raw = line.slice(6).trim();
-      if (!raw) continue;
-      try {
-        const evt = JSON.parse(raw) as CoachDelta;
-        if (evt.error) throw new Error(`Coach error: ${evt.error}`);
-        if (evt.delta) onDelta(evt.delta);
-        if (evt.done) {
-          isComplete = evt.complete ?? false;
-        }
-      } catch {
-        // malformed SSE line — skip
-      }
-    }
-  }
-
-  return { complete: isComplete };
+  return readSseStream(reader, onDelta, "Coach");
 }
 
 // ---------------------------------------------------------------------------
@@ -249,34 +275,7 @@ export async function streamInterviewQuestion(
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body from interview endpoint");
 
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let isComplete = false;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const raw = line.slice(6).trim();
-      if (!raw) continue;
-      try {
-        const evt = JSON.parse(raw) as CoachDelta;
-        if (evt.error) throw new Error(`Interview error: ${evt.error}`);
-        if (evt.delta) onDelta(evt.delta);
-        if (evt.done) isComplete = evt.complete ?? false;
-      } catch {
-        // malformed SSE line — skip
-      }
-    }
-  }
-
-  return { complete: isComplete };
+  return readSseStream(reader, onDelta, "Interview");
 }
 
 /**
