@@ -33,7 +33,7 @@ export default function AdminFlagsPage() {
     setError(null)
     try {
       const res = await getAdminFeatureFlags(token!)
-      setFlags(res.flags)
+      setFlags(Array.isArray(res.flags) ? res.flags : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load flags")
     } finally {
