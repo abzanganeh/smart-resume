@@ -33,7 +33,7 @@ export function SiteFooter() {
           </a>
         </nav>
         <p className="text-xs text-slate-500">
-          © 2026 Hamed Zangane — Licensed under{" "}
+          © 2026 Alireza Barzin Zanganeh ·{" "}
           <a
             href="https://mariadb.com/bsl11/"
             target="_blank"

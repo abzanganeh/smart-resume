@@ -23,8 +23,10 @@ function setCache(token: string, data: SubscriptionCurrentResponse) {
 }
 
 export function UsageWidget() {
-  const { data: session, status } = useSession()
-  const token = session?.backendAccessToken
+  const { data: session, status, update } = useSession()
+  // Treat an expired backend token the same as no token — stop polling until re-auth.
+  const tokenExpired = session?.error === "TokenExpired"
+  const token = tokenExpired ? undefined : session?.backendAccessToken
   const [current, setCurrent] = useState<SubscriptionCurrentResponse | null>(
     token ? getCached(token) : null,
   )
@@ -65,6 +67,13 @@ export function UsageWidget() {
       } catch {
         if (!cancelled) {
           setCurrent(null)
+          // Stop polling and force a session re-check so all components learn
+          // about the token expiry (session.error = "TokenExpired") at once.
+          if (intervalRef.current !== null) {
+            window.clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          void update()
         }
       } finally {
         if (!cancelled) {
