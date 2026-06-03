@@ -38,6 +38,7 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.polish import polish_resume
 from app.agent.story import story_to_resume
 from app.config import settings
 from app.db.engine import get_db
@@ -47,7 +48,7 @@ from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
 from app.models.resume import ParsedResume
-from app.models.story import StoryToResumeRequest
+from app.models.story import PolishResumeRequest, StoryToResumeRequest
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
@@ -650,6 +651,43 @@ async def create_resume_from_story(
                  "until OPENAI_EMBEDDING_KEY is configured."
         ),
     }
+
+
+@router.post("/resume/polish", status_code=200)
+@limiter.limit("30/minute")
+async def polish_resume_draft(
+    request: Request,
+    body: PolishResumeRequest,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Apply a single plain-English editing instruction to a resume draft.
+
+    Used by the Story Mode review step.  No credit is charged: this is
+    a free iteration on a story_build that already cost 1 credit.
+
+    Returns: { "text": "<updated resume text>" }
+    """
+    byok_key = request.headers.get("X-Api-Key", "").strip()
+    provider  = request.headers.get("X-Provider", "").strip()
+    model     = request.headers.get("X-Model", "").strip()
+
+    llm_client = get_llm_client(
+        provider or None,
+        model or None,
+        api_key=byok_key or None,
+    )
+
+    try:
+        updated = await polish_resume(body.text, body.instruction, llm_client)
+    except Exception as exc:
+        log.error("polish.failed", error=str(exc), user_id=str(user.id))
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "polish_failed", "message": str(exc)},
+        ) from exc
+
+    return {"text": updated}
 
 
 __all__ = ["router"]

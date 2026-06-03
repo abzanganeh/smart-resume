@@ -1,5 +1,40 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export interface PolishResumeResponse {
+  text: string;
+}
+
+export async function polishResume(
+  text: string,
+  instruction: string,
+  token: string,
+  options: { byokApiKey?: string; byokProvider?: string; byokModel?: string } = {},
+): Promise<PolishResumeResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
+  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
+  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
+
+  const res = await fetch(`${BASE}/api/profile/resume/polish`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ text, instruction }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { detail?: { message?: string } | string };
+    const msg = typeof body.detail === "object"
+      ? (body.detail?.message ?? "Polish request failed")
+      : (body.detail ?? "Polish request failed");
+    throw new Error(msg);
+  }
+
+  return res.json() as Promise<PolishResumeResponse>;
+}
+
 export interface StoryToResumeResponse {
   id: string;
   chunk_count: number;
