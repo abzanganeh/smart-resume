@@ -73,6 +73,7 @@ function SessionContent() {
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
   const [runErrorType, setRunErrorType] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
+  const [chatPrefill, setChatPrefill] = useState<string | null>(null);
   const [expiryWarning, setExpiryWarning] = useState(false);
   const [phaseRunning, setPhaseRunning] = useState(false);
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -723,6 +724,10 @@ function SessionContent() {
                           scoreHistory={atsScoreHistory}
                           variant="sidebar"
                           onApplySuggestion={setAppliedSuggestion}
+                          onSendToChat={(msg) => {
+                            setChatPrefill(msg);
+                            setSidebarTab("chat");
+                          }}
                         />
                       ) : (
                         <p className="text-slate-500 text-xs py-4 text-center">
@@ -735,6 +740,8 @@ function SessionContent() {
                       <ResumeChat
                         sessionId={sessionId}
                         tailored={tailored}
+                        prefillMessage={chatPrefill}
+                        onClearPrefill={() => setChatPrefill(null)}
                         onApplyPatch={async (_patch, updatedTailored) => {
                           setTailored(updatedTailored);
                           setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
@@ -786,6 +793,11 @@ function SessionContent() {
                   variant="primary"
                   onApplySuggestion={(text) => {
                     setAppliedSuggestion(text);
+                    goTo("rewrite");
+                  }}
+                  onSendToChat={(msg) => {
+                    setChatPrefill(msg);
+                    setSidebarTab("chat");
                     goTo("rewrite");
                   }}
                 />
