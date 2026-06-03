@@ -80,12 +80,20 @@ export function NavBar() {
               onLogout={handleLogout}
             />
           ) : (
-            <Link
-              href="/auth"
-              className="bg-amber-400 text-slate-900 font-semibold text-sm px-4 py-1.5 rounded-lg hover:bg-amber-300 transition-colors"
-            >
-              Sign in
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/auth"
+                className="text-slate-400 hover:text-slate-200 text-sm font-medium px-3 py-1.5 transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/auth?mode=register"
+                className="bg-amber-400 text-slate-900 font-semibold text-sm px-4 py-1.5 rounded-lg hover:bg-amber-300 transition-colors"
+              >
+                Register
+              </Link>
+            </div>
           )}
         </div>
       </div>
