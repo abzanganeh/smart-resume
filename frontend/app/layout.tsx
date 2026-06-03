@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { NavBar } from "@/components/nav/NavBar";
+import { AppChrome } from "@/components/nav/AppChrome";
 import { SessionProvider } from "@/components/nav/SessionProvider";
-import { SiteFooter } from "@/components/nav/SiteFooter";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,9 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-slate-950 antialiased flex min-h-screen flex-col`}>
         <SessionProvider>
-          <NavBar />
-          <div className="flex-1">{children}</div>
-          <SiteFooter />
+          <AppChrome>{children}</AppChrome>
         </SessionProvider>
       </body>
     </html>

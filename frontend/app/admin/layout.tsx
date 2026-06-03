@@ -103,13 +103,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const toastTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  // Load session once on mount
+  // Load session once on mount; redirect to /admin/auth if none exists.
   useEffect(() => {
+    const isAuthPage = pathname === "/admin/auth"
     getAdminSession().then((s) => {
+      if (!s && !isAuthPage) {
+        router.replace("/admin/auth")
+        return
+      }
       setSession(s)
       setLoading(false)
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Listen for backend session-revoked signals from req() and redirect immediately.
+  useEffect(() => {
+    const isAuthPage = pathname === "/admin/auth"
+    if (isAuthPage) return
+    async function handleUnauthorized() {
+      await clearAdminSession()
+      router.replace("/admin/auth?reason=session_revoked")
+    }
+    window.addEventListener("admin:unauthorized", handleUnauthorized)
+    return () => window.removeEventListener("admin:unauthorized", handleUnauthorized)
+  }, [pathname, router])
 
   // Countdown timer for session TTL warning
   useEffect(() => {

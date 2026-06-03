@@ -56,8 +56,8 @@ export default function AdminAuditPage() {
         page,
         per_page: PER_PAGE,
       })
-      setEntries(res.entries)
-      setTotal(res.total)
+      setEntries(Array.isArray(res.entries) ? res.entries : [])
+      setTotal(res.total ?? 0)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load audit log")
     } finally {

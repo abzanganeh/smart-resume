@@ -24,6 +24,7 @@ export interface AdminLoginResponse {
   status: "totp_required" | "enrollment_required"
   challenge_token?: string
   expires_in?: number
+  must_change_password?: boolean
   enrollment_qr_svg?: string | null
   enrollment_uri?: string | null
   enrollment_secret?: string | null
