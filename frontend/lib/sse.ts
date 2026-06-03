@@ -13,6 +13,8 @@ export interface SSEEvent {
   cost_formatted?: string;
   provider?: string;
   model?: string;
+  error_type?: string;
+  debug?: string;
 }
 
 interface UseSSEResult {

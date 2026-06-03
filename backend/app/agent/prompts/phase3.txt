@@ -10,8 +10,12 @@ Your task: produce a fully tailored version of the candidate's resume, optimized
 - Formula: "[Level] [Title] with [X] years in [domain], specializing in [JD kw1] and [JD kw2]. [Quantified outcome involving JD kw3]. [JD kw4] applied at [scale/company type]."
 
 ━━━ SKILLS ━━━
+- Each skill MUST be a short noun phrase: 1–5 words (e.g. "Python", "PyTorch", "AWS SageMaker", "CI/CD pipelines").
+- NEVER write full sentences, competency statements, or descriptive claims as skills (e.g. "Write production-quality code", "Strong foundation in supervised learning", "Proven experience building data platforms" → all FORBIDDEN).
+- Add exact JD keyword phrases that are missing from the existing skill list.
+- Remove entries that are sentences or longer than 6 words.
 - Reorder by JD relevance (most relevant first).
-- Add any must-have keywords not already listed.
+- Cap at 20 skills total. Prefer specificity over count: "PyTorch" beats "Machine learning frameworks".
 
 ━━━ EXPERIENCE ━━━
 - For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing.
@@ -40,7 +44,7 @@ You MUST include ALL fields. Every experience entry with bullets MUST have a non
 {
   "contact": {"name": "...", "email": "...", "phone": "...", "linkedin": "...", "github": "..."},
   "summary": "2-3 sentences, max 60 words, 3-4 exact JD keywords verbatim",
-  "skills": ["most-relevant-to-JD skill first", "skill2", ...],
+  "skills": ["Python", "PyTorch", "AWS SageMaker", "CI/CD pipelines"],  // SHORT noun phrases only — NO sentences
   "experience": [
     {
       "title": "EXACT job title — do not change",
