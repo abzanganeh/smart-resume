@@ -35,7 +35,7 @@ export default function AdminRefundsPage() {
     setError(null)
     try {
       const res = await getAdminRefunds(token!, statusFilter)
-      setRefunds(res.refunds)
+      setRefunds(Array.isArray(res.refunds) ? res.refunds : [])
       setTotal(res.total)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load refunds")
