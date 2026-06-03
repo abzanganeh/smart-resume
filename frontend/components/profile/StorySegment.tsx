@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, Trash2 } from "lucide-react";
+import { Mic, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -8,12 +8,24 @@ interface Props {
   text: string;
   isRecording: boolean;
   disabled: boolean;
+  coachOpen: boolean;
   onChange: (text: string) => void;
   onReRecord: () => void;
   onDelete: () => void;
+  onCoach: () => void;
 }
 
-export function StorySegment({ index, text, isRecording, disabled, onChange, onReRecord, onDelete }: Props) {
+export function StorySegment({
+  index,
+  text,
+  isRecording,
+  disabled,
+  coachOpen,
+  onChange,
+  onReRecord,
+  onDelete,
+  onCoach,
+}: Props) {
   const preview = text.slice(0, 80) + (text.length > 80 ? "…" : "");
 
   return (
@@ -26,6 +38,24 @@ export function StorySegment({ index, text, isRecording, disabled, onChange, onR
           Segment {index + 1}
         </span>
         <div className="flex items-center gap-1.5">
+          {/* Coach me button — only visible when segment has content */}
+          {text.trim().length > 10 && !isRecording && (
+            <button
+              type="button"
+              onClick={onCoach}
+              disabled={disabled}
+              title={coachOpen ? "Close coach" : "Get coaching feedback"}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-40",
+                coachOpen
+                  ? "bg-indigo-600 text-white hover:bg-indigo-500"
+                  : "text-indigo-400 hover:text-indigo-200 hover:bg-indigo-900/40 border border-indigo-700/50",
+              )}
+            >
+              <Sparkles className="w-3 h-3" />
+              Coach me
+            </button>
+          )}
           <button
             type="button"
             onClick={onReRecord}

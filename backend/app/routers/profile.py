@@ -35,11 +35,13 @@ from fastapi import (
     Request,
     UploadFile,
 )
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.polish import polish_resume
 from app.agent.story import story_to_resume
+from app.agent.story_coach import MAX_EXCHANGES, coach_segment, is_complete_response
 from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
@@ -48,13 +50,14 @@ from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
 from app.models.resume import ParsedResume
-from app.models.story import PolishResumeRequest, StoryToResumeRequest
+from app.models.story import CoachMessage, CoachRequest, PolishResumeRequest, StoryToResumeRequest
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
 from app.services.auth.dependencies import get_current_user
-from app.services.billing.quota import check_quota_for_story
+from app.services.billing.quota import check_quota_for_story, check_quota_for_story_coach
+from app.services.billing.exceptions import AccountSuspendedError, InsufficientCreditsError
 from app.services.master_resume import crud as master_crud
 from app.services.master_resume.chunking import Chunk, count_tokens
 from app.services.master_resume.embedding import embed_text
@@ -688,6 +691,90 @@ async def polish_resume_draft(
         ) from exc
 
     return {"text": updated}
+
+
+@router.post("/story/coach", status_code=200)
+@limiter.limit("10/minute")
+async def story_coach_endpoint(
+    request: Request,
+    body: CoachRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Stream one follow-up question from the interview coach (§22).
+
+    - BYOK / subscribers: 0 credits.
+    - Free users: 1 credit per coaching session (deducted on the first exchange,
+      identified by history being empty).
+    - Max {MAX_EXCHANGES} exchanges per segment enforced here.
+
+    Returns: SSE stream of {"delta": str} events, finished by {"done": true}.
+    """
+    # Rate-limit abuse: cap exchanges server-side as well as client-side
+    prior_coach_msgs = [m for m in body.history if m.role == "coach"]
+    if len(prior_coach_msgs) >= MAX_EXCHANGES:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "coach_limit_reached",
+                "message": f"Maximum {MAX_EXCHANGES} coaching exchanges per segment.",
+            },
+        )
+
+    byok_key = request.headers.get("X-Api-Key", "").strip()
+    provider  = request.headers.get("X-Provider", "").strip()
+    model     = request.headers.get("X-Model", "").strip()
+    byok_active = bool(byok_key)
+
+    # Charge 1 credit on the very first exchange (history is empty)
+    if not body.history:
+        try:
+            await check_quota_for_story_coach(
+                session,
+                user=user,
+                byok_active=byok_active,
+                session_id=body.session_id,
+            )
+        except AccountSuspendedError:
+            raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+        except InsufficientCreditsError:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "insufficient_credits",
+                    "message": "You need at least 1 credit to start a coaching session.",
+                },
+            )
+
+    llm_client = get_llm_client(
+        provider or None,
+        model or None,
+        api_key=byok_key or None,
+    )
+
+    history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
+
+    import json
+
+    async def _generate():
+        buffer = ""
+        try:
+            async for delta in coach_segment(
+                segment_text=body.segment_text,
+                history=history_dicts,
+                llm_client=llm_client,
+            ):
+                buffer += delta
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            log.error("story_coach.stream_error", error=str(exc))
+            yield 'data: {"error": "coach_failed"}\n\n'
+            return
+
+        complete = is_complete_response(buffer)
+        yield f"data: {json.dumps({'done': True, 'complete': complete})}\n\n"
+
+    return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 __all__ = ["router"]
