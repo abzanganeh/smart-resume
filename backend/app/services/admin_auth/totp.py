@@ -26,12 +26,15 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+import pyotp
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import AdminUser
+from app.services.auth.encryption import decrypt_bytes
 from app.services.auth.totp import (
+    ISSUER,
     RECOVERY_CODE_COUNT,
     begin_enrollment,
     consume_recovery_code,
@@ -70,16 +73,32 @@ async def _load_admin_for_update(
     return row
 
 
+def _provisioning_uri_for_admin(admin: AdminUser, secret_b32: str) -> str:
+    return pyotp.totp.TOTP(secret_b32).provisioning_uri(
+        name=f"admin:{admin.email}",
+        issuer_name=ISSUER,
+    )
+
+
 async def admin_enroll_totp(
     session: AsyncSession, admin_id: uuid.UUID
 ) -> AdminEnrollmentResult:
     """Generate a fresh TOTP secret + provisioning URI for ``admin_id``.
 
-    Repeated calls overwrite the prior secret; ``has_totp`` stays
-    ``False`` until ``admin_verify_totp`` succeeds because we mint the
-    recovery hashes only on confirmation.
+    When a secret was already written during a prior enroll attempt but
+    confirmation has not completed yet, return that same secret so a
+    page refresh or second login does not invalidate the user's
+    authenticator entry.  A brand-new secret is minted only when none
+    exists yet.
     """
     admin = await _load_admin_for_update(session, admin_id)
+    if admin.totp_secret is not None:
+        secret_b32 = decrypt_bytes(admin.totp_secret).decode("utf-8")
+        log.info("admin.totp.enroll_reuse", admin_id=str(admin.id))
+        return AdminEnrollmentResult(
+            secret_b32=secret_b32,
+            provisioning_uri=_provisioning_uri_for_admin(admin, secret_b32),
+        )
     enrollment = begin_enrollment(account_label=f"admin:{admin.email}")
     admin.totp_secret = enrollment.encrypted_secret
     admin.totp_recovery_codes = []  # invalidate any prior partial enrollment

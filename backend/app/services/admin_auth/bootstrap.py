@@ -34,6 +34,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
@@ -42,10 +43,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import is_production_grade, settings
 from app.models.admin import AdminRole, AdminUser
+from app.models.user import AuthProvider, User, UserTier
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.auth.password import hash_password
 
 log = structlog.get_logger("admin.bootstrap")
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 # Stable hash key for ``pg_advisory_lock``.  The Python ``hash()``
@@ -69,6 +75,64 @@ def _gen_password() -> str:
     return secrets.token_urlsafe(24)
 
 
+async def _ensure_linked_app_user(
+    session: AsyncSession,
+    email: str,
+    password_hash: Optional[str] = None,
+    display_name: str = "",
+) -> None:
+    """Idempotently ensure a regular User row exists for the bootstrap email.
+
+    The linked user gets:
+    - ``pro`` tier (no plan limits)
+    - 999 999 free credits (effectively unlimited for testing)
+    - pre-verified email (no email verification step)
+    - same password hash as the admin account (if provided)
+
+    Safe to call on every startup — it never degrades an existing account.
+    """
+    existing = (
+        await session.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+
+    if existing is None:
+        user = User(
+            id=uuid.uuid4(),
+            email=email,
+            display_name=display_name or email,
+            auth_provider=AuthProvider.email,
+            provider_id=None,
+            password_hash=password_hash,
+            tier=UserTier.pro,
+            credit_balance=999_999,
+            email_verified_at=_utcnow(),
+            accepted_tos_version="bootstrap",
+        )
+        session.add(user)
+        log.info(
+            "admin.bootstrap.app_user_created",
+            email=email,
+            tier="pro",
+            credits=999_999,
+        )
+    else:
+        # Upgrade existing user but never downgrade.
+        changed = False
+        if existing.tier != UserTier.pro:
+            existing.tier = UserTier.pro
+            changed = True
+        if existing.credit_balance < 999_999:
+            existing.credit_balance = 999_999
+            changed = True
+        if existing.email_verified_at is None:
+            existing.email_verified_at = _utcnow()
+            changed = True
+        if changed:
+            log.info("admin.bootstrap.app_user_upgraded", email=email)
+        else:
+            log.info("admin.bootstrap.app_user_ok", email=email)
+
+
 async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
     """Idempotently ensure exactly one super-admin row exists.
 
@@ -86,6 +150,8 @@ async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
         {"k": _BOOTSTRAP_LOCK_KEY},
     )
 
+    email = settings.BOOTSTRAP_SUPER_ADMIN_EMAIL.strip().lower()
+
     # Re-check existence under the lock.
     existing_count = (
         await session.execute(
@@ -100,6 +166,9 @@ async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
             reason="bootstrap_skipped_existing_admin",
             count=int(existing_count),
         )
+        # Even when skipping admin creation, ensure a linked app User exists
+        # so the owner can log in to the app with the same credentials.
+        await _ensure_linked_app_user(session, email)
         return BootstrapResult(
             False, "bootstrap_skipped_existing_admin", None, None
         )
@@ -136,12 +205,15 @@ async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
             f"{settings.BOOTSTRAP_SUPER_ADMIN_EMAIL}: {password}\n"
         )
 
+    display_name = settings.BOOTSTRAP_SUPER_ADMIN_DISPLAY_NAME or email
+    password_hash = hash_password(password)
+
     admin = AdminUser(
         id=uuid.uuid4(),
-        email=settings.BOOTSTRAP_SUPER_ADMIN_EMAIL.strip().lower(),
-        display_name=settings.BOOTSTRAP_SUPER_ADMIN_DISPLAY_NAME,
+        email=email,
+        display_name=display_name,
         role=AdminRole.super_admin,
-        password_hash=hash_password(password),
+        password_hash=password_hash,
         totp_secret=None,
         totp_recovery_codes=[],
         must_change_password=True,
@@ -167,6 +239,10 @@ async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
             "must_enroll_2fa": True,
         },
     )
+
+    # Also create (or ensure) a linked regular User so the owner can log in
+    # to the app itself and test it without limits.
+    await _ensure_linked_app_user(session, email, password_hash=password_hash, display_name=display_name)
 
     log.info(
         "admin.bootstrap.created",
