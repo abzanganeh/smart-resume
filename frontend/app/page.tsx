@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { ProductScreenshot } from "@/components/brand/ProductScreenshot";
 import {
   ArrowRight,
   BookOpen,
@@ -21,6 +23,9 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-6 pt-24 pb-16 text-center">
+        <div className="flex justify-center mb-8">
+          <BrandLogo className="h-16 w-auto max-w-[min(100%,320px)]" priority />
+        </div>
         <div className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-300 mb-8">
           <Sparkles className="w-4 h-4 text-amber-400" />
           ATS-optimized · Evidence-based · Never fabricates metrics
@@ -60,6 +65,9 @@ export default function LandingPage() {
           {" · "}
           6 credits on signup · No credit card required
         </p>
+        <div className="mt-14 max-w-3xl mx-auto text-left">
+          <ProductScreenshot priority />
+        </div>
       </section>
 
       {/* How it works */}

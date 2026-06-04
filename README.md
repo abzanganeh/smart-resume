@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="docs/assets/brand/logo.png" alt="Smart Resume Agent — AI-powered job search platform" width="360" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/marketing/smart-resume-photo-03.png" alt="Smart Resume Agent — resume tailoring session" width="720" />
+</p>
+
 # Smart Resume Agent
 
 An AI-powered job-search platform. Build your master resume by speaking or uploading, tailor it to any job description in minutes, find matching jobs, write cover letters, and track every application — all in one place.

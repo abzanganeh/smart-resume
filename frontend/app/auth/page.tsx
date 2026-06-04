@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, useSession, getProviders } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
 import zxcvbn from "zxcvbn"
+import { BrandLogo } from "@/components/brand/BrandLogo"
 import {
   loginUser,
   registerUser,
@@ -225,9 +226,9 @@ function AuthPageContent() {
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Logo / brand */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Smart Resume</h1>
-          <p className="text-slate-400 text-sm mt-1">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <BrandLogo className="h-14 w-auto max-w-[280px] mb-3" priority />
+          <p className="text-slate-400 text-sm">
             {view === "register"
               ? "Create your free account"
               : view === "2fa"
