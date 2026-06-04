@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { signOut, useSession } from "next-auth/react"
-import { ChevronDown, CreditCard, FileText, LogOut, Settings, Sparkles } from "lucide-react"
+import { ChevronDown, CreditCard, FileText, LogOut, Settings } from "lucide-react"
+import { BrandLogo } from "@/components/brand/BrandLogo"
 import { logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
 import { JobsNavItem } from "@/components/nav/JobsNavItem"
@@ -42,9 +43,8 @@ export function NavBar() {
     <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         {/* Brand */}
-        <Link href="/" className="flex items-center gap-2 text-white font-semibold hover:opacity-80 transition-opacity shrink-0">
-          <Sparkles className="w-5 h-5 text-amber-400" />
-          <span className="hidden sm:inline">Smart Resume</span>
+        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity shrink-0">
+          <BrandLogo className="h-8 w-auto max-w-[200px] sm:max-w-[220px]" />
         </Link>
 
         {/* Nav links (authenticated) */}
