@@ -1,5 +1,5 @@
-# Local-only docs (not pushed)
-docs/
+# Internal design docs (markdown only — not pushed to GitHub)
+docs/**/*.md
 tech_docs/
 
 # Editor & OS
@@ -32,3 +32,8 @@ node_modules/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Full-resolution brand masters in public/ (commit web copy logo.png only)
+frontend/public/brand/smart-resume-logo.png
+frontend/public/brand/smart-resume-logo-black.png
+frontend/public/brand/smart-resume-logo-trans.png
