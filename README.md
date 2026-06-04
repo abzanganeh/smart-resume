@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/brand/logo.png" alt="Smart Resume Agent — AI-powered job search platform" width="360" />
-</p>
+
 
 <p align="center">
   <img src="docs/assets/marketing/smart-resume-photo-03.png" alt="Smart Resume Agent — resume tailoring session" width="720" />
