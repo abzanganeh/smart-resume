@@ -10,6 +10,15 @@ export const metadata: Metadata = {
   title: "Smart Resume Agent — AI job search co-pilot",
   description:
     "Build your master resume by voice, tailor it to every job description, find matching jobs, write cover letters, and track applications — all in one place.",
+  icons: {
+    icon: "/brand/logo.png",
+  },
+  openGraph: {
+    title: "Smart Resume Agent",
+    description:
+      "AI-powered job search platform — master resume, JD tailoring, ATS guidance, and application tracking.",
+    images: [{ url: "/brand/logo.png", width: 480, height: 262, alt: "Smart Resume Agent" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
