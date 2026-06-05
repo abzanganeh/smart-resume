@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     SESSION_TTL_SECONDS: int = 86400  # 24 hours
     SESSION_EXPIRY_WARN_SECONDS: int = 72000  # 20 hours — show banner after this
 
+    # Flint cross-product handoff (Strategy B Phase 1)
+    FLINT_HANDOFF_TTL_SECONDS: int = 600
+
     # Security
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
     SENTRY_DSN: str = ""
