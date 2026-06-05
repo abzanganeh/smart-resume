@@ -270,6 +270,21 @@ export function exportUrl(
   return `${BASE}/api/sessions/${sessionId}/export?format=${format}`;
 }
 
+export interface FlintHandoffResponse {
+  token: string;
+  expires_in: number;
+}
+
+/** Mint a single-use token for Flint to import this session's tailored context. */
+export async function createFlintHandoff(
+  sessionId: string,
+): Promise<FlintHandoffResponse> {
+  return request<FlintHandoffResponse>(
+    `/api/sessions/${sessionId}/flint-handoff`,
+    { method: "POST" },
+  );
+}
+
 // ── Cover letter ─────────────────────────────────────────────────────────────
 
 export type CoverLetterTone = "formal" | "balanced" | "warm";
