@@ -29,6 +29,7 @@ import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel } from "@/components/session/ATSGuidancePanel";
 import { ExportButtons } from "@/components/session/ExportButtons";
+import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
 import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { VersionHistory } from "@/components/session/VersionHistory";
 import { ProgressLog } from "@/components/session/ProgressLog";
@@ -832,9 +833,15 @@ function SessionContent() {
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />
               {qa && (
-                <div className="mt-6">
-                  <h2 className="text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
-                  <ExportButtons sessionId={sessionId} disabled={false} />
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <h2 className="text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
+                    <ExportButtons sessionId={sessionId} disabled={false} />
+                  </div>
+                  <div>
+                    <h2 className="text-slate-300 font-semibold mb-3 text-sm">Prepare for the interview</h2>
+                    <OpenInFlintButton sessionId={sessionId} disabled={false} />
+                  </div>
                 </div>
               )}
               {tailored && (
