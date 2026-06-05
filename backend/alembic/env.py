@@ -51,6 +51,7 @@ from app.models import jobs as _jobs_models  # noqa: F401, E402
 from app.models import llm_config as _llm_config_models  # noqa: F401, E402
 from app.models import master_resume as _master_resume_models  # noqa: F401, E402
 from app.models import user as _user_models  # noqa: F401, E402
+from app.models import job_description as _job_description_models  # noqa: F401, E402
 
 target_metadata = Base.metadata
 

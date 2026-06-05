@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # Flint cross-product handoff (Strategy B Phase 1)
     FLINT_HANDOFF_TTL_SECONDS: int = 600
 
+    # Strategy B Phase 2 — Extension auth
+    # Disabled by default; enable after extension is released to avoid
+    # exposing a cookie-less refresh endpoint unnecessarily.
+    EXTENSION_AUTH_ENABLED: bool = True
+    JD_TEXT_MAX_CHARS: int = 20_000
+
     # Security
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
     SENTRY_DSN: str = ""
