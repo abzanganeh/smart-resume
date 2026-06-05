@@ -26,6 +26,7 @@ from app.routers import (
     dashboard,
     export,
     fit,
+    flint_handoff,
     jobs,
     legal,
     llm,
@@ -202,6 +203,7 @@ app.include_router(tracker.router)
 app.include_router(notifications.router)
 app.include_router(account.router)
 app.include_router(export.router)
+app.include_router(flint_handoff.router)
 app.include_router(llm.router)
 # Step 35 - admin domain
 app.include_router(admin.router)
