@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -14,8 +15,32 @@ from app.models.session import PhaseStatus, Session
 # In-memory fallback (for local dev without Redis)
 # ---------------------------------------------------------------------------
 _memory_store: dict[str, str] = {}
+_memory_expiry: dict[str, float] = {}  # key -> unix timestamp when key expires
 _lock_store: dict[str, bool] = {}
 _redis_client: aioredis.Redis | None = None
+
+
+def _mem_get(key: str) -> str | None:
+    """Read a key from the in-memory store, respecting TTL."""
+    exp = _memory_expiry.get(key)
+    if exp is not None and time.monotonic() > exp:
+        _memory_store.pop(key, None)
+        _memory_expiry.pop(key, None)
+        return None
+    return _memory_store.get(key)
+
+
+def _mem_set(key: str, value: str, *, ex: int | None = None) -> None:
+    _memory_store[key] = value
+    if ex is not None:
+        _memory_expiry[key] = time.monotonic() + ex
+    else:
+        _memory_expiry.pop(key, None)
+
+
+def _mem_delete(key: str) -> str | None:
+    _memory_expiry.pop(key, None)
+    return _memory_store.pop(key, None)
 
 
 async def init_redis() -> None:
@@ -119,13 +144,13 @@ async def _save(session_id: str, session: Session) -> None:
     if _redis_client:
         await _redis_client.setex(session_id, settings.SESSION_TTL_SECONDS, data)
     else:
-        _memory_store[session_id] = data
+        _mem_set(session_id, data, ex=settings.SESSION_TTL_SECONDS)
 
 
 async def _load(session_id: str) -> str | None:
     if _redis_client:
         return await _redis_client.get(session_id)
-    return _memory_store.get(session_id)
+    return _mem_get(session_id)
 
 
 async def health_check() -> dict:
@@ -146,7 +171,14 @@ def redis_available() -> bool:
 async def redis_get(key: str) -> str | None:
     if _redis_client:
         return await _redis_client.get(key)
-    return _memory_store.get(key)
+    return _mem_get(key)
+
+
+async def redis_getdel(key: str) -> str | None:
+    """Atomically fetch and delete a key (single-use token redeem)."""
+    if _redis_client:
+        return await _redis_client.getdel(key)
+    return _mem_delete(key)
 
 
 async def redis_set(key: str, value: str, *, ex: int | None = None) -> None:
@@ -156,7 +188,7 @@ async def redis_set(key: str, value: str, *, ex: int | None = None) -> None:
         else:
             await _redis_client.set(key, value)
     else:
-        _memory_store[key] = value
+        _mem_set(key, value, ex=ex)
 
 
 async def redis_set_nx(key: str, value: str, *, ex: int | None = None) -> bool:
@@ -164,9 +196,9 @@ async def redis_set_nx(key: str, value: str, *, ex: int | None = None) -> bool:
     if _redis_client:
         result = await _redis_client.set(key, value, nx=True, ex=ex)
         return result is True
-    if key in _memory_store:
+    if _mem_get(key) is not None:
         return False
-    _memory_store[key] = value
+    _mem_set(key, value, ex=ex)
     return True
 
 
@@ -176,26 +208,38 @@ async def redis_delete(*keys: str) -> None:
             await _redis_client.delete(*keys)
     else:
         for key in keys:
-            _memory_store.pop(key, None)
+            _mem_delete(key)
 
 
 async def redis_expire(key: str, seconds: int) -> None:
     if _redis_client:
         await _redis_client.expire(key, seconds)
+    else:
+        if key in _memory_store:
+            _memory_expiry[key] = time.monotonic() + seconds
 
 
 async def redis_incr(key: str) -> int:
     if _redis_client:
         return int(await _redis_client.incr(key))
-    current = int(_memory_store.get(key, "0"))
+    current = int(_mem_get(key) or "0")
     current += 1
+    # Preserve existing TTL when incrementing.
+    existing_exp = _memory_expiry.get(key)
     _memory_store[key] = str(current)
+    if existing_exp is not None:
+        _memory_expiry[key] = existing_exp
     return current
 
 
 async def reset_redis_keys_for_tests() -> None:
     """Clear in-memory Redis fallback between tests."""
     if not _redis_client:
-        keys = [k for k in _memory_store if k.startswith("hirebase:")]
+        keys = [
+            k
+            for k in list(_memory_store)
+            if k.startswith(("hirebase:", "flint:handoff:", "flint:handoff:rate:"))
+        ]
         for key in keys:
             _memory_store.pop(key, None)
+            _memory_expiry.pop(key, None)
