@@ -25,8 +25,10 @@ from app.routers import (
     cover_letter,
     dashboard,
     export,
+    extension_auth,
     fit,
     flint_handoff,
+    job_descriptions,
     jobs,
     legal,
     llm,
@@ -190,6 +192,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(extension_auth.router)
 app.include_router(billing.router)
 app.include_router(profile.router)
 app.include_router(sessions.router)
@@ -204,6 +207,7 @@ app.include_router(notifications.router)
 app.include_router(account.router)
 app.include_router(export.router)
 app.include_router(flint_handoff.router)
+app.include_router(job_descriptions.router)
 app.include_router(llm.router)
 # Step 35 - admin domain
 app.include_router(admin.router)
