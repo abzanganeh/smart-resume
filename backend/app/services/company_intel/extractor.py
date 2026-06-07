@@ -22,8 +22,8 @@ from pathlib import Path
 
 import structlog
 
-from app.config import settings
 from app.llm.base import LLMClient, LLMMessage
+from app.llm.factory import has_platform_extraction_key
 from app.llm.pricing import estimate_cost, format_cost
 from app.models.company_profile import CompanyIntelOutput
 
@@ -35,9 +35,7 @@ _PROMPT = (Path(__file__).parent.parent.parent / "agent" / "prompts" / "company_
 # 12 000 chars ≈ 4 000 tokens (gemini-2.5-flash-lite input budget: fine).
 _JD_CHAR_LIMIT = 12_000
 
-_PRIMARY_PROVIDER = "gemini"
 _PRIMARY_MODEL = "gemini-2.5-flash-lite"
-_FALLBACK_PROVIDER = "openai"
 _FALLBACK_MODEL = "gpt-4o-mini"
 
 # JSON field names expected in the LLM response.
@@ -50,7 +48,8 @@ def _get_extraction_client() -> LLMClient | None:
     Returns None when no platform key is configured so the caller can
     skip extraction gracefully.
     """
-    from app.llm.factory import _is_real_api_key  # avoid circular import at module level
+    from app.config import settings
+    from app.llm.factory import _is_real_api_key  # noqa: PLC2701 — shared key validation
 
     if _is_real_api_key(settings.GOOGLE_API_KEY):
         from app.llm.providers.gemini_adapter import GeminiAdapter
@@ -85,6 +84,8 @@ def _parse_json_from_response(raw: str) -> dict | None:
 def _build_intel(company_name: str, data: dict) -> CompanyIntelOutput:
     mission = str(data.get("mission") or "").strip()
     raw_values = data.get("values") or []
+    if not isinstance(raw_values, list):
+        raw_values = []
     values = [str(v).strip() for v in raw_values if str(v).strip()][:8]
     culture_notes = str(data.get("culture_notes") or "").strip()
     return CompanyIntelOutput(
@@ -104,6 +105,9 @@ async def extract_from_jd(
 
     Returns None on any failure so callers can degrade gracefully.
     """
+    if not (jd_text or "").strip():
+        return None
+
     llm = _get_extraction_client()
     if llm is None:
         log.info(
