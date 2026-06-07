@@ -5,6 +5,7 @@ import type { BackendUser } from "@/auth"
 declare module "next-auth" {
   interface Session {
     backendAccessToken?: string
+    backendExpiresAt?: number
     backendUser?: BackendUser
     error?: string
   }

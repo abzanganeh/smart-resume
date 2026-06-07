@@ -25,6 +25,7 @@ from app.services.export_service import (
     render_cover_letter_pdf,
     render_cover_letter_txt,
 )
+from app.services.llm_session_config import apply_llm_request_headers
 from app.services.session_store import get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["cover-letter"])
@@ -99,6 +100,7 @@ async def generate_cover_letter(
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
+    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a cover letter and stream progress via SSE."""
@@ -118,12 +120,13 @@ async def generate_cover_letter(
     except InsufficientCreditsError:
         raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
 
-    if x_api_key:
-        session.byok_api_key = x_api_key
-    if x_provider:
-        session.provider = x_provider
-    if x_model:
-        session.model = x_model
+    apply_llm_request_headers(
+        session,
+        x_use_platform=x_use_platform,
+        x_api_key=x_api_key,
+        x_provider=x_provider,
+        x_model=x_model,
+    )
     await update_session(session)
 
     llm = get_llm_client(

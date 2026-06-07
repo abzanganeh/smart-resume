@@ -1,18 +1,33 @@
 from __future__ import annotations
 
 import json
+import uuid
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import chat as chat_agent
+from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.models.chat import ChatRequest, ChatResponse
+from app.models.dashboard import ResumeRecord
 from app.models.rewrite import TailoredResumeOutput
+from app.models.user import User
+from app.services.auth.dependencies import get_current_user
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+class SessionResumeRecordResponse(BaseModel):
+    id: uuid.UUID
+    display_name: str | None
+    jd_title: str
+    jd_company: str
+    tailoring_stage: str
 
 
 @router.post("", status_code=201)
@@ -117,3 +132,30 @@ async def chat_with_resume(session_id: str, body: ChatRequest) -> ChatResponse:
         api_key=getattr(session, "byok_api_key", None),
     )
     return await chat_agent.run(session, body, llm)
+
+
+@router.get("/{session_id}/resume-record", response_model=SessionResumeRecordResponse)
+async def get_session_resume_record(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SessionResumeRecordResponse:
+    """Dashboard row linked to this tailoring session, if any."""
+    record = (
+        await db.execute(
+            select(ResumeRecord).where(
+                ResumeRecord.user_id == user.id,
+                ResumeRecord.session_id == session_id,
+                ResumeRecord.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Resume record not found")
+    return SessionResumeRecordResponse(
+        id=record.id,
+        display_name=record.display_name,
+        jd_title=record.jd_title,
+        jd_company=record.jd_company,
+        tailoring_stage=record.tailoring_stage.value,
+    )
