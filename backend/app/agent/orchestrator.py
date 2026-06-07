@@ -350,6 +350,22 @@ async def run_phase(
                     error=str(exc),
                 )
 
+            # Corpus expansion: embed Phase 3 output into user corpus so
+            # future sessions can retrieve these proven bullets via RAG.
+            if settings.DATABASE_URL.strip():
+                from app.services.corpus_writer import embed_tailored_resume
+
+                refreshed = await session_store.get_session(session_id)
+                if refreshed is not None and refreshed.phase3_output is not None:
+                    asyncio.create_task(
+                        embed_tailored_resume(
+                            user_id=uuid.UUID(session.user_id),
+                            session_id=session_id,
+                            tailored_output=refreshed.phase3_output,
+                        ),
+                        name=f"corpus_tailored:{session_id}",
+                    )
+
         # Step 27 — persist ResumeRecord + ATS history after Phase 4.
         if phase == 4 and session.user_id:
             try:

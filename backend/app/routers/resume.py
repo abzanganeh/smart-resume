@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import uuid
+
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -201,6 +204,48 @@ async def suggest_audit_bullet_fixes(
     return SuggestBulletFixesResponse(fixes=fixes)
 
 
+def _enqueue_corpus_additions(session: object, body: "AdditionsRequest") -> None:  # type: ignore[name-defined]
+    """Fire-and-forget: embed notes and claimed keywords into the corpus."""
+    if not settings.DATABASE_URL.strip():
+        return
+
+    user_id_str = getattr(session, "user_id", None)
+    if not user_id_str:
+        return
+
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return
+
+    session_id = getattr(session, "session_id", None)
+
+    from app.services.corpus_writer import embed_claimed_keywords, embed_user_notes
+
+    notes = (getattr(body, "extra_notes", None) or "").strip()
+    keywords = list(getattr(body, "claimed_keywords", None) or [])
+
+    if notes:
+        asyncio.create_task(
+            embed_user_notes(
+                user_id=user_id,
+                session_id=session_id,
+                notes_text=notes,
+            ),
+            name=f"corpus_notes:{session_id}",
+        )
+
+    if keywords:
+        asyncio.create_task(
+            embed_claimed_keywords(
+                user_id=user_id,
+                session_id=session_id,
+                keywords=keywords,
+            ),
+            name=f"corpus_kw:{session_id}",
+        )
+
+
 @router.patch("/{session_id}/additions")
 async def save_additions(session_id: str, body: AdditionsRequest):
     """Save keywords/skills the user claims to have that weren't in the original resume,
@@ -212,6 +257,11 @@ async def save_additions(session_id: str, body: AdditionsRequest):
     session.user_extra_notes = body.extra_notes
     session.bullet_fixes = body.bullet_fixes
     await update_session(session)
+
+    # Corpus expansion: embed notes and claimed keywords in the background
+    # so future sessions can retrieve them as personal context.
+    _enqueue_corpus_additions(session, body)
+
     return {"ok": True, "claimed": len(body.claimed_keywords)}
 
 
