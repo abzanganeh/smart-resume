@@ -163,10 +163,10 @@ async def extract_from_jd(
 
     data = _parse_json_from_response(raw)
     if data is None or not _EXPECTED_KEYS.intersection(data.keys()):
+        # raw_preview intentionally omitted — it could echo fragments of the user JD.
         log.warning(
             "company_intel_parse_failed",
             company_name=company_name,
-            raw_preview=raw[:200],
         )
         return None
 

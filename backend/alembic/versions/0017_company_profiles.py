@@ -57,7 +57,23 @@ def upgrade() -> None:
         unique=True,
     )
 
+    # RLS: company_profiles is a shared cache of public company data (no user_id).
+    # Enable RLS with a permissive read/write policy so the backend service account
+    # can access all rows while satisfying the project-wide "every table has RLS"
+    # security requirement.
+    op.execute("ALTER TABLE company_profiles ENABLE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY company_profiles_service_access
+        ON company_profiles
+        USING (true)
+        WITH CHECK (true)
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute("DROP POLICY IF EXISTS company_profiles_service_access ON company_profiles")
+    op.execute("ALTER TABLE company_profiles DISABLE ROW LEVEL SECURITY")
     op.drop_index("ix_company_profiles_company_key", table_name="company_profiles")
     op.drop_table("company_profiles")

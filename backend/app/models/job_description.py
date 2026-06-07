@@ -44,4 +44,5 @@ class JobDescription(Base):
 
     __table_args__ = (
         Index("ix_job_descriptions_user_id", "user_id"),
+        Index("ix_job_descriptions_user_created", "user_id", "created_at"),
     )
