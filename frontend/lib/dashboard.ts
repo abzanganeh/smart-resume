@@ -1,5 +1,6 @@
 import type {
   DashboardSummaryResponse,
+  ResumeListItem,
   ResumeListResponse,
   ResumeRecordStatus,
   ResumeSort,
@@ -70,9 +71,13 @@ export async function listResumes(
 export async function patchResume(
   token: string,
   id: string,
-  body: { tags?: string[]; status?: ResumeRecordStatus },
-): Promise<void> {
-  await authRequest(`/api/resumes/${id}`, token, {
+  body: {
+    tags?: string[];
+    status?: ResumeRecordStatus;
+    display_name?: string | null;
+  },
+): Promise<ResumeListItem> {
+  return authRequest(`/api/resumes/${id}`, token, {
     method: "PATCH",
     body: JSON.stringify(body),
   })
