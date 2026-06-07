@@ -13,6 +13,10 @@ from app.models.userinfo import UserInfo
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
+from app.services.bullet_fix_suggest import (
+    BulletFixSuggestionItem,
+    suggest_bullet_fixes,
+)
 from app.services.session_store import get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["resume"])
@@ -97,6 +101,9 @@ async def upload_resume(
     if x_model:
         session.model = x_model
     await update_session(session)
+    from app.services.dashboard.resume_record import sync_dashboard_record_from_session
+
+    await sync_dashboard_record_from_session(session)
     return {"parsed": parsed.model_dump()}
 
 
@@ -130,6 +137,9 @@ async def paste_resume(
     if x_model:
         session.model = x_model
     await update_session(session)
+    from app.services.dashboard.resume_record import sync_dashboard_record_from_session
+
+    await sync_dashboard_record_from_session(session)
     return {"parsed": parsed.model_dump()}
 
 
@@ -140,6 +150,9 @@ async def save_userinfo(session_id: str, body: UserInfo):
         raise HTTPException(status_code=404, detail="Session not found")
     session.user_info = body
     await update_session(session)
+    from app.services.dashboard.resume_record import sync_dashboard_record_from_session
+
+    await sync_dashboard_record_from_session(session)
     return {"ok": True}
 
 
@@ -148,6 +161,44 @@ class AdditionsRequest(BaseModel):
     extra_notes: str = ""
     # Fix 4: persist user-supplied bullet corrections.
     bullet_fixes: list[BulletFix] = []
+
+
+class SuggestBulletFixesRequest(BaseModel):
+    indices: list[int]
+
+
+class SuggestBulletFixesResponse(BaseModel):
+    fixes: list[BulletFixSuggestionItem]
+
+
+@router.post("/{session_id}/audit/suggest-bullet-fixes", response_model=SuggestBulletFixesResponse)
+async def suggest_audit_bullet_fixes(
+    session_id: str,
+    body: SuggestBulletFixesRequest,
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    x_provider: str | None = Header(default=None, alias="X-Provider"),
+    x_model: str | None = Header(default=None, alias="X-Model"),
+) -> SuggestBulletFixesResponse:
+    """Generate AI rewrite suggestions for selected Phase 2 bullet issues."""
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    audit = session.phase2_output
+    if audit is None or not audit.bullet_issues:
+        raise HTTPException(status_code=422, detail="Run the resume audit first.")
+    if not body.indices:
+        raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
+
+    provider = x_provider or session.provider
+    model = x_model or session.model
+    llm = get_llm_client(provider, model, api_key=x_api_key)
+    fixes = await suggest_bullet_fixes(
+        llm,
+        session=session,
+        issues=audit.bullet_issues,
+        indices=body.indices,
+    )
+    return SuggestBulletFixesResponse(fixes=fixes)
 
 
 @router.patch("/{session_id}/additions")
@@ -225,4 +276,7 @@ async def submit_jd(session_id: str, body: JDRequest):
         session.phase4_stale_since = None
 
     await update_session(session)
+    from app.services.dashboard.resume_record import sync_dashboard_record_from_session
+
+    await sync_dashboard_record_from_session(session)
     return {"ok": True, "jd_changed": jd_changed}

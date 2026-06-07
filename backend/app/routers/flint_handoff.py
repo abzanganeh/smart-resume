@@ -38,6 +38,9 @@ class FlintContextResponse(BaseModel):
     export_version: int
     user_id: str | None = None
     created_at: str | None = None
+    # Present when the handoff originated from a saved job description
+    # (extension JD-only flow). Absent for session-based handoffs.
+    jd_id: str | None = None
 
 
 @router.post("/api/sessions/{session_id}/flint-handoff", response_model=FlintHandoffResponse)
