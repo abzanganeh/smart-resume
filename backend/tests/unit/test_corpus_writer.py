@@ -1,4 +1,4 @@
-"""Unit tests for the corpus_writer service.
+"""Unit tests for the corpus_writer service and the user-corpus retrieval path.
 
 All DB and embedding calls are mocked so the tests run without a live
 Postgres instance.  The primary contract under test:
@@ -11,6 +11,7 @@ Postgres instance.  The primary contract under test:
 5. Truncation: fragments longer than _MAX_FRAGMENT_CHARS are capped.
 6. Graceful degradation: any exception inside embed_* is swallowed and
    logged as a warning, never re-raised to the caller.
+7. _query_user_corpus degrades gracefully when the table does not exist.
 """
 
 from __future__ import annotations
@@ -342,3 +343,50 @@ async def test_embed_tailored_resume_fallback_on_embedding_error():
     assert len(added) == 3
     for chunk in added:
         assert all(v == 0.0 for v in chunk.embedding)
+
+
+# ---------------------------------------------------------------------------
+# F3 regression: _query_user_corpus degrades gracefully when table absent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_query_user_corpus_returns_empty_on_db_error() -> None:
+    """_query_user_corpus must return [] (not raise) when the DB throws.
+
+    This covers the pre-migration-0018 case where the table does not yet
+    exist, and any other transient DB error during retrieval.
+    """
+    import uuid as _uuid
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.retrieval.retrieval_service import _query_user_corpus
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=Exception("relation does not exist"))
+
+    result = await _query_user_corpus(
+        db,
+        user_id=_uuid.uuid4(),
+        jd_vector=[0.0] * 1536,
+        limit=8,
+    )
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_query_user_corpus_returns_empty_when_limit_zero() -> None:
+    """_query_user_corpus short-circuits with an empty list for limit=0."""
+    import uuid as _uuid
+    from unittest.mock import AsyncMock
+    from app.services.retrieval.retrieval_service import _query_user_corpus
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=AssertionError("should not reach DB"))
+
+    result = await _query_user_corpus(
+        db,
+        user_id=_uuid.uuid4(),
+        jd_vector=[0.0] * 1536,
+        limit=0,
+    )
+    assert result == []

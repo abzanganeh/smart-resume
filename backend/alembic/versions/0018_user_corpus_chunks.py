@@ -139,8 +139,24 @@ def upgrade() -> None:
         """
     )
 
+    # RLS: corpus chunks contain user resume content (bullets, notes, keywords).
+    # Enforce user-level row isolation using the same app.current_user_id
+    # session variable pattern as job_descriptions.
+    op.execute("ALTER TABLE user_corpus_chunks ENABLE ROW LEVEL SECURITY")
+    op.execute(
+        """
+        CREATE POLICY user_corpus_chunks_user_isolation
+        ON user_corpus_chunks
+        USING (user_id = (current_setting('app.current_user_id', true))::uuid)
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute(
+        "DROP POLICY IF EXISTS user_corpus_chunks_user_isolation ON user_corpus_chunks"
+    )
+    op.execute("ALTER TABLE user_corpus_chunks DISABLE ROW LEVEL SECURITY")
     op.drop_index("ix_user_corpus_chunks_embedding", table_name="user_corpus_chunks")
     op.drop_index("ix_user_corpus_chunks_session", table_name="user_corpus_chunks")
     op.drop_index("ix_user_corpus_chunks_user_source_live", table_name="user_corpus_chunks")

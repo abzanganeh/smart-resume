@@ -237,6 +237,7 @@ _CORPUS_QUERY = text(
     WHERE user_id = :user_id
       AND deleted_at IS NULL
       AND embedding IS NOT NULL
+      AND corpus_source != 'master_resume'
     ORDER BY score DESC, created_at ASC, id ASC
     LIMIT :limit
     """
