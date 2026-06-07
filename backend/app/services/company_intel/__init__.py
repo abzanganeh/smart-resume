@@ -23,6 +23,7 @@ from __future__ import annotations
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.company_profile import CompanyIntelOutput
 from app.services.company_intel.cache import get_cached, normalise_key, upsert_cache
 from app.services.company_intel.extractor import extract_from_jd
@@ -45,8 +46,15 @@ async def get_company_intel(
     """
     if not company_name or company_name.lower() in {"unknown", "—", ""}:
         return None
+    if not (jd_text or "").strip():
+        return None
+    if not settings.DATABASE_URL.strip():
+        log.info("company_intel_skipped_no_database")
+        return None
 
     company_key = normalise_key(company_name)
+    if company_key == "unknown":
+        return None
 
     try:
         cached = await get_cached(db, company_key)

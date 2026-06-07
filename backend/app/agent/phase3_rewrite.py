@@ -13,6 +13,8 @@ from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
+from app.services.company_intel import get_company_intel
+from app.services.dashboard.resume_record import extract_jd_metadata
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
     PromptBudgetExceededError,
@@ -203,6 +205,41 @@ async def _run_retrieval(
             await db.rollback()
 
 
+async def _ensure_company_intel(session: Session) -> None:
+    """Load company intel when the Phase 1 background task has not finished yet."""
+    if session.company_intel is not None and not session.company_intel.is_empty():
+        return
+
+    jd_text = session.jd_raw or ""
+    if not jd_text.strip():
+        return
+
+    _, company_name = extract_jd_metadata(session)
+    if not company_name or company_name == "Unknown":
+        return
+
+    try:
+        async with async_session_factory() as db:
+            intel = await get_company_intel(
+                db,
+                company_name=company_name,
+                jd_text=jd_text,
+            )
+    except Exception as exc:
+        log.warning("phase3_company_intel_fetch_failed", error=str(exc))
+        return
+
+    if intel is None or intel.is_empty():
+        return
+
+    session.company_intel = intel
+    log.info(
+        "phase3_company_intel_loaded",
+        company=company_name,
+        source=intel.source,
+    )
+
+
 async def run(
     session: Session,
     llm: LLMClient,
@@ -223,6 +260,8 @@ async def run(
         raise RuntimeError("Phases 1 and 2 must complete before Phase 3.")
     if scoped and not session.phase3_output:
         raise RuntimeError("Phase 3 must complete before a scoped regeneration.")
+
+    await _ensure_company_intel(session)
 
     if scoped and scope is not None:
         scope = await _resolve_chunk_content(scope, session.user_id)
@@ -266,6 +305,8 @@ async def run(
     estimated_input = (len(resume_text) + len(jd_text)) // 3
     if retrieval_result is not None:
         estimated_input += retrieval_result.total_tokens
+    if session.company_intel and not session.company_intel.is_empty():
+        estimated_input += len(session.company_intel.render_for_prompt()) // 3
     estimated_output = 2000
     cost = estimate_cost(estimated_input, estimated_output, llm.provider_name, llm.model_name)
     await event_queue.put({

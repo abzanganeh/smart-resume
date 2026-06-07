@@ -14,6 +14,11 @@ def _is_real_api_key(key: str) -> bool:
     return True
 
 
+def has_platform_extraction_key() -> bool:
+    """True when a platform-owned key exists for cheap background extraction."""
+    return _is_real_api_key(settings.GOOGLE_API_KEY) or _is_real_api_key(settings.OPENAI_API_KEY)
+
+
 def _get_default_key(provider: str) -> str:
     """Return the .env key for a provider (may be empty/placeholder)."""
     match provider:

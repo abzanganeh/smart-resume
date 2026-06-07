@@ -7,6 +7,7 @@ import uuid
 
 import structlog
 
+from app.config import settings
 from app.db.engine import async_session_factory
 from app.llm.base import LLMClient
 from app.llm.factory import get_llm_client
@@ -301,12 +302,9 @@ async def run_phase(
 
         await session_store.save_phase_output(session_id, phase, output)
 
-        # After Phase 1: fire company intelligence extraction as a background
-        # task.  It runs concurrently with Phase 2 and writes the result
-        # directly to the session so Phase 3 can inject it into the prompt.
-        # The task is non-blocking — any failure is caught inside it so the
-        # phase pipeline is never affected.
-        if phase == 1 and session.user_id:
+        # After Phase 1: prefetch company intelligence while Phase 2 runs.
+        # Phase 3 also loads intel synchronously if this task has not finished.
+        if phase == 1 and settings.DATABASE_URL.strip():
             asyncio.create_task(
                 _fetch_and_store_company_intel(session_id, session),
                 name=f"company_intel:{session_id}",
