@@ -16,12 +16,9 @@ from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from pydantic import BaseModel
 
-try:
-    from pydantic import BaseModel
-except ImportError:  # pragma: no cover
-    raise
+from app.db.base import Base
 
 
 # ---------------------------------------------------------------------------

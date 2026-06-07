@@ -28,7 +28,7 @@ def normalise_key(company_name: str) -> str:
     """Return a stable slug usable as a cache key.
 
     >>> normalise_key("Google LLC")
-    'google'
+    'google-llc'
     >>> normalise_key("Amazon Web Services (AWS)")
     'amazon-web-services-aws'
     """
