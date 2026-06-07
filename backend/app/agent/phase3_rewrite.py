@@ -206,7 +206,11 @@ async def _run_retrieval(
 
 
 async def _ensure_company_intel(session: Session) -> None:
-    """Load company intel when the Phase 1 background task has not finished yet."""
+    """Load company intel when the Phase 1 background task has not finished yet.
+
+    Mutates ``session.company_intel`` in place and persists the result to the
+    session store so subsequent Phase 3 re-runs skip the DB round-trip.
+    """
     if session.company_intel is not None and not session.company_intel.is_empty():
         return
 
@@ -238,6 +242,13 @@ async def _ensure_company_intel(session: Session) -> None:
         company=company_name,
         source=intel.source,
     )
+
+    # Persist so subsequent Phase 3 re-runs skip this synchronous fetch.
+    try:
+        from app.services import session_store as _store
+        await _store.update_session(session)
+    except Exception as exc:
+        log.warning("phase3_company_intel_persist_failed", error=str(exc))
 
 
 async def run(

@@ -39,8 +39,10 @@ def normalise_key(company_name: str) -> str:
 
 def _is_stale(cached_at: datetime) -> bool:
     ttl = timedelta(days=settings.COMPANY_INTEL_CACHE_DAYS)
-    age = datetime.now(timezone.utc) - cached_at.replace(tzinfo=timezone.utc)
-    return age > ttl
+    # asyncpg returns tz-aware datetimes for TIMESTAMPTZ columns; guard against
+    # naive values coming from tests or a different driver.
+    aware = cached_at if cached_at.tzinfo is not None else cached_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - aware > ttl
 
 
 async def get_cached(db: AsyncSession, company_key: str) -> CompanyIntelOutput | None:
