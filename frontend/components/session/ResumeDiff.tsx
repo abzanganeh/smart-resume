@@ -8,8 +8,6 @@ interface Props {
   streaming: boolean;
   costInfo?: { cost_formatted: string; provider: string; model: string } | null;
   sessionId: string;
-  /** Bump when chat (or external) replaces the full tailored doc so the editor re-syncs. */
-  editorRevision?: number;
   onEdited?: (updated: TailoredResumeOutput) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
@@ -17,7 +15,7 @@ interface Props {
   onClearSuggestion?: () => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -52,7 +50,6 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         </div>
       )}
       <TailoredEditor
-        key={`${sessionId}-${editorRevision}`}
         initial={tailored}
         sessionId={sessionId}
         onSaved={onEdited}

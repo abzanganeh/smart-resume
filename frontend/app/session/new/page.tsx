@@ -12,7 +12,6 @@ import {
   createSession,
   saveUserInfo,
   submitJD,
-  checkSession,
   type JDPayload,
   type ParsedResume,
   type UserInfoPayload,
@@ -137,30 +136,6 @@ function NewSessionContent() {
     router.replace(`/session/new?step=${s}`);
   };
 
-  // Browser back/forward: keep wizard step aligned with ?step=.
-  useEffect(() => {
-    const raw = searchParams.get("step");
-    if (!raw || !STEPS.includes(raw as Step)) return;
-    const urlStep = raw as Step;
-    if (urlStep !== step) setStep(urlStep);
-  }, [searchParams, step]);
-
-  // If user backs into the wizard after finishing, skip to the live session.
-  useEffect(() => {
-    if (step !== "info" || !sessionId) return;
-    let cancelled = false;
-    checkSession(sessionId)
-      .then((s) => {
-        if (!cancelled && s.phase1_complete) {
-          router.replace(`/session/${sessionId}?step=keywords`);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [step, sessionId, router]);
-
   const handleAiComplete = (p: string, m: string) => {
     setProvider(p);
     setModel(m);
@@ -192,8 +167,7 @@ function NewSessionContent() {
     setLoading(true);
     try {
       await saveUserInfo(sessionId, info);
-      sessionStorage.removeItem("smart_resume_session_id");
-      router.replace(`/session/${sessionId}?step=keywords`);
+      router.push(`/session/${sessionId}?step=keywords`);
     } finally {
       setLoading(false);
     }
@@ -201,25 +175,16 @@ function NewSessionContent() {
 
   const stepIndex = STEPS.indexOf(step);
 
-  function handleWizardBack() {
-    if (stepIndex <= 0) {
-      router.push("/dashboard");
-      return;
-    }
-    goTo(STEPS[stepIndex - 1]!);
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="max-w-2xl mx-auto px-6 py-12">
 
-        <button
-          type="button"
-          onClick={handleWizardBack}
+        <a
+          href="/"
           className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-8 transition-colors"
         >
           ← Back
-        </button>
+        </a>
 
         {/* Progress bar */}
         <div className="flex items-center gap-2 mb-10">
@@ -292,7 +257,6 @@ function NewSessionContent() {
                 token={session?.backendAccessToken ?? undefined}
                 onParsed={handleResumeParsed}
                 hasMasterResume={hasMasterResume}
-                onMasterResumeSaved={() => setHasMasterResume(true)}
               />
             </div>
           )}

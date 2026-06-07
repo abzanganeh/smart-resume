@@ -21,7 +21,5 @@ RUN uv sync --frozen --no-dev
 
 COPY . .
 
-RUN chmod +x docker-entrypoint.sh
-
 EXPOSE 8000
-CMD ["./docker-entrypoint.sh"]
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

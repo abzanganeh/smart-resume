@@ -368,14 +368,8 @@ async def register(
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     if existing is not None:
-        if existing.auth_provider != AuthProvider.email and not existing.password_hash:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "email_registered_with_sso",
-                    "provider": existing.auth_provider.value,
-                },
-            )
+        # Do not leak whether the email is associated with a different
+        # provider — same 409 either way.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "email_already_registered"},
@@ -447,10 +441,12 @@ async def login(
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
 
-    if user is None:
+    if user is None or user.auth_provider != AuthProvider.email:
+        # Same uniform negative for unknown email vs SSO-only account.
+        # We still consume bcrypt time so timing is comparable.
         verify_password(payload.password, None)
         try:
-            await _process_failed_login(db, request, user=None, reason="unknown_email")
+            await _process_failed_login(db, request, user=user, reason="unknown_email")
         except AccountLockedError as exc:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -459,24 +455,6 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "invalid_credentials"},
-        )
-
-    if user.auth_provider != AuthProvider.email and not user.password_hash:
-        # SSO-only account — no password on file. Guide caller to the provider.
-        verify_password(payload.password, None)
-        try:
-            await _process_failed_login(db, request, user=user, reason="sso_only")
-        except AccountLockedError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"code": "account_locked"},
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "sso_sign_in_required",
-                "provider": user.auth_provider.value,
-            },
         )
 
     if user.is_suspended:

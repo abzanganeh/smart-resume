@@ -41,10 +41,10 @@ export function NavBar() {
 
   return (
     <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         {/* Brand */}
-        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
-          <BrandLogo className="h-11 w-auto max-w-[240px] sm:max-w-[280px]" />
+        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity shrink-0">
+          <BrandLogo className="h-8 w-auto max-w-[200px] sm:max-w-[220px]" />
         </Link>
 
         {/* Nav links (authenticated) */}
