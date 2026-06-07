@@ -28,6 +28,12 @@ log = structlog.get_logger()
 _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text()
 _PHASE3 = (Path(__file__).parent / "prompts" / "phase3.txt").read_text()
 
+_COMPANY_INTEL_INSTRUCTION = (
+    "\n\nCOMPANY INTELLIGENCE — use these signals to align the summary and bullet "
+    "phrasing with the employer's stated values where it is authentic.  Never "
+    "fabricate alignment that is not supported by the candidate's actual experience."
+)
+
 
 # Snippet appended to the system prompt when retrieval has produced
 # selected chunks.  Wording per SYSTEM_DESIGN_PHASE_2 §18.4 — the LLM
@@ -299,8 +305,7 @@ async def run(
             f"corrected versions as the basis and polish them with JD keywords):\n{fixes_block}\n"
         )
 
-    # Compose the system prompt — append the retrieval instructions when
-    # we have chunks to pin the LLM against.
+    # Compose the system prompt — append extension blocks in priority order.
     system_content = _SYSTEM_BASE + "\n\n" + _PHASE3
     if scoped:
         system_content += _SCOPED_INSTRUCTION
@@ -312,10 +317,27 @@ async def run(
             f"{retrieval_result.render_for_prompt()}\n"
         )
 
+    # Company intelligence block — prepended to user_content so the LLM
+    # sees it before the JD.  Only injected when intel was successfully
+    # fetched and contains at least one signal field.
+    company_intel_block = ""
+    if session.company_intel and not session.company_intel.is_empty():
+        system_content += _COMPANY_INTEL_INSTRUCTION
+        company_intel_block = (
+            "COMPANY INTELLIGENCE:\n"
+            f"{session.company_intel.render_for_prompt()}\n\n"
+        )
+        log.info(
+            "phase3_company_intel_injected",
+            company=session.company_intel.company_name,
+            source=session.company_intel.source,
+        )
+
     user_content = (
         f"CAREER STAGE: {career_stage}\n"
         f"TARGET ROLE: {target_role}\n"
         f"CAREER TRANSITION: {is_career_transition}\n"
+        f"{company_intel_block}"
         f"{additions_section}"
         f"{chunks_prompt_block}\n"
         f"JOB DESCRIPTION:\n{jd_text}\n\n"

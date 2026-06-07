@@ -13,6 +13,8 @@ from app.llm.factory import get_llm_client
 from app.llm.pricing import estimate_cost, format_cost
 from app.models.session import PhaseStatus, Session
 from app.services import session_store
+from app.services.company_intel import get_company_intel
+from app.services.dashboard.resume_record import extract_jd_metadata
 from app.services.billing.exceptions import InsufficientCreditsError
 from app.services.billing.llm_upgrade import (
     Phase3RouteDecision,
@@ -212,6 +214,43 @@ def _user_facing_error(exc: BaseException) -> str:
     return messages.get(kind, "The AI step encountered an error. Please retry.")
 
 
+async def _fetch_and_store_company_intel(session_id: str, session: Session) -> None:
+    """Background task: extract company intel from the JD and persist to session.
+
+    Runs after Phase 1 completes.  Any exception is swallowed so the task
+    never propagates into the phase pipeline.
+    """
+    try:
+        jd_text = session.jd_raw or ""
+        if not jd_text:
+            return
+
+        _, company_name = extract_jd_metadata(session)
+        if not company_name or company_name == "Unknown":
+            return
+
+        async with async_session_factory() as db:
+            intel = await get_company_intel(db, company_name=company_name, jd_text=jd_text)
+
+        if intel is None or intel.is_empty():
+            return
+
+        current = await session_store.get_session(session_id)
+        if current is None:
+            return
+        current.company_intel = intel
+        await session_store.update_session(current)
+
+        log.info(
+            "company_intel_stored",
+            session_id=session_id,
+            company=company_name,
+            source=intel.source,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("company_intel_background_task_failed", session_id=session_id, error=str(exc))
+
+
 async def run_phase(
     session_id: str,
     phase: int,
@@ -262,6 +301,17 @@ async def run_phase(
 
         await session_store.save_phase_output(session_id, phase, output)
 
+        # After Phase 1: fire company intelligence extraction as a background
+        # task.  It runs concurrently with Phase 2 and writes the result
+        # directly to the session so Phase 3 can inject it into the prompt.
+        # The task is non-blocking — any failure is caught inside it so the
+        # phase pipeline is never affected.
+        if phase == 1 and session.user_id:
+            asyncio.create_task(
+                _fetch_and_store_company_intel(session_id, session),
+                name=f"company_intel:{session_id}",
+            )
+
         # Fix 3 — when Phase 2 completes, mark downstream phases stale so the
         # user sees a warning dot on the Rewrite / QA tabs.  Only stale a phase
         # when its output already exists (phases that have never run stay clean).
@@ -279,6 +329,28 @@ async def run_phase(
                     changed = True
                 if changed:
                     await session_store.update_session(session)
+
+        # Dashboard: mark polished after Phase 3 rewrite completes.
+        if phase == 3 and session.user_id:
+            try:
+                user_id = uuid.UUID(session.user_id)
+                from app.services.dashboard.resume_record import (
+                    mark_resume_record_polished,
+                )
+
+                async with async_session_factory() as db:
+                    await mark_resume_record_polished(
+                        db,
+                        user_id=user_id,
+                        session_id=session_id,
+                    )
+                    await db.commit()
+            except Exception as exc:  # noqa: BLE001 — do not fail the phase run
+                log.warning(
+                    "resume_record_polish_failed",
+                    session_id=session_id,
+                    error=str(exc),
+                )
 
         # Step 27 — persist ResumeRecord + ATS history after Phase 4.
         if phase == 4 and session.user_id:

@@ -28,6 +28,11 @@ class ResumeRecordStatus(str, enum.Enum):
     withdrawn = "withdrawn"
 
 
+class TailoringStage(str, enum.Enum):
+    in_progress = "in_progress"
+    polished = "polished"
+
+
 class AtsRecalcType(str, enum.Enum):
     initial = "initial"
     manual = "manual"
@@ -43,6 +48,12 @@ _RESUME_RECORD_STATUS_PG = PGEnum(
 _ATS_RECALC_TYPE_PG = PGEnum(
     AtsRecalcType,
     name="ats_recalc_type",
+    create_type=False,
+    values_callable=lambda e: [m.value for m in e],
+)
+_TAILORING_STAGE_PG = PGEnum(
+    TailoringStage,
+    name="resume_tailoring_stage",
     create_type=False,
     values_callable=lambda e: [m.value for m in e],
 )
@@ -79,6 +90,13 @@ class ResumeRecord(Base):
         default=ResumeRecordStatus.draft,
         server_default=ResumeRecordStatus.draft.value,
     )
+    tailoring_stage: Mapped[TailoringStage] = mapped_column(
+        _TAILORING_STAGE_PG,
+        nullable=False,
+        default=TailoringStage.in_progress,
+        server_default=TailoringStage.in_progress.value,
+    )
+    display_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -158,4 +176,5 @@ __all__ = [
     "AtsScoreHistory",
     "ResumeRecord",
     "ResumeRecordStatus",
+    "TailoringStage",
 ]

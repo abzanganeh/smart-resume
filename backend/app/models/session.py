@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.models.audit import AuditOutput
+from app.models.company_profile import CompanyIntelOutput
 from app.models.cover_letter import CoverLetterOutput
 from app.models.keywords import KeywordExtractionOutput
 from app.models.qa import QAOutput
@@ -60,6 +61,10 @@ class Session(BaseModel):
     model: str | None = None
     # Ephemeral — user-supplied API key (BYOK). Never logged. Cleared on session expiry.
     byok_api_key: str | None = None
+
+    # Company intelligence extracted from the JD after Phase 1 completes.
+    # Injected into the Phase 3 prompt when present and non-empty.
+    company_intel: CompanyIntelOutput | None = None
 
     # User-declared additions: skills/keywords they have but weren't in the original resume
     user_claimed_keywords: list[str] = []

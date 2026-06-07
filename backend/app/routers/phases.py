@@ -37,6 +37,7 @@ from app.services.billing.quota import (
 )
 from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
+from app.services.llm_session_config import apply_llm_request_headers
 from app.services.session_store import get_session, reset_phase, update_session
 
 MAX_PHASE3_VERSIONS = 20
@@ -141,6 +142,7 @@ async def trigger_phase(
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
+    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
@@ -218,14 +220,14 @@ async def trigger_phase(
                         detail={"code": "insufficient_credits", "action": "ats_recalc"},
                     ) from exc
 
-    if x_provider and session.provider != x_provider:
-        session.provider = x_provider
-        await update_session(session)
-    if x_model and session.model != x_model:
-        session.model = x_model
-        await update_session(session)
-    if x_api_key:
-        session.byok_api_key = x_api_key
+    apply_llm_request_headers(
+        session,
+        x_use_platform=x_use_platform,
+        x_api_key=x_api_key,
+        x_provider=x_provider,
+        x_model=x_model,
+    )
+    await update_session(session)
 
     if body.force:
         await reset_phase(session_id, phase)
