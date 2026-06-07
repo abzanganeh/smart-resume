@@ -9,7 +9,7 @@ import structlog
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.context import truncate_to_fit
 from app.llm.structured import complete_structured
-from app.models.audit import AuditLLMOutput, AuditOutput, BulletIssue, KeywordCoverage
+from app.models.audit import AuditLLMOutput, AuditOutput, KeywordCoverage
 from app.models.session import Session
 from pydantic import BaseModel
 
@@ -102,39 +102,10 @@ def _reject_hollow_llm(output: BaseModel) -> str | None:
     return None
 
 
-_MAX_BULLET_ISSUES = 10
-_SEVERITY_RANK = {"high": 3, "medium": 2, "low": 1}
-
-
-def _bullet_issue_priority(issue: BulletIssue) -> int:
-    """Higher = more important to fix for this JD."""
-    score = _SEVERITY_RANK.get(issue.severity, 1)
-    score += len(issue.missing_keywords) * 3
-    flags = set(issue.issues or [])
-    if "irrelevant" in flags:
-        return -100
-    if "missing_keyword" in flags:
-        score += 4
-    if "no_metric" in flags:
-        score += 1
-    if "no_action_verb" in flags:
-        score += 1
-    if "cliche" in flags:
-        score += 1
-    return score
-
-
-def _prioritize_bullet_issues(issues: list[BulletIssue]) -> list[BulletIssue]:
-    """Keep JD-relevant, high-impact bullets only."""
-    ranked = sorted(issues, key=_bullet_issue_priority, reverse=True)
-    kept = [issue for issue in ranked if _bullet_issue_priority(issue) > 0]
-    return kept[:_MAX_BULLET_ISSUES]
-
-
 def _merge_audit(coverage: KeywordCoverage, llm: AuditLLMOutput) -> AuditOutput:
     return AuditOutput(
         keyword_coverage=coverage,
-        bullet_issues=_prioritize_bullet_issues(llm.bullet_issues),
+        bullet_issues=llm.bullet_issues,
         cliches_found=llm.cliches_found,
         irrelevant_sections=llm.irrelevant_sections,
         page_estimate=llm.page_estimate,

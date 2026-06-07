@@ -12,7 +12,6 @@ import {
   verify2fa,
   type TfaRequired,
 } from "@/lib/auth/api"
-import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -68,7 +67,6 @@ function AuthPageContent() {
 
   // UI state
   const [error, setError] = useState<string | null>(initialError)
-  const [errorCode, setErrorCode] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [strength, setStrength] = useState(0)
   const [ssoProviders, setSsoProviders] = useState<{ google?: boolean; github?: boolean }>({})
@@ -87,9 +85,8 @@ function AuthPageContent() {
     callbackUrl: string,
     onboardingCompletedAt: string | null | undefined,
   ) {
-    const dest = resolveAuthReturnUrl(callbackUrl)
-    if (dest && dest !== "/auth" && onboardingCompletedAt) {
-      router.replace(dest)
+    if (callbackUrl && callbackUrl !== "/auth" && onboardingCompletedAt) {
+      router.replace(callbackUrl)
     } else if (!onboardingCompletedAt) {
       router.replace("/onboarding")
     } else {
@@ -103,20 +100,10 @@ function AuthPageContent() {
       const callbackUrl = searchParams.get("callbackUrl") ?? ""
       doRedirect(callbackUrl, session.backendUser?.onboarding_completed_at)
     } else if (status === "authenticated" && session?.error) {
-      showError(session.error)
+      setError(friendlyError(session.error))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session])
-
-  function showError(code: string) {
-    setErrorCode(code)
-    setError(friendlyError(code))
-  }
-
-  function clearError() {
-    setError(null)
-    setErrorCode(null)
-  }
 
   function onPasswordChange(val: string) {
     setPassword(val)
@@ -129,7 +116,7 @@ function AuthPageContent() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
-    clearError()
+    setError(null)
     if (!tosAccepted || !privacyAccepted) {
       setError("You must accept the Terms of Service and Privacy Policy.")
       return
@@ -157,7 +144,7 @@ function AuthPageContent() {
         setSuccessMsg("Account created! Check your email to verify your address.")
         // Session update will trigger the redirect effect above
       } catch (err: unknown) {
-        showError((err as Error).message)
+        setError(friendlyError((err as Error).message))
       }
     })
   }
@@ -166,7 +153,7 @@ function AuthPageContent() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    clearError()
+    setError(null)
     startTransition(async () => {
       try {
         const result = await loginUser({ email, password })
@@ -187,7 +174,7 @@ function AuthPageContent() {
         })
         // The session effect above handles the redirect
       } catch (err: unknown) {
-        showError((err as Error).message)
+        setError(friendlyError((err as Error).message))
       }
     })
   }
@@ -196,7 +183,7 @@ function AuthPageContent() {
 
   async function handle2fa(e: React.FormEvent) {
     e.preventDefault()
-    clearError()
+    setError(null)
     if (!tfaChallenge) return
     startTransition(async () => {
       try {
@@ -212,7 +199,7 @@ function AuthPageContent() {
           user_json: JSON.stringify(data.user),
         })
       } catch (err: unknown) {
-        showError((err as Error).message)
+        setError(friendlyError((err as Error).message))
       }
     })
   }
@@ -220,12 +207,8 @@ function AuthPageContent() {
   // ── SSO ─────────────────────────────────────────────────────────────────────
 
   function handleSSO(provider: "google" | "github") {
-    clearError()
-    const callbackUrl = resolveAuthReturnUrl(
-      searchParams.get("callbackUrl"),
-      "/dashboard",
-    )
-    saveAuthReturnUrl(callbackUrl)
+    setError(null)
+    const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard"
     signIn(provider, { callbackUrl })
   }
 
@@ -244,7 +227,7 @@ function AuthPageContent() {
       <div className="w-full max-w-md">
         {/* Logo / brand */}
         <div className="text-center mb-8 flex flex-col items-center">
-          <BrandLogo className="h-20 sm:h-24 w-auto max-w-[min(100%,420px)] mb-4" priority />
+          <BrandLogo className="h-14 w-auto max-w-[280px] mb-3" priority />
           <p className="text-slate-400 text-sm">
             {view === "register"
               ? "Create your free account"
@@ -257,21 +240,8 @@ function AuthPageContent() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
           {/* Error / success banners */}
           {error && (
-            <div className="mb-5 p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-sm space-y-2">
-              <p>{error}</p>
-              {(errorCode === "email_registered_with_sso" ||
-                errorCode === "sso_sign_in_required") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView("login")
-                    clearError()
-                  }}
-                  className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
-                >
-                  Go to Sign in
-                </button>
-              )}
+            <div className="mb-5 p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-sm">
+              {error}
             </div>
           )}
           {successMsg && (
@@ -367,7 +337,7 @@ function AuthPageContent() {
                     type="button"
                     onClick={() => {
                       setView(v)
-                      clearError()
+                      setError(null)
                       setSuccessMsg(null)
                     }}
                     className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -612,12 +582,7 @@ export default function AuthPage() {
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
     invalid_credentials: "Invalid email or password.",
-    sso_sign_in_required:
-      "This account uses Google sign-in, not a password. Use Continue with Google on the Sign in tab.",
-    email_registered_with_sso:
-      "This email is already registered with Google. Switch to Sign in — email/password is not set up for this account.",
-    email_already_registered:
-      "An account with this email already exists. Switch to Sign in instead.",
+    email_already_registered: "An account with this email already exists.",
     account_locked: "Account temporarily locked after too many failed attempts. Try again in 15 minutes.",
     account_suspended: "This account has been suspended. Contact support.",
     weak_password: "Password is too weak. Try a longer or more complex password.",

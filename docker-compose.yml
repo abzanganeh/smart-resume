@@ -49,11 +49,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-        GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-        GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-        GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     restart: unless-stopped
     ports:
       - "3000:3000"

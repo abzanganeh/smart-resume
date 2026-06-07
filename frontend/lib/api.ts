@@ -153,16 +153,6 @@ export async function saveAdditions(
   );
 }
 
-export async function suggestBulletFixes(
-  sessionId: string,
-  indices: number[],
-): Promise<{ fixes: { index: number; suggestion: string }[] }> {
-  return request(`/api/sessions/${sessionId}/audit/suggest-bullet-fixes`, {
-    method: "POST",
-    body: JSON.stringify({ indices }),
-  });
-}
-
 export async function saveUserInfo(
   sessionId: string,
   info: UserInfoPayload
@@ -395,58 +385,10 @@ export async function getBillingPrices(token?: string): Promise<BillingPricesRes
   })
 }
 
-const SUBSCRIPTION_CACHE_TTL_MS = 60_000
-let subscriptionCache: {
-  token: string
-  data: SubscriptionCurrentResponse
-  fetchedAt: number
-} | null = null
-let subscriptionInflight: Promise<SubscriptionCurrentResponse> | null = null
-let subscriptionBlockedUntil = 0
-
-async function fetchSubscriptionCurrentRaw(
-  token: string,
-): Promise<SubscriptionCurrentResponse> {
+export async function getSubscriptionCurrent(token: string): Promise<SubscriptionCurrentResponse> {
   return request("/api/subscriptions/current", {
     headers: { Authorization: `Bearer ${token}` },
   })
-}
-
-/** Cached, single-flight subscription snapshot for nav widgets. */
-export async function getSubscriptionCurrent(
-  token: string,
-): Promise<SubscriptionCurrentResponse> {
-  const now = Date.now()
-  if (now < subscriptionBlockedUntil) {
-    if (subscriptionCache?.token === token) return subscriptionCache.data
-    throw new ApiError("rate_limited", 429, "rate_limited")
-  }
-
-  if (
-    subscriptionCache?.token === token &&
-    now - subscriptionCache.fetchedAt < SUBSCRIPTION_CACHE_TTL_MS
-  ) {
-    return subscriptionCache.data
-  }
-
-  if (subscriptionInflight) return subscriptionInflight
-
-  subscriptionInflight = fetchSubscriptionCurrentRaw(token)
-    .then((data) => {
-      subscriptionCache = { token, data, fetchedAt: Date.now() }
-      return data
-    })
-    .catch((err) => {
-      if (err instanceof ApiError && err.status === 429) {
-        subscriptionBlockedUntil = Date.now() + 60_000
-      }
-      throw err
-    })
-    .finally(() => {
-      subscriptionInflight = null
-    })
-
-  return subscriptionInflight
 }
 
 export async function createCheckoutSession(
@@ -942,7 +884,6 @@ export interface DashboardSummaryResponse {
 export interface ResumeListItem {
   id: string;
   session_id: string;
-  display_name: string | null;
   jd_title: string;
   jd_company: string;
   tags: string[];
@@ -950,23 +891,8 @@ export interface ResumeListItem {
   starting_ats_score: number;
   ats_score_delta: number;
   status: ResumeRecordStatus;
-  tailoring_stage: "in_progress" | "polished";
   created_at: string;
   updated_at: string;
-}
-
-export interface SessionResumeRecord {
-  id: string;
-  display_name: string | null;
-  jd_title: string;
-  jd_company: string;
-  tailoring_stage: "in_progress" | "polished";
-}
-
-export async function getSessionResumeRecord(
-  sessionId: string,
-): Promise<SessionResumeRecord> {
-  return request(`/api/sessions/${sessionId}/resume-record`);
 }
 
 export interface ResumeListResponse {
@@ -1008,20 +934,10 @@ export interface ResumePatch {
   // Skills
   add_skills?: string[];
   remove_skills?: string[];
-  // Experience
+  // Experience bullet
   company?: string;
   bullet_old?: string;
   bullet_new?: string;
-  title_old?: string;
-  new_title?: string;
-  dates_old?: string;
-  new_dates?: string;
-  // Projects
-  remove_projects?: string[];
-  project_name?: string;
-  project_bullet_old?: string;
-  project_bullet_new?: string;
-  project_bullets_replace_all?: string[];
 }
 
 export interface ChatMessage {

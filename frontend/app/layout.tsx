@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     title: "Smart Resume Agent",
     description:
       "AI-powered job search platform — master resume, JD tailoring, ATS guidance, and application tracking.",
-    images: [{ url: "/brand/logo.png", width: 514, height: 305, alt: "Smart Resume Agent" }],
+    images: [{ url: "/brand/logo.png", width: 480, height: 262, alt: "Smart Resume Agent" }],
   },
 };
 
