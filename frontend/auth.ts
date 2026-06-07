@@ -2,7 +2,7 @@
  * NextAuth.js v5 configuration.
  *
  * Session strategy: JWT (stored in encrypted httpOnly cookie by NextAuth).
- * The backend's own access token (15-min HS256 JWT) is embedded inside
+ * The backend's own access token (HS256 JWT) is embedded inside
  * NextAuth's JWT so every server-side caller can forward it to FastAPI.
  * The backend's refresh token rides in a *separate* httpOnly cookie
  * (sr_refresh) set by FastAPI — browsers send it automatically on fetch
@@ -233,8 +233,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
   callbacks: {
     async jwt({ token, user, account, trigger, session }) {
-      if (trigger === "update" && session?.backendUser) {
-        token.backendUser = session.backendUser
+      if (trigger === "update" && session) {
+        const patch = session as {
+          backendAccessToken?: string
+          backendExpiresAt?: number
+          backendUser?: BackendUser
+        }
+        if (patch.backendAccessToken) {
+          token.backendAccessToken = patch.backendAccessToken
+          token.backendExpiresAt = patch.backendExpiresAt
+          delete token.error
+        }
+        if (patch.backendUser) {
+          token.backendUser = patch.backendUser
+        }
         return token
       }
 
@@ -281,6 +293,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return {
         ...session,
         backendAccessToken: token.backendAccessToken as string | undefined,
+        backendExpiresAt: token.backendExpiresAt as number | undefined,
         backendUser: token.backendUser as BackendUser | undefined,
         error: token.error as string | undefined,
       }

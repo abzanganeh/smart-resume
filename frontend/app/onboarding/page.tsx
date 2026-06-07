@@ -250,7 +250,7 @@ export default function OnboardingPage() {
         }
         if (isMasterStep) {
           await saveAiChoice(aiChoice)
-          router.push("/profile?mode=story")
+          router.push("/profile?mode=story&from=onboarding")
           return
         }
         if (isLast) {

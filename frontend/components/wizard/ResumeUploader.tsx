@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, BookUser, FileText, Loader2, Mic, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { uploadResumeFile, pasteResumeText, type ParsedResume } from "@/lib/api";
+import { uploadProfileResume } from "@/lib/profile";
 import { VoiceTab } from "@/components/shared/VoiceTab";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -13,16 +14,37 @@ interface Props {
   token?: string; // backend JWT — needed for voice fallback + saved-resume tabs
   onParsed: (parsed: ParsedResume) => void;
   hasMasterResume?: boolean;
+  /** Called after the first upload is persisted to the master profile. */
+  onMasterResumeSaved?: () => void;
 }
 
 type Mode = "upload" | "paste" | "voice" | "saved";
 
-export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: Props) {
+export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, onMasterResumeSaved }: Props) {
   const [mode, setMode]       = useState<Mode>("upload");
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [pasteText, setPasteText] = useState("");
+
+  useEffect(() => {
+    if (hasMasterResume) {
+      setMode("saved");
+    }
+  }, [hasMasterResume]);
+
+  const persistToMaster = useCallback(
+    async (payload: { file?: File; text?: string }) => {
+      if (!token || hasMasterResume) return;
+      try {
+        await uploadProfileResume(token, payload);
+        onMasterResumeSaved?.();
+      } catch {
+        // Session resume is already saved — master sync is best-effort.
+      }
+    },
+    [token, hasMasterResume, onMasterResumeSaved],
+  );
 
   // ── Saved resume state ─────────────────────────────────────────────────────
   const [savedText, setSavedText] = useState<string | null>(null); // null = not loaded
@@ -42,6 +64,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: 
       setLoading(true);
       try {
         const result = await uploadResumeFile(sessionId, file);
+        await persistToMaster({ file });
         onParsed(result.parsed);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Upload failed.");
@@ -49,7 +72,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: 
         setLoading(false);
       }
     },
-    [sessionId, onParsed],
+    [sessionId, onParsed, persistToMaster],
   );
 
   // ── Paste ──────────────────────────────────────────────────────────────────
@@ -59,6 +82,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: 
     setError(null);
     try {
       const result = await pasteResumeText(sessionId, pasteText);
+      await persistToMaster({ text: pasteText });
       onParsed(result.parsed);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to process resume text.");
@@ -73,6 +97,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume }: 
     setError(null);
     try {
       const result = await pasteResumeText(sessionId, text);
+      await persistToMaster({ text });
       onParsed(result.parsed);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to process transcribed resume.");

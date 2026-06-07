@@ -164,6 +164,47 @@ async def redeem_handoff_token(token: str, *, client_ip: str) -> dict[str, Any]:
     return payload
 
 
+async def create_jd_handoff_token(
+    *,
+    jd_id: str,
+    jd_text: str,
+    title: str,
+    company: str,
+    user_id: str,
+) -> tuple[str, int]:
+    """Mint a single-use token for a JD-only (no tailoring session) import.
+
+    Resume summary is intentionally empty — Flint will use the user's
+    locally-stored profile instead.
+    """
+    payload: dict[str, Any] = {
+        "session_name": f"{company} — {title}".strip(" —") if (company or title) else "New Interview",
+        "session_type": "interview",
+        "domain": "software engineering",
+        "jd_text": jd_text.strip(),
+        "resume_summary": "",
+        "smart_resume_session_id": "",
+        "jd_id": jd_id,
+        "export_version": _EXPORT_VERSION,
+        "user_id": user_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    token = str(uuid.uuid4())
+    ttl = settings.FLINT_HANDOFF_TTL_SECONDS
+    key = _handoff_key(token)
+    stored = await redis_set_nx(key, json.dumps(payload), ex=ttl)
+    if not stored:
+        token = str(uuid.uuid4())
+        key = _handoff_key(token)
+        stored = await redis_set_nx(key, json.dumps(payload), ex=ttl)
+        if not stored:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Could not create handoff token. Please try again.",
+            )
+    return token, ttl
+
+
 async def assert_session_owned(session_id: str, user_id: str) -> Session:
     """Load a tailoring session and verify it belongs to the authenticated user."""
     session = await get_session(session_id)
