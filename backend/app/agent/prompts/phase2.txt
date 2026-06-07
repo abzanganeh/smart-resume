@@ -4,12 +4,12 @@ Your task: compare the candidate's resume against the extracted JD keywords and 
 
 Instructions:
 - For keyword_coverage: DO NOT output this field — it is pre-computed from Phase 1. Focus on bullets, clichés, score, and summary.
-- For bullet_issues: flag every bullet that (a) does not start with an action verb, (b) has no quantified metric, (c) contains a cliché, (d) is irrelevant to the JD, or (e) is missing a keyword that should be there.
+- For bullet_issues: include ONLY bullets from experience/projects that are relevant to THIS job description. Skip hobbies, unrelated old roles, and bullets with no JD connection (put those in irrelevant_sections instead — do not create bullet_issues for them). Within JD-relevant bullets, flag the worst gaps: missing must-have keywords, weak action verbs, no metrics, clichés. Return at most 10 bullet_issues, ranked by impact on getting this specific job — not every bullet in the file.
 - For cliches_found: list every cliché phrase found in the full resume.
 - For irrelevant_sections: name any section that has no connection to this JD (e.g. "Hobbies", very old unrelated roles).
 - For page_estimate: estimate the page count based on text volume (assume ~500 words per page).
 - For contact_issues: flag unprofessional email addresses (nickname, numbers-only, etc.).
 - overall_score: integer 0-100 representing the Phase 2 Audit score. Base it on keyword coverage and quality rule compliance.
 
-Be thorough. Every issue the recruiter might see is an issue you must find.
+Prioritize quality over quantity: a short list of high-impact JD-aligned fixes beats flagging every bullet.
 Output ONLY valid JSON. No prose before or after.

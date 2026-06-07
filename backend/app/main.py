@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.config import settings
+from app.config import is_production_grade, settings
 from app.db.engine import async_session_factory
 from app.dependencies.admin_auth import AdminDefaultDenyMiddleware
 from app.limiter import limiter
@@ -169,8 +169,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Return JSON errors with CORS headers so the browser shows the real failure."""
-    log.error("unhandled_exception", path=str(request.url.path), error=str(exc))
+    """Return JSON errors with CORS headers; never leak internal details to clients."""
+    log.error(
+        "unhandled_exception",
+        path=str(request.url.path),
+        error=str(exc),
+        exc_info=True,
+    )
     msg = str(exc)
     if "invalid_api_key" in msg or "AuthenticationError" in type(exc).__name__:
         return JSONResponse(
@@ -183,9 +188,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             },
             headers=_cors_headers(request),
         )
+    content: dict[str, str] = {
+        "detail": "Something went wrong. Please try again in a moment.",
+    }
+    if not is_production_grade():
+        content["debug"] = msg
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Server error: {msg}"},
+        content=content,
         headers=_cors_headers(request),
     )
 

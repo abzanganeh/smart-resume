@@ -10,8 +10,13 @@ interface Props {
   streaming?: boolean;
   scoreHistory?: number[];
   onApplySuggestion?: (suggestion: string) => void;
-  /** Called when user wants to send a suggestion directly to the chat. */
+  /** Called when user wants to send a single suggestion to the chat (sidebar variant). */
   onSendToChat?: (message: string) => void;
+  /**
+   * Called when user clicks "Fix with AI" on a blocking issue (primary/export variant).
+   * Receives all blocking issues with the clicked one first so the caller can drive a queue.
+   */
+  onStartQueue?: (orderedIssues: BlockingIssue[]) => void;
   /** Primary = full-width top section (Phase 4); sidebar = compact collapsible panel (Phase 3). */
   variant?: "primary" | "sidebar";
 }
@@ -268,15 +273,17 @@ function BlockingIssueRow({
   issue,
   defaultOpen,
   onSendToChat,
+  onStartQueue,
 }: {
   issue: BlockingIssue;
   defaultOpen?: boolean;
   onSendToChat?: (message: string) => void;
+  onStartQueue?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
 
   function buildChatMessage() {
-    return `Fix this issue in my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nSuggestion: ${issue.suggestion}`;
+    return `Fix this issue in my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\nSuggestion: ${issue.suggestion}\nFix effort: ${issue.fix_effort.replace(/_/g, " ")}`;
   }
 
   return (
@@ -313,7 +320,19 @@ function BlockingIssueRow({
           <p className="text-[10px] text-slate-600">
             Fix effort: {issue.fix_effort.replace(/_/g, " ")}
           </p>
-          {onSendToChat && (
+          {/* Primary variant: queue-based flow */}
+          {onStartQueue && (
+            <button
+              type="button"
+              onClick={onStartQueue}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
+            >
+              <MessageSquare className="w-3 h-3" />
+              Fix with AI →
+            </button>
+          )}
+          {/* Sidebar variant: single-shot chat message */}
+          {!onStartQueue && onSendToChat && (
             <button
               type="button"
               onClick={() => onSendToChat(buildChatMessage())}
@@ -343,6 +362,7 @@ export function ATSGuidancePanel({
   scoreHistory = [],
   onApplySuggestion,
   onSendToChat,
+  onStartQueue,
   variant = "primary",
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -508,6 +528,15 @@ export function ATSGuidancePanel({
                 onSendToChat={onSendToChat
                   ? (msg) => { dismissBlocking(origIdx); onSendToChat(msg); }
                   : undefined}
+                onStartQueue={onStartQueue
+                  ? () => {
+                      // Put clicked issue first, then the rest in their sorted order.
+                      const others = blocking
+                        .filter(({ origIdx: oi }) => oi !== origIdx)
+                        .map(({ issue: i }) => i);
+                      onStartQueue([issue, ...others]);
+                    }
+                  : undefined}
               />
             ))}
           </div>
@@ -545,5 +574,5 @@ export function ATSGuidancePanel({
   return content;
 }
 
-/** Exported for component tests — mirrors panel sort order. */
-export { sortBlockingIssues, scoreColor };
+/** Exported for component tests and page-level usage. */
+export { sortBlockingIssues, scoreColor, CATEGORY_LABELS };

@@ -66,6 +66,7 @@ class DashboardSummaryResponse(BaseModel):
 class ResumeListItem(BaseModel):
     id: uuid.UUID
     session_id: str
+    display_name: str | None
     jd_title: str
     jd_company: str
     tags: list[str]
@@ -73,6 +74,7 @@ class ResumeListItem(BaseModel):
     starting_ats_score: int
     ats_score_delta: int
     status: str
+    tailoring_stage: str
     created_at: datetime
     updated_at: datetime
 
@@ -93,6 +95,7 @@ class ResumeDetailResponse(ResumeListItem):
 class ResumePatchRequest(BaseModel):
     tags: list[str] | None = None
     status: ResumeRecordStatus | None = None
+    display_name: str | None = None
 
 
 class BulkActionRequest(BaseModel):
@@ -133,6 +136,7 @@ def _record_to_list_item(record: ResumeRecord) -> ResumeListItem:
     return ResumeListItem(
         id=record.id,
         session_id=record.session_id,
+        display_name=record.display_name,
         jd_title=record.jd_title,
         jd_company=record.jd_company,
         tags=list(record.tags or []),
@@ -140,6 +144,7 @@ def _record_to_list_item(record: ResumeRecord) -> ResumeListItem:
         starting_ats_score=record.starting_ats_score,
         ats_score_delta=record.ats_score_delta,
         status=record.status.value,
+        tailoring_stage=record.tailoring_stage.value,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -303,6 +308,7 @@ async def list_resumes(
             or_(
                 func.lower(ResumeRecord.jd_title).like(pattern),
                 func.lower(ResumeRecord.jd_company).like(pattern),
+                func.lower(func.coalesce(ResumeRecord.display_name, "")).like(pattern),
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
@@ -336,6 +342,7 @@ async def list_resumes(
             or_(
                 func.lower(ResumeRecord.jd_title).like(pattern),
                 func.lower(ResumeRecord.jd_company).like(pattern),
+                func.lower(func.coalesce(ResumeRecord.display_name, "")).like(pattern),
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
@@ -419,6 +426,9 @@ async def patch_resume(
         record.tags = body.tags
     if body.status is not None:
         record.status = body.status
+    if body.display_name is not None:
+        cleaned = body.display_name.strip()
+        record.display_name = cleaned or None
     record.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return _record_to_list_item(record)

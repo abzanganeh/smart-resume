@@ -1,0 +1,19 @@
+COMPANY INTELLIGENCE EXTRACTION
+
+Extract company culture signals from the job description below.
+Focus only on what is explicitly stated — do NOT invent or assume.
+
+Return a JSON object with EXACTLY these fields:
+
+{
+  "mission": "One sentence. The company's stated purpose or mission. Empty string if not mentioned.",
+  "values": ["Value 1", "Value 2"],  // Core values or principles explicitly named. Max 8 items. Empty array if none stated.
+  "culture_notes": "One or two sentences. Hiring culture signals: what they emphasize (e.g. ownership, speed, collaboration, data-driven). Empty string if not enough signal."
+}
+
+Rules:
+- Use only information present in the JD. No hallucination.
+- If the JD says nothing about mission/values/culture, return empty strings/arrays.
+- "values" must be short noun phrases (1-4 words each): "Customer Obsession", "Bias for Action".
+- "culture_notes" must describe what the employer values in candidates, not job requirements.
+- Output ONLY the JSON object. No prose before or after.
