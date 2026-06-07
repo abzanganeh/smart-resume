@@ -93,13 +93,21 @@ def _parse_json_from_response(raw: str) -> dict[str, Any] | None:
     return None
 
 
+# Per-field char caps prevent verbose LLM output from bloating the Flint
+# context window. Combined limit is ~1 400 chars, well within the digest
+# LLM's budget alongside a typical JD.
+_MISSION_MAX_CHARS = 400
+_CULTURE_MAX_CHARS = 400
+_VALUE_MAX_CHARS = 80
+
+
 def _build_intel(company_name: str, data: dict) -> CompanyIntelOutput:
-    mission = str(data.get("mission") or "").strip()
+    mission = str(data.get("mission") or "").strip()[:_MISSION_MAX_CHARS]
     raw_values = data.get("values") or []
     if not isinstance(raw_values, list):
         raw_values = []
-    values = [str(v).strip() for v in raw_values if str(v).strip()][:8]
-    culture_notes = str(data.get("culture_notes") or "").strip()
+    values = [str(v).strip()[:_VALUE_MAX_CHARS] for v in raw_values if str(v).strip()][:8]
+    culture_notes = str(data.get("culture_notes") or "").strip()[:_CULTURE_MAX_CHARS]
     return CompanyIntelOutput(
         company_name=company_name,
         mission=mission,
