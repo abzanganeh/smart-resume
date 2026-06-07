@@ -4,68 +4,100 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Loader2, TrendingUp, Zap } from "lucide-react"
-import { getSubscriptionCurrent, ApiError, type SubscriptionCurrentResponse } from "@/lib/api"
+import { getSubscriptionCurrent, type SubscriptionCurrentResponse } from "@/lib/api"
 import { isSubscriptionActive } from "@/lib/billing"
-import { refreshBackendSession } from "@/lib/auth/refreshBackendSession"
 
-const POLL_MS = 60_000
+const CACHE_TTL_MS = 30_000
+
+let _cache: { token: string; data: SubscriptionCurrentResponse; fetchedAt: number } | null = null
+
+function getCached(token: string): SubscriptionCurrentResponse | null {
+  if (!_cache) return null
+  if (_cache.token !== token) return null
+  if (Date.now() - _cache.fetchedAt > CACHE_TTL_MS) return null
+  return _cache.data
+}
+
+function setCache(token: string, data: SubscriptionCurrentResponse) {
+  _cache = { token, data, fetchedAt: Date.now() }
+}
 
 export function UsageWidget() {
   const { data: session, status, update } = useSession()
-  const updateRef = useRef(update)
-  updateRef.current = update
-
+  // Treat an expired backend token the same as no token — stop polling until re-auth.
   const tokenExpired = session?.error === "TokenExpired"
   const token = tokenExpired ? undefined : session?.backendAccessToken
-
-  const [current, setCurrent] = useState<SubscriptionCurrentResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const fetchedTokenRef = useRef<string | null>(null)
+  const [current, setCurrent] = useState<SubscriptionCurrentResponse | null>(
+    token ? getCached(token) : null,
+  )
+  const [loading, setLoading] = useState(Boolean(token && !getCached(token)))
+  const intervalRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!token || status !== "authenticated") {
-      setCurrent(null)
-      setLoading(false)
-      fetchedTokenRef.current = null
+    if (!token) {
+      const timeout = window.setTimeout(() => {
+        setCurrent(null)
+        setLoading(false)
+      }, 0)
+      return () => {
+        window.clearTimeout(timeout)
+      }
+    }
+
+    if (status !== "authenticated") {
       return
     }
 
     let cancelled = false
 
-    const load = async (force = false) => {
-      if (!force && fetchedTokenRef.current === token) return
+    const refresh = async (force = false) => {
+      const cached = getCached(token)
+      if (!force && cached) {
+        setCurrent(cached)
+        setLoading(false)
+        return
+      }
 
       setLoading(true)
       try {
         const data = await getSubscriptionCurrent(token)
         if (cancelled) return
-        fetchedTokenRef.current = token
+        setCache(token, data)
         setCurrent(data)
-      } catch (e) {
-        if (cancelled) return
-        if (e instanceof ApiError && e.status === 429) {
-          // Shared client cache handles cooldown — do not retry in a loop.
-          return
-        }
-        setCurrent(null)
-        if (e instanceof ApiError && e.status === 401) {
-          void refreshBackendSession(updateRef.current)
+      } catch {
+        if (!cancelled) {
+          setCurrent(null)
+          // Stop polling and force a session re-check so all components learn
+          // about the token expiry (session.error = "TokenExpired") at once.
+          if (intervalRef.current !== null) {
+            window.clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          void update()
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
-    void load(false)
-    const id = window.setInterval(() => void load(true), POLL_MS)
+    void refresh(false)
+
+    intervalRef.current = window.setInterval(() => {
+      void refresh(true)
+    }, CACHE_TTL_MS)
+
     return () => {
       cancelled = true
-      window.clearInterval(id)
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current)
+      }
     }
   }, [token, status])
 
-  if (status === "loading" || status === "unauthenticated" || !token) return null
-  if (loading && !current) {
+  if (status === "loading" || status === "unauthenticated") return null
+  if (loading) {
     return <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
   }
   if (!current) return null
@@ -96,6 +128,7 @@ export function UsageWidget() {
     )
   }
 
+  // Free user
   const credits = current.credit_balance
   return (
     <Link

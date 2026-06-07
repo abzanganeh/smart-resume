@@ -10,7 +10,6 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  Pencil,
   Plus,
   Search,
   Sparkles,
@@ -38,7 +37,6 @@ import {
   duplicateResume,
   getDashboardSummary,
   listResumes,
-  patchResume,
 } from "@/lib/dashboard"
 import { listExports, type ExportListItem } from "@/lib/account"
 import { isSubscriptionActive } from "@/lib/billing"
@@ -62,15 +60,6 @@ const STATUS_COLORS: Record<string, string> = {
   withdrawn: "bg-slate-800 text-slate-400",
 }
 
-const TAILORING_COLORS: Record<string, string> = {
-  in_progress: "bg-amber-900/50 text-amber-200 border border-amber-700/40",
-  polished: "bg-emerald-900/50 text-emerald-200 border border-emerald-700/40",
-}
-
-function resumeTitle(r: ResumeListItem): string {
-  return r.display_name?.trim() || r.jd_title
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
@@ -79,20 +68,7 @@ function formatDate(iso: string): string {
   })
 }
 
-function AtsBadge({
-  score,
-  delta,
-  tailoringStage,
-}: {
-  score: number
-  delta: number
-  tailoringStage: ResumeListItem["tailoring_stage"]
-}) {
-  if (tailoringStage === "in_progress" && score === 0) {
-    return (
-      <span className="text-xs text-slate-500 italic">Not scored yet</span>
-    )
-  }
+function AtsBadge({ score, delta }: { score: number; delta: number }) {
   const deltaLabel =
     delta === 0 ? null : delta > 0 ? `+${delta}` : String(delta)
   return (
@@ -227,12 +203,7 @@ export function DashboardView({ token }: { token: string }) {
         await loadResumes()
       } catch (e) {
         if (!cancelled) {
-          const raw = e instanceof Error ? e.message : "Failed to load dashboard"
-          const friendly =
-            raw.includes("sqlalchemy") || raw.startsWith("Server error:")
-              ? "We couldn't load your dashboard. Please refresh the page."
-              : raw
-          setError(friendly)
+          setError(e instanceof Error ? e.message : "Failed to load dashboard")
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -280,18 +251,6 @@ export function DashboardView({ token }: { token: string }) {
     if (!tags.length) return
     await bulkResumeAction(token, { action: "tag", ids: [...selected], tags })
     await loadResumes()
-  }
-
-  const handleRename = async (r: ResumeListItem) => {
-    const suggested = r.display_name?.trim() || r.jd_title
-    const raw = window.prompt("Name this resume", suggested)
-    if (raw === null) return
-    const updated = await patchResume(token, r.id, {
-      display_name: raw.trim() || null,
-    })
-    setResumes((prev) =>
-      prev.map((item) => (item.id === r.id ? { ...item, ...updated } : item)),
-    )
   }
 
   const handleBulkExport = async () => {
@@ -665,30 +624,21 @@ export function DashboardView({ token }: { token: string }) {
             {resumes.map((r) => (
               <article key={r.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
                 <div className="flex flex-wrap items-start gap-3">
-                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="mt-1" aria-label={`Select ${resumeTitle(r)}`} />
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="mt-1" aria-label={`Select ${r.jd_title}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-slate-100">{resumeTitle(r)}</h3>
-                      {r.display_name && (
-                        <span className="text-slate-500 text-sm truncate">{r.jd_title}</span>
-                      )}
+                      <h3 className="font-semibold text-slate-100">{r.jd_title}</h3>
                       <span className="text-slate-500 text-sm">@ {r.jd_company}</span>
-                      <span className={clsx("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full", TAILORING_COLORS[r.tailoring_stage] ?? TAILORING_COLORS.in_progress)}>
-                        {r.tailoring_stage === "in_progress" ? "Draft" : "Polished"}
-                      </span>
-                      {r.tailoring_stage === "polished" && (
-                        <span className={clsx("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full", STATUS_COLORS[r.status] ?? STATUS_COLORS.draft)}>{r.status}</span>
-                      )}
+                      <span className={clsx("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full", STATUS_COLORS[r.status] ?? STATUS_COLORS.draft)}>{r.status}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500">
                       <span>Built {formatDate(r.updated_at)}</span>
-                      <AtsBadge score={r.current_ats_score} delta={r.ats_score_delta} tailoringStage={r.tailoring_stage} />
+                      <AtsBadge score={r.current_ats_score} delta={r.ats_score_delta} />
                       {r.tags.map((t) => (<span key={t} className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{t}</span>))}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link href={`/session/${r.session_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>
-                    <button type="button" onClick={() => void handleRename(r)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg" title="Rename"><Pencil className="w-3.5 h-3.5" /> Name</button>
                     <button type="button" onClick={() => void handleDuplicate(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Copy className="w-3.5 h-3.5" /> Duplicate</button>
                     <button type="button" onClick={() => void downloadResume(token, r.id, "pdf", `${r.jd_company}_resume.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Download className="w-3.5 h-3.5" /> PDF</button>
                     <button type="button" onClick={() => void handleDelete(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-red-400 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>

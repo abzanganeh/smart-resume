@@ -10,7 +10,6 @@ import {
   checkSession,
   getLLMUpgradeStatus,
   createLLMUpgradeCheckout,
-  getSessionResumeRecord,
   ApiError,
   type PhaseRunScope,
   type KeywordExtractionOutput,
@@ -21,11 +20,8 @@ import {
   type LLMTier,
   type LLMUpgradeStatus,
   type LLMUpgradeCheckoutCode,
-  type SessionResumeRecord,
 } from "@/lib/api";
-import { patchResume } from "@/lib/dashboard";
 import { trackRecentSession } from "@/lib/recentSessions";
-import { saveAuthReturnUrl } from "@/lib/auth/returnUrl";
 import { useSession } from "next-auth/react";
 import { KeywordDashboard } from "@/components/session/KeywordDashboard";
 import { AuditPanel } from "@/components/session/AuditPanel";
@@ -39,12 +35,13 @@ import { VersionHistory } from "@/components/session/VersionHistory";
 import { ProgressLog } from "@/components/session/ProgressLog";
 import { StaleBanner } from "@/components/session/StaleBanner";
 import {
+  LLMTierSelector,
   LLMUpgradePurchaseModal,
 } from "@/components/session/LLMTierSelector";
-import { SessionAiControls } from "@/components/session/SessionAiControls";
 import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume } from "@/lib/api";
+import { getStoredKey } from "@/lib/keyStore";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
 
@@ -78,8 +75,6 @@ function SessionContent() {
   const [runErrorType, setRunErrorType] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
   const [chatPrefill, setChatPrefill] = useState<string | null>(null);
-  const [issueQueue, setIssueQueue] = useState<import("@/lib/api").BlockingIssue[]>([]);
-  const [issueQueueIdx, setIssueQueueIdx] = useState(0);
   const [expiryWarning, setExpiryWarning] = useState(false);
   const [phaseRunning, setPhaseRunning] = useState(false);
   const [progressLog, setProgressLog] = useState<string[]>([]);
@@ -98,34 +93,27 @@ function SessionContent() {
   const [llmStatus, setLlmStatus] = useState<LLMUpgradeStatus | null>(null);
   const [purchaseTier, setPurchaseTier] = useState<Exclude<LLMTier, "standard"> | null>(null);
   const [checkoutBusyCode, setCheckoutBusyCode] = useState<LLMUpgradeCheckoutCode | null>(null);
-  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
-  const [namePromptRecord, setNamePromptRecord] = useState<SessionResumeRecord | null>(null);
-  const [namePromptValue, setNamePromptValue] = useState("");
-  const [namePromptSaving, setNamePromptSaving] = useState(false);
+  // BYOK key (from sessionStorage) — when present, Phase 3 routes through
+  // the user's own LLM and the platform tier picker is irrelevant.
+  const [byokEntry, setByokEntry] = useState<ReturnType<typeof getStoredKey>>(null);
+  useEffect(() => {
+    setByokEntry(getStoredKey());
+    function onStorage() { setByokEntry(getStoredKey()); }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const { data: authSession } = useSession();
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
   const tailoredBackupRef = useRef<TailoredResumeOutput | null>(null);
 
-  const { data: authSession } = useSession();
   const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
 
   useEffect(() => {
     activeStepRef.current = step;
   }, [step]);
-
-  // Keep React step in sync with browser back/forward (?step= in URL).
-  useEffect(() => {
-    const raw = searchParams.get("step");
-    if (!raw || !STEPS.includes(raw as Step)) return;
-    const urlStep = raw as Step;
-    if (urlStep !== step) setStep(urlStep);
-  }, [searchParams, step]);
-
-  // Remember tailoring location so re-auth returns here (not dashboard).
-  useEffect(() => {
-    saveAuthReturnUrl(`/session/${sessionId}?step=${step}`);
-  }, [sessionId, step]);
 
   useEffect(() => {
     phase4RecalcRef.current = phase4RecalcActive;
@@ -137,12 +125,6 @@ function SessionContent() {
       tailoredBackupRef.current = tailored;
     }
   }, [tailored]);
-
-  useEffect(() => {
-    if (runErrorType?.startsWith("llm_")) {
-      setAiSettingsOpen(true);
-    }
-  }, [runErrorType]);
 
   const recordAtsScore = useCallback((qaOut: QAOutput) => {
     if (typeof qaOut.ats_score === "number") {
@@ -187,16 +169,10 @@ function SessionContent() {
     applyCached("keywords", "1");
     applyCached("audit", "2");
     applyCached("rewrite", "3");
-    // Only restore QA if phase 4 is not stale relative to phase 3 edits.
-    // If stale["4"] is set it means the tailored resume was edited after the
-    // last QA run — showing the old result would give a false pass/fail.
-    const phase4Stale = !!(s.stale?.["4"]);
-    if (!phase4Stale) {
-      applyCached("export", "4");
-    }
+    applyCached("export", "4");
 
     const phase4 = s.phases?.["4"];
-    if (!phase4Stale && phase4?.status === "done" && phase4.output) {
+    if (phase4?.status === "done" && phase4.output) {
       const out = phase4.output as QAOutput;
       if (typeof out.ats_score === "number") {
         setAtsScoreHistory([out.ats_score]);
@@ -213,7 +189,8 @@ function SessionContent() {
 
   const goTo = (s: Step) => {
     setStep(s);
-    router.push(`/session/${sessionId}?step=${s}`, { scroll: false });
+    // scroll: false prevents Next.js from jumping to top on soft navigation
+    router.replace(`/session/${sessionId}?step=${s}`, { scroll: false });
   };
 
   const runPhase = useCallback(
@@ -265,29 +242,6 @@ function SessionContent() {
     [sessionId, connect, reset, llmTier]
   );
 
-  function buildIssuePrefill(issue: import("@/lib/api").BlockingIssue): string {
-    return `Fix this issue in my resume:\n[${issue.category}] ${issue.description}\nSuggestion: ${issue.suggestion}`;
-  }
-
-  function startIssueQueue(issues: import("@/lib/api").BlockingIssue[]) {
-    if (!issues.length) return;
-    setIssueQueue(issues);
-    setIssueQueueIdx(0);
-    setChatPrefill(buildIssuePrefill(issues[0]!));
-    setSidebarTab("chat");
-    goTo("rewrite");
-  }
-
-  function advanceIssueQueue(idx: number) {
-    const next = idx + 1;
-    setIssueQueueIdx(next);
-    if (next < issueQueue.length) {
-      setChatPrefill(buildIssuePrefill(issueQueue[next]!));
-    } else {
-      setIssueQueue([]);
-    }
-  }
-
   const recalculateAts = useCallback(async () => {
     if (runInFlightRef.current) return;
     setPhase4RecalcActive(true);
@@ -335,22 +289,6 @@ function SessionContent() {
       applyPhaseOutput(outputStep, lastEvent.output);
       if (lastEvent.phase === 3) {
         setStale((prev) => ({ ...prev, "3": null, "4": null }));
-        if (authSession?.backendAccessToken) {
-          void (async () => {
-            try {
-              const record = await getSessionResumeRecord(sessionId);
-              if (
-                record.tailoring_stage === "polished" &&
-                !record.display_name?.trim()
-              ) {
-                setNamePromptRecord(record);
-                setNamePromptValue(record.jd_title);
-              }
-            } catch {
-              // Anonymous or record not synced yet.
-            }
-          })();
-        }
       }
       if (lastEvent.phase === 4) {
         setStale((prev) => ({ ...prev, "4": null }));
@@ -366,7 +304,7 @@ function SessionContent() {
       setRunErrorType(lastEvent.error_type ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
-  }, [lastEvent, applyPhaseOutput, authSession?.backendAccessToken, sessionId]);
+  }, [lastEvent, applyPhaseOutput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -411,7 +349,7 @@ function SessionContent() {
     } catch {
       setLlmStatus(null);
     }
-  }, [authSession?.backendAccessToken, authSession?.error]);
+  }, [authSession?.backendAccessToken]);
 
   useEffect(() => {
     void refreshLLMStatus();
@@ -488,19 +426,6 @@ function SessionContent() {
     export: !!qa,
   };
 
-  const handleSaveResumeName = useCallback(async () => {
-    if (!namePromptRecord || !authSession?.backendAccessToken) return;
-    setNamePromptSaving(true);
-    try {
-      await patchResume(authSession.backendAccessToken, namePromptRecord.id, {
-        display_name: namePromptValue.trim() || null,
-      });
-      setNamePromptRecord(null);
-    } finally {
-      setNamePromptSaving(false);
-    }
-  }, [authSession?.backendAccessToken, namePromptRecord, namePromptValue]);
-
   const tabsUnlocked = phase1Complete;
   const isStreaming = phaseRunning || (isConnected && !isDone);
   const showProgress = phaseRunning;
@@ -521,38 +446,6 @@ function SessionContent() {
         <div className="bg-amber-400/10 border-b border-amber-400/30 px-6 py-2 text-center text-amber-400 text-sm">
           <AlertCircle className="w-4 h-4 inline mr-1.5 -mt-0.5" />
           Your session expires in 4 hours. Download your resume before it&apos;s gone.
-        </div>
-      )}
-
-      {namePromptRecord && authSession?.backendAccessToken && (
-        <div className="bg-emerald-400/10 border-b border-emerald-400/30 px-6 py-3">
-          <p className="text-sm text-emerald-200 mb-2">
-            Name this resume for your dashboard (you can change it later):
-          </p>
-          <div className="flex flex-wrap items-center gap-2 max-w-xl">
-            <input
-              type="text"
-              value={namePromptValue}
-              onChange={(e) => setNamePromptValue(e.target.value)}
-              className="flex-1 min-w-[12rem] bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100"
-              placeholder="e.g. Acme — Staff Engineer"
-            />
-            <button
-              type="button"
-              disabled={namePromptSaving}
-              onClick={() => void handleSaveResumeName()}
-              className="text-sm font-medium bg-emerald-500 text-slate-900 px-3 py-2 rounded-lg disabled:opacity-50"
-            >
-              Save name
-            </button>
-            <button
-              type="button"
-              onClick={() => setNamePromptRecord(null)}
-              className="text-sm text-slate-400 hover:text-slate-200 px-2 py-2"
-            >
-              Skip
-            </button>
-          </div>
         </div>
       )}
 
@@ -585,23 +478,9 @@ function SessionContent() {
           })}
         </div>
 
-        <p className="text-xs text-slate-500 mb-4">
-          Click any step above to jump back — your progress is saved.
-        </p>
-
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
-          <SessionAiControls
-            llmTier={llmTier}
-            llmStatus={llmStatus}
-            phaseRunning={phaseRunning}
-            showTierSelector={Boolean(authSession?.backendAccessToken)}
-            defaultOpen={aiSettingsOpen}
-            onLlmTierChange={setLlmTier}
-            onRequestPurchase={handleRequestPurchase}
-          />
-
           {runError && (
-            <div className="flex flex-col sm:flex-row sm:items-start gap-2 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
+            <div className="flex items-start gap-2 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
               <div className="flex-1 min-w-0">
                 {runErrorType?.startsWith("llm_") && (
@@ -610,45 +489,28 @@ function SessionContent() {
                   </span>
                 )}
                 <span className="text-red-300">{runError}</span>
-                {runErrorType?.startsWith("llm_") && (
-                  <p className="text-xs text-slate-400 mt-2">
-                    Switch to Platform AI or update your API key below, then retry — no need to start a new session.
-                  </p>
-                )}
               </div>
-              <div className="flex flex-wrap gap-3 sm:ml-auto shrink-0">
-                {runErrorType?.startsWith("llm_") && (
-                  <button
-                    type="button"
-                    onClick={() => setAiSettingsOpen(true)}
-                    className="text-amber-400 hover:text-amber-300 text-xs font-semibold"
-                  >
-                    Change AI settings
-                  </button>
-                )}
-                {runErrorCode === "master_resume_required" ? (
-                  <Link
-                    href="/profile"
-                    className="whitespace-nowrap underline hover:no-underline text-red-400"
-                    onClick={() => setRunError(null)}
-                  >
-                    Upload master resume →
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRunError(null);
-                      setRunErrorCode(null);
-                      setRunErrorType(null);
-                      runCurrentPhase({ force: true });
-                    }}
-                    className="underline hover:no-underline text-red-400"
-                  >
-                    Retry
-                  </button>
-                )}
-              </div>
+              {runErrorCode === "master_resume_required" ? (
+                <Link
+                  href="/profile"
+                  className="ml-auto whitespace-nowrap underline hover:no-underline text-red-400"
+                  onClick={() => setRunError(null)}
+                >
+                  Upload master resume →
+                </Link>
+              ) : (
+                <button
+                  onClick={() => {
+                    setRunError(null);
+                    setRunErrorCode(null);
+                    setRunErrorType(null);
+                    runCurrentPhase({ force: true });
+                  }}
+                  className="ml-auto underline hover:no-underline text-red-400"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
@@ -791,6 +653,26 @@ function SessionContent() {
                   </div>
                 )}
               </div>
+              {byokEntry?.apiKey ? (
+                <div className="mb-4 px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/40 text-xs text-slate-300 flex items-center gap-3">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold text-[10px] uppercase tracking-wide">
+                    BYOK
+                  </span>
+                  <span>
+                    Using your <span className="text-slate-100 font-medium">{byokEntry.provider}</span> key
+                    {byokEntry.model ? <> · <span className="text-slate-100 font-medium">{byokEntry.model}</span></> : null}.
+                    Platform tier upgrades are not applied when you supply your own key.
+                  </span>
+                </div>
+              ) : (
+                <LLMTierSelector
+                  value={llmTier}
+                  status={llmStatus}
+                  disabled={phaseRunning}
+                  onChange={setLlmTier}
+                  onRequestPurchase={handleRequestPurchase}
+                />
+              )}
               {!tailored && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
@@ -814,7 +696,6 @@ function SessionContent() {
                 <div className="flex-1 min-w-0">
                   <ResumeDiff
                     tailored={tailored}
-                    editorRevision={resumeVersion}
                     streaming={isStreaming && !showProgress}
                     costInfo={costInfo}
                     sessionId={sessionId}
@@ -890,29 +771,11 @@ function SessionContent() {
                         tailored={tailored}
                         prefillMessage={chatPrefill}
                         onClearPrefill={() => setChatPrefill(null)}
-                        queueBanner={
-                          issueQueue.length > 0 && issueQueueIdx < issueQueue.length
-                            ? {
-                                issue: issueQueue[issueQueueIdx]!,
-                                current: issueQueueIdx + 1,
-                                total: issueQueue.length,
-                                onSkip: () => advanceIssueQueue(issueQueueIdx),
-                              }
-                            : null
-                        }
                         onApplyPatch={async (_patch, updatedTailored) => {
                           setTailored(updatedTailored);
-                          setResumeVersion((v) => v + 1);
                           setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-                          // Advance queue — next issue prefill is set inside advanceIssueQueue.
-                          if (issueQueue.length > 0) {
-                            advanceIssueQueue(issueQueueIdx);
-                          }
                           try {
                             await saveTailoredResume(sessionId, updatedTailored);
-                            // Always clear the previous QA result after a patch — it was run against
-                            // the old resume and showing it would give a false pass/fail on the export step.
-                            setQa(null);
                           } catch {
                             // Local state is already updated; patch will persist on next manual save.
                           }
@@ -961,7 +824,11 @@ function SessionContent() {
                     setAppliedSuggestion(text);
                     goTo("rewrite");
                   }}
-                  onStartQueue={startIssueQueue}
+                  onSendToChat={(msg) => {
+                    setChatPrefill(msg);
+                    setSidebarTab("chat");
+                    goTo("rewrite");
+                  }}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

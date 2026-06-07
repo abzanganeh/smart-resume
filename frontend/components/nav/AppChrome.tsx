@@ -4,19 +4,16 @@ import { usePathname } from "next/navigation"
 import { NavBar } from "@/components/nav/NavBar"
 import { SiteFooter } from "@/components/nav/SiteFooter"
 
-/** Hides chrome on /admin/* and /auth (auth has its own centered brand). */
+/** Hides the public site chrome on /admin/* (separate admin auth + layout). */
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isAdminRoute = pathname?.startsWith("/admin") ?? false
-  const isAuthRoute = pathname === "/auth"
-
-  const showPublicChrome = !isAdminRoute && !isAuthRoute
 
   return (
     <>
-      {showPublicChrome && <NavBar />}
+      {!isAdminRoute && <NavBar />}
       <div className="flex-1">{children}</div>
-      {showPublicChrome && <SiteFooter />}
+      {!isAdminRoute && <SiteFooter />}
     </>
   )
 }

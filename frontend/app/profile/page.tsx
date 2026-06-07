@@ -1,12 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, Suspense, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowRight, Loader2, RefreshCw, UserCircle, XCircle } from "lucide-react"
+import { Loader2, RefreshCw, UserCircle, XCircle } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
-import { patchOnboarding } from "@/lib/auth/api"
-import { needsOnboarding, postOnboardingDestination } from "@/lib/auth/onboarding"
 import { ChunkCard } from "@/components/profile/ChunkCard"
 import { ProfileUploadZone } from "@/components/profile/ProfileUploadZone"
 import { TailoredUsagePanel } from "@/components/profile/TailoredUsagePanel"
@@ -37,13 +35,11 @@ function formatTimestamp(iso: string | null): string {
 
 function ProfilePageContent() {
   const { session, status } = useRequireAuth("/profile")
-  const { data: clientSession, update: updateSession } = useSession()
+  const { data: clientSession } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isContinuing, startContinueTransition] = useTransition()
 
   const returnUrl = searchParams.get("return")
-  const fromOnboarding = searchParams.get("from") === "onboarding"
   const defaultStory = searchParams.get("mode") === "story"
 
   const token = clientSession?.backendAccessToken ?? session?.backendAccessToken
@@ -90,34 +86,6 @@ function ProfilePageContent() {
   const liveCount = liveChunkCount(chunks)
   const showReembed =
     editedChunkIds.size >= REEMBED_THRESHOLD && Boolean(profile?.raw_text)
-  const onboardingIncomplete = needsOnboarding(session?.backendUser)
-  const showContinue =
-    liveCount > 0 && (fromOnboarding || Boolean(returnUrl) || onboardingIncomplete)
-
-  function handleContinue() {
-    if (!token) return
-    startContinueTransition(async () => {
-      try {
-        if (onboardingIncomplete) {
-          const choice = session?.backendUser?.onboarding_ai_choice ?? "platform"
-          const user = await patchOnboarding(token, {
-            ai_choice: choice === "byok" ? "byok" : "platform",
-            complete: true,
-          })
-          await updateSession({ backendUser: user })
-          router.push(postOnboardingDestination(user))
-          return
-        }
-        if (returnUrl) {
-          router.push(returnUrl)
-          return
-        }
-        router.push("/session/new")
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not continue")
-      }
-    })
-  }
 
   async function handleUpload(payload: { file?: File; text?: string }) {
     if (!token) return
@@ -251,29 +219,7 @@ function ProfilePageContent() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {showContinue && (
-                    <button
-                      type="button"
-                      onClick={handleContinue}
-                      disabled={isContinuing || uploading || reembedding}
-                      className="inline-flex items-center justify-center gap-2 bg-amber-400 text-slate-900 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-amber-300 transition-colors disabled:opacity-60"
-                    >
-                      {isContinuing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Continuing…
-                        </>
-                      ) : (
-                        <>
-                          {onboardingIncomplete ? "Finish setup" : "Continue"}
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {showReembed && (
+                {showReembed && (
                   <button
                     type="button"
                     onClick={() => void handleReembedAll()}
@@ -291,15 +237,8 @@ function ProfilePageContent() {
                     )}
                     Re-embed all
                   </button>
-                  )}
-                </div>
+                )}
               </div>
-
-              {showContinue && onboardingIncomplete && (
-                <p className="text-sm text-slate-500">
-                  Your master resume is indexed. Finish setup to open your dashboard and start tailoring.
-                </p>
-              )}
 
               {orderedSections.map((sectionKey) => {
                 const sectionChunks = grouped.get(sectionKey) ?? []
