@@ -13,6 +13,8 @@ from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
+from app.services.company_intel import get_company_intel
+from app.services.dashboard.resume_record import extract_jd_metadata
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
     PromptBudgetExceededError,
@@ -27,6 +29,12 @@ log = structlog.get_logger()
 
 _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text()
 _PHASE3 = (Path(__file__).parent / "prompts" / "phase3.txt").read_text()
+
+_COMPANY_INTEL_INSTRUCTION = (
+    "\n\nCOMPANY INTELLIGENCE — use these signals to align the summary and bullet "
+    "phrasing with the employer's stated values where it is authentic.  Never "
+    "fabricate alignment that is not supported by the candidate's actual experience."
+)
 
 
 # Snippet appended to the system prompt when retrieval has produced
@@ -197,6 +205,52 @@ async def _run_retrieval(
             await db.rollback()
 
 
+async def _ensure_company_intel(session: Session) -> None:
+    """Load company intel when the Phase 1 background task has not finished yet.
+
+    Mutates ``session.company_intel`` in place and persists the result to the
+    session store so subsequent Phase 3 re-runs skip the DB round-trip.
+    """
+    if session.company_intel is not None and not session.company_intel.is_empty():
+        return
+
+    jd_text = session.jd_raw or ""
+    if not jd_text.strip():
+        return
+
+    _, company_name = extract_jd_metadata(session)
+    if not company_name or company_name == "Unknown":
+        return
+
+    try:
+        async with async_session_factory() as db:
+            intel = await get_company_intel(
+                db,
+                company_name=company_name,
+                jd_text=jd_text,
+            )
+    except Exception as exc:
+        log.warning("phase3_company_intel_fetch_failed", error=str(exc))
+        return
+
+    if intel is None or intel.is_empty():
+        return
+
+    session.company_intel = intel
+    log.info(
+        "phase3_company_intel_loaded",
+        company=company_name,
+        source=intel.source,
+    )
+
+    # Persist so subsequent Phase 3 re-runs skip this synchronous fetch.
+    try:
+        from app.services import session_store as _store
+        await _store.update_session(session)
+    except Exception as exc:
+        log.warning("phase3_company_intel_persist_failed", error=str(exc))
+
+
 async def run(
     session: Session,
     llm: LLMClient,
@@ -217,6 +271,8 @@ async def run(
         raise RuntimeError("Phases 1 and 2 must complete before Phase 3.")
     if scoped and not session.phase3_output:
         raise RuntimeError("Phase 3 must complete before a scoped regeneration.")
+
+    await _ensure_company_intel(session)
 
     if scoped and scope is not None:
         scope = await _resolve_chunk_content(scope, session.user_id)
@@ -260,6 +316,8 @@ async def run(
     estimated_input = (len(resume_text) + len(jd_text)) // 3
     if retrieval_result is not None:
         estimated_input += retrieval_result.total_tokens
+    if session.company_intel and not session.company_intel.is_empty():
+        estimated_input += len(session.company_intel.render_for_prompt()) // 3
     estimated_output = 2000
     cost = estimate_cost(estimated_input, estimated_output, llm.provider_name, llm.model_name)
     await event_queue.put({
@@ -299,8 +357,7 @@ async def run(
             f"corrected versions as the basis and polish them with JD keywords):\n{fixes_block}\n"
         )
 
-    # Compose the system prompt — append the retrieval instructions when
-    # we have chunks to pin the LLM against.
+    # Compose the system prompt — append extension blocks in priority order.
     system_content = _SYSTEM_BASE + "\n\n" + _PHASE3
     if scoped:
         system_content += _SCOPED_INSTRUCTION
@@ -312,10 +369,27 @@ async def run(
             f"{retrieval_result.render_for_prompt()}\n"
         )
 
+    # Company intelligence block — prepended to user_content so the LLM
+    # sees it before the JD.  Only injected when intel was successfully
+    # fetched and contains at least one signal field.
+    company_intel_block = ""
+    if session.company_intel and not session.company_intel.is_empty():
+        system_content += _COMPANY_INTEL_INSTRUCTION
+        company_intel_block = (
+            "COMPANY INTELLIGENCE:\n"
+            f"{session.company_intel.render_for_prompt()}\n\n"
+        )
+        log.info(
+            "phase3_company_intel_injected",
+            company=session.company_intel.company_name,
+            source=session.company_intel.source,
+        )
+
     user_content = (
         f"CAREER STAGE: {career_stage}\n"
         f"TARGET ROLE: {target_role}\n"
         f"CAREER TRANSITION: {is_career_transition}\n"
+        f"{company_intel_block}"
         f"{additions_section}"
         f"{chunks_prompt_block}\n"
         f"JOB DESCRIPTION:\n{jd_text}\n\n"

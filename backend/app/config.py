@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Always load backend/.env regardless of the shell's current working directory.
@@ -48,6 +48,16 @@ class Settings(BaseSettings):
 
     # Flint cross-product handoff (Strategy B Phase 1)
     FLINT_HANDOFF_TTL_SECONDS: int = 600
+
+    # Company intelligence cache TTL in days.  Profiles older than this are
+    # re-extracted on the next Phase 1 completion for that company.
+    COMPANY_INTEL_CACHE_DAYS: int = 30
+
+    # Strategy B Phase 2 — Extension auth
+    # Disabled by default; enable after extension is released to avoid
+    # exposing a cookie-less refresh endpoint unnecessarily.
+    EXTENSION_AUTH_ENABLED: bool = True
+    JD_TEXT_MAX_CHARS: int = 20_000
 
     # Security
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
@@ -195,6 +205,16 @@ class Settings(BaseSettings):
                 f"Allowed values: {sorted(_ALLOWED_APP_ENVS)}"
             )
         return v
+
+    @model_validator(mode="after")
+    def _apply_environment_defaults(self) -> "Settings":
+        # Local/dev: 24-hour access tokens (production keeps 15-minute cap).
+        if (
+            self.APP_ENV in {"local", "development"}
+            and self.ACCESS_TOKEN_TTL_SECONDS == 15 * 60
+        ):
+            object.__setattr__(self, "ACCESS_TOKEN_TTL_SECONDS", 24 * 3600)
+        return self
 
 
 settings = Settings()

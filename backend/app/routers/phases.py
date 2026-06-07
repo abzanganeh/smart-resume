@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
+from app.config import settings
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
@@ -37,6 +38,7 @@ from app.services.billing.quota import (
 )
 from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
+from app.services.llm_session_config import apply_llm_request_headers
 from app.services.session_store import get_session, reset_phase, update_session
 
 MAX_PHASE3_VERSIONS = 20
@@ -141,6 +143,7 @@ async def trigger_phase(
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
+    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
@@ -218,14 +221,14 @@ async def trigger_phase(
                         detail={"code": "insufficient_credits", "action": "ats_recalc"},
                     ) from exc
 
-    if x_provider and session.provider != x_provider:
-        session.provider = x_provider
-        await update_session(session)
-    if x_model and session.model != x_model:
-        session.model = x_model
-        await update_session(session)
-    if x_api_key:
-        session.byok_api_key = x_api_key
+    apply_llm_request_headers(
+        session,
+        x_use_platform=x_use_platform,
+        x_api_key=x_api_key,
+        x_provider=x_provider,
+        x_model=x_model,
+    )
+    await update_session(session)
 
     if body.force:
         await reset_phase(session_id, phase)
@@ -373,6 +376,60 @@ async def post_audit_output(session_id: str, body: AuditPatchRequest):
     return await _apply_audit_patch(session_id, body)
 
 
+def _maybe_embed_edited_bullet(session: "Session", body: dict) -> None:  # type: ignore[name-defined]
+    """Fire-and-forget: embed an accepted experience bullet into the corpus.
+
+    Only embeds when the edit targets a single named experience bullet
+    and the session has an authenticated user.  Skips silently on any
+    missing context so the response is never blocked.
+    """
+    if not settings.DATABASE_URL.strip():
+        return
+
+    user_id_str = getattr(session, "user_id", None)
+    if not user_id_str:
+        return
+
+    section = body.get("section") or (
+        # section_id path: e.g. "experience:Acme Corp"
+        body.get("section_id", "").split(":")[0]
+        if "section_id" in body
+        else ""
+    )
+    if section != "experience":
+        return
+
+    new_text = (body.get("new_text") or body.get("content") or "").strip()
+    if not new_text:
+        return
+
+    company = body.get("company") or (
+        body.get("section_id", "").split(":", 1)[1]
+        if ":" in body.get("section_id", "")
+        else None
+    )
+    bullet_index = body.get("bullet_index")
+
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return
+
+    from app.services.corpus_writer import embed_bullet_fix
+
+    asyncio.create_task(
+        embed_bullet_fix(
+            user_id=user_id,
+            session_id=session.session_id,
+            bullet_text=new_text,
+            company=company,
+            bullet_index=bullet_index,
+            section_type="experience",
+        ),
+        name=f"corpus_bullet:{session.session_id}",
+    )
+
+
 @router.patch("/{session_id}/resume/tailored")
 async def patch_tailored_resume(session_id: str, body: dict):
     """Save inline edits; supports legacy field patches and section_id updates."""
@@ -483,6 +540,11 @@ async def patch_tailored_resume(session_id: str, body: dict):
     session.stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
+
+    # Embed the edited bullet into the corpus so future sessions can
+    # retrieve it.  Only experience bullets carry enough signal — summary
+    # and skills are too session-specific to be useful in cross-session RAG.
+    _maybe_embed_edited_bullet(session, body)
 
     return {
         "version": version.version,
