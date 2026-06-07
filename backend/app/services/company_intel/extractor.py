@@ -22,8 +22,9 @@ from pathlib import Path
 
 import structlog
 
+from typing import Any
+
 from app.llm.base import LLMClient, LLMMessage
-from app.llm.factory import has_platform_extraction_key
 from app.llm.pricing import estimate_cost, format_cost
 from app.models.company_profile import CompanyIntelOutput
 
@@ -40,6 +41,17 @@ _FALLBACK_MODEL = "gpt-4o-mini"
 
 # JSON field names expected in the LLM response.
 _EXPECTED_KEYS = frozenset({"mission", "values", "culture_notes"})
+
+# Prevents a crafted company name (from the user-supplied JD) from injecting
+# fake instructions into the extraction prompt.
+_COMPANY_NAME_MAX_CHARS = 200
+
+
+def _sanitize_company_name(name: str) -> str:
+    """Return a single-line, length-capped company name safe for prompt injection."""
+    # Take only the first line to strip any embedded newlines.
+    single_line = name.splitlines()[0] if name.strip() else name
+    return single_line.strip()[:_COMPANY_NAME_MAX_CHARS]
 
 
 def _get_extraction_client() -> LLMClient | None:
@@ -62,7 +74,7 @@ def _get_extraction_client() -> LLMClient | None:
     return None
 
 
-def _parse_json_from_response(raw: str) -> dict | None:
+def _parse_json_from_response(raw: str) -> dict[str, Any] | None:
     """Extract the JSON object from the LLM response, tolerating prose wrappers."""
     # Try direct parse first.
     try:
@@ -108,8 +120,8 @@ async def extract_from_jd(
     if not (jd_text or "").strip():
         return None
 
-    llm = _get_extraction_client()
-    if llm is None:
+    from app.llm.factory import has_platform_extraction_key
+    if not has_platform_extraction_key():
         log.info(
             "company_intel_no_platform_key",
             company_name=company_name,
@@ -117,9 +129,14 @@ async def extract_from_jd(
         )
         return None
 
+    llm = _get_extraction_client()
+    if llm is None:
+        return None
+
+    safe_name = _sanitize_company_name(company_name)
     jd_truncated = jd_text[:_JD_CHAR_LIMIT]
     user_content = (
-        f"COMPANY NAME: {company_name}\n\n"
+        f"COMPANY NAME: {safe_name}\n\n"
         f"JOB DESCRIPTION:\n{jd_truncated}"
     )
 

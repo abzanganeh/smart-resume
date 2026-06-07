@@ -46,8 +46,10 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.UniqueConstraint("company_key", name="uq_company_profiles_key"),
     )
+    # A unique index serves both uniqueness enforcement and fast lookups.
+    # Do NOT add a UniqueConstraint on the same column — Postgres would create
+    # two separate unique indexes, wasting space and breaking the downgrade path.
     op.create_index(
         "ix_company_profiles_company_key",
         "company_profiles",
