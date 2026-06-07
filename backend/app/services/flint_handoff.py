@@ -93,7 +93,7 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
 
     resume_summary = render_txt(session)[:_RESUME_SUMMARY_MAX]
 
-    return {
+    payload: dict[str, Any] = {
         "session_name": _derive_session_name(session),
         "session_type": "interview",
         "domain": _derive_domain(session),
@@ -104,6 +104,17 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
         "user_id": session.user_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Include company intel when available so Flint can surface employer values
+    # in {interviewer_priorities} during live sessions.
+    if session.company_intel and not session.company_intel.is_empty():
+        payload["company_intel"] = {
+            "mission": session.company_intel.mission,
+            "values": session.company_intel.values,
+            "culture_notes": session.company_intel.culture_notes,
+        }
+
+    return payload
 
 
 async def create_handoff_token(session: Session) -> tuple[str, int]:
