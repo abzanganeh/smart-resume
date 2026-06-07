@@ -218,6 +218,32 @@ class RetrievalResult:
 # threshold filter and for the deterministic ordering.  The ``id``
 # tie-breaker is appended so two chunks created at the same instant
 # still sort identically across processes.
+
+# Query for the extended user corpus (tailored_resume, bullet_fix, user_note,
+# claimed_keyword sources).  Returns top-N by cosine similarity.  The
+# ``corpus_source`` column is surfaced as ``section`` so it slots into the
+# same _Candidate dataclass without schema changes.
+_CORPUS_QUERY = text(
+    """
+    SELECT
+        id,
+        corpus_source::text AS section,
+        1 - (embedding <=> CAST(:jd AS vector)) AS score,
+        token_count,
+        content,
+        created_at,
+        metadata
+    FROM user_corpus_chunks
+    WHERE user_id = :user_id
+      AND deleted_at IS NULL
+      AND embedding IS NOT NULL
+    ORDER BY score DESC, created_at ASC, id ASC
+    LIMIT :limit
+    """
+).bindparams(
+    bindparam("user_id", type_=PG_UUID(as_uuid=True)),
+)
+
 _PER_SECTION_QUERY = text(
     """
     SELECT
@@ -274,6 +300,59 @@ async def _query_section(
         # Clamp the score into [-1, 1].  pgvector occasionally yields
         # values like 1.0000000000000002 due to fp drift — clamp so
         # downstream JSON consumers don't choke on them.
+        raw_score = float(r["score"])
+        score = max(-1.0, min(1.0, raw_score))
+        out.append(
+            _Candidate(
+                chunk_id=r["id"],
+                section=r["section"],
+                score=score,
+                tokens=int(r["token_count"]),
+                content=str(r["content"]),
+                created_at_iso=r["created_at"].isoformat() if r["created_at"] else "",
+                metadata=dict(r["metadata"] or {}),
+            )
+        )
+    return out
+
+
+async def _query_user_corpus(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    jd_vector: Sequence[float],
+    limit: int,
+) -> list[_Candidate]:
+    """Run the ANN query against ``user_corpus_chunks`` and return candidates.
+
+    Returns at most ``limit`` rows ordered by cosine similarity descending.
+    Returns an empty list if the ``user_corpus_chunks`` table does not exist
+    (e.g., before migration 0018 has been applied).
+    """
+    if limit <= 0:
+        return []
+    try:
+        rows = (
+            await db.execute(
+                _CORPUS_QUERY,
+                {
+                    "user_id": user_id,
+                    "jd": _vector_literal(jd_vector),
+                    "limit": limit,
+                },
+            )
+        ).mappings().all()
+    except Exception as exc:
+        # Degrade gracefully if the table does not exist yet.
+        log.warning(
+            "retrieval.corpus_query_failed",
+            user_id=str(user_id),
+            error=str(exc),
+        )
+        return []
+
+    out: list[_Candidate] = []
+    for r in rows:
         raw_score = float(r["score"])
         score = max(-1.0, min(1.0, raw_score))
         out.append(
@@ -600,6 +679,35 @@ async def retrieve_for_jd(
         if fallback_used:
             fallback_sections.append(section)
 
+    # 4b) Augment with user corpus chunks (accepted bullet fixes, tailored
+    # resume history, notes, claimed keywords).  Capped at 4 chunks and
+    # subject to the same token budget as master resume chunks.
+    _CORPUS_CAP = 4
+    corpus_candidates = await _query_user_corpus(
+        db,
+        user_id=user_id,
+        jd_vector=jd_vector,
+        limit=_CORPUS_CAP * 2,  # fetch extras so threshold filtering has room
+    )
+    corpus_kept: list[_Candidate] = [
+        c for c in corpus_candidates if c.score >= runtime.primary_threshold
+    ][:_CORPUS_CAP]
+    for c in corpus_candidates:
+        if c not in corpus_kept:
+            all_skipped.append(
+                SkippedChunk(
+                    chunk_id=str(c.chunk_id),
+                    section=c.section,
+                    score=c.score,
+                    reason="below_threshold",
+                    content=c.content,
+                )
+            )
+    if corpus_kept:
+        # Merge into selected_by_section under their corpus_source label.
+        for c in corpus_kept:
+            selected_by_section.setdefault(c.section, []).append(c)
+
     # 5) Enforce the global token budget.
     selected_by_section, budget_skipped = _enforce_token_budget(
         selected_by_section, budget=runtime.token_budget
@@ -637,6 +745,7 @@ async def retrieve_for_jd(
             "total_tokens": sum(s.tokens for s in selected),
             "embedding_model": runtime.embedding_model,
             "token_budget": runtime.token_budget,
+            "corpus_chunks_added": len(corpus_kept),
         },
     )
 
