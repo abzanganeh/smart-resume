@@ -187,6 +187,12 @@ async def create_jd_handoff_token(
 
     Resume summary is intentionally empty — Flint will use the user's
     locally-stored profile instead.
+
+    TODO: company_intel is not included here. The company profile may exist in
+    the DB (extracted when the JD was saved) but fetching it would require a DB
+    lookup on the hot token-creation path. Revisit when the extension flow
+    accounts for >20% of handoffs — pass `company_intel` as an optional param
+    from the job_descriptions router.
     """
     payload: dict[str, Any] = {
         "session_name": f"{company} — {title}".strip(" —") if (company or title) else "New Interview",

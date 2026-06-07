@@ -63,6 +63,27 @@ async def test_create_and_redeem_handoff_token() -> None:
 
 
 @pytest.mark.asyncio
+async def test_company_intel_survives_redis_round_trip() -> None:
+    session = _session_with_outputs()
+    session.company_intel = CompanyIntelOutput(
+        company_name="Acme Corp",
+        mission="Build software that matters",
+        values=["Bias for Action", "Customer Obsession"],
+        culture_notes="Fast-paced, high-ownership",
+    )
+    await update_session(session)
+
+    token, _ = await flint_handoff.create_handoff_token(session)
+    payload = await flint_handoff.redeem_handoff_token(token, client_ip="127.0.0.1")
+
+    assert "company_intel" in payload
+    ci = payload["company_intel"]
+    assert ci["mission"] == "Build software that matters"
+    assert ci["values"] == ["Bias for Action", "Customer Obsession"]
+    assert ci["culture_notes"] == "Fast-paced, high-ownership"
+
+
+@pytest.mark.asyncio
 async def test_handoff_requires_phase3() -> None:
     session = _session_with_outputs()
     session.phase3_output = None
