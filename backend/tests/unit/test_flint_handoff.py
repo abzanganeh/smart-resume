@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
+from app.models.company_profile import CompanyIntelOutput
 from app.models.keywords import KeywordExtractionOutput, RoleContext
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import Session
@@ -62,6 +63,27 @@ async def test_create_and_redeem_handoff_token() -> None:
 
 
 @pytest.mark.asyncio
+async def test_company_intel_survives_redis_round_trip() -> None:
+    session = _session_with_outputs()
+    session.company_intel = CompanyIntelOutput(
+        company_name="Acme Corp",
+        mission="Build software that matters",
+        values=["Bias for Action", "Customer Obsession"],
+        culture_notes="Fast-paced, high-ownership",
+    )
+    await update_session(session)
+
+    token, _ = await flint_handoff.create_handoff_token(session)
+    payload = await flint_handoff.redeem_handoff_token(token, client_ip="127.0.0.1")
+
+    assert "company_intel" in payload
+    ci = payload["company_intel"]
+    assert ci["mission"] == "Build software that matters"
+    assert ci["values"] == ["Bias for Action", "Customer Obsession"]
+    assert ci["culture_notes"] == "Fast-paced, high-ownership"
+
+
+@pytest.mark.asyncio
 async def test_handoff_requires_phase3() -> None:
     session = _session_with_outputs()
     session.phase3_output = None
@@ -88,6 +110,36 @@ async def test_handoff_requires_jd() -> None:
     with pytest.raises(HTTPException) as exc:
         flint_handoff.build_handoff_payload(session)
     assert exc.value.status_code == 422
+
+
+def test_handoff_includes_company_intel_when_present() -> None:
+    session = _session_with_outputs()
+    session.company_intel = CompanyIntelOutput(
+        company_name="Acme Corp",
+        mission="Build software that matters",
+        values=["Bias for Action", "Customer Obsession"],
+        culture_notes="Fast-paced, high-ownership",
+    )
+    payload = flint_handoff.build_handoff_payload(session)
+    assert "company_intel" in payload
+    ci = payload["company_intel"]
+    assert ci["mission"] == "Build software that matters"
+    assert ci["values"] == ["Bias for Action", "Customer Obsession"]
+    assert ci["culture_notes"] == "Fast-paced, high-ownership"
+
+
+def test_handoff_omits_company_intel_when_absent() -> None:
+    session = _session_with_outputs()
+    session.company_intel = None
+    payload = flint_handoff.build_handoff_payload(session)
+    assert "company_intel" not in payload
+
+
+def test_handoff_omits_company_intel_when_empty() -> None:
+    session = _session_with_outputs()
+    session.company_intel = CompanyIntelOutput(company_name="Acme Corp")  # mission/values/culture all empty
+    payload = flint_handoff.build_handoff_payload(session)
+    assert "company_intel" not in payload
 
 
 @pytest.mark.asyncio

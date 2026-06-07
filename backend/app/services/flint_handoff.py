@@ -93,7 +93,7 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
 
     resume_summary = render_txt(session)[:_RESUME_SUMMARY_MAX]
 
-    return {
+    payload: dict[str, Any] = {
         "session_name": _derive_session_name(session),
         "session_type": "interview",
         "domain": _derive_domain(session),
@@ -104,6 +104,17 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
         "user_id": session.user_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Include company intel when available so Flint can surface employer values
+    # in {interviewer_priorities} during live sessions.
+    if session.company_intel and not session.company_intel.is_empty():
+        payload["company_intel"] = {
+            "mission": session.company_intel.mission,
+            "values": session.company_intel.values,
+            "culture_notes": session.company_intel.culture_notes,
+        }
+
+    return payload
 
 
 async def create_handoff_token(session: Session) -> tuple[str, int]:
@@ -176,6 +187,12 @@ async def create_jd_handoff_token(
 
     Resume summary is intentionally empty — Flint will use the user's
     locally-stored profile instead.
+
+    TODO: company_intel is not included here. The company profile may exist in
+    the DB (extracted when the JD was saved) but fetching it would require a DB
+    lookup on the hot token-creation path. Revisit when the extension flow
+    accounts for >20% of handoffs — pass `company_intel` as an optional param
+    from the job_descriptions router.
     """
     payload: dict[str, Any] = {
         "session_name": f"{company} — {title}".strip(" —") if (company or title) else "New Interview",
