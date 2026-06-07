@@ -179,3 +179,23 @@ def test_is_stale_handles_naive_datetime(monkeypatch: pytest.MonkeyPatch) -> Non
     naive = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=31)
     assert naive.tzinfo is None
     assert _is_stale(naive)
+
+
+# ---------------------------------------------------------------------------
+# F1 regression: parse_failed log must not emit raw LLM output
+# ---------------------------------------------------------------------------
+
+
+def test_parse_failed_log_omits_raw_preview() -> None:
+    """The company_intel_parse_failed warning must not pass raw LLM output
+    as a keyword argument.  raw_preview=... was removed (F1 review finding)
+    because the LLM response could echo fragments of the user-supplied JD."""
+    import inspect
+
+    src = inspect.getsource(
+        __import__("app.services.company_intel.extractor", fromlist=["extract_from_jd"]).extract_from_jd
+    )
+    # Look for the kwarg form specifically (e.g. "raw_preview=").
+    assert "raw_preview=" not in src, (
+        "raw_preview= kwarg must not appear in extract_from_jd — it may echo JD content into logs"
+    )

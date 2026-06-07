@@ -80,6 +80,7 @@ async def upsert_cache(
     Uses Postgres ``ON CONFLICT DO UPDATE`` so concurrent upserts on the
     same key are safe.
     """
+    now = datetime.now(timezone.utc)
     stmt = (
         pg_insert(CompanyProfile)
         .values(
@@ -88,7 +89,7 @@ async def upsert_cache(
             mission=intel.mission,
             values=intel.values,
             culture_notes=intel.culture_notes,
-            cached_at=datetime.now(timezone.utc),
+            cached_at=now,
         )
         .on_conflict_do_update(
             index_elements=["company_key"],
@@ -97,7 +98,7 @@ async def upsert_cache(
                 "mission": intel.mission,
                 "values": intel.values,
                 "culture_notes": intel.culture_notes,
-                "cached_at": datetime.now(timezone.utc),
+                "cached_at": now,
             },
         )
     )

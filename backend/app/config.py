@@ -54,8 +54,8 @@ class Settings(BaseSettings):
     COMPANY_INTEL_CACHE_DAYS: int = 30
 
     # Strategy B Phase 2 — Extension auth
-    # Disabled by default; enable after extension is released to avoid
-    # exposing a cookie-less refresh endpoint unnecessarily.
+    # Enabled for Phase 2 rollout.  Set to False in production environments
+    # where the extension has not yet been released.
     EXTENSION_AUTH_ENABLED: bool = True
     JD_TEXT_MAX_CHARS: int = 20_000
 
