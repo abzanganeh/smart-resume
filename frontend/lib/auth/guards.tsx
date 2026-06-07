@@ -5,15 +5,8 @@
  */
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, ComponentType } from "react"
+import { useEffect, ComponentType } from "react"
 import { isOnboardingExempt, needsOnboarding } from "@/lib/auth/onboarding"
-import { refreshBackendSession, isRefreshRateLimited } from "@/lib/auth/refreshBackendSession"
-import { saveAuthReturnUrl } from "@/lib/auth/returnUrl"
-
-function currentPath(): string {
-  if (typeof window === "undefined") return "/"
-  return `${window.location.pathname}${window.location.search}`
-}
 
 /**
  * Redirects to /auth when the user is not signed in OR when their backend
@@ -21,32 +14,22 @@ function currentPath(): string {
  * except on exempt paths (profile, session wizard).
  */
 export function useRequireAuth(callbackUrl?: string) {
-  const { data: session, status, update } = useSession()
+  const { data: session, status } = useSession()
   const router = useRouter()
-  const refreshingRef = useRef(false)
 
   useEffect(() => {
     if (status === "loading") return
 
-    const dest = callbackUrl ?? currentPath()
+    const dest = callbackUrl ?? (typeof window !== "undefined" ? window.location.pathname : "/")
     const authUrl = `/auth?callbackUrl=${encodeURIComponent(dest)}`
 
     if (!session) {
-      saveAuthReturnUrl(dest)
       router.replace(authUrl)
       return
     }
 
     if (session.error === "TokenExpired") {
-      if (refreshingRef.current || isRefreshRateLimited()) return
-      refreshingRef.current = true
-      void refreshBackendSession(update).then((ok) => {
-        refreshingRef.current = false
-        if (!ok && !isRefreshRateLimited()) {
-          saveAuthReturnUrl(dest)
-          void signOut({ callbackUrl: authUrl })
-        }
-      })
+      signOut({ callbackUrl: authUrl })
       return
     }
 
@@ -59,7 +42,7 @@ export function useRequireAuth(callbackUrl?: string) {
     ) {
       router.replace("/onboarding")
     }
-  }, [session, status, router, callbackUrl, update])
+  }, [session, status, router, callbackUrl])
 
   return { session, status }
 }

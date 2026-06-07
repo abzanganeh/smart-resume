@@ -1,28 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronRight, Loader2, MessageSquare, Send, SkipForward, X } from "lucide-react";
+import { Check, ChevronRight, Loader2, MessageSquare, Send, X } from "lucide-react";
 import {
   chatWithResume,
-  type BlockingIssue,
   type ChatMessage,
   type ChatResponse,
   type ResumePatch,
   type TailoredResumeOutput,
 } from "@/lib/api";
-import { applyResumePatch } from "@/lib/applyResumePatch";
 import { cn } from "@/lib/utils";
 
 // ── Patch state ──────────────────────────────────────────────────────────────
 
-type PatchStatus = "pending" | "accepted" | "rejected" | "failed";
+type PatchStatus = "pending" | "accepted" | "rejected";
 
 interface AssistantMessage {
   role: "assistant";
   content: string;
   patches: ResumePatch[];
   patchStatuses: PatchStatus[];
-  patchFailureReasons: (string | null)[];
 }
 interface UserMessageEntry {
   role: "user";
@@ -35,13 +32,11 @@ type MessageEntry = UserMessageEntry | AssistantMessage;
 function PatchCard({
   patch,
   status,
-  failureReason,
   onAccept,
   onReject,
 }: {
   patch: ResumePatch;
   status: PatchStatus;
-  failureReason?: string | null;
   onAccept: () => void;
   onReject: () => void;
 }) {
@@ -87,38 +82,6 @@ function PatchCard({
         </div>
       )}
 
-      {patch.section === "experience" && patch.new_title?.trim() && (
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Title</p>
-          {patch.title_old && patch.title_old !== patch.new_title && (
-            <div className="flex items-start gap-1.5 text-red-400/80">
-              <span className="shrink-0 font-mono font-bold mt-0.5">−</span>
-              <span className="line-through opacity-75">{patch.title_old}</span>
-            </div>
-          )}
-          <div className="flex items-start gap-1.5 text-emerald-400/90">
-            <span className="shrink-0 font-mono font-bold mt-0.5">+</span>
-            <span>{patch.new_title}</span>
-          </div>
-        </div>
-      )}
-
-      {patch.section === "experience" && patch.new_dates?.trim() && (
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Dates</p>
-          {patch.dates_old && patch.dates_old !== patch.new_dates && (
-            <div className="flex items-start gap-1.5 text-red-400/80">
-              <span className="shrink-0 font-mono font-bold mt-0.5">−</span>
-              <span className="line-through opacity-75">{patch.dates_old}</span>
-            </div>
-          )}
-          <div className="flex items-start gap-1.5 text-emerald-400/90">
-            <span className="shrink-0 font-mono font-bold mt-0.5">+</span>
-            <span>{patch.new_dates}</span>
-          </div>
-        </div>
-      )}
-
       {patch.section === "summary" && patch.new_summary && (
         <div className="flex items-start gap-1.5 text-emerald-400/90">
           <ChevronRight className="w-3 h-3 shrink-0 mt-0.5" />
@@ -149,47 +112,6 @@ function PatchCard({
         </div>
       )}
 
-      {patch.section === "projects" && (patch.remove_projects?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {patch.remove_projects!.map((name) => (
-            <span
-              key={name}
-              className="bg-red-400/15 text-red-300 px-1.5 py-0.5 rounded text-[10px] line-through"
-            >
-              − {name}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {patch.section === "projects" && patch.project_name && patch.project_bullet_old && patch.project_bullet_new && (
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{patch.project_name}</p>
-          <div className="flex items-start gap-1.5 text-red-400/80">
-            <span className="shrink-0 font-mono font-bold mt-0.5">−</span>
-            <span className="line-through opacity-75 text-[11px]">{patch.project_bullet_old}</span>
-          </div>
-          <div className="flex items-start gap-1.5 text-emerald-400/90">
-            <span className="shrink-0 font-mono font-bold mt-0.5">+</span>
-            <span className="text-[11px]">{patch.project_bullet_new}</span>
-          </div>
-        </div>
-      )}
-
-      {patch.section === "projects" && patch.project_name && (patch.project_bullets_replace_all?.length ?? 0) > 0 && !patch.project_bullet_old && (
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{patch.project_name} — all bullets replaced</p>
-          <ul className="space-y-0.5">
-            {patch.project_bullets_replace_all!.map((b, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-emerald-400/90">
-                <span className="shrink-0 font-mono font-bold mt-0.5">+</span>
-                <span className="text-[11px]">{b}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Accept / Reject buttons */}
       {status === "pending" && (
         <div className="flex gap-1.5 pt-0.5">
@@ -214,11 +136,6 @@ function PatchCard({
       {status === "accepted" && (
         <p className="text-emerald-400 font-semibold flex items-center gap-1">
           <Check className="w-3 h-3" /> Applied to resume
-        </p>
-      )}
-      {status === "failed" && (
-        <p className="text-amber-400 flex items-center gap-1">
-          {failureReason ?? "Could not apply — the patch did not match the resume."}
         </p>
       )}
       {status === "rejected" && (
@@ -268,7 +185,6 @@ function AssistantBubble({
               key={i}
               patch={patch}
               status={message.patchStatuses[i]}
-              failureReason={message.patchFailureReasons[i]}
               onAccept={() => onAcceptPatch(i)}
               onReject={() => onRejectPatch(i)}
             />
@@ -302,13 +218,6 @@ function TypingIndicator() {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-interface QueueBanner {
-  issue: BlockingIssue;
-  current: number;
-  total: number;
-  onSkip: () => void;
-}
-
 interface Props {
   sessionId: string;
   tailored: TailoredResumeOutput | null;
@@ -316,21 +225,14 @@ interface Props {
   /** Pre-fills the input and focuses it. Clear after reading with onClearPrefill. */
   prefillMessage?: string | null;
   onClearPrefill?: () => void;
-  /** When set, shows a guided fix queue banner at the top of the chat. */
-  queueBanner?: QueueBanner | null;
 }
 
-export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, onClearPrefill, queueBanner }: Props) {
+export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, onClearPrefill }: Props) {
   const [messages, setMessages] = useState<MessageEntry[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const tailoredRef = useRef(tailored);
-
-  useEffect(() => {
-    tailoredRef.current = tailored;
-  }, [tailored]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -374,7 +276,6 @@ export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, 
           content: res.reply,
           patches: res.patches,
           patchStatuses: res.patches.map(() => "pending" as PatchStatus),
-          patchFailureReasons: res.patches.map(() => null),
         },
       ]);
     } catch {
@@ -385,7 +286,6 @@ export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, 
           content: "Something went wrong. Please try again.",
           patches: [],
           patchStatuses: [],
-          patchFailureReasons: [],
         },
       ]);
     } finally {
@@ -395,30 +295,53 @@ export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, 
   }
 
   function applyPatch(msgIdx: number, patchIdx: number) {
-    const current = tailoredRef.current;
-    if (!current) return;
+    if (!tailored) return;
 
     const msg = messages[msgIdx];
     if (msg.role !== "assistant") return;
 
     const patch = msg.patches[patchIdx];
-    const { updated, applied, failureReason } = applyResumePatch(current, patch);
+    let updated: TailoredResumeOutput = { ...tailored };
 
+    if (patch.section === "summary" && patch.new_summary) {
+      updated = { ...updated, summary: patch.new_summary };
+    }
+
+    if (patch.section === "skills") {
+      let skills = [...(updated.skills ?? [])];
+      if (patch.add_skills?.length) {
+        const toAdd = patch.add_skills.filter((s) => !skills.includes(s));
+        skills = [...skills, ...toAdd];
+      }
+      if (patch.remove_skills?.length) {
+        const removeSet = new Set(patch.remove_skills);
+        skills = skills.filter((s) => !removeSet.has(s));
+      }
+      updated = { ...updated, skills };
+    }
+
+    if (patch.section === "experience" && patch.company && patch.bullet_old && patch.bullet_new) {
+      const experience = updated.experience.map((exp) => {
+        if (exp.company !== patch.company) return exp;
+        const bullets = exp.bullets.map((b) =>
+          b === patch.bullet_old ? patch.bullet_new! : b,
+        );
+        return { ...exp, bullets };
+      });
+      updated = { ...updated, experience };
+    }
+
+    // Mark the patch as accepted in the UI
     setMessages((prev) =>
       prev.map((m, mi) => {
         if (mi !== msgIdx || m.role !== "assistant") return m;
         const patchStatuses = [...m.patchStatuses];
-        const patchFailureReasons = [...m.patchFailureReasons];
-        patchStatuses[patchIdx] = applied ? "accepted" : "failed";
-        patchFailureReasons[patchIdx] = applied ? null : (failureReason ?? null);
-        return { ...m, patchStatuses, patchFailureReasons };
+        patchStatuses[patchIdx] = "accepted";
+        return { ...m, patchStatuses };
       }),
     );
 
-    if (applied) {
-      tailoredRef.current = updated;
-      onApplyPatch(patch, updated);
-    }
+    onApplyPatch(patch, updated);
   }
 
   function rejectPatch(msgIdx: number, patchIdx: number) {
@@ -436,30 +359,6 @@ export function ResumeChat({ sessionId, tailored, onApplyPatch, prefillMessage, 
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Queue banner — shown when driving a guided fix queue */}
-      {queueBanner && (
-        <div className="shrink-0 border-b border-amber-400/20 bg-amber-400/5 px-3 py-2.5 space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
-              Issue {queueBanner.current} / {queueBanner.total}
-            </span>
-            <button
-              type="button"
-              onClick={queueBanner.onSkip}
-              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
-            >
-              <SkipForward className="w-3 h-3" />
-              Skip
-            </button>
-          </div>
-          <p className="text-slate-200 text-xs font-medium leading-snug">
-            {queueBanner.issue.description}
-          </p>
-          <p className="text-slate-500 text-[11px] leading-snug">
-            {queueBanner.issue.suggestion}
-          </p>
-        </div>
-      )}
       {/* Message list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (

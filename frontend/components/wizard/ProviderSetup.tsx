@@ -101,11 +101,9 @@ const GUIDES: Record<string, ProviderGuide> = {
 
 interface Props {
   onComplete: (provider: string, model: string) => void;
-  /** When true, save button reads "Save AI settings" (in-session panel). */
-  inline?: boolean;
 }
 
-export default function ProviderSetup({ onComplete, inline = false }: Props) {
+export default function ProviderSetup({ onComplete }: Props) {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [selected, setSelected] = useState<LLMProvider | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
@@ -205,7 +203,6 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
     ? selected.id === "ollama" || selected.has_env_key || !!apiKey.trim()
     : false;
   const testedOk = verifyResult?.valid === true;
-  const continueLabel = inline ? "Save AI settings" : "Continue to upload resume";
 
   return (
     <div className="space-y-6">
@@ -427,15 +424,9 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
               </div>
             )}
 
-            {!testedOk && selected && canTest && !testing && !inline && (
+            {!testedOk && selected && canTest && !testing && (
               <p className="text-xs text-slate-500 text-center">
                 Test your key before continuing to upload your resume.
-              </p>
-            )}
-
-            {!testedOk && selected && canTest && !testing && inline && (
-              <p className="text-xs text-slate-500 text-center">
-                Test your key, then save. Changes apply to the next AI step you run.
               </p>
             )}
 
@@ -473,7 +464,7 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
                   disabled={!testedOk}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
                 >
-                  {continueLabel} {!inline && <ChevronRight className="h-4 w-4" />}
+                  Continue to upload resume <ChevronRight className="h-4 w-4" />
                 </button>
                 {saved && (
                   <button

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2, Plus, Save, Sparkles } from "lucide-react";
-import { saveAdditions, patchAuditOutput, suggestBulletFixes, type AuditOutput, type BulletFixPayload } from "@/lib/api";
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, Plus, Save } from "lucide-react";
+import { saveAdditions, patchAuditOutput, type AuditOutput, type BulletFixPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -54,9 +54,6 @@ export function AuditPanel({
   const [summaryDraft, setSummaryDraft] = useState("");
   const [editingSummary, setEditingSummary] = useState(false);
   const [summarySaving, setSummarySaving] = useState(false);
-  const [selectedBullets, setSelectedBullets] = useState<Set<number>>(() => new Set());
-  const [bulkFixing, setBulkFixing] = useState(false);
-  const [bulkFixError, setBulkFixError] = useState<string | null>(null);
   const fixRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
 
   // Re-hydrate when session data arrives from the parent (e.g. first render or refresh).
@@ -68,72 +65,6 @@ export function AuditPanel({
       setExtraNotes(initialExtraNotes);
     }
   }, [initialClaimedKeywords, initialExtraNotes]);
-
-  const bulletIssueCount = output?.bullet_issues?.length ?? 0;
-  const auditSelectionKey = output
-    ? `${output.overall_score}:${bulletIssueCount}:${output.summary?.slice(0, 32) ?? ""}`
-    : "";
-
-  useEffect(() => {
-    if (!output?.bullet_issues?.length) return;
-    const defaultSelected = output.bullet_issues
-      .map((issue, i) => ({ issue, i }))
-      .filter(({ issue }) => {
-        if ((issue.issues ?? []).includes("irrelevant")) return false;
-        return issue.severity === "high" || issue.severity === "medium";
-      })
-      .slice(0, 8)
-      .map(({ i }) => i);
-    const indices =
-      defaultSelected.length > 0
-        ? defaultSelected
-        : output.bullet_issues.slice(0, Math.min(5, output.bullet_issues.length)).map((_, i) => i);
-    setSelectedBullets(new Set(indices));
-  }, [auditSelectionKey, output]);
-
-  function toggleBulletSelection(index: number) {
-    setSelectedBullets((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  }
-
-  function selectAllBullets() {
-    if (!output?.bullet_issues) return;
-    setSelectedBullets(new Set(output.bullet_issues.map((_, i) => i)));
-  }
-
-  function clearBulletSelection() {
-    setSelectedBullets(new Set());
-  }
-
-  async function handleBulkAiFix() {
-    if (!output || selectedBullets.size === 0) return;
-    setBulkFixing(true);
-    setBulkFixError(null);
-    try {
-      const indices = Array.from(selectedBullets).sort((a, b) => a - b);
-      const { fixes } = await suggestBulletFixes(sessionId, indices);
-      if (fixes.length === 0) {
-        setBulkFixError("No suggestions returned — try again or edit bullets manually.");
-        return;
-      }
-      setBulletFixes((prev) => {
-        const next = { ...prev };
-        for (const fix of fixes) {
-          next[fix.index] = fix.suggestion;
-        }
-        return next;
-      });
-      setExpandedFix(fixes[0]?.index ?? null);
-    } catch (err) {
-      setBulkFixError(err instanceof Error ? err.message : "Could not generate fixes.");
-    } finally {
-      setBulkFixing(false);
-    }
-  }
 
   // Debounced auto-save bullet fixes whenever they change (500 ms).
   const bulletFixDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -426,70 +357,21 @@ export function AuditPanel({
       {/* ── Bullet issues ──────────────────────────────────────────────────── */}
       {(output.bullet_issues ?? []).length > 0 && (
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-slate-200 font-semibold text-sm">
-                Bullet Issues ({output.bullet_issues.length})
-              </h3>
-              <p className="text-slate-500 text-xs mt-1">
-                Top JD-relevant issues are pre-selected. Adjust selection, then generate AI fixes in one step.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={selectAllBullets}
-                className="text-xs text-slate-400 hover:text-slate-200"
-              >
-                Select all
-              </button>
-              <span className="text-slate-600">·</span>
-              <button
-                type="button"
-                onClick={clearBulletSelection}
-                className="text-xs text-slate-400 hover:text-slate-200"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleBulkAiFix()}
-                disabled={bulkFixing || selectedBullets.size === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-40 transition-colors"
-              >
-                {bulkFixing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                {bulkFixing
-                  ? "Generating…"
-                  : `Fix selected (${selectedBullets.size})`}
-              </button>
-            </div>
-          </div>
-          {bulkFixError && (
-            <p className="text-red-400 text-xs mb-3 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-              {bulkFixError}
-            </p>
-          )}
+          <h3 className="text-slate-200 font-semibold mb-1 text-sm">
+            Bullet Issues ({output.bullet_issues.length})
+          </h3>
+          <p className="text-slate-500 text-xs mb-3">
+            Click <strong className="text-slate-400">Fix this bullet</strong> to write a corrected version — it will be passed to the rewrite.
+          </p>
           <div className="space-y-3">
             {output.bullet_issues.map((issue, i) => {
               const cfg = SEVERITY_CONFIG[issue.severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.medium;
               const Icon = cfg.icon;
               const isOpen = expandedFix === i;
               const hasFix = !!bulletFixes[i]?.trim();
-              const isSelected = selectedBullets.has(i);
               return (
-                <div key={i} className={cn("border rounded-xl p-3 text-sm space-y-2", cfg.cls, !isSelected && "opacity-60")}>
+                <div key={i} className={cn("border rounded-xl p-3 text-sm space-y-2", cfg.cls)}>
                   <div className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleBulletSelection(i)}
-                      className="mt-1 shrink-0 accent-amber-400"
-                      aria-label={`Select bullet ${i + 1} for bulk fix`}
-                    />
                     <Icon className="w-4 h-4 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-xs opacity-70 mb-1">

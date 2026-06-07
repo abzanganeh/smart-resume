@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.config import is_production_grade, settings
+from app.config import settings
 from app.db.engine import async_session_factory
 from app.dependencies.admin_auth import AdminDefaultDenyMiddleware
 from app.limiter import limiter
@@ -25,10 +25,8 @@ from app.routers import (
     cover_letter,
     dashboard,
     export,
-    extension_auth,
     fit,
     flint_handoff,
-    job_descriptions,
     jobs,
     legal,
     llm,
@@ -169,13 +167,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Return JSON errors with CORS headers; never leak internal details to clients."""
-    log.error(
-        "unhandled_exception",
-        path=str(request.url.path),
-        error=str(exc),
-        exc_info=True,
-    )
+    """Return JSON errors with CORS headers so the browser shows the real failure."""
+    log.error("unhandled_exception", path=str(request.url.path), error=str(exc))
     msg = str(exc)
     if "invalid_api_key" in msg or "AuthenticationError" in type(exc).__name__:
         return JSONResponse(
@@ -188,21 +181,15 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             },
             headers=_cors_headers(request),
         )
-    content: dict[str, str] = {
-        "detail": "Something went wrong. Please try again in a moment.",
-    }
-    if not is_production_grade():
-        content["debug"] = msg
     return JSONResponse(
         status_code=500,
-        content=content,
+        content={"detail": f"Server error: {msg}"},
         headers=_cors_headers(request),
     )
 
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(extension_auth.router)
 app.include_router(billing.router)
 app.include_router(profile.router)
 app.include_router(sessions.router)
@@ -217,7 +204,6 @@ app.include_router(notifications.router)
 app.include_router(account.router)
 app.include_router(export.router)
 app.include_router(flint_handoff.router)
-app.include_router(job_descriptions.router)
 app.include_router(llm.router)
 # Step 35 - admin domain
 app.include_router(admin.router)
