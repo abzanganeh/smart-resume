@@ -67,6 +67,7 @@ def _fake_tailored_output(summary: str = "Experienced engineer", experience=None
             SimpleNamespace(
                 company="Acme",
                 title="SWE",
+                dates="2020 – 2024",
                 bullets=["Built X", "Led Y"],
             )
         ]
@@ -112,7 +113,7 @@ async def test_embed_tailored_resume_inserts_summary_and_bullets():
         patch(
             "app.services.corpus_writer.embed_texts",
             new_callable=AsyncMock,
-            return_value=[[0.1] * 1536 for _ in range(3)],
+            return_value=[[0.1] * 1536 for _ in range(4)],
         ),
         patch(
             "app.services.corpus_writer._soft_delete_session_source",
@@ -125,8 +126,8 @@ async def test_embed_tailored_resume_inserts_summary_and_bullets():
             tailored_output=output,
         )
 
-    # Summary + 2 bullets = 3 chunks
-    assert len(added) == 3
+    # Summary + experience header + 2 bullets = 4 chunks
+    assert len(added) == 4
     section_types = {obj.section_type for obj in added}
     assert "summary" in section_types
     assert "experience" in section_types
@@ -136,7 +137,7 @@ async def test_embed_tailored_resume_inserts_summary_and_bullets():
 async def test_embed_tailored_resume_skips_empty_bullets():
     user_id = uuid.uuid4()
     session_id = "sess-abc"
-    experience = [SimpleNamespace(company="X", title="Y", bullets=["", "  ", "Real bullet"])]
+    experience = [SimpleNamespace(company="X", title="Y", dates="", bullets=["", "  ", "Real bullet"])]
     output = _fake_tailored_output(summary="", experience=experience)
 
     ctx, db = _make_db_ctx()
@@ -148,7 +149,7 @@ async def test_embed_tailored_resume_skips_empty_bullets():
         patch(
             "app.services.corpus_writer.embed_texts",
             new_callable=AsyncMock,
-            return_value=[[0.1] * 1536],
+            return_value=[[0.1] * 1536, [0.2] * 1536],
         ),
         patch(
             "app.services.corpus_writer._soft_delete_session_source",
@@ -161,8 +162,10 @@ async def test_embed_tailored_resume_skips_empty_bullets():
             tailored_output=output,
         )
 
-    assert len(added) == 1
-    assert added[0].content == "Real bullet"
+    assert len(added) == 2
+    contents = {c.content for c in added}
+    assert "Real bullet" in contents
+    assert "Y | X" in contents
 
 
 @pytest.mark.asyncio
@@ -340,7 +343,7 @@ async def test_embed_tailored_resume_fallback_on_embedding_error():
         )
 
     # Chunks are persisted even when embedding fails (zero-vector fallback).
-    assert len(added) == 3
+    assert len(added) == 4
     for chunk in added:
         assert all(v == 0.0 for v in chunk.embedding)
 

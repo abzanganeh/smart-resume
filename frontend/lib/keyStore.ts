@@ -1,7 +1,7 @@
 /**
- * BYOK key store — persists to sessionStorage only.
- * Keys are never sent to any server except as request headers for the
- * user's own LLM calls. They vanish when the browser tab closes.
+ * BYOK key store — persists to localStorage on this device only.
+ * Keys are never sent to Smart Resume servers for storage; they are attached
+ * as request headers for your own LLM calls only.
  */
 
 const STORE_KEY = "sr_byok";
@@ -13,13 +13,40 @@ export type AiMode = "platform" | "byok";
 export interface KeyEntry {
   provider: string;
   model: string;
-  apiKey: string; // masked after first save
+  apiKey: string;
+}
+
+function storage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage;
+}
+
+function migrateLegacySessionStorage(): void {
+  if (typeof window === "undefined") return;
+  const store = storage();
+  if (!store || store.getItem(STORE_KEY)) return;
+  try {
+    const legacy = window.sessionStorage.getItem(STORE_KEY);
+    if (legacy) {
+      store.setItem(STORE_KEY, legacy);
+      window.sessionStorage.removeItem(STORE_KEY);
+    }
+    const legacyMode = window.sessionStorage.getItem(AI_MODE_KEY);
+    if (legacyMode && !store.getItem(AI_MODE_KEY)) {
+      store.setItem(AI_MODE_KEY, legacyMode);
+      window.sessionStorage.removeItem(AI_MODE_KEY);
+    }
+  } catch {
+    // ignore quota / private mode errors
+  }
 }
 
 function load(): KeyEntry | null {
-  if (typeof window === "undefined") return null;
+  migrateLegacySessionStorage();
+  const store = storage();
+  if (!store) return null;
   try {
-    const raw = sessionStorage.getItem(STORE_KEY);
+    const raw = store.getItem(STORE_KEY);
     return raw ? (JSON.parse(raw) as KeyEntry) : null;
   } catch {
     return null;
@@ -27,13 +54,11 @@ function load(): KeyEntry | null {
 }
 
 function save(entry: KeyEntry): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(STORE_KEY, JSON.stringify(entry));
+  storage()?.setItem(STORE_KEY, JSON.stringify(entry));
 }
 
 function clear(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(STORE_KEY);
+  storage()?.removeItem(STORE_KEY);
 }
 
 /** Returns the stored key entry, or null if nothing is saved. */
@@ -49,7 +74,7 @@ function notifyChange(): void {
 /** Platform AI uses Smart Resume credits; BYOK sends the user's key. */
 export function getAiMode(): AiMode {
   if (typeof window === "undefined") return "platform";
-  const explicit = sessionStorage.getItem(AI_MODE_KEY);
+  const explicit = window.localStorage.getItem(AI_MODE_KEY);
   if (explicit === "platform" || explicit === "byok") return explicit;
   const entry = load();
   if (entry?.apiKey && entry.apiKey !== "__env__") return "byok";
@@ -58,7 +83,7 @@ export function getAiMode(): AiMode {
 
 export function setAiMode(mode: AiMode): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(AI_MODE_KEY, mode);
+  window.localStorage.setItem(AI_MODE_KEY, mode);
   notifyChange();
 }
 
@@ -69,7 +94,7 @@ export function subscribeByokChanges(listener: () => void): () => void {
   return () => window.removeEventListener(BYOK_CHANGE_EVENT, listener);
 }
 
-/** Persists the user's key for this browser session. */
+/** Persists the user's key on this browser/device (localStorage). */
 export function storeKey(entry: KeyEntry): void {
   save(entry);
   setAiMode("byok");

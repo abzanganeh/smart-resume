@@ -32,9 +32,27 @@ async def run(
     resume_json = json.dumps(session.phase3_output.model_dump(), indent=2)
     jd_text = session.jd_raw or ""
 
+    # Inject Phase 4 QA results when available so the agent can answer
+    # "what's missing" questions precisely without re-deriving them.
+    qa_context = ""
+    if session.phase4_output:
+        qa = session.phase4_output
+        issue_lines = [
+            f"- [{i.category}] {i.description} | Fix: {i.suggestion}"
+            for i in qa.blocking_issues[:6]
+        ]
+        qa_context = (
+            f"\nCURRENT ATS SCORE: {qa.ats_score}/100 (ceiling: {qa.score_ceiling}/100)\n"
+            f"BLOCKING ISSUES (from last QA run — use these to answer ATS improvement questions):\n"
+            + ("\n".join(issue_lines) if issue_lines else "  (none)")
+        )
+
     # Use replace(), not str.format() — the prompt may contain JSON examples with braces.
     system_content = (
-        _SYSTEM_PROMPT.replace("{resume_json}", resume_json).replace("{jd_text}", jd_text)
+        _SYSTEM_PROMPT
+        .replace("{resume_json}", resume_json)
+        .replace("{jd_text}", jd_text)
+        .replace("{qa_context}", qa_context)
     )
 
     messages: list[LLMMessage] = [
@@ -44,7 +62,7 @@ async def run(
     ]
 
     try:
-        return await complete_structured(llm, messages, ChatResponse, max_tokens=2000, temperature=0.3)
+        return await complete_structured(llm, messages, ChatResponse, max_tokens=4000, temperature=0.3)
     except Exception as exc:
         log.warning("chat_agent_error", error=str(exc))
         return ChatResponse(

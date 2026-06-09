@@ -113,8 +113,50 @@ async def save_tailored_edits(session_id: str, body: TailoredEditRequest):
     try:
         session.phase3_output = TailoredResumeOutput.model_validate(body.tailored_output)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}")
+        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
     await update_session(session)
+    return {"ok": True}
+
+
+class CommitTailoredRequest(BaseModel):
+    tailored_output: dict
+
+
+@router.post("/{session_id}/tailored/commit")
+async def commit_tailored_edits(
+    session_id: str,
+    body: CommitTailoredRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Save polished resume and sync master resume + RAG corpus (name, dates, titles)."""
+    from app.services.tailored_persistence import commit_tailored_resume
+
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        tailored = TailoredResumeOutput.model_validate(body.tailored_output)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
+
+    account_email: str | None = None
+    user_id = session.user_id
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            try:
+                claims = decode_access_token(token)
+                user_id = claims.get("sub") or user_id
+                account_email = claims.get("email")
+            except (TokenExpiredError, TokenInvalidError):
+                pass
+
+    await commit_tailored_resume(
+        session_id,
+        tailored,
+        user_id=user_id,
+        account_email=account_email,
+    )
     return {"ok": True}
 
 

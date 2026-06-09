@@ -1032,8 +1032,10 @@ export interface SubscriptionCurrentResponse {
 // ── Resume Chat ──────────────────────────────────────────────────────────────
 
 export interface ResumePatch {
-  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects";
+  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects" | "contact";
   description: string;
+  // Contact
+  new_name?: string;
   // Summary
   new_summary?: string;
   // Skills
@@ -1047,6 +1049,10 @@ export interface ResumePatch {
   new_title?: string;
   dates_old?: string;
   new_dates?: string;
+  delete_experience?: boolean;
+  // Certifications
+  remove_certifications?: string[];
+  add_certifications?: string[];
   // Education
   institution?: string;
   institution_old?: string;
@@ -1081,6 +1087,17 @@ export async function saveTailoredResume(
 ): Promise<{ ok: boolean }> {
   return request(`/api/sessions/${sessionId}/tailored`, {
     method: "PATCH",
+    body: JSON.stringify({ tailored_output: tailored }),
+  });
+}
+
+/** Save polished resume and sync master profile + RAG vectors (name, dates, titles). */
+export async function commitTailoredResume(
+  sessionId: string,
+  tailored: TailoredResumeOutput,
+): Promise<{ ok: boolean }> {
+  return request(`/api/sessions/${sessionId}/tailored/commit`, {
+    method: "POST",
     body: JSON.stringify({ tailored_output: tailored }),
   });
 }

@@ -316,6 +316,14 @@ export function applyResumePatch(
   const effectivePatch = normalizeResumePatch(updated, patch);
   let applied = false;
 
+  if (effectivePatch.section === "contact" && effectivePatch.new_name?.trim()) {
+    updated.contact = {
+      ...(updated.contact ?? {}),
+      name: effectivePatch.new_name.trim(),
+    };
+    applied = true;
+  }
+
   if (effectivePatch.section === "summary" && effectivePatch.new_summary?.trim()) {
     updated.summary = effectivePatch.new_summary.trim();
     applied = true;
@@ -348,6 +356,11 @@ export function applyResumePatch(
   if (effectivePatch.section === "experience" && effectivePatch.company?.trim()) {
     const idx = findExperienceIndex(updated.experience, effectivePatch.company);
     if (idx >= 0) {
+      if (effectivePatch.delete_experience) {
+        updated.experience = updated.experience.filter((_, i) => i !== idx);
+        return { updated, applied: true };
+      }
+
       const exp = updated.experience[idx]!;
       const coerced = coerceExperiencePatch(exp, effectivePatch);
       let anyChange = false;
@@ -446,7 +459,51 @@ export function applyResumePatch(
     }
   }
 
+  if (effectivePatch.section === "certifications") {
+    let certs = [...(updated.certifications ?? [])];
+    let changed = false;
+    if (effectivePatch.remove_certifications?.length) {
+      const removeSet = new Set(effectivePatch.remove_certifications);
+      const next = certs.filter((c) => !removeSet.has(c));
+      if (next.length !== certs.length) {
+        certs = next;
+        changed = true;
+      }
+    }
+    if (effectivePatch.add_certifications?.length) {
+      const toAdd = effectivePatch.add_certifications.filter((c) => !certs.includes(c));
+      if (toAdd.length) {
+        certs = [...certs, ...toAdd];
+        changed = true;
+      }
+    }
+    if (changed) {
+      updated.certifications = certs;
+      applied = true;
+    } else if (
+      (effectivePatch.remove_certifications?.length ?? 0) > 0 ||
+      (effectivePatch.add_certifications?.length ?? 0) > 0
+    ) {
+      return {
+        updated,
+        applied: false,
+        failureReason: "No matching certifications found to add or remove.",
+      };
+    }
+  }
+
   if (effectivePatch.section === "projects" && effectivePatch.new_project?.name?.trim()) {
+    const newName = effectivePatch.new_project.name.trim();
+    const exists = (updated.projects ?? []).some((proj) =>
+      matchProjectName(projectDisplayName(proj as Record<string, unknown>), newName),
+    );
+    if (exists) {
+      return {
+        updated,
+        applied: false,
+        failureReason: `"${newName}" already exists — edit the existing project or delete duplicates first.`,
+      };
+    }
     updated.projects = [...(updated.projects ?? []), effectivePatch.new_project];
     applied = true;
   }

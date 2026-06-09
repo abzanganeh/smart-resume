@@ -68,7 +68,7 @@ def _derive_domain(session: Session) -> str:
     return "software engineering"
 
 
-def build_handoff_payload(session: Session) -> dict[str, Any]:
+def build_handoff_payload(session: Session, *, account_email: str | None = None) -> dict[str, Any]:
     """Build the JSON blob stored in Redis for a handoff token."""
     if session.phase3_output is None:
         raise HTTPException(
@@ -81,7 +81,7 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
             detail="No job description on this session.",
         )
 
-    resume_summary = render_txt(session)[:_RESUME_SUMMARY_MAX]
+    resume_summary = render_txt(session, account_email=account_email)[:_RESUME_SUMMARY_MAX]
 
     payload: dict[str, Any] = {
         "session_name": _derive_session_name(session),
@@ -107,10 +107,14 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
     return payload
 
 
-async def create_handoff_token(session: Session) -> tuple[str, int]:
+async def create_handoff_token(
+    session: Session,
+    *,
+    account_email: str | None = None,
+) -> tuple[str, int]:
     """Mint a single-use token. Returns (token, expires_in_seconds)."""
     await ensure_session_company_intel(session)
-    payload = build_handoff_payload(session)
+    payload = build_handoff_payload(session, account_email=account_email)
     token = str(uuid.uuid4())
     ttl = settings.FLINT_HANDOFF_TTL_SECONDS
     key = _handoff_key(token)

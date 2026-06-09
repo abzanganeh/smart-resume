@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.company_profile import CompanyIntelOutput
+from app.models.rewrite import TailoredResumeOutput
 from app.models.session import Session
 from app.services import flint_handoff
 from app.services.session_store import reset_redis_keys_for_tests, update_session
@@ -66,6 +67,20 @@ async def test_handoff_requires_jd() -> None:
     with pytest.raises(HTTPException) as exc:
         flint_handoff.build_handoff_payload(session)
     assert exc.value.status_code == 422
+
+
+def test_handoff_uses_account_email_in_resume_summary() -> None:
+    session = session_with_outputs()
+    session.phase3_output = TailoredResumeOutput(
+        contact={"name": "Alireza", "email": "alireza.zanganeh@gmail.com"},
+        summary="Engineer",
+    )
+    payload = flint_handoff.build_handoff_payload(
+        session,
+        account_email="alireza@zanganehai.com",
+    )
+    assert "alireza@zanganehai.com" in payload["resume_summary"]
+    assert "alireza.zanganeh@gmail.com" not in payload["resume_summary"]
 
 
 def test_handoff_includes_company_intel_when_present() -> None:

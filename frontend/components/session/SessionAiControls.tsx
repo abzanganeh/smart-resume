@@ -21,7 +21,8 @@ interface Props {
   llmStatus: LLMUpgradeStatus | null;
   phaseRunning: boolean;
   showTierSelector: boolean;
-  defaultOpen?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onLlmTierChange: (tier: LLMTier) => void;
   onRequestPurchase: (tier: Exclude<LLMTier, "standard">) => void;
 }
@@ -31,17 +32,13 @@ export function SessionAiControls({
   llmStatus,
   phaseRunning,
   showTierSelector,
-  defaultOpen = false,
+  open,
+  onOpenChange,
   onLlmTierChange,
   onRequestPurchase,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
   const [mode, setMode] = useState<AiMode>("platform");
   const [byokEntry, setByokEntry] = useState<ReturnType<typeof getStoredKey>>(null);
-
-  useEffect(() => {
-    setOpen(defaultOpen);
-  }, [defaultOpen]);
 
   useEffect(() => {
     function refresh() {
@@ -63,7 +60,7 @@ export function SessionAiControls({
     <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => onOpenChange(!open)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/80 transition-colors"
       >
         <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />

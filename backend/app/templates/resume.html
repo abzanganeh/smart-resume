@@ -45,6 +45,8 @@
   }
   .summary { margin-bottom: 8px; }
   .skills { margin-bottom: 8px; font-size: 10.5pt; }
+  .skill-category { margin-bottom: 4px; }
+  .skill-category-name { font-weight: bold; }
   .exp-entry { margin-bottom: 10px; }
   .exp-header {
     display: flex;
@@ -79,9 +81,18 @@
 <div class="summary">{{ summary }}</div>
 {% endif %}
 
-{% if skills %}
+{% if skill_lines %}
 <h2>Skills</h2>
-<div class="skills">{{ skills | join(' · ') }}</div>
+<div class="skills">
+  {% for line in skill_lines %}
+  {% if ':' in line %}
+  {% set parts = line.split(':', 1) %}
+  <div class="skill-category"><span class="skill-category-name">{{ parts[0].strip() }}:</span> {{ parts[1].strip() }}</div>
+  {% else %}
+  <div class="skill-category">{{ line }}</div>
+  {% endif %}
+  {% endfor %}
+</div>
 {% endif %}
 
 {% if experience %}

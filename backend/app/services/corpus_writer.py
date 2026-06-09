@@ -150,6 +150,16 @@ async def embed_tailored_resume(
 
     fragments: list[tuple[str, str | None, dict[str, Any]]] = []
 
+    contact = getattr(tailored_output, "contact", None) or {}
+    if isinstance(contact, dict):
+        name = (contact.get("name") or "").strip()
+        email = (contact.get("email") or "").strip()
+        if name:
+            header = name
+            if email:
+                header = f"{name} | {email}"
+            fragments.append((header, "summary", {"kind": "contact"}))
+
     summary = (getattr(tailored_output, "summary", "") or "").strip()
     if summary:
         fragments.append((summary, "summary", {}))
@@ -157,6 +167,16 @@ async def embed_tailored_resume(
     for entry in getattr(tailored_output, "experience", []) or []:
         company = getattr(entry, "company", "") or ""
         title = getattr(entry, "title", "") or ""
+        dates = getattr(entry, "dates", "") or ""
+        header = " | ".join(p for p in [title, company, dates] if p)
+        if header:
+            fragments.append(
+                (
+                    header,
+                    "experience",
+                    {"company": company, "title": title, "dates": dates, "kind": "header"},
+                )
+            )
         for idx, bullet in enumerate(getattr(entry, "bullets", []) or []):
             text = (bullet or "").strip()
             if text:
@@ -164,7 +184,7 @@ async def embed_tailored_resume(
                     (
                         text,
                         "experience",
-                        {"company": company, "title": title, "bullet_index": idx},
+                        {"company": company, "title": title, "dates": dates, "bullet_index": idx},
                     )
                 )
 

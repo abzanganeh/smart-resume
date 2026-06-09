@@ -194,6 +194,21 @@ function runTests() {
     "new project name stored",
   );
 
+  const duplicateProjectPatch: ResumePatch = {
+    section: "projects",
+    description: "Duplicate Fraud Shield AI",
+    new_project: {
+      name: "Fraud Shield AI",
+      bullets: ["Duplicate entry."],
+    },
+  };
+  const duplicateProjectResult = applyResumePatch(addProjectResult.updated, duplicateProjectPatch);
+  assert(!duplicateProjectResult.applied, "duplicate new_project rejected");
+  assert(
+    duplicateProjectResult.updated.projects.length === 1,
+    "no second Fraud Shield AI appended",
+  );
+
   const mislabeledAddPatch: ResumePatch = {
     section: "projects",
     description: "Add project via wrong LLM fields",

@@ -127,7 +127,12 @@ async def test_scoped_run_preserves_unscoped_sections(monkeypatch) -> None:
     output = await run(refreshed, FakeLLM(), queue, scope=scope)
 
     assert output.summary == _sample_tailored().summary
-    assert output.skills == _sample_tailored().skills
+    # Phase 3 post-process now categorizes skills; verify every original
+    # term is still represented after grouping.
+    from app.agent.phase3_postprocess import flatten_skill_terms
+
+    flat = {t.lower() for t in flatten_skill_terms(output.skills)}
+    assert {s.lower() for s in _sample_tailored().skills}.issubset(flat)
     assert output.experience[0].bullets[0] == "Scoped rewrite bullet"
     assert output.experience[1].company == "Beta"
 

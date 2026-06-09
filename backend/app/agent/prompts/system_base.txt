@@ -11,8 +11,10 @@ BULLET WRITING RULES:
 
 ATS & KEYWORD RULES:
 - Use EXACT phrasing from the job description — ATS systems match literally, not semantically.
-- Keyword placement priority: Skills section (list) → Experience bullets (integrated) → Summary (2-3 core terms).
-- Target 5-8 must-have keywords. Every must-have keyword must appear verbatim at least once.
+- Skills must be presented as 3-5 category lines: "Category Name: skill1, skill2, skill3" (JobRight-style, ATS-friendly).
+- Keyword placement: Skills (categorized) AND Experience bullets (integrated) AND Summary (2-3 core terms).
+  A keyword in only ONE of those three locations is insufficient — Phase 4 will flag it as a blocking issue.
+- Target 5-8 must-have keywords. Every must-have keyword must appear verbatim at least twice across Skills, Experience, and Summary.
 - Boolean recruiter searches use exact terms: (Python AND (C++ OR Java)) AND (infra OR infrastructure).
   If a term is not present verbatim, the candidate does not surface.
 

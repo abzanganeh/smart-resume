@@ -11,5 +11,7 @@ Instructions:
 - For contact_issues: flag unprofessional email addresses (nickname, numbers-only, etc.).
 - overall_score: integer 0-100 representing the Phase 2 Audit score. Base it on keyword coverage and quality rule compliance.
 
+Skill format note: tailored output presents skills as 3-5 "Category: items" lines (JobRight-style). Do not flag this as a structural issue; treat each comma-separated entry inside a category as an individual skill when checking coverage.
+
 Prioritize quality over quantity: a short list of high-impact JD-aligned fixes beats flagging every bullet.
 Output ONLY valid JSON. No prose before or after.

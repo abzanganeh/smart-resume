@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useSSE } from "@/lib/sse";
+import { useSSE, type SSEEvent } from "@/lib/sse";
 import {
   triggerPhase,
   phaseEventsUrl,
@@ -43,9 +43,10 @@ import {
   LLMUpgradePurchaseModal,
 } from "@/components/session/LLMTierSelector";
 import { SessionAiControls } from "@/components/session/SessionAiControls";
+import { cn } from "@/lib/utils";
 import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
-import { saveTailoredResume, type ResumePatch } from "@/lib/api";
+import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { makeSuggestions, type ResumeSuggestion } from "@/lib/suggestions";
 
@@ -104,6 +105,7 @@ function SessionContent() {
   const [purchaseTier, setPurchaseTier] = useState<Exclude<LLMTier, "standard"> | null>(null);
   const [checkoutBusyCode, setCheckoutBusyCode] = useState<LLMUpgradeCheckoutCode | null>(null);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiSettingsHighlight, setAiSettingsHighlight] = useState(false);
   const [namePromptRecord, setNamePromptRecord] = useState<SessionResumeRecord | null>(null);
   const [namePromptValue, setNamePromptValue] = useState("");
   const [namePromptSaving, setNamePromptSaving] = useState(false);
@@ -111,6 +113,25 @@ function SessionContent() {
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
   const tailoredBackupRef = useRef<TailoredResumeOutput | null>(null);
+  const aiControlsRef = useRef<HTMLDivElement>(null);
+  // Guard: track the last Phase 3 done event that already bumped resumeVersion.
+  // Prevents the main lastEvent effect from double-firing when unstable deps
+  // (e.g. NextAuth's updateAuthSession) cause it to re-run with the same event.
+  const lastPhase3DoneRef = useRef<SSEEvent | null>(null);
+
+  const openAiSettings = useCallback(() => {
+    setAiSettingsHighlight(true);
+    window.setTimeout(() => setAiSettingsHighlight(false), 2500);
+    setAiSettingsOpen(false);
+    requestAnimationFrame(() => {
+      setAiSettingsOpen(true);
+      requestAnimationFrame(() => {
+        aiControlsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }, []);
+
+  const llmErrorActive = runErrorType?.startsWith("llm_") ?? false;
 
   const { data: authSession, update: updateAuthSession } = useSession();
   const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
@@ -145,9 +166,9 @@ function SessionContent() {
 
   useEffect(() => {
     if (runErrorType?.startsWith("llm_")) {
-      setAiSettingsOpen(true);
+      openAiSettings();
     }
-  }, [runErrorType]);
+  }, [runErrorType, openAiSettings]);
 
   const recordAtsScore = useCallback((qaOut: QAOutput) => {
     if (typeof qaOut.ats_score === "number") {
@@ -170,7 +191,6 @@ function SessionContent() {
     }
     if (s === "rewrite") {
       setTailored(output as TailoredResumeOutput);
-      setResumeVersion((v) => v + 1);
     }
     if (s === "export") {
       const qaOut = output as QAOutput;
@@ -216,10 +236,27 @@ function SessionContent() {
     if (s.bullet_fixes?.length) setSessionBulletFixes(s.bullet_fixes);
   }, [applyPhaseOutput]);
 
+  const persistTailoredBeforeExport = useCallback(async () => {
+    if (!tailored) return;
+    await commitTailoredResume(sessionId, tailored);
+  }, [sessionId, tailored]);
+
   const goTo = (s: Step) => {
     setStep(s);
     router.push(`/session/${sessionId}?step=${s}`, { scroll: false });
   };
+
+  const goToExport = useCallback(async () => {
+    if (tailored) {
+      try {
+        await persistTailoredBeforeExport();
+      } catch {
+        setRunError("Could not save resume changes before QA. Please try again.");
+        return;
+      }
+    }
+    goTo("export");
+  }, [tailored, persistTailoredBeforeExport]);
 
   const runPhase = useCallback(
     async (targetStep: Step, options?: { force?: boolean; scope?: PhaseRunScope }) => {
@@ -316,7 +353,11 @@ function SessionContent() {
       setTailored(updated);
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
       setQa(null);
-      saveTailoredResume(sessionId, updated).catch(() => {});
+      saveTailoredResume(sessionId, updated).catch((err) => {
+        setRunError(
+          err instanceof Error ? err.message : "Could not save this edit. Please try again.",
+        );
+      });
       if (issueQueue.length > 0 && issueQueueIdx < issueQueue.length) {
         advanceIssueQueue(issueQueueIdx);
       }
@@ -360,9 +401,30 @@ function SessionContent() {
   }, [runPhase]);
 
   const runCurrentPhase = useCallback(
-    (options?: { force?: boolean; scope?: PhaseRunScope }) => runPhase(step, options),
-    [step, runPhase]
+    async (options?: { force?: boolean; scope?: PhaseRunScope }) => {
+      if (step === "export" && tailored) {
+        try {
+          await persistTailoredBeforeExport();
+        } catch {
+          setRunError("Could not save resume changes before QA. Please try again.");
+          return;
+        }
+      }
+      return runPhase(step, options);
+    },
+    [step, tailored, persistTailoredBeforeExport, runPhase],
   );
+
+  useEffect(() => {
+    if (
+      lastEvent?.event === "done" &&
+      lastEvent.phase === 3 &&
+      lastPhase3DoneRef.current !== lastEvent
+    ) {
+      lastPhase3DoneRef.current = lastEvent;
+      setResumeVersion((v) => v + 1);
+    }
+  }, [lastEvent]);
 
   useEffect(() => {
     if (!lastEvent) return;
@@ -580,6 +642,27 @@ function SessionContent() {
     return null;
   };
 
+  const sessionAiControls = (
+    <div
+      ref={aiControlsRef}
+      className={cn(
+        "rounded-xl transition-shadow",
+        aiSettingsHighlight && "ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900",
+      )}
+    >
+      <SessionAiControls
+        llmTier={llmTier}
+        llmStatus={llmStatus}
+        phaseRunning={phaseRunning}
+        showTierSelector={Boolean(authSession?.backendAccessToken)}
+        open={aiSettingsOpen}
+        onOpenChange={setAiSettingsOpen}
+        onLlmTierChange={setLlmTier}
+        onRequestPurchase={handleRequestPurchase}
+      />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {expiryWarning && (
@@ -655,15 +738,7 @@ function SessionContent() {
         </p>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
-          <SessionAiControls
-            llmTier={llmTier}
-            llmStatus={llmStatus}
-            phaseRunning={phaseRunning}
-            showTierSelector={Boolean(authSession?.backendAccessToken)}
-            defaultOpen={aiSettingsOpen}
-            onLlmTierChange={setLlmTier}
-            onRequestPurchase={handleRequestPurchase}
-          />
+          {!llmErrorActive && sessionAiControls}
 
           {runError && (
             <div className="flex flex-col sm:flex-row sm:items-start gap-2 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
@@ -677,7 +752,8 @@ function SessionContent() {
                 <span className="text-red-300">{runError}</span>
                 {runErrorType?.startsWith("llm_") && (
                   <p className="text-xs text-slate-400 mt-2">
-                    Switch to Platform AI or update your API key below, then retry — no need to start a new session.
+                    Switch to Platform AI or update your API key in the panel below, then retry — no
+                    need to start a new session.
                   </p>
                 )}
               </div>
@@ -685,8 +761,8 @@ function SessionContent() {
                 {runErrorType?.startsWith("llm_") && (
                   <button
                     type="button"
-                    onClick={() => setAiSettingsOpen(true)}
-                    className="text-amber-400 hover:text-amber-300 text-xs font-semibold"
+                    onClick={openAiSettings}
+                    className="text-amber-400 hover:text-amber-300 text-xs font-semibold underline hover:no-underline"
                   >
                     Change AI settings
                   </button>
@@ -725,6 +801,8 @@ function SessionContent() {
               </div>
             </div>
           )}
+
+          {llmErrorActive && <div className="mb-6">{sessionAiControls}</div>}
 
           {staleMessageForStep(step) && (
             <StaleBanner
@@ -830,6 +908,14 @@ function SessionContent() {
                 </div>
                 {tailored && (
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => runCurrentPhase({ force: true })}
+                      disabled={phaseRunning}
+                      className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                    >
+                      {phaseRunning ? "Regenerating…" : "Regenerate Resume"}
+                    </button>
                     {showRecalcConfirm ? (
                       <>
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-xs text-amber-300">
@@ -913,7 +999,7 @@ function SessionContent() {
                 </div>
 
                 {/* Right sidebar — ATS Guidance + Chat (tabbed) */}
-                <div className="lg:w-80 shrink-0 flex flex-col border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60" style={{ height: "fit-content", minHeight: 400 }}>
+                <div className="lg:w-80 shrink-0 flex flex-col border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60" style={{ height: "fit-content", minHeight: 480 }}>
                   {/* Tab bar */}
                   <div className="flex border-b border-slate-700 shrink-0">
                     <button
@@ -967,7 +1053,7 @@ function SessionContent() {
                       )}
                     </div>
                   ) : (
-                    <div className="flex-1 flex flex-col" style={{ height: 520 }}>
+                    <div className="flex-1 flex flex-col" style={{ height: 580 }}>
                       <ResumeChat
                         sessionId={sessionId}
                         tailored={tailored}
@@ -991,7 +1077,7 @@ function SessionContent() {
               </div>
               {tailored && !isStreaming && (
                 <button
-                  onClick={() => goTo("export")}
+                  onClick={() => void goToExport()}
                   className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
                 >
                   Run QA & export →

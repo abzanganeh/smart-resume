@@ -328,7 +328,9 @@ export function InlineFieldSuggestion({
       ? suggestion.patch.new_title
       : label === "dates"
         ? suggestion.patch.new_dates
-        : suggestion.patch.new_institution;
+        : label === "name"
+          ? suggestion.patch.new_name
+          : suggestion.patch.new_institution;
 
   if (!proposed) return <span>{current}</span>;
 
@@ -358,6 +360,9 @@ export function InlineFieldSuggestion({
 
 function orphanPatchPreview(patch: import("@/lib/api").ResumePatch): string[] {
   const lines: string[] = [];
+  if (patch.delete_experience) lines.push(`Remove experience entry (${patch.company ?? "unknown"})`);
+  for (const name of patch.remove_projects ?? []) lines.push(`Remove project: ${name}`);
+  for (const name of patch.remove_certifications ?? []) lines.push(`Remove certification: ${name}`);
   if (patch.new_institution) lines.push(`Institution → ${patch.new_institution}`);
   if (patch.new_degree) lines.push(`Degree → ${patch.new_degree}`);
   if (patch.new_dates) lines.push(`Dates → ${patch.new_dates}`);

@@ -26,7 +26,7 @@ export default function ApiKeySettings({ onChange }: Props) {
       .then(({ providers: ps }) => {
         setProviders(ps);
 
-        // Pre-fill from sessionStorage if a key was previously saved
+        // Pre-fill from localStorage if a key was previously saved
         const stored = getStoredKey();
         if (stored) {
           const match = ps.find((p) => p.id === stored.provider) ?? ps[0];
@@ -49,14 +49,25 @@ export default function ApiKeySettings({ onChange }: Props) {
   function pickProvider(p: LLMProvider) {
     setSelectedProvider(p);
     setSelectedModel(p.model);
-    setSaved(false);
     setProviderOpen(false);
+    const stored = getStoredKey();
+    if (stored && stored.provider === p.id) {
+      setApiKey(stored.apiKey === "__env__" ? "" : stored.apiKey);
+      setSaved(true);
+    } else {
+      setSaved(false);
+    }
   }
 
   function pickModel(m: LLMModelOption) {
     setSelectedModel(m.id);
-    setSaved(false);
     setModelOpen(false);
+    const stored = getStoredKey();
+    if (stored && stored.provider === selectedProvider?.id && stored.model === m.id) {
+      setSaved(true);
+    } else {
+      setSaved(false);
+    }
   }
 
   function handleSave() {
@@ -262,8 +273,8 @@ export default function ApiKeySettings({ onChange }: Props) {
       </div>
 
       <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-        Your key is stored in <strong>sessionStorage</strong> only — it disappears when you close this tab
-        and is never logged or persisted by the server.
+        Your key is stored in this browser&apos;s <strong>localStorage</strong> on this device only —
+        not on Smart Resume servers. Clear removes it, or use a private window if you prefer no persistence.
       </p>
     </div>
   );

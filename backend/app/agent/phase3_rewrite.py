@@ -11,8 +11,13 @@ from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
+from app.agent.phase3_postprocess import (
+    flatten_skill_terms,
+    postprocess_tailored_output,
+)
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
+from app.services.contact_authority import apply_authoritative_contact, resolve_account_email
 from app.services.company_intel import ensure_session_company_intel
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
@@ -69,11 +74,16 @@ def _merge_scoped_output(
         elif scope.section == "education" and partial.education:
             merged.education = [*merged.education, *partial.education]
         elif scope.section == "skills" and partial.skills:
-            seen = {s.lower() for s in merged.skills}
-            for skill in partial.skills:
-                if skill.lower() not in seen:
-                    merged.skills.append(skill)
-                    seen.add(skill.lower())
+            # Existing skills may be categorized lines like "AI: Python, LLMs".
+            # Dedupe against the FLATTENED individual terms, not the raw lines,
+            # so we don't double-add a skill that's already inside a category.
+            existing_terms = {t.lower() for t in flatten_skill_terms(merged.skills)}
+            for raw_skill in partial.skills:
+                for new_term in flatten_skill_terms([raw_skill]):
+                    if new_term.lower() in existing_terms:
+                        continue
+                    merged.skills.append(new_term)
+                    existing_terms.add(new_term.lower())
         elif scope.section == "summary" and partial.summary:
             merged.summary = partial.summary
         return merged
@@ -99,7 +109,13 @@ def _merge_scoped_output(
                 replaced = False
                 for i, exp in enumerate(merged.experience):
                     if exp.company == scope.company:
-                        merged.experience[i] = partial.experience[0]
+                        incoming = partial.experience[0]
+                        merged.experience[i] = incoming.model_copy(
+                            update={
+                                "dates": exp.dates if exp.dates.strip() else incoming.dates,
+                                "title": exp.title if exp.title.strip() else incoming.title,
+                            }
+                        )
                         replaced = True
                         break
                 if not replaced:
@@ -127,10 +143,16 @@ def _merge_scoped_output(
 
 def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutput) -> str:
     if scope.mode == "add" and scope.chunk_content:
+        skills_clause = ""
+        if scope.section == "skills":
+            skills_clause = (
+                " Return skills as 'Category Name: skill1, skill2' lines so they "
+                "merge cleanly into the existing categorized skills."
+            )
         return (
             f"ADD SECTION MODE — convert the following master-resume chunk into a "
             f"tailored ``{scope.section}`` section entry and return ONLY that section "
-            f"in the JSON output.\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
+            f"in the JSON output.{skills_clause}\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
         )
     if scope.bullet_index is not None and scope.section == "experience":
         company = scope.company or ""
@@ -155,9 +177,17 @@ def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutpu
             f"REGENERATE ONLY the education entry for institution "
             f"\"{scope.institution}\".  Return JSON with only the education array."
         )
+    skills_format = ""
+    if scope.section == "skills":
+        skills_format = (
+            " SKILLS FORMAT — each array entry MUST be a category string: "
+            "\"Category Name: skill1, skill2, skill3\". "
+            "Group into 3–5 categories ordered by JD relevance. "
+            "Do NOT return plain individual skill strings."
+        )
     return (
         f"REGENERATE ONLY the ``{scope.section}`` section.  "
-        f"Return JSON containing only that section's field(s)."
+        f"Return JSON containing only that section's field(s).{skills_format}"
     )
 
 
@@ -362,6 +392,16 @@ async def run(
             f"{session.phase3_output.model_dump_json()}\n\n"
             f"{_scoped_user_instruction(scope, session.phase3_output)}"
         )
+    elif not scoped and session.phase3_output:
+        # Full re-run: pass the current tailored resume as the baseline so that
+        # experience entries added from suggestions (not in the raw resume) are
+        # preserved and built upon rather than silently dropped.
+        user_content += (
+            f"\n\nCURRENT TAILORED RESUME (baseline from previous run with user edits applied — "
+            f"treat this as the starting point; preserve accepted experience entries and bullets "
+            f"while applying all Phase 3 quality rules: bullet limits, skill categories, keyword placement):\n"
+            f"{session.phase3_output.model_dump_json()}"
+        )
 
     # Prompt budget gate (§6a "Determinism and prompt budget contract").
     # Raises ``PromptBudgetExceededError`` → orchestrator surfaces 422.
@@ -389,6 +429,20 @@ async def run(
         output.selected_chunks = trace["selected_chunks"]
         output.skipped_chunks = trace["skipped_chunks"]
         output.retrieval_meta = trace["retrieval_meta"]
+
+    must_have = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else None
+    )
+    output = postprocess_tailored_output(output, must_have)
+
+    account_email = await resolve_account_email(session.user_id)
+    output = apply_authoritative_contact(
+        output,
+        user_info=session.user_info,
+        account_email=account_email,
+    )
 
     await event_queue.put({"event": "partial", "phase": 3, "data": json.loads(output.model_dump_json())})
     log.info(
