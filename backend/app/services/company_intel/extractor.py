@@ -100,6 +100,60 @@ _MISSION_MAX_CHARS = 400
 _CULTURE_MAX_CHARS = 400
 _VALUE_MAX_CHARS = 80
 
+_THEME_VALUE_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"thoughtful design", "Thoughtful design"),
+    (r"\bcollaboration\b", "Collaboration"),
+    (r"long-term impact", "Long-term impact"),
+    (r"learning(?:,|\s+and|\s*&)\s*growth", "Learning & growth"),
+    (r"inclusive culture", "Inclusive culture"),
+    (r"\bownership\b", "Ownership"),
+    (r"data-driven", "Data-driven"),
+)
+
+
+def extract_from_jd_heuristic(company_name: str, jd_text: str) -> CompanyIntelOutput | None:
+    """Rule-based fallback when LLM extraction is unavailable or returns nothing."""
+    jd = jd_text.strip()
+    if not jd:
+        return None
+
+    lower = jd.lower()
+    mission = ""
+
+    purpose_match = re.search(
+        r"(?:bigger purpose|our purpose|we work for a(?: bigger)? purpose)\s*:?\s*([^.]+\.)",
+        jd,
+        re.IGNORECASE,
+    )
+    if purpose_match:
+        mission = purpose_match.group(1).strip()
+
+    values: list[str] = []
+    for pattern, label in _THEME_VALUE_PATTERNS:
+        if re.search(pattern, lower, re.IGNORECASE):
+            values.append(label)
+
+    culture_parts: list[str] = []
+    if "great place to work" in lower:
+        culture_parts.append("Great Place to Work certified employer")
+    if re.search(r"in-?office role", lower, re.IGNORECASE):
+        culture_parts.append("In-office role; hybrid eligibility varies by tenure and performance")
+    if re.search(r"learning(?:,|\s+and|\s*&)\s*(?:growth|development)", lower, re.IGNORECASE):
+        culture_parts.append("Invests in employee learning and career development")
+
+    culture_notes = ". ".join(culture_parts)
+    if culture_notes and not culture_notes.endswith("."):
+        culture_notes += "."
+
+    intel = CompanyIntelOutput(
+        company_name=company_name,
+        mission=mission[:_MISSION_MAX_CHARS],
+        values=values[:8],
+        culture_notes=culture_notes[:_CULTURE_MAX_CHARS],
+        source="jd_text",
+    )
+    return intel if not intel.is_empty() else None
+
 
 def _build_intel(company_name: str, data: dict) -> CompanyIntelOutput:
     mission = str(data.get("mission") or "").strip()[:_MISSION_MAX_CHARS]
@@ -133,13 +187,13 @@ async def extract_from_jd(
         log.info(
             "company_intel_no_platform_key",
             company_name=company_name,
-            hint="configure GOOGLE_API_KEY or OPENAI_API_KEY for company intel extraction",
+            hint="configure GOOGLE_API_KEY or OPENAI_API_KEY for LLM extraction; using JD heuristic",
         )
-        return None
+        return extract_from_jd_heuristic(company_name, jd_text)
 
     llm = _get_extraction_client()
     if llm is None:
-        return None
+        return extract_from_jd_heuristic(company_name, jd_text)
 
     safe_name = _sanitize_company_name(company_name)
     jd_truncated = jd_text[:_JD_CHAR_LIMIT]
@@ -186,4 +240,6 @@ async def extract_from_jd(
         value_count=len(intel.values),
         has_culture=bool(intel.culture_notes),
     )
+    if intel.is_empty():
+        return extract_from_jd_heuristic(company_name, jd_text)
     return intel

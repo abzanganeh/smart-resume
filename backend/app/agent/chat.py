@@ -32,9 +32,9 @@ async def run(
     resume_json = json.dumps(session.phase3_output.model_dump(), indent=2)
     jd_text = session.jd_raw or ""
 
-    system_content = _SYSTEM_PROMPT.format(
-        resume_json=resume_json,
-        jd_text=jd_text,
+    # Use replace(), not str.format() — the prompt may contain JSON examples with braces.
+    system_content = (
+        _SYSTEM_PROMPT.replace("{resume_json}", resume_json).replace("{jd_text}", jd_text)
     )
 
     messages: list[LLMMessage] = [

@@ -25,12 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.company_profile import CompanyIntelOutput
+from app.models.session import Session
 from app.services.company_intel.cache import get_cached, normalise_key, upsert_cache
 from app.services.company_intel.extractor import extract_from_jd
+from app.services.dashboard.resume_record import resolve_company_name
 
 log = structlog.get_logger("company_intel")
 
-__all__ = ["get_company_intel"]
+__all__ = ["get_company_intel", "ensure_session_company_intel"]
 
 
 async def get_company_intel(
@@ -75,3 +77,47 @@ async def get_company_intel(
         await db.rollback()
 
     return intel
+
+
+async def ensure_session_company_intel(session: Session) -> None:
+    """Load company intel when missing; mutates ``session.company_intel`` in place."""
+    if session.company_intel is not None and not session.company_intel.is_empty():
+        return
+
+    jd_text = session.jd_raw or ""
+    if not jd_text.strip():
+        return
+
+    company_name = resolve_company_name(session)
+    if not company_name or company_name == "Unknown":
+        return
+
+    try:
+        from app.db.engine import async_session_factory
+
+        async with async_session_factory() as db:
+            intel = await get_company_intel(
+                db,
+                company_name=company_name,
+                jd_text=jd_text,
+            )
+    except Exception as exc:
+        log.warning("company_intel_session_fetch_failed", error=str(exc))
+        return
+
+    if intel is None or intel.is_empty():
+        return
+
+    session.company_intel = intel
+    log.info(
+        "company_intel_session_loaded",
+        company=company_name,
+        source=intel.source,
+    )
+
+    try:
+        from app.services import session_store as _store
+
+        await _store.update_session(session)
+    except Exception as exc:
+        log.warning("company_intel_session_persist_failed", error=str(exc))

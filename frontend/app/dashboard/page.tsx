@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { signOut } from "next-auth/react"
 import { DashboardView } from "@/components/dashboard/DashboardView"
 import { useRequireAuth } from "@/lib/auth/guards"
+import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { Loader2 } from "lucide-react"
 
 export default function DashboardPage() {

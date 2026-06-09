@@ -174,6 +174,11 @@ class SubscriptionView(BaseModel):
     pause_resumes_at: datetime | None
 
 
+class SubscriptionCurrentResponse(BaseModel):
+    subscription: SubscriptionView | None
+    credit_balance: int
+
+
 class RefundRequestPayload(BaseModel):
     reason: Literal[
         "self_service_24h",
@@ -469,7 +474,12 @@ async def subscriptions_current(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
-) -> SubscriptionView | dict[str, None]:
+) -> SubscriptionCurrentResponse:
+    free_credits = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
+    if user.credit_balance != free_credits:
+        user.credit_balance = max(0, free_credits)
+        await db.flush()
+
     sub = (
         await db.execute(
             select(Subscription)
@@ -480,28 +490,31 @@ async def subscriptions_current(
         )
     ).scalar_one_or_none()
     if sub is None:
-        return {"subscription": None}
-    return SubscriptionView(
-        id=sub.id,
-        plan=sub.plan.value,
-        billing_cycle=sub.billing_cycle.value,
-        llm_upgrade=sub.llm_upgrade.value,
-        llm_upgrade_billing_cycle=(
-            sub.llm_upgrade_billing_cycle.value
-            if sub.llm_upgrade_billing_cycle is not None
-            else None
+        return SubscriptionCurrentResponse(subscription=None, credit_balance=free_credits)
+    return SubscriptionCurrentResponse(
+        subscription=SubscriptionView(
+            id=sub.id,
+            plan=sub.plan.value,
+            billing_cycle=sub.billing_cycle.value,
+            llm_upgrade=sub.llm_upgrade.value,
+            llm_upgrade_billing_cycle=(
+                sub.llm_upgrade_billing_cycle.value
+                if sub.llm_upgrade_billing_cycle is not None
+                else None
+            ),
+            status=sub.status.value,
+            trial_ends_at=sub.trial_ends_at,
+            period_start=sub.period_start,
+            period_end=sub.period_end,
+            resumes_used=sub.resumes_used,
+            searches_used=sub.searches_used,
+            upgraded_resumes_used=sub.upgraded_resumes_used,
+            cancel_at_period_end=sub.cancel_at_period_end,
+            payment_failed_at=sub.payment_failed_at,
+            paused_at=sub.paused_at,
+            pause_resumes_at=sub.pause_resumes_at,
         ),
-        status=sub.status.value,
-        trial_ends_at=sub.trial_ends_at,
-        period_start=sub.period_start,
-        period_end=sub.period_end,
-        resumes_used=sub.resumes_used,
-        searches_used=sub.searches_used,
-        upgraded_resumes_used=sub.upgraded_resumes_used,
-        cancel_at_period_end=sub.cancel_at_period_end,
-        payment_failed_at=sub.payment_failed_at,
-        paused_at=sub.paused_at,
-        pause_resumes_at=sub.pause_resumes_at,
+        credit_balance=free_credits,
     )
 
 

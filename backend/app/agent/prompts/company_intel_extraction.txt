@@ -6,9 +6,9 @@ Focus only on what is explicitly stated — do NOT invent or assume.
 Return a JSON object with EXACTLY these fields:
 
 {
-  "mission": "One sentence. The company's stated purpose or mission. Empty string if not mentioned.",
-  "values": ["Value 1", "Value 2"],  // Core values or principles explicitly named. Max 8 items. Empty array if none stated.
-  "culture_notes": "One or two sentences. Hiring culture signals: what they emphasize (e.g. ownership, speed, collaboration, data-driven). Empty string if not enough signal."
+  "mission": "One sentence. The company's stated purpose or mission — include explicit purpose statements from sections like 'Why [Company]' when present. Empty string if not mentioned.",
+  "values": ["Value 1", "Value 2"],  // Core values, principles, or recurring cultural themes explicitly named (e.g. collaboration, learning, inclusion). Max 8 items. Empty array if none stated.
+  "culture_notes": "One or two sentences. Hiring culture signals: what they emphasize in candidate fit (e.g. ownership, speed, collaboration, data-driven, in-office expectations). Empty string if not enough signal."
 }
 
 Rules:

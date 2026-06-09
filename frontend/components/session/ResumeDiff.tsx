@@ -2,6 +2,7 @@
 
 import { type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
 import { TailoredEditor } from "./TailoredEditor";
+import type { ResumeSuggestion } from "@/lib/suggestions";
 
 interface Props {
   tailored: TailoredResumeOutput | null;
@@ -15,9 +16,13 @@ interface Props {
   phaseRunning?: boolean;
   suggestionDraft?: string | null;
   onClearSuggestion?: () => void;
+  suggestions?: ResumeSuggestion[];
+  onAcceptSuggestion?: (id: string) => void;
+  onRejectSuggestion?: (id: string) => void;
+  onDismissSuggestion?: (id: string) => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onRejectSuggestion, onDismissSuggestion }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -60,6 +65,10 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         phaseRunning={phaseRunning}
         suggestionDraft={suggestionDraft}
         onClearSuggestion={onClearSuggestion}
+        suggestions={suggestions}
+        onAcceptSuggestion={onAcceptSuggestion}
+        onRejectSuggestion={onRejectSuggestion}
+        onDismissSuggestion={onDismissSuggestion}
       />
     </div>
   );

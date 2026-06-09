@@ -5,6 +5,14 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class NewProject(BaseModel):
+    """A new project entry to append to the resume projects list."""
+
+    name: str
+    description: str | None = None
+    bullets: list[str] = Field(default_factory=list)
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -64,6 +72,39 @@ class ResumePatch(BaseModel):
         description="Replacement date range (e.g. '2022 – 2025'). Only set when section='experience'.",
     )
 
+    # ── Education ────────────────────────────────────────────────────────────
+    institution: str | None = Field(
+        default=None,
+        description=(
+            "School or program name to match — copy EXACTLY from education[].institution. "
+            "Only set when section='education'."
+        ),
+    )
+    institution_old: str | None = Field(
+        default=None,
+        description="Current institution name (for diff display). Optional when section='education'.",
+    )
+    new_institution: str | None = Field(
+        default=None,
+        description="Replacement institution name (e.g. shorten 'Interview Kickstart' to 'IK').",
+    )
+    new_degree: str | None = Field(
+        default=None,
+        description="Replacement degree text. Only set when section='education'.",
+    )
+    add_education_bullets: list[str] = Field(
+        default_factory=list,
+        description="Bullets to append to the matched education entry.",
+    )
+    education_bullet_old: str | None = Field(
+        default=None,
+        description="Exact existing education bullet to replace (verbatim).",
+    )
+    education_bullet_new: str | None = Field(
+        default=None,
+        description="Replacement education bullet text.",
+    )
+
     # ── Projects ─────────────────────────────────────────────────────────────
     remove_projects: list[str] = Field(
         default_factory=list,
@@ -93,6 +134,14 @@ class ResumePatch(BaseModel):
             "Full replacement bullet list for the named project. Use ONLY when replacing "
             "all bullets at once (e.g. user provides a complete rewrite). "
             "project_bullet_old/new takes priority when both are set."
+        ),
+    )
+    new_project: NewProject | None = Field(
+        default=None,
+        description=(
+            "A brand-new project to append to the resume. Set name, description (optional), "
+            "and bullets. Use ONLY when the project does not already exist in the resume JSON. "
+            "Do NOT use project_name/project_bullets_replace_all for a new project."
         ),
     )
 
