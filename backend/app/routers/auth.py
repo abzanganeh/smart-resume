@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import is_production_grade, settings
 from app.db.engine import get_db
 from app.limiter import limiter
+from app.models.billing import CreditKind
 from app.models.user import (
     AuthAuditEvent,
     AuthProvider,
@@ -39,6 +40,7 @@ from app.models.user import (
     User,
     UserTier,
 )
+from app.services.billing.credits import get_balance
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.dependencies import CLOSURE_HEADER, get_current_user
@@ -234,13 +236,13 @@ def _clear_refresh_cookie(response: Response) -> None:
     )
 
 
-def _me(user: User) -> MeResponse:
+def _me(user: User, *, credit_balance: int | None = None) -> MeResponse:
     return MeResponse(
         id=user.id,
         email=user.email,
         display_name=user.display_name,
         tier=user.tier,
-        credit_balance=user.credit_balance,
+        credit_balance=credit_balance if credit_balance is not None else user.credit_balance,
         auth_provider=user.auth_provider,
         email_verified_at=user.email_verified_at,
         has_totp=user.has_totp,
@@ -249,6 +251,15 @@ def _me(user: User) -> MeResponse:
         onboarding_completed_at=user.onboarding_completed_at,
         onboarding_ai_choice=user.onboarding_ai_choice,
     )
+
+
+async def _me_from_ledger(db: AsyncSession, user: User) -> MeResponse:
+    """Return profile fields with the authoritative free-credit ledger balance."""
+    balance = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
+    if user.credit_balance != balance:
+        user.credit_balance = max(0, balance)
+        await db.flush()
+    return _me(user, credit_balance=balance)
 
 
 async def _issue_session(
@@ -278,7 +289,7 @@ async def _issue_session(
     return AuthSuccessResponse(
         access_token=access,
         expires_in=settings.ACCESS_TOKEN_TTL_SECONDS,
-        user=_me(user),
+        user=await _me_from_ledger(db, user),
     )
 
 
@@ -774,7 +785,7 @@ async def refresh(
     return AuthSuccessResponse(
         access_token=access,
         expires_in=settings.ACCESS_TOKEN_TTL_SECONDS,
-        user=_me(user),
+        user=await _me_from_ledger(db, user),
     )
 
 
@@ -784,10 +795,11 @@ async def refresh(
 async def me(
     request: Request,
     response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> MeResponse:
     _attach_closure_header(request, response)
-    return _me(user)
+    return await _me_from_ledger(db, user)
 
 
 # 7b. PATCH /onboarding ----------------------------------------------------
@@ -814,7 +826,7 @@ async def patch_onboarding(
 
     await db.commit()
     await db.refresh(user)
-    return _me(user)
+    return await _me_from_ledger(db, user)
 
 
 # 8. GET /sessions ---------------------------------------------------------

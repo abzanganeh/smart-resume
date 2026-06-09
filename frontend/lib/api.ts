@@ -15,6 +15,45 @@ export class ApiError extends Error {
   }
 }
 
+function formatApiErrorMessage(
+  detail: unknown,
+  status: number,
+): { message: string; code?: string } {
+  if (typeof detail === "string") {
+    return { message: detail };
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as Record<string, unknown>;
+    const code = typeof d.code === "string" ? d.code : undefined;
+    const candidate = d.message ?? d.error;
+    if (typeof candidate === "string") {
+      return { message: candidate, code };
+    }
+    if (code === "insufficient_credits") {
+      const action = typeof d.action === "string" ? d.action : undefined;
+      if (action === "ats_recalc") {
+        return {
+          code,
+          message:
+            "You're out of credits. ATS score recalculation costs 1 credit.",
+        };
+      }
+      return {
+        code,
+        message: "You're out of credits. Upgrade or wait for your next grant.",
+      };
+    }
+    if (code === "subscription_required") {
+      return { code, message: "This feature requires an active subscription." };
+    }
+    if (typeof code === "string") {
+      return { message: code, code };
+    }
+    return { message: JSON.stringify(detail) };
+  }
+  return { message: `HTTP ${status}` };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Attach the NextAuth bearer token on every API call when a session exists.
   // Falls back gracefully for anonymous (unauthenticated) usage.
@@ -41,23 +80,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const detail = body?.detail;
-    let message: string;
-    let errorCode: string | undefined;
-    if (typeof detail === "string") {
-      message = detail;
-    } else if (detail && typeof detail === "object") {
-      // FastAPI sometimes returns structured detail (e.g. {code, message, ...}).
-      // Prefer a human-readable field; fall back to JSON so we never show "[object Object]".
-      const d = detail as Record<string, unknown>;
-      errorCode = typeof d.code === "string" ? d.code : undefined;
-      const candidate = d.message ?? d.error ?? d.code;
-      message =
-        typeof candidate === "string" ? candidate : JSON.stringify(detail);
-    } else {
-      message = `HTTP ${res.status}`;
-    }
-    throw new ApiError(message, res.status, errorCode);
+    const { message, code } = formatApiErrorMessage(body?.detail, res.status);
+    throw new ApiError(message, res.status, code);
   }
   return res.json() as Promise<T>;
 }
@@ -410,6 +434,12 @@ async function fetchSubscriptionCurrentRaw(
   return request("/api/subscriptions/current", {
     headers: { Authorization: `Bearer ${token}` },
   })
+}
+
+/** Drop cached subscription/credit snapshot (e.g. after a credit-consuming action). */
+export function invalidateSubscriptionCache(): void {
+  subscriptionCache = null
+  subscriptionInflight = null
 }
 
 /** Cached, single-flight subscription snapshot for nav widgets. */
@@ -926,6 +956,7 @@ export interface DashboardSummaryResponse {
   } | null;
   counts: {
     resumes: number;
+    master_chunks: number;
     applications: number;
     saved_jobs: number;
   };
@@ -1016,12 +1047,21 @@ export interface ResumePatch {
   new_title?: string;
   dates_old?: string;
   new_dates?: string;
+  // Education
+  institution?: string;
+  institution_old?: string;
+  new_institution?: string;
+  new_degree?: string;
+  add_education_bullets?: string[];
+  education_bullet_old?: string;
+  education_bullet_new?: string;
   // Projects
   remove_projects?: string[];
   project_name?: string;
   project_bullet_old?: string;
   project_bullet_new?: string;
   project_bullets_replace_all?: string[];
+  new_project?: { name: string; description?: string; bullets: string[] } | null;
 }
 
 export interface ChatMessage {

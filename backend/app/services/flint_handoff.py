@@ -16,6 +16,8 @@ from fastapi import HTTPException, status
 
 from app.config import settings
 from app.models.session import Session
+from app.services.company_intel import ensure_session_company_intel
+from app.services.dashboard.resume_record import resolve_company_name
 from app.services.export_service import render_txt
 from app.services.session_store import (
     get_session,
@@ -41,22 +43,10 @@ def _rate_key(client_ip: str) -> str:
 
 
 def _derive_session_name(session: Session) -> str:
-    company = ""
+    company = resolve_company_name(session)
+    if company == "Unknown":
+        company = ""
     role = "Interview"
-
-    if session.phase2_output is not None:
-        audit = session.phase2_output
-        if getattr(audit, "company", None):
-            company = str(audit.company).strip()
-
-    if not company and session.phase3_output is not None:
-        contact = session.phase3_output.contact or {}
-        if isinstance(contact, dict):
-            company = str(contact.get("company") or "").strip()
-
-    if not company and session.jd_raw:
-        first_line = session.jd_raw.strip().splitlines()[0][:120]
-        company = first_line.strip()
 
     if session.phase3_output is not None:
         contact = session.phase3_output.contact or {}
@@ -119,6 +109,7 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
 
 async def create_handoff_token(session: Session) -> tuple[str, int]:
     """Mint a single-use token. Returns (token, expires_in_seconds)."""
+    await ensure_session_company_intel(session)
     payload = build_handoff_payload(session)
     token = str(uuid.uuid4())
     ttl = settings.FLINT_HANDOFF_TTL_SECONDS

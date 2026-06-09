@@ -98,6 +98,10 @@ function ProfilePageContent() {
     if (!token) return
     startContinueTransition(async () => {
       try {
+        if (fromOnboarding && onboardingIncomplete) {
+          router.push("/onboarding?step=4")
+          return
+        }
         if (onboardingIncomplete) {
           const choice = session?.backendUser?.onboarding_ai_choice ?? "platform"
           const user = await patchOnboarding(token, {
@@ -105,7 +109,7 @@ function ProfilePageContent() {
             complete: true,
           })
           await updateSession({ backendUser: user })
-          router.push(postOnboardingDestination(user))
+          window.location.assign(postOnboardingDestination(user))
           return
         }
         if (returnUrl) {
@@ -266,7 +270,7 @@ function ProfilePageContent() {
                         </>
                       ) : (
                         <>
-                          {onboardingIncomplete ? "Finish setup" : "Continue"}
+                          {onboardingIncomplete ? "Continue setup" : "Continue"}
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}
@@ -295,7 +299,12 @@ function ProfilePageContent() {
                 </div>
               </div>
 
-              {showContinue && onboardingIncomplete && (
+              {showContinue && onboardingIncomplete && fromOnboarding && (
+                <p className="text-sm text-slate-500">
+                  Your master resume is indexed. Continue to the final onboarding step, then open your dashboard.
+                </p>
+              )}
+              {showContinue && onboardingIncomplete && !fromOnboarding && (
                 <p className="text-sm text-slate-500">
                   Your master resume is indexed. Finish setup to open your dashboard and start tailoring.
                 </p>

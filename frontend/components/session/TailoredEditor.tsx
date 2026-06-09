@@ -15,8 +15,47 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { patchTailoredResume, type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
+import {
+  patchTailoredResume,
+  saveTailoredResume,
+  type PhaseRunScope,
+  type TailoredResumeOutput,
+} from "@/lib/api";
 import { useVersionStack } from "@/lib/useVersionStack";
+import type { ResumeSuggestion } from "@/lib/suggestions";
+import {
+  acceptedBulletSuggestion,
+  acceptedProjectBulletSuggestion,
+  acceptedSkillAdds,
+  activeSummarySuggestion,
+  bulletEditSuggestion,
+  datesSuggestion,
+  educationBulletAddSuggestions,
+  educationSuggestions,
+  hasPendingEducationSuggestions,
+  experienceSuggestions,
+  institutionRenameSuggestion,
+  newProjectSuggestions,
+  orphanedSuggestions,
+  pendingSkillAdds,
+  pendingSkillRemoves,
+  pendingSuggestionCount,
+  projectBulletEditSuggestion,
+  projectRemovalPending,
+  projectReplaceAllSuggestion,
+  skillChipTone,
+  skillsSuggestions,
+  titleSuggestion,
+} from "@/lib/suggestionHighlight";
+import {
+  InlineFieldSuggestion,
+  OrphanSuggestionCard,
+  PendingAdditionCard,
+  SkillChip,
+  SuggestedBulletRow,
+  SuggestionActionButtons,
+  SummaryHighlight,
+} from "./SuggestionHighlight";
 
 interface Props {
   initial: TailoredResumeOutput;
@@ -26,6 +65,10 @@ interface Props {
   phaseRunning?: boolean;
   suggestionDraft?: string | null;
   onClearSuggestion?: () => void;
+  suggestions?: ResumeSuggestion[];
+  onAcceptSuggestion?: (id: string) => void;
+  onRejectSuggestion?: (id: string) => void;
+  onDismissSuggestion?: (id: string) => void;
 }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -47,6 +90,17 @@ function SavedBadge() {
       <Check className="w-3 h-3" /> saved
     </span>
   );
+}
+
+function dismissAcceptedForSection(
+  suggestions: ResumeSuggestion[],
+  onDismiss: ((id: string) => void) | undefined,
+  predicate: (s: ResumeSuggestion) => boolean,
+) {
+  if (!onDismiss) return;
+  for (const s of suggestions) {
+    if (s.status === "accepted" && predicate(s)) onDismiss(s.id);
+  }
 }
 
 // ── inline text editor ───────────────────────────────────────────────────────
@@ -265,6 +319,9 @@ function ScopedBulletList({
   bullets,
   company,
   phaseRunning,
+  suggestions = [],
+  onAcceptSuggestion,
+  onRejectSuggestion,
   onRegenBullet,
   onSaveBullet,
   onDeleteBullet,
@@ -274,6 +331,9 @@ function ScopedBulletList({
   bullets: string[];
   company: string;
   phaseRunning?: boolean;
+  suggestions?: ResumeSuggestion[];
+  onAcceptSuggestion?: (id: string) => void;
+  onRejectSuggestion?: (id: string) => void;
   onRegenBullet: (idx: number) => void;
   onSaveBullet: (idx: number, text: string) => Promise<void>;
   onDeleteBullet: (idx: number) => Promise<void>;
@@ -339,37 +399,48 @@ function ScopedBulletList({
                 </button>
               </div>
             </div>
-          ) : (
-            <>
-              <span className="text-slate-500 mt-1 shrink-0">•</span>
-              <p className="flex-1 text-slate-200 text-sm leading-relaxed">{b}</p>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
-                <button
-                  type="button"
-                  disabled={phaseRunning}
-                  onClick={() => onRegenBullet(idx)}
-                  className="p-1 rounded text-slate-500 hover:text-amber-400 disabled:opacity-40"
-                  title="Regenerate bullet"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
-                  className="p-1 rounded text-slate-500 hover:text-amber-400"
-                  title="Edit bullet"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => commitDelete(idx)}
-                  className="p-1 rounded text-slate-500 hover:text-red-400"
-                  title="Delete bullet"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </>
-          )}
+          ) : (() => {
+            const editSug = bulletEditSuggestion(suggestions, company, b);
+            const acceptedSug = !editSug
+              ? acceptedBulletSuggestion(suggestions, company, b)
+              : undefined;
+            const activeSug = editSug ?? acceptedSug;
+            const tone = activeSug?.status === "accepted"
+              ? "accepted"
+              : activeSug?.status === "pending"
+                ? "pending"
+                : "none";
+
+            if (activeSug && tone !== "none") {
+              return (
+                <SuggestedBulletRow
+                  suggestion={activeSug}
+                  originalText={b}
+                  displayText={b}
+                  tone={tone}
+                  phaseRunning={phaseRunning}
+                  onAccept={(id) => onAcceptSuggestion?.(id)}
+                  onReject={(id) => onRejectSuggestion?.(id)}
+                  onRegen={() => onRegenBullet(idx)}
+                  onEdit={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
+                  onDelete={() => commitDelete(idx)}
+                />
+              );
+            }
+
+            return (
+              <SuggestedBulletRow
+                displayText={b}
+                tone="none"
+                phaseRunning={phaseRunning}
+                onAccept={() => {}}
+                onReject={() => {}}
+                onRegen={() => onRegenBullet(idx)}
+                onEdit={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
+                onDelete={() => commitDelete(idx)}
+              />
+            );
+          })()}
         </div>
       ))}
 
@@ -415,7 +486,10 @@ function ScopedBulletList({
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
+export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onRejectSuggestion, onDismissSuggestion }: Props) {
+  function acceptSug(id: string) { onAcceptSuggestion?.(id); }
+  function rejectSug(id: string) { onRejectSuggestion?.(id); }
+
   const { present: data, push, replace, undo, redo, canUndo, canRedo } = useVersionStack(initial);
   const [draftText, setDraftText] = useState(suggestionDraft ?? "");
 
@@ -435,6 +509,18 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   useEffect(() => {
     replace(initial);
   }, [initial, replace]);
+
+  useEffect(() => {
+    const pendingExp = data.experience.find((exp) =>
+      experienceSuggestions(suggestions, exp.company).some((s) => s.status === "pending"),
+    );
+    if (pendingExp) setExpandedExp(pendingExp.company);
+
+    const pendingEdu = data.education.find((edu) =>
+      hasPendingEducationSuggestions(suggestions, edu.institution, data.education),
+    );
+    if (pendingEdu) setExpandedEdu(pendingEdu.institution);
+  }, [suggestions, data.experience, data.education]);
 
   async function patch(payload: Record<string, unknown>) {
     const result = await patchTailoredResume(sessionId, payload);
@@ -501,6 +587,11 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   async function saveSummary(text: string) {
     await patch({ section: "summary", new_text: text });
     updateLocal((p) => ({ ...p, summary: text }));
+    dismissAcceptedForSection(
+      suggestions,
+      onDismissSuggestion,
+      (s) => s.patch.section === "summary",
+    );
   }
 
   // ── Skills ───────────────────────────────────────────────────────────────
@@ -508,6 +599,11 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   async function saveSkills(skills: string[]) {
     await patch({ section: "skills", skills });
     updateLocal((p) => ({ ...p, skills }));
+    dismissAcceptedForSection(
+      suggestions,
+      onDismissSuggestion,
+      (s) => s.patch.section === "skills",
+    );
   }
 
   // ── Experience bullets ───────────────────────────────────────────────────
@@ -522,6 +618,11 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           : e
       ),
     }));
+    dismissAcceptedForSection(
+      suggestions,
+      onDismissSuggestion,
+      (s) => s.patch.section === "experience",
+    );
   }
 
   async function deleteExpBullet(company: string, idx: number) {
@@ -560,6 +661,11 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         e.institution === institution ? { ...e, bullets } : e
       ),
     }));
+    dismissAcceptedForSection(
+      suggestions,
+      onDismissSuggestion,
+      (s) => s.patch.section === "education",
+    );
   }
 
   async function saveEduBullet(institution: string, idx: number, text: string) {
@@ -582,6 +688,22 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
     await saveEduBullets(institution, [...entry.bullets, text]);
   }
 
+  async function saveEduInstitution(oldInstitution: string, newInstitution: string) {
+    const trimmed = newInstitution.trim();
+    if (!trimmed || trimmed === oldInstitution.trim()) return;
+    const nextEducation = data.education.map((e) =>
+      e.institution === oldInstitution ? { ...e, institution: trimmed } : e,
+    );
+    const next = { ...data, education: nextEducation };
+    updateLocal(() => next);
+    await saveTailoredResume(sessionId, next);
+    dismissAcceptedForSection(
+      suggestions,
+      onDismissSuggestion,
+      (s) => s.patch.section === "education",
+    );
+  }
+
   // ── Skills chip editor ───────────────────────────────────────────────────
 
   const [editingSkills, setEditingSkills] = useState(false);
@@ -599,8 +721,26 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
     setTimeout(() => setSkillsSaved(false), 2000);
   }
 
+  const pendingCount = pendingSuggestionCount(suggestions);
+
   return (
     <div className="space-y-8">
+      {pendingCount > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-100 space-y-1.5">
+          <p className="font-semibold text-amber-300">
+            {pendingCount} pending suggestion{pendingCount !== 1 ? "s" : ""} — not applied yet
+          </p>
+          <p className="text-amber-200/80">
+            <span className="inline-block w-2 h-2 rounded-sm bg-amber-500/60 mr-1 align-middle" />
+            Yellow = proposed change
+            <span className="mx-2">·</span>
+            <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/60 mr-1 align-middle" />
+            Green = accepted
+            <span className="mx-2">·</span>
+            Click <strong>Accept</strong> on each highlight to update your resume
+          </p>
+        </div>
+      )}
       {suggestionDraft && (
         <div className="bg-amber-400/10 border border-amber-400/30 rounded-xl p-4 space-y-2">
           <p className="text-xs text-amber-400 font-semibold uppercase tracking-wide">
@@ -744,12 +884,19 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
             <RotateCw className="w-3.5 h-3.5" /> Regenerate
           </button>
         </div>
-        <InlineText
-          value={data.summary}
-          onSave={saveSummary}
-          rows={4}
-          placeholder="2–3 sentences, max 60 words, include 3–4 exact JD keywords."
-        />
+        <SummaryHighlight
+          currentText={data.summary}
+          suggestion={activeSummarySuggestion(suggestions)}
+          onAccept={acceptSug}
+          onReject={rejectSug}
+        >
+          <InlineText
+            value={data.summary}
+            onSave={saveSummary}
+            rows={4}
+            placeholder="2–3 sentences, max 60 words, include 3–4 exact JD keywords."
+          />
+        </SummaryHighlight>
       </section>
 
       {/* ── Skills ───────────────────────────────────────────────────────── */}
@@ -793,15 +940,48 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         ) : (
           <div className="group relative">
             <div className="flex flex-wrap gap-1.5 pr-8">
-              {data.skills.map((s, i) => (
-                <span
-                  key={i}
-                  className="bg-slate-800 border border-slate-700 text-slate-300 rounded px-2 py-0.5 text-xs"
-                >
-                  {s}
-                </span>
+              {data.skills.map((s, i) => {
+                const removeSug = skillsSuggestions(suggestions).find(
+                  (sug) =>
+                    sug.status === "pending" &&
+                    (sug.patch.remove_skills ?? []).some((r) => r.toLowerCase() === s.toLowerCase()),
+                );
+                return (
+                  <SkillChip
+                    key={i}
+                    skill={s}
+                    tone={skillChipTone(
+                      s,
+                      suggestions,
+                      pendingSkillRemoves(suggestions),
+                      acceptedSkillAdds(suggestions),
+                    )}
+                    suggestion={removeSug}
+                    onAccept={acceptSug}
+                    onReject={rejectSug}
+                  />
+                );
+              })}
+              {pendingSkillAdds(suggestions).map((s) => (
+                <SkillChip
+                  key={`add-${s}`}
+                  skill={s}
+                  tone="pending"
+                  onAccept={acceptSug}
+                  onReject={rejectSug}
+                />
               ))}
             </div>
+            {skillsSuggestions(suggestions)
+              .filter((sug) => sug.status === "pending" && (sug.patch.add_skills?.length ?? 0) > 0)
+              .map((sug) => (
+                <div key={sug.id} className="flex justify-end mt-2">
+                  <SuggestionActionButtons
+                    onAccept={() => acceptSug(sug.id)}
+                    onReject={() => rejectSug(sug.id)}
+                  />
+                </div>
+              ))}
             <button
               onClick={() => { setSkillsDraft(data.skills.join(", ")); setEditingSkills(true); }}
               className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 p-1 rounded text-slate-500 hover:text-amber-400 transition"
@@ -820,15 +1000,41 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           <div className="space-y-3">
             {data.experience.map((exp) => {
               const open = expandedExp === exp.company;
+              const hasPendingHighlight =
+                experienceSuggestions(suggestions, exp.company).some((s) => s.status === "pending");
               return (
-                <div key={exp.company} className="border border-slate-700 rounded-xl overflow-hidden">
+                <div
+                  key={exp.company}
+                  className={`border rounded-xl overflow-hidden ${
+                    hasPendingHighlight
+                      ? "border-amber-500/50 ring-1 ring-amber-500/25"
+                      : "border-slate-700"
+                  }`}
+                >
                   <button
                     onClick={() => setExpandedExp(open ? null : exp.company)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-left transition"
                   >
                     <div>
-                      <p className="text-slate-100 text-sm font-semibold">{exp.title}</p>
-                      <p className="text-slate-400 text-xs">{exp.company} · {exp.dates}</p>
+                      <p className="text-slate-100 text-sm font-semibold">
+                        <InlineFieldSuggestion
+                          current={exp.title}
+                          suggestion={titleSuggestion(suggestions, exp.company)}
+                          label="title"
+                          onAccept={acceptSug}
+                          onReject={rejectSug}
+                        />
+                      </p>
+                      <p className="text-slate-400 text-xs">
+                        {exp.company} ·{" "}
+                        <InlineFieldSuggestion
+                          current={exp.dates}
+                          suggestion={datesSuggestion(suggestions, exp.company)}
+                          label="dates"
+                          onAccept={acceptSug}
+                          onReject={rejectSug}
+                        />
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {exp.keywords_injected?.length > 0 && (
@@ -860,6 +1066,9 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
                         bullets={exp.bullets}
                         company={exp.company}
                         phaseRunning={phaseRunning}
+                        suggestions={suggestions}
+                        onAcceptSuggestion={acceptSug}
+                        onRejectSuggestion={rejectSug}
                         onRegenBullet={(idx) =>
                           regen({ section: "experience", company: exp.company, bullet_index: idx })
                         }
@@ -895,8 +1104,30 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           <div className="space-y-3">
             {data.education.map((edu) => {
               const open = expandedEdu === edu.institution;
+              const renameSug = institutionRenameSuggestion(
+                suggestions,
+                edu.institution,
+                data.education,
+              );
+              const bulletAddSugs = educationBulletAddSuggestions(
+                suggestions,
+                edu.institution,
+                data.education,
+              );
+              const eduPending = hasPendingEducationSuggestions(
+                suggestions,
+                edu.institution,
+                data.education,
+              );
               return (
-                <div key={edu.institution} className="border border-slate-700 rounded-xl overflow-hidden">
+                <div
+                  key={edu.institution}
+                  className={`border rounded-xl overflow-hidden ${
+                    eduPending
+                      ? "border-amber-500/50 ring-1 ring-amber-500/25"
+                      : "border-slate-700"
+                  }`}
+                >
                   <button
                     onClick={() => setExpandedEdu(open ? null : edu.institution)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-left transition"
@@ -906,7 +1137,13 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
                       <div>
                         <p className="text-slate-100 text-sm font-semibold">{edu.degree}</p>
                         <p className="text-slate-400 text-xs">
-                          {edu.institution}
+                          <InlineFieldSuggestion
+                            current={edu.institution}
+                            suggestion={renameSug}
+                            label="institution"
+                            onAccept={acceptSug}
+                            onReject={rejectSug}
+                          />
                           {edu.year ? ` · ${edu.year}` : ""}
                         </p>
                       </div>
@@ -926,9 +1163,18 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
                   </button>
 
                   {open && (
-                    <div className="px-4 py-4 bg-slate-900/40">
-                      {edu.bullets.length === 0 && (
-                        <p className="text-slate-600 text-xs mb-3 flex items-center gap-1.5">
+                    <div className="px-4 py-4 bg-slate-900/40 space-y-4">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1.5">Institution</p>
+                        <InlineText
+                          value={edu.institution}
+                          onSave={(text) => saveEduInstitution(edu.institution, text)}
+                          rows={1}
+                          placeholder="School or program name"
+                        />
+                      </div>
+                      {edu.bullets.length === 0 && bulletAddSugs.length === 0 && (
+                        <p className="text-slate-600 text-xs flex items-center gap-1.5">
                           <Info className="w-3.5 h-3.5" />
                           No bullets yet — add relevant coursework, GPA, thesis, or activities.
                         </p>
@@ -940,6 +1186,23 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
                         onAddBullet={(text) => addEduBullet(edu.institution, text)}
                         addPlaceholder="e.g. Relevant coursework: Machine Learning, Distributed Systems · GPA: 3.9/4.0"
                       />
+                      {bulletAddSugs.map((sug) => (
+                        <PendingAdditionCard
+                          key={sug.id}
+                          suggestion={sug}
+                          onAccept={acceptSug}
+                          onReject={rejectSug}
+                        >
+                          <div className="space-y-1">
+                            {(sug.patch.add_education_bullets ?? []).map((bullet, bi) => (
+                              <p key={bi} className="text-amber-100 text-sm flex gap-2">
+                                <span className="text-amber-400 shrink-0">+</span>
+                                {bullet}
+                              </p>
+                            ))}
+                          </div>
+                        </PendingAdditionCard>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -956,11 +1219,33 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           <div className="space-y-3">
             {data.projects.map((proj, i) => {
               const p = proj as Record<string, unknown>;
+              const projectName = String(p.name ?? "");
               const bullets = (p.bullets as string[]) ?? [];
+              const removalSug = projectRemovalPending(suggestions, projectName);
+              const replaceAllSug = projectReplaceAllSuggestion(suggestions, projectName);
+              const removalTone = removalSug?.status === "accepted"
+                ? "accepted"
+                : removalSug?.status === "pending"
+                  ? "pending"
+                  : "none";
+
               return (
-                <div key={i} className="border border-slate-700 rounded-xl px-4 py-3 bg-slate-800/30">
+                <div
+                  key={i}
+                  className={`border rounded-xl px-4 py-3 ${
+                    removalTone === "pending"
+                      ? "border-red-500/50 bg-red-950/20"
+                      : removalTone === "accepted"
+                        ? "border-emerald-500/40 bg-emerald-950/10 opacity-60"
+                        : "border-slate-700 bg-slate-800/30"
+                  }`}
+                >
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-slate-100 text-sm font-semibold">{String(p.name ?? "")}</p>
+                    <p className={`text-sm font-semibold ${
+                      removalTone === "pending" ? "text-red-300 line-through" : "text-slate-100"
+                    }`}>
+                      {projectName}
+                    </p>
                     {!!p.url && (
                       <a
                         href={String(p.url)}
@@ -972,15 +1257,125 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
                       </a>
                     )}
                   </div>
-                  {bullets.map((b, j) => (
-                    <p key={j} className="text-slate-300 text-sm flex gap-2">
-                      <span className="text-slate-600 shrink-0">•</span>
-                      {b}
-                    </p>
-                  ))}
+
+                  {replaceAllSug?.status === "pending" ? (
+                    <PendingAdditionCard
+                      suggestion={replaceAllSug}
+                      onAccept={acceptSug}
+                      onReject={rejectSug}
+                    >
+                      <div className="space-y-1">
+                        {bullets.map((b, j) => (
+                          <p key={j} className="text-red-300/70 text-sm line-through flex gap-2">
+                            <span className="shrink-0">•</span>{b}
+                          </p>
+                        ))}
+                        {(replaceAllSug.patch.project_bullets_replace_all ?? []).map((b, j) => (
+                          <p key={`new-${j}`} className="text-amber-100 text-sm flex gap-2">
+                            <span className="text-amber-400 shrink-0">•</span>{b}
+                          </p>
+                        ))}
+                      </div>
+                    </PendingAdditionCard>
+                  ) : (
+                    bullets.map((b, j) => {
+                      const editSug = projectBulletEditSuggestion(suggestions, projectName, b);
+                      const acceptedSug = !editSug
+                        ? acceptedProjectBulletSuggestion(suggestions, projectName, b)
+                        : undefined;
+                      const activeSug = editSug ?? acceptedSug;
+                      const replaceAllAccepted =
+                        replaceAllSug?.status === "accepted" &&
+                        (replaceAllSug.patch.project_bullets_replace_all ?? []).some(
+                          (text) => text === b,
+                        );
+                      const tone = replaceAllAccepted || activeSug?.status === "accepted"
+                        ? "accepted"
+                        : activeSug?.status === "pending"
+                          ? "pending"
+                          : "none";
+
+                      if (activeSug && tone !== "none" && !replaceAllAccepted) {
+                        return (
+                          <SuggestedBulletRow
+                            key={j}
+                            suggestion={activeSug}
+                            originalText={b}
+                            displayText={b}
+                            tone={tone}
+                            onAccept={acceptSug}
+                            onReject={rejectSug}
+                          />
+                        );
+                      }
+
+                      if (tone === "accepted") {
+                        return (
+                          <SuggestedBulletRow
+                            key={j}
+                            displayText={b}
+                            tone="accepted"
+                            onAccept={() => {}}
+                            onReject={() => {}}
+                          />
+                        );
+                      }
+
+                      return (
+                        <p key={j} className="text-slate-300 text-sm flex gap-2">
+                          <span className="text-slate-600 shrink-0">•</span>
+                          {b}
+                        </p>
+                      );
+                    })
+                  )}
+
+                  {removalSug?.status === "pending" && (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-red-500/30">
+                      <p className="text-red-300 text-xs">Suggested removal</p>
+                      <SuggestionActionButtons
+                        onAccept={() => acceptSug(removalSug.id)}
+                        onReject={() => rejectSug(removalSug.id)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+          {newProjectSuggestions(suggestions).map((sug) => (
+            <PendingAdditionCard
+              key={sug.id}
+              suggestion={sug}
+              onAccept={acceptSug}
+              onReject={rejectSug}
+            >
+              <p className="text-amber-200 text-sm font-semibold">{sug.patch.new_project?.name}</p>
+              {sug.patch.new_project?.description && (
+                <p className="text-amber-200/60 text-xs mt-0.5">{sug.patch.new_project.description}</p>
+              )}
+              {(sug.patch.new_project?.bullets ?? []).map((b, j) => (
+                <p key={j} className="text-amber-100/90 text-sm flex gap-2 mt-1">
+                  <span className="text-amber-400 shrink-0">•</span>{b}
+                </p>
+              ))}
+            </PendingAdditionCard>
+          ))}
+        </section>
+      )}
+
+      {orphanedSuggestions(suggestions, data).length > 0 && (
+        <section>
+          <SectionHeader title="AI Suggestions" count={orphanedSuggestions(suggestions, data).length} />
+          <div className="space-y-2">
+            {orphanedSuggestions(suggestions, data).map((sug) => (
+              <OrphanSuggestionCard
+                key={sug.id}
+                suggestion={sug}
+                onAccept={acceptSug}
+                onReject={rejectSug}
+              />
+            ))}
           </div>
         </section>
       )}

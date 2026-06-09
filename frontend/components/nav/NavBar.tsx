@@ -5,7 +5,7 @@ import Link from "next/link"
 import { signOut, useSession } from "next-auth/react"
 import { ChevronDown, CreditCard, FileText, LogOut, Settings } from "lucide-react"
 import { BrandLogo } from "@/components/brand/BrandLogo"
-import { logoutUser } from "@/lib/auth/api"
+import { fetchMe, logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
 import { JobsNavItem } from "@/components/nav/JobsNavItem"
 import { NotificationBell } from "@/components/nav/NotificationBell"
@@ -16,8 +16,15 @@ export function NavBar() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on outside click
+  const accessToken =
+    session?.error === "TokenExpired" ? undefined : session?.backendAccessToken
+
+  // Keep the user menu mounted while NextAuth refreshes the JWT (status === "loading").
+  const showUserMenu = Boolean(session?.user ?? session?.backendAccessToken)
+
+  // Close dropdown on outside click — only while open.
   useEffect(() => {
+    if (!dropdownOpen) return
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false)
@@ -25,7 +32,7 @@ export function NavBar() {
     }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
-  }, [])
+  }, [dropdownOpen])
 
   async function handleLogout() {
     setDropdownOpen(false)
@@ -48,7 +55,7 @@ export function NavBar() {
         </Link>
 
         {/* Nav links (authenticated) */}
-        {status === "authenticated" && session && (
+        {showUserMenu && (
           <div className="flex items-center gap-1 text-sm text-slate-400 overflow-x-auto">
             <NavLink href="/session/new">New session</NavLink>
             <NavLink href="/profile">Edit master resume</NavLink>
@@ -61,19 +68,20 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
-          {status === "authenticated" && session && (
+          {showUserMenu && (
             <>
               <NotificationBell />
               <UsageWidget />
             </>
           )}
-          {status === "loading" ? (
+          {status === "loading" && !showUserMenu ? (
             <div className="w-20 h-7 bg-slate-800 rounded animate-pulse" />
-          ) : status === "authenticated" && session ? (
+          ) : showUserMenu ? (
             <UserMenu
-              displayName={session.backendUser?.display_name ?? session.user?.name ?? "You"}
-              email={session.user?.email ?? ""}
-              creditBalance={session.backendUser?.credit_balance}
+              displayName={session!.backendUser?.display_name ?? session!.user?.name ?? "You"}
+              email={session!.user?.email ?? ""}
+              creditBalance={session!.backendUser?.credit_balance}
+              accessToken={accessToken}
               dropdownOpen={dropdownOpen}
               setDropdownOpen={setDropdownOpen}
               dropdownRef={dropdownRef}
@@ -118,6 +126,7 @@ interface UserMenuProps {
   displayName: string
   email: string
   creditBalance?: number
+  accessToken?: string
   dropdownOpen: boolean
   setDropdownOpen: React.Dispatch<React.SetStateAction<boolean>>
   dropdownRef: React.RefObject<HTMLDivElement | null>
@@ -128,11 +137,41 @@ function UserMenu({
   displayName,
   email,
   creditBalance,
+  accessToken,
   dropdownOpen,
   setDropdownOpen,
   dropdownRef,
   onLogout,
 }: UserMenuProps) {
+  const [liveCredits, setLiveCredits] = useState<number | undefined>(creditBalance)
+  const fetchedForOpenRef = useRef(false)
+
+  useEffect(() => {
+    setLiveCredits(creditBalance)
+  }, [creditBalance])
+
+  useEffect(() => {
+    if (!dropdownOpen) {
+      fetchedForOpenRef.current = false
+      return
+    }
+    if (!accessToken || fetchedForOpenRef.current) return
+    fetchedForOpenRef.current = true
+
+    let cancelled = false
+    void fetchMe(accessToken)
+      .then((user) => {
+        if (!cancelled) setLiveCredits(user.credit_balance)
+      })
+      .catch(() => {
+        if (!cancelled) setLiveCredits(creditBalance)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [dropdownOpen, accessToken, creditBalance])
+
   const initials = displayName
     .split(" ")
     .map((n) => n[0])
@@ -143,12 +182,12 @@ function UserMenu({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setDropdownOpen((v) => !v)}
         className="flex items-center gap-2 hover:bg-slate-800 rounded-lg px-2 py-1.5 transition-colors"
         aria-haspopup="true"
         aria-expanded={dropdownOpen}
       >
-        {/* Avatar */}
         <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-400 text-xs font-semibold">
           {initials}
         </div>
@@ -163,21 +202,21 @@ function UserMenu({
         />
       </button>
 
-      {/* Dropdown */}
       {dropdownOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
-          {/* User info */}
+        <div
+          className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div className="px-4 py-3 border-b border-slate-800">
             <p className="text-sm font-medium text-slate-200 truncate">{displayName}</p>
             <p className="text-xs text-slate-500 truncate">{email}</p>
-            {creditBalance !== undefined && (
+            {liveCredits !== undefined && (
               <p className="text-xs text-amber-400 mt-0.5">
-                {creditBalance} credit{creditBalance !== 1 ? "s" : ""} remaining
+                {liveCredits} credit{liveCredits !== 1 ? "s" : ""} remaining
               </p>
             )}
           </div>
 
-          {/* Menu items */}
           <div className="p-1">
             <DropdownItem href="/profile" icon={<Settings className="w-4 h-4" />}>
               Profile &amp; settings
@@ -195,7 +234,9 @@ function UserMenu({
 
           <div className="p-1 border-t border-slate-800">
             <button
-              onClick={onLogout}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => void onLogout()}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-950/40 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />

@@ -13,8 +13,7 @@ from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
-from app.services.company_intel import get_company_intel
-from app.services.dashboard.resume_record import extract_jd_metadata
+from app.services.company_intel import ensure_session_company_intel
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
     PromptBudgetExceededError,
@@ -206,49 +205,8 @@ async def _run_retrieval(
 
 
 async def _ensure_company_intel(session: Session) -> None:
-    """Load company intel when the Phase 1 background task has not finished yet.
-
-    Mutates ``session.company_intel`` in place and persists the result to the
-    session store so subsequent Phase 3 re-runs skip the DB round-trip.
-    """
-    if session.company_intel is not None and not session.company_intel.is_empty():
-        return
-
-    jd_text = session.jd_raw or ""
-    if not jd_text.strip():
-        return
-
-    _, company_name = extract_jd_metadata(session)
-    if not company_name or company_name == "Unknown":
-        return
-
-    try:
-        async with async_session_factory() as db:
-            intel = await get_company_intel(
-                db,
-                company_name=company_name,
-                jd_text=jd_text,
-            )
-    except Exception as exc:
-        log.warning("phase3_company_intel_fetch_failed", error=str(exc))
-        return
-
-    if intel is None or intel.is_empty():
-        return
-
-    session.company_intel = intel
-    log.info(
-        "phase3_company_intel_loaded",
-        company=company_name,
-        source=intel.source,
-    )
-
-    # Persist so subsequent Phase 3 re-runs skip this synchronous fetch.
-    try:
-        from app.services import session_store as _store
-        await _store.update_session(session)
-    except Exception as exc:
-        log.warning("phase3_company_intel_persist_failed", error=str(exc))
+    """Load company intel when the Phase 1 background task has not finished yet."""
+    await ensure_session_company_intel(session)
 
 
 async def run(

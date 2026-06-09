@@ -148,6 +148,9 @@ class Settings(BaseSettings):
 
     # Default currency code surfaced by /api/billing/prices (Step 7).
     BILLING_CURRENCY: str = "USD"
+    # When true, phase runs and other quota-gated actions skip credit checks.
+    # In ``local`` / ``development`` this defaults to enabled unless explicitly false.
+    BILLING_SKIP_QUOTA: bool | None = None
 
     # Hard server-side limits enforced before calling Stripe (§7.7).
     SUBSCRIPTION_PAUSE_MIN_DAYS: int = 7
@@ -228,3 +231,12 @@ def is_production_grade() -> bool:
     relaxed CORS, etc.) must gate on this helper, never on raw APP_ENV strings.
     """
     return settings.APP_ENV in {"ci", "staging", "production"}
+
+
+def should_skip_billing_quota() -> bool:
+    """Return True when quota checks should be bypassed (local dev by default)."""
+    if settings.BILLING_SKIP_QUOTA is True:
+        return True
+    if settings.BILLING_SKIP_QUOTA is False:
+        return False
+    return settings.APP_ENV in {"local", "development"}
