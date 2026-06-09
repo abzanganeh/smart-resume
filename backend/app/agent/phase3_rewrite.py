@@ -11,7 +11,10 @@ from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
-from app.agent.phase3_postprocess import postprocess_tailored_output
+from app.agent.phase3_postprocess import (
+    flatten_skill_terms,
+    postprocess_tailored_output,
+)
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
 from app.services.company_intel import ensure_session_company_intel
@@ -70,11 +73,16 @@ def _merge_scoped_output(
         elif scope.section == "education" and partial.education:
             merged.education = [*merged.education, *partial.education]
         elif scope.section == "skills" and partial.skills:
-            seen = {s.lower() for s in merged.skills}
-            for skill in partial.skills:
-                if skill.lower() not in seen:
-                    merged.skills.append(skill)
-                    seen.add(skill.lower())
+            # Existing skills may be categorized lines like "AI: Python, LLMs".
+            # Dedupe against the FLATTENED individual terms, not the raw lines,
+            # so we don't double-add a skill that's already inside a category.
+            existing_terms = {t.lower() for t in flatten_skill_terms(merged.skills)}
+            for raw_skill in partial.skills:
+                for new_term in flatten_skill_terms([raw_skill]):
+                    if new_term.lower() in existing_terms:
+                        continue
+                    merged.skills.append(new_term)
+                    existing_terms.add(new_term.lower())
         elif scope.section == "summary" and partial.summary:
             merged.summary = partial.summary
         return merged
@@ -128,10 +136,16 @@ def _merge_scoped_output(
 
 def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutput) -> str:
     if scope.mode == "add" and scope.chunk_content:
+        skills_clause = ""
+        if scope.section == "skills":
+            skills_clause = (
+                " Return skills as 'Category Name: skill1, skill2' lines so they "
+                "merge cleanly into the existing categorized skills."
+            )
         return (
             f"ADD SECTION MODE — convert the following master-resume chunk into a "
             f"tailored ``{scope.section}`` section entry and return ONLY that section "
-            f"in the JSON output.\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
+            f"in the JSON output.{skills_clause}\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
         )
     if scope.bullet_index is not None and scope.section == "experience":
         company = scope.company or ""

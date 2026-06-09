@@ -91,6 +91,35 @@ def skills_are_categorized(skills: list[str]) -> bool:
     return categorized >= max(1, len(skills) // 2)
 
 
+def flatten_skill_terms(skills: list[str]) -> list[str]:
+    """Public version: expand "Category: a, b" lines into individual skill terms.
+
+    Used by Phase 4 keyword detection. Unlike :func:`_flatten_skills` this
+    keeps every term (no word-count filter) because callers only need
+    substring-match coverage, not display-quality skills.
+    """
+    flat: list[str] = []
+    seen: set[str] = set()
+    for raw in skills or []:
+        text = raw.strip()
+        if not text:
+            continue
+        if is_category_skill_line(text):
+            _, items = text.split(":", 1)
+            for item in items.split(","):
+                term = item.strip()
+                key = term.lower()
+                if term and key not in seen:
+                    flat.append(term)
+                    seen.add(key)
+            continue
+        key = text.lower()
+        if key not in seen:
+            flat.append(text)
+            seen.add(key)
+    return flat
+
+
 def _flatten_skills(skills: list[str]) -> list[str]:
     """Expand category lines and drop sentence-style entries."""
     flat: list[str] = []
@@ -249,6 +278,7 @@ def postprocess_tailored_output(
 __all__ = [
     "enforce_experience_bullet_limits",
     "enforce_project_bullet_limits",
+    "flatten_skill_terms",
     "is_category_skill_line",
     "normalize_skills_to_categories",
     "postprocess_tailored_output",

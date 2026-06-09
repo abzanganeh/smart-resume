@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.agent.phase3_postprocess import (
     enforce_experience_bullet_limits,
     enforce_project_bullet_limits,
+    flatten_skill_terms,
     is_category_skill_line,
     normalize_skills_to_categories,
     postprocess_tailored_output,
@@ -61,6 +62,22 @@ def test_enforce_project_bullet_limits() -> None:
     projects = [{"name": "P1", "bullets": ["a", "b", "c", "d"]}]
     trimmed = enforce_project_bullet_limits(projects)
     assert len(trimmed[0]["bullets"]) == 3
+
+
+def test_flatten_skill_terms_handles_categories_and_flat() -> None:
+    skills = [
+        "AI & Machine Learning: Python, LLMs, RAG",
+        "DevOps: Kubernetes",
+        "Standalone Skill",
+    ]
+    flat = flatten_skill_terms(skills)
+    assert flat == ["Python", "LLMs", "RAG", "Kubernetes", "Standalone Skill"]
+
+
+def test_flatten_skill_terms_dedupes_case_insensitive() -> None:
+    skills = ["AI: Python, LLMs", "ML: python, RAG"]
+    flat = flatten_skill_terms(skills)
+    assert [t.lower() for t in flat] == ["python", "llms", "rag"]
 
 
 def test_postprocess_tailored_output_integration() -> None:
