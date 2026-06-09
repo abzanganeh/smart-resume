@@ -2,16 +2,18 @@
 
 import { Suspense, useEffect, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { signIn, useSession, getProviders } from "next-auth/react"
+import { signIn, signOut, useSession, getProviders } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
 import zxcvbn from "zxcvbn"
 import { BrandLogo } from "@/components/brand/BrandLogo"
 import {
+  fetchMe,
   loginUser,
   registerUser,
   verify2fa,
   type TfaRequired,
 } from "@/lib/auth/api"
+import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -97,12 +99,26 @@ function AuthPageContent() {
     }
   }
 
-  // Redirect if already signed in with a backend token
+  // Redirect only when the backend token still resolves to a live user row.
   useEffect(() => {
-    if (status === "authenticated" && session?.backendAccessToken) {
-      const callbackUrl = searchParams.get("callbackUrl") ?? ""
-      doRedirect(callbackUrl, session.backendUser?.onboarding_completed_at)
-    } else if (status === "authenticated" && session?.error) {
+    if (status !== "authenticated") return
+
+    if (session?.backendAccessToken) {
+      void fetchMe(session.backendAccessToken)
+        .then((user) => {
+          const callbackUrl = searchParams.get("callbackUrl") ?? ""
+          doRedirect(callbackUrl, user.onboarding_completed_at)
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : ""
+          if (isStaleAuthError(message)) {
+            void signOut({ redirect: false })
+          }
+        })
+      return
+    }
+
+    if (session?.error) {
       showError(session.error)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

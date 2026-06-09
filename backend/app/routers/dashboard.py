@@ -22,6 +22,7 @@ from app.models.dashboard import (
     ResumeRecord,
     ResumeRecordStatus,
 )
+from app.models.master_resume import MasterResume
 from app.models.tracker import Application
 from app.models.jobs import SavedJob
 from app.models.session import PhaseStatus
@@ -235,6 +236,13 @@ async def dashboard_summary(
         )
     ).scalar_one()
 
+    master_row = (
+        await db.execute(
+            select(MasterResume.chunk_count).where(MasterResume.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    master_chunk_count = int(master_row or 0)
+
     free_credits = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
 
     subscription_payload: dict[str, Any] | None = None
@@ -272,6 +280,7 @@ async def dashboard_summary(
         subscription=subscription_payload,
         counts={
             "resumes": resume_count,
+            "master_chunks": master_chunk_count,
             "applications": application_count,
             "saved_jobs": saved_jobs_count,
         },

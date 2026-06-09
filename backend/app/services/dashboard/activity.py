@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.master_resume import MasterResume
 from app.models.notifications import Notification
 from app.models.dashboard import AtsRecalcType, AtsScoreHistory, ResumeRecord
 from app.models.jobs import JobSearchLog, SavedJob
@@ -23,6 +24,22 @@ async def build_recent_activity(
 ) -> list[dict[str, Any]]:
     """Aggregate last events from resume, ATS, credits, jobs, notifications."""
     events: list[dict[str, Any]] = []
+
+    master = (
+        await db.execute(
+            select(MasterResume).where(MasterResume.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if master is not None and master.chunk_count > 0:
+        events.append(
+            {
+                "type": "master_resume",
+                "at": master.updated_at or master.created_at,
+                "title": "Master resume indexed",
+                "subtitle": f"{master.chunk_count} section{'s' if master.chunk_count != 1 else ''} embedded",
+                "meta": {"chunk_count": master.chunk_count},
+            }
+        )
 
     resume_rows = (
         await db.execute(

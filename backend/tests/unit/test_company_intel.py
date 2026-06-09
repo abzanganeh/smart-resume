@@ -12,6 +12,7 @@ from app.services.company_intel.extractor import (
     _build_intel,
     _parse_json_from_response,
     _sanitize_company_name,
+    extract_from_jd_heuristic,
 )
 
 pytestmark = pytest.mark.unit
@@ -199,3 +200,25 @@ def test_parse_failed_log_omits_raw_preview() -> None:
     assert "raw_preview=" not in src, (
         "raw_preview= kwarg must not appear in extract_from_jd — it may echo JD content into logs"
     )
+
+
+FISHER_JD_SNIPPET = """
+Senior AI Developer
+Fisher Investments
+This is an exciting time to join Fisher Investments.
+You'll work with partners who value thoughtful design, collaboration, and long-term impact.
+Fisher Investments is proud to be a Great Place to Work Certified organization that invests in learning, growth, and career development.
+Why Fisher Investments:
+We work for a bigger purpose: bettering the investment universe. We take great pride in our inclusive culture.
+This is an in-office role.
+"""
+
+
+def test_heuristic_extracts_fisher_culture_signals() -> None:
+    intel = extract_from_jd_heuristic("Fisher Investments", FISHER_JD_SNIPPET)
+    assert intel is not None
+    assert "bettering the investment universe" in intel.mission.lower()
+    assert "Collaboration" in intel.values
+    assert "Learning & growth" in intel.values
+    assert "Great Place to Work" in intel.culture_notes
+    assert "In-office" in intel.culture_notes

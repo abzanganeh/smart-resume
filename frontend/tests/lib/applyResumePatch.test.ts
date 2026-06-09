@@ -1,4 +1,4 @@
-import { applyResumePatch } from "@/lib/applyResumePatch";
+import { applyResumePatch, coerceEducationPatch } from "@/lib/applyResumePatch";
 import type { ResumePatch, TailoredResumeOutput } from "@/lib/api";
 
 function assert(condition: boolean, message: string) {
@@ -174,6 +174,121 @@ function runTests() {
   assert(
     (trustSingle.bullets as string[])[0]?.includes("3-service"),
     "single bullet replaced",
+  );
+
+  const addProjectPatch: ResumePatch = {
+    section: "projects",
+    description: "Add Fraud Shield AI project",
+    new_project: {
+      name: "Fraud Shield AI",
+      description: "End-to-end credit card fraud detection pipeline",
+      bullets: ["Built PySpark feature pipeline.", "Deployed Streamlit inference app."],
+    },
+  };
+  const addProjectResult = applyResumePatch(base, addProjectPatch);
+  assert(addProjectResult.applied, "new_project patch appends project");
+  assert(addProjectResult.updated.projects.length === 1, "one project added");
+  assert(
+    projectDisplayName(addProjectResult.updated.projects[0] as Record<string, unknown>) ===
+      "Fraud Shield AI",
+    "new project name stored",
+  );
+
+  const mislabeledAddPatch: ResumePatch = {
+    section: "projects",
+    description: "Add project via wrong LLM fields",
+    project_name: "Fraud Shield AI End-to-end credit card fraud detection pipeline",
+    project_bullets_replace_all: [
+      "Built end-to-end fraud detection pipeline with PySpark preprocessing.",
+      "Deployed Streamlit inference app for batch scoring.",
+    ],
+  };
+  const mislabeledAddResult = applyResumePatch(base, mislabeledAddPatch);
+  assert(mislabeledAddResult.applied, "mislabeled add patch coerces to new_project");
+  assert(mislabeledAddResult.updated.projects.length === 1, "coerced add creates one project");
+  const coercedProj = mislabeledAddResult.updated.projects[0] as Record<string, unknown>;
+  assert(
+    projectDisplayName(coercedProj) === "Fraud Shield AI",
+    "coerced project uses short title",
+  );
+  assert((coercedProj.bullets as string[]).length === 2, "coerced project keeps bullets");
+
+  const typoDatesPatch: ResumePatch = {
+    section: "experience",
+    company: "Accptto",
+    description: "Fix Acceptto dates",
+    new_dates: "2016 – 2022",
+  };
+  const typoDatesResult = applyResumePatch(base, typoDatesPatch);
+  assert(typoDatesResult.applied, "fuzzy company typo Accptto matches Acceptto");
+  assert(
+    typoDatesResult.updated.experience[1]?.dates === "2016 – 2022",
+    "typo company dates updated",
+  );
+
+  const withEducation: TailoredResumeOutput = {
+    ...base,
+    education: [
+      {
+        degree: "AIML Software Engineering Program",
+        institution: "Interview Kickstart",
+        year: "",
+        bullets: [],
+      },
+    ],
+  };
+  const descriptionOnlyPatch: ResumePatch = {
+    section: "education",
+    description: "Changed Interview Kickstart to IK in education",
+  };
+  const coercedDesc = coerceEducationPatch(
+    withEducation.education,
+    descriptionOnlyPatch,
+  );
+  assert(coercedDesc.institution === "Interview Kickstart", "coerce finds institution from description");
+  assert(coercedDesc.new_institution === "IK", "coerce infers IK rename from description");
+
+  const capstoneOnlyPatch: ResumePatch = {
+    section: "education",
+    description: "Added capstone project with a perfect score of 800/800",
+  };
+  const coercedCapstone = coerceEducationPatch(withEducation.education, capstoneOnlyPatch);
+  assert(
+    (coercedCapstone.add_education_bullets?.length ?? 0) > 0,
+    "coerce infers capstone bullet from description",
+  );
+
+  const descApplyResult = applyResumePatch(withEducation, descriptionOnlyPatch);
+  assert(descApplyResult.applied, "description-only education rename applies end-to-end");
+  assert(
+    descApplyResult.updated.education[0]?.institution === "IK",
+    "description-only patch renames institution",
+  );
+
+  const eduRenamePatch: ResumePatch = {
+    section: "education",
+    institution: "Interview Kickstart",
+    description: "Rename to IK",
+    new_institution: "IK",
+  };
+  const eduRenameResult = applyResumePatch(withEducation, eduRenamePatch);
+  assert(eduRenameResult.applied, "education institution rename applies");
+  assert(
+    eduRenameResult.updated.education[0]?.institution === "IK",
+    "institution renamed to IK",
+  );
+
+  const eduBulletPatch: ResumePatch = {
+    section: "education",
+    institution: "IK",
+    description: "Add capstone bullet",
+    add_education_bullets: ["Capstone project: scored 800/800 on final evaluation."],
+  };
+  const eduBulletResult = applyResumePatch(eduRenameResult.updated, eduBulletPatch);
+  assert(eduBulletResult.applied, "education bullet add applies");
+  assert(
+    eduBulletResult.updated.education[0]?.bullets.length === 1,
+    "one education bullet added",
   );
 
   console.log("\nAll applyResumePatch tests passed.\n");

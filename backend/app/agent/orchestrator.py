@@ -15,7 +15,7 @@ from app.llm.pricing import estimate_cost, format_cost
 from app.models.session import PhaseStatus, Session
 from app.services import session_store
 from app.services.company_intel import get_company_intel
-from app.services.dashboard.resume_record import extract_jd_metadata
+from app.services.dashboard.resume_record import resolve_company_name
 from app.services.billing.exceptions import InsufficientCreditsError
 from app.services.billing.llm_upgrade import (
     Phase3RouteDecision,
@@ -226,7 +226,7 @@ async def _fetch_and_store_company_intel(session_id: str, session: Session) -> N
         if not jd_text:
             return
 
-        _, company_name = extract_jd_metadata(session)
+        company_name = resolve_company_name(session)
         if not company_name or company_name == "Unknown":
             return
 

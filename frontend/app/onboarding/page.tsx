@@ -1,11 +1,11 @@
+"use client"
+
 /**
  * Onboarding — first-run flow after registration.
  */
-"use client"
-
-import { useEffect, useState, useTransition } from "react"
+import { Suspense, useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import {
   ArrowLeft,
@@ -20,8 +20,14 @@ import {
   Zap,
 } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
-import { patchOnboarding } from "@/lib/auth/api"
-import { needsOnboarding, postOnboardingDestination } from "@/lib/auth/onboarding"
+import { fetchMe, patchOnboarding } from "@/lib/auth/api"
+import {
+  needsOnboarding,
+  parseOnboardingStepParam,
+  postOnboardingDestination,
+  resolveOnboardingStepIndex,
+} from "@/lib/auth/onboarding"
+import { getProfileChunks, liveChunkCount } from "@/lib/profile"
 import { clsx } from "clsx"
 
 type AiChoice = "platform" | "byok"
@@ -173,38 +179,70 @@ const STEPS = [
   },
 ] as const
 
-function initialStepFromUser(user: { onboarding_ai_choice?: string | null } | undefined): number {
-  if (user?.onboarding_ai_choice) return 2
-  return 0
-}
-
-export default function OnboardingPage() {
+function OnboardingPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { session, status } = useRequireAuth("/onboarding")
   const { update } = useSession()
   const [step, setStep] = useState(0)
   const [aiChoice, setAiChoice] = useState<AiChoice>("platform")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [initialized, setInitialized] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
+  const navigatingToProfileRef = useRef(false)
+  const updateRef = useRef(update)
+  updateRef.current = update
+
+  const token = session?.backendAccessToken
+  const urlStepParam = searchParams.get("step")
 
   useEffect(() => {
-    if (status !== "authenticated" || !session?.backendUser) return
+    if (status !== "authenticated" || !token) return
+    // Re-fetch when landing with ?step=… (e.g. returning from profile); otherwise hydrate once.
+    if (hydrated && !urlStepParam) return
 
-    if (!needsOnboarding(session.backendUser)) {
-      router.replace(postOnboardingDestination(session.backendUser))
-      return
-    }
+    let cancelled = false
 
-    if (!initialized) {
-      const saved = session.backendUser.onboarding_ai_choice
-      if (saved === "platform" || saved === "byok") {
-        setAiChoice(saved)
+    void (async () => {
+      try {
+        const [user, chunks] = await Promise.all([
+          fetchMe(token),
+          getProfileChunks(token).catch(() => []),
+        ])
+        if (cancelled) return
+
+        await updateRef.current({ backendUser: user })
+
+        if (!needsOnboarding(user)) {
+          router.replace(postOnboardingDestination(user))
+          return
+        }
+
+        const urlStep = parseOnboardingStepParam(urlStepParam)
+        const hasMaster = liveChunkCount(chunks) > 0
+        const stepIndex = resolveOnboardingStepIndex(user, {
+          urlStepIndex: urlStep,
+          hasMasterResume: hasMaster,
+        })
+
+        if (user.onboarding_ai_choice === "platform" || user.onboarding_ai_choice === "byok") {
+          setAiChoice(user.onboarding_ai_choice)
+        }
+        setStep(Math.max(0, stepIndex))
+        navigatingToProfileRef.current = false
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError((err as Error).message || "Could not load onboarding progress.")
+        }
+      } finally {
+        if (!cancelled) setHydrated(true)
       }
-      setStep(initialStepFromUser(session.backendUser))
-      setInitialized(true)
+    })()
+
+    return () => {
+      cancelled = true
     }
-  }, [session, status, router, initialized])
+  }, [status, token, urlStepParam, hydrated, router])
 
   async function syncSession(user: Awaited<ReturnType<typeof patchOnboarding>>) {
     await update({ backendUser: user })
@@ -218,14 +256,15 @@ export default function OnboardingPage() {
   }
 
   async function completeOnboarding(choice: AiChoice) {
-    const token = session?.backendAccessToken
-    if (!token) throw new Error("Not signed in")
-    const user = await patchOnboarding(token, { ai_choice: choice, complete: true })
+    const accessToken = session?.backendAccessToken
+    if (!accessToken) throw new Error("Not signed in")
+    const user = await patchOnboarding(accessToken, { ai_choice: choice, complete: true })
     await syncSession(user)
-    router.replace(postOnboardingDestination(user))
+    // Hard navigation so middleware reads the updated JWT (avoids race with client session).
+    window.location.assign(postOnboardingDestination(user))
   }
 
-  if (status === "loading" || !session) {
+  if (status === "loading" || !session || !hydrated) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
@@ -249,8 +288,10 @@ export default function OnboardingPage() {
           return
         }
         if (isMasterStep) {
+          if (navigatingToProfileRef.current) return
+          navigatingToProfileRef.current = true
           await saveAiChoice(aiChoice)
-          router.push("/profile?mode=story&from=onboarding")
+          router.push("/profile?from=onboarding")
           return
         }
         if (isLast) {
@@ -439,5 +480,19 @@ export default function OnboardingPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <OnboardingPageContent />
+    </Suspense>
   )
 }

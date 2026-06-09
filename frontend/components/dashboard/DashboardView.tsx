@@ -25,6 +25,7 @@ import {
   YAxis,
 } from "recharts"
 import { clsx } from "clsx"
+import { signOut } from "next-auth/react"
 import type {
   DashboardSummaryResponse,
   ResumeListItem,
@@ -42,6 +43,8 @@ import {
 } from "@/lib/dashboard"
 import { listExports, type ExportListItem } from "@/lib/account"
 import { isSubscriptionActive } from "@/lib/billing"
+import { isStaleAuthError } from "@/lib/auth/staleSession"
+import { getProfileResume, type ProfileResume } from "@/lib/profile"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -169,7 +172,11 @@ export function DashboardView({ token }: { token: string }) {
     jd_company?: string
   } | null>(null)
   const [exports, setExports] = useState<ExportListItem[]>([])
-  const [hasMasterResume, setHasMasterResume] = useState<boolean | null>(null)
+  const [masterProfile, setMasterProfile] = useState<ProfileResume | null>(null)
+
+  const masterChunkCount =
+    masterProfile?.chunk_count ?? summary?.counts.master_chunks ?? 0
+  const hasMasterResume = masterChunkCount > 0
 
   const loadSummary = useCallback(async () => {
     const data = await getDashboardSummary(token)
@@ -181,18 +188,10 @@ export function DashboardView({ token }: { token: string }) {
       setExports([])
     }
     try {
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
-      const res = await fetch(`${BASE}/api/profile/resume`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        const profile = await res.json() as { chunk_count?: number }
-        setHasMasterResume((profile.chunk_count ?? 0) > 0)
-      } else {
-        setHasMasterResume(false)
-      }
+      const profile = await getProfileResume(token)
+      setMasterProfile(profile)
     } catch {
-      setHasMasterResume(false)
+      setMasterProfile(null)
     }
   }, [token])
 
@@ -228,6 +227,10 @@ export function DashboardView({ token }: { token: string }) {
       } catch (e) {
         if (!cancelled) {
           const raw = e instanceof Error ? e.message : "Failed to load dashboard"
+          if (isStaleAuthError(raw)) {
+            void signOut({ callbackUrl: "/auth?callbackUrl=%2Fdashboard" })
+            return
+          }
           const friendly =
             raw.includes("sqlalchemy") || raw.startsWith("Server error:")
               ? "We couldn't load your dashboard. Please refresh the page."
@@ -374,7 +377,7 @@ export function DashboardView({ token }: { token: string }) {
         </button>
       </header>
 
-      {hasMasterResume === false && (
+      {!hasMasterResume && masterProfile !== null && (
         <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1 space-y-1">
             <p className="text-white font-semibold text-lg">Ready to build your master resume?</p>
@@ -396,6 +399,38 @@ export function DashboardView({ token }: { token: string }) {
             >
               Upload file instead
             </a>
+          </div>
+        </div>
+      )}
+
+      {hasMasterResume && (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex-1 space-y-1">
+            <p className="text-white font-semibold text-lg">Master resume ready</p>
+            <p className="text-slate-400 text-sm">
+              {masterChunkCount} indexed section{masterChunkCount === 1 ? "" : "s"}
+              {masterProfile?.last_embedded_at && (
+                <>
+                  {" "}
+                  · last updated {formatDate(masterProfile.last_embedded_at)}
+                </>
+              )}
+              . Tailor it to a job description to create a version tracked below.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <Link
+              href="/session/new"
+              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors text-sm text-center"
+            >
+              Tailor for a job →
+            </Link>
+            <Link
+              href="/profile"
+              className="px-5 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 rounded-xl transition-colors text-sm text-center"
+            >
+              View master resume
+            </Link>
           </div>
         </div>
       )}
@@ -583,12 +618,17 @@ export function DashboardView({ token }: { token: string }) {
       )}
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-white">
-          Resume history
-          <span className="text-slate-500 font-normal text-sm ml-2">
-            ({summary?.counts.resumes ?? 0} total)
-          </span>
-        </h2>
+        <div>
+          <h2 className="text-lg font-semibold text-white">
+            Tailored resumes
+            <span className="text-slate-500 font-normal text-sm ml-2">
+              ({summary?.counts.resumes ?? 0} total)
+            </span>
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Job-specific versions built from your master resume — each gets its own ATS score and history.
+          </p>
+        </div>
 
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
@@ -656,9 +696,29 @@ export function DashboardView({ token }: { token: string }) {
         {listLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
         ) : resumes.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl">
-            No resumes match your filters.{" "}
-            <Link href="/session/new" className="text-amber-400 hover:underline">Build one</Link>
+          <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-3 px-4">
+            {hasMasterResume ? (
+              <>
+                <p>No tailored resumes yet.</p>
+                <p className="text-sm text-slate-400 max-w-md mx-auto">
+                  Your master resume is indexed and ready. Create a tailored version by
+                  pasting a job description — it will appear here with ATS scores and export links.
+                </p>
+              </>
+            ) : (
+              <>
+                <p>No tailored resumes yet.</p>
+                <p className="text-sm text-slate-400 max-w-md mx-auto">
+                  Upload or build your master resume first, then tailor it to each job you apply for.
+                </p>
+              </>
+            )}
+            <Link
+              href="/session/new"
+              className="inline-flex items-center gap-1 text-amber-400 hover:underline font-medium"
+            >
+              New tailored resume
+            </Link>
           </div>
         ) : (
           <div className="space-y-3">

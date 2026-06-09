@@ -433,13 +433,13 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
               </p>
             )}
 
-            {!testedOk && selected && canTest && !testing && inline && (
+            {!testedOk && selected && canTest && !testing && inline && selected.requires_key && !selected.has_env_key && !saved && (
               <p className="text-xs text-slate-500 text-center">
-                Test your key, then save. Changes apply to the next AI step you run.
+                Optionally test your key before saving.
               </p>
             )}
 
-            {/* Continue — only enabled after a successful test */}
+            {/* Continue — onboarding requires a passing test; inline only requires selectable credentials */}
             {selected.id === "ollama" ? (
               <div className="space-y-2">
                 <button
@@ -459,10 +459,10 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
                 <button
                   type="button"
                   onClick={handleContinueOllama}
-                  disabled={!testedOk}
+                  disabled={inline ? false : !testedOk}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
                 >
-                  Continue to upload resume <ChevronRight className="h-4 w-4" />
+                  {inline ? continueLabel : <>Continue to upload resume <ChevronRight className="h-4 w-4" /></>}
                 </button>
               </div>
             ) : (
@@ -470,7 +470,7 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!testedOk}
+                  disabled={inline ? !canTest : !testedOk}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
                 >
                   {continueLabel} {!inline && <ChevronRight className="h-4 w-4" />}

@@ -6,7 +6,10 @@ import { useSession } from "next-auth/react"
 import { Loader2, TrendingUp, Zap } from "lucide-react"
 import { getSubscriptionCurrent, ApiError, type SubscriptionCurrentResponse } from "@/lib/api"
 import { isSubscriptionActive } from "@/lib/billing"
-import { refreshBackendSession } from "@/lib/auth/refreshBackendSession"
+import {
+  isRefreshRateLimited,
+  refreshBackendSession,
+} from "@/lib/auth/refreshBackendSession"
 
 const POLL_MS = 60_000
 
@@ -21,12 +24,14 @@ export function UsageWidget() {
   const [current, setCurrent] = useState<SubscriptionCurrentResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const fetchedTokenRef = useRef<string | null>(null)
+  const hasDataRef = useRef(false)
 
   useEffect(() => {
     if (!token || status !== "authenticated") {
       setCurrent(null)
       setLoading(false)
       fetchedTokenRef.current = null
+      hasDataRef.current = false
       return
     }
 
@@ -35,20 +40,20 @@ export function UsageWidget() {
     const load = async (force = false) => {
       if (!force && fetchedTokenRef.current === token) return
 
-      setLoading(true)
+      if (!hasDataRef.current) setLoading(true)
       try {
         const data = await getSubscriptionCurrent(token)
         if (cancelled) return
         fetchedTokenRef.current = token
+        hasDataRef.current = true
         setCurrent(data)
       } catch (e) {
         if (cancelled) return
         if (e instanceof ApiError && e.status === 429) {
-          // Shared client cache handles cooldown — do not retry in a loop.
           return
         }
-        setCurrent(null)
-        if (e instanceof ApiError && e.status === 401) {
+        if (!hasDataRef.current) setCurrent(null)
+        if (e instanceof ApiError && e.status === 401 && !isRefreshRateLimited()) {
           void refreshBackendSession(updateRef.current)
         }
       } finally {
@@ -96,7 +101,8 @@ export function UsageWidget() {
     )
   }
 
-  const credits = current.credit_balance
+  const credits =
+    current.credit_balance ?? session?.backendUser?.credit_balance ?? 0
   return (
     <Link
       href="/billing"

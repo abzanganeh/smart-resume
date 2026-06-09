@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
-from app.config import settings
+from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
@@ -178,7 +178,7 @@ async def trigger_phase(
     # no chunks are present, so we no longer block here. The retrieval
     # service handles zero-chunk gracefully by skipping the retrieval step.
 
-    if body.scope is not None and user_id:
+    if body.scope is not None and user_id and not should_skip_billing_quota():
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -194,10 +194,16 @@ async def trigger_phase(
                 except AccountSuspendedError:
                     raise HTTPException(status_code=403, detail={"code": "account_suspended"})
                 except InsufficientCreditsError:
-                    raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "insufficient_credits",
+                            "message": "You're out of credits. Section regeneration costs 1 credit.",
+                        },
+                    )
 
     # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
-    if phase == 4 and user_id:
+    if phase == 4 and user_id and not should_skip_billing_quota():
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -218,7 +224,11 @@ async def trigger_phase(
                 except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError) as exc:
                     raise HTTPException(
                         status_code=402,
-                        detail={"code": "insufficient_credits", "action": "ats_recalc"},
+                        detail={
+                            "code": "insufficient_credits",
+                            "action": "ats_recalc",
+                            "message": "You're out of credits. ATS score recalculation costs 1 credit.",
+                        },
                     ) from exc
 
     apply_llm_request_headers(

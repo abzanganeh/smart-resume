@@ -27,19 +27,26 @@ export function OpenInFlintButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [showFallback, setShowFallback] = useState(false);
+  const [handoffReady, setHandoffReady] = useState(false);
+  const [showAutoOpenHint, setShowAutoOpenHint] = useState(false);
   const [lastDeepLink, setLastDeepLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleOpen = () => {
     if (disabled || loading) return;
     setError(null);
-    setShowFallback(false);
+    setHandoffReady(false);
+    setShowAutoOpenHint(false);
     setCopied(false);
     setStatus("Preparing import link…");
 
     // Must happen synchronously in the click handler — async breaks custom-scheme launch.
     const carrier = openFlintImportCarrier();
+    if (!carrier) {
+      setError(
+        "Popup blocked — allow popups for this site, or use Copy import link after handoff.",
+      );
+    }
     setLoading(true);
 
     void (async () => {
@@ -47,11 +54,12 @@ export function OpenInFlintButton({
         const { token } = await createFlintHandoff(sessionId);
         const deepLink = buildFlintImportLink(token);
         setLastDeepLink(deepLink);
+        setHandoffReady(true);
         setStatus("Opening Flint…");
-        navigateFlintImportCarrier(carrier, deepLink);
+        const launched = navigateFlintImportCarrier(carrier, deepLink);
         window.setTimeout(() => {
-          if (document.hasFocus()) {
-            setShowFallback(true);
+          if (document.hasFocus() || !launched) {
+            setShowAutoOpenHint(true);
             setStatus(null);
           }
         }, FLINT_OPEN_FALLBACK_MS);
@@ -63,6 +71,7 @@ export function OpenInFlintButton({
             : "Could not prepare Flint import. Please try again.";
         setError(message);
         setStatus(null);
+        setHandoffReady(false);
       } finally {
         setLoading(false);
       }
@@ -107,21 +116,27 @@ export function OpenInFlintButton({
           {error}
         </p>
       )}
-      {showFallback && (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2">
-          <p className="text-sm text-slate-300">
-            Flint did not open automatically. Make sure Flint is running, then try again.
-          </p>
-          {lastDeepLink && (
-            <button
-              type="button"
-              onClick={() => void copyDeepLink()}
-              className="flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              {copied ? "Link copied" : "Copy import link"}
-            </button>
+      {handoffReady && lastDeepLink && (
+        <div className="rounded-lg border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-2">
+          {showAutoOpenHint ? (
+            <p className="text-sm text-slate-300">
+              Flint did not open automatically (common on Linux dev builds). Paste the
+              link below into Flint → New Session → Import from Smart Resume link.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-300">
+              Import link ready. If Flint does not open, paste the link there manually.
+            </p>
           )}
+          <button
+            type="button"
+            onClick={() => void copyDeepLink()}
+            className="flex items-center gap-1.5 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copied ? "Link copied" : "Copy import link"}
+          </button>
+          <p className="text-xs text-slate-500 break-all font-mono">{lastDeepLink}</p>
           <p className="text-sm text-slate-400">
             Don&apos;t have Flint yet?{" "}
             <a

@@ -6,18 +6,38 @@ export function buildFlintImportLink(token: string): string {
 }
 
 /**
- * Open a custom-protocol deep link without navigating the current tab away.
- *
- * Browsers require a synchronous user gesture to launch custom schemes. Callers
- * should invoke `openFlintImportCarrier()` in the click handler *before* any
- * await, then pass the returned window to `navigateFlintImportCarrier()`.
+ * Open a placeholder window synchronously on click so a later async handoff can
+ * assign `flint://…` without losing the user-gesture chain (required on Linux).
  */
 export function openFlintImportCarrier(): Window | null {
   try {
-    return window.open("about:blank", "_blank", "noopener,noreferrer");
+    return window.open("about:blank", "flint_handoff", "noopener,noreferrer");
   } catch {
     return null;
   }
+}
+
+function closeCarrier(carrier: Window | null): void {
+  if (!carrier || carrier.closed) return;
+  for (const delayMs of [0, 50, 250, 1000]) {
+    window.setTimeout(() => {
+      try {
+        carrier.close();
+      } catch {
+        // Popup may already be gone once the OS takes over.
+      }
+    }, delayMs);
+  }
+}
+
+function navigateViaHiddenAnchor(deepLink: string): void {
+  const anchor = document.createElement("a");
+  anchor.href = deepLink;
+  anchor.rel = "noopener noreferrer";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
 }
 
 export function navigateFlintImportCarrier(
@@ -25,26 +45,12 @@ export function navigateFlintImportCarrier(
   deepLink: string,
 ): boolean {
   if (carrier && !carrier.closed) {
-    try {
-      carrier.location.replace(deepLink);
-    } catch {
-      carrier.location.href = deepLink;
-    }
-    window.setTimeout(() => {
-      try {
-        carrier.close();
-      } catch {
-        // Popup may already be gone once the OS takes over.
-      }
-    }, 500);
+    // One navigation only — fallback anchor causes duplicate OS handler calls on Linux.
+    carrier.location.href = deepLink;
+    closeCarrier(carrier);
     return true;
   }
 
-  // Popup blocked — try a hidden iframe without leaving Smart Resume.
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  iframe.src = deepLink;
-  document.body.appendChild(iframe);
-  window.setTimeout(() => iframe.remove(), 2000);
+  navigateViaHiddenAnchor(deepLink);
   return false;
 }

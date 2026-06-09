@@ -26,6 +26,7 @@ import {
 import { patchResume } from "@/lib/dashboard";
 import { trackRecentSession } from "@/lib/recentSessions";
 import { saveAuthReturnUrl } from "@/lib/auth/returnUrl";
+import { refreshBackendSession } from "@/lib/auth/refreshBackendSession";
 import { useSession } from "next-auth/react";
 import { KeywordDashboard } from "@/components/session/KeywordDashboard";
 import { AuditPanel } from "@/components/session/AuditPanel";
@@ -44,7 +45,9 @@ import {
 import { SessionAiControls } from "@/components/session/SessionAiControls";
 import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
-import { saveTailoredResume } from "@/lib/api";
+import { saveTailoredResume, type ResumePatch } from "@/lib/api";
+import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
+import { makeSuggestions, type ResumeSuggestion } from "@/lib/suggestions";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
 
@@ -88,6 +91,8 @@ function SessionContent() {
   const [stale, setStale] = useState<Record<string, string | null>>({ "3": null, "4": null });
   const [atsScoreHistory, setAtsScoreHistory] = useState<number[]>([]);
   const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
+  const [pendingSuggestions, setPendingSuggestions] = useState<ResumeSuggestion[]>([]);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
   const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
@@ -107,7 +112,7 @@ function SessionContent() {
   const phase4RecalcRef = useRef(false);
   const tailoredBackupRef = useRef<TailoredResumeOutput | null>(null);
 
-  const { data: authSession } = useSession();
+  const { data: authSession, update: updateAuthSession } = useSession();
   const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
 
   useEffect(() => {
@@ -256,13 +261,19 @@ function SessionContent() {
         const errorCode = e instanceof ApiError ? e.code : undefined;
         setRunErrorCode(errorCode ?? null);
         setRunError(e instanceof Error ? e.message : "Failed to start phase.");
+        if (
+          errorCode === "insufficient_credits" ||
+          (e instanceof ApiError && e.status === 402)
+        ) {
+          void refreshBackendSession(updateAuthSession);
+        }
         // Restore the tailored resume if Phase 3 failed — don't leave the user with a blank rewrite.
         if (targetStep === "rewrite" && tailoredBackupRef.current) {
           setTailored(tailoredBackupRef.current);
         }
       }
     },
-    [sessionId, connect, reset, llmTier]
+    [sessionId, connect, reset, llmTier, updateAuthSession]
   );
 
   function buildIssuePrefill(issue: import("@/lib/api").BlockingIssue): string {
@@ -286,6 +297,59 @@ function SessionContent() {
     } else {
       setIssueQueue([]);
     }
+  }
+
+  function addSuggestions(patches: ResumePatch[]) {
+    if (patches.length === 0 || !tailored) return;
+    setSuggestionError(null);
+    const normalized = patches.map((p) => normalizeResumePatch(tailored, p));
+    setPendingSuggestions((prev) => [...prev, ...makeSuggestions(normalized)]);
+  }
+
+  function acceptSuggestion(id: string) {
+    const sug = pendingSuggestions.find((s) => s.id === id);
+    if (!sug || !tailored) return;
+    setSuggestionError(null);
+    const patch = normalizeResumePatch(tailored, sug.patch);
+    const { updated, applied, failureReason } = applyResumePatch(tailored, patch);
+    if (applied) {
+      setTailored(updated);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setQa(null);
+      saveTailoredResume(sessionId, updated).catch(() => {});
+      if (issueQueue.length > 0 && issueQueueIdx < issueQueue.length) {
+        advanceIssueQueue(issueQueueIdx);
+      }
+      // Keep accepted suggestions for persistent green highlighting in the resume.
+      setPendingSuggestions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, status: "accepted" } : s)),
+      );
+      return;
+    }
+    setSuggestionError(
+      failureReason ?? "Could not apply this suggestion. Try the edit button or rephrase in chat.",
+    );
+    setPendingSuggestions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, status: "rejected" } : s)),
+    );
+    setTimeout(
+      () => setPendingSuggestions((prev) => prev.filter((s) => s.id !== id)),
+      1200,
+    );
+  }
+
+  function rejectSuggestion(id: string) {
+    setPendingSuggestions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, status: "rejected" } : s)),
+    );
+    setTimeout(
+      () => setPendingSuggestions((prev) => prev.filter((s) => s.id !== id)),
+      1200,
+    );
+  }
+
+  function dismissSuggestion(id: string) {
+    setPendingSuggestions((prev) => prev.filter((s) => s.id !== id));
   }
 
   const recalculateAts = useCallback(async () => {
@@ -356,6 +420,7 @@ function SessionContent() {
         setStale((prev) => ({ ...prev, "4": null }));
         setPhase4RecalcActive(false);
         setAtsRecalcRunning(false);
+        void refreshBackendSession(updateAuthSession);
       }
     }
     if (lastEvent.event === "error") {
@@ -366,7 +431,7 @@ function SessionContent() {
       setRunErrorType(lastEvent.error_type ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
-  }, [lastEvent, applyPhaseOutput, authSession?.backendAccessToken, sessionId]);
+  }, [lastEvent, applyPhaseOutput, authSession?.backendAccessToken, sessionId, updateAuthSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -634,6 +699,15 @@ function SessionContent() {
                   >
                     Upload master resume →
                   </Link>
+                ) : runErrorCode === "insufficient_credits" ||
+                  runErrorCode === "subscription_required" ? (
+                  <Link
+                    href="/billing"
+                    className="whitespace-nowrap underline hover:no-underline text-red-400"
+                    onClick={() => setRunError(null)}
+                  >
+                    View billing →
+                  </Link>
                 ) : (
                   <button
                     type="button"
@@ -812,6 +886,11 @@ function SessionContent() {
               )}
               <div className="flex flex-col lg:flex-row gap-6">
                 <div className="flex-1 min-w-0">
+                  {suggestionError && (
+                    <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      {suggestionError}
+                    </div>
+                  )}
                   <ResumeDiff
                     tailored={tailored}
                     editorRevision={resumeVersion}
@@ -826,6 +905,10 @@ function SessionContent() {
                     phaseRunning={phaseRunning}
                     suggestionDraft={appliedSuggestion}
                     onClearSuggestion={() => setAppliedSuggestion(null)}
+                    suggestions={pendingSuggestions}
+                    onAcceptSuggestion={acceptSuggestion}
+                    onRejectSuggestion={rejectSuggestion}
+                    onDismissSuggestion={dismissSuggestion}
                   />
                 </div>
 
@@ -900,23 +983,7 @@ function SessionContent() {
                               }
                             : null
                         }
-                        onApplyPatch={async (_patch, updatedTailored) => {
-                          setTailored(updatedTailored);
-                          setResumeVersion((v) => v + 1);
-                          setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-                          // Advance queue — next issue prefill is set inside advanceIssueQueue.
-                          if (issueQueue.length > 0) {
-                            advanceIssueQueue(issueQueueIdx);
-                          }
-                          try {
-                            await saveTailoredResume(sessionId, updatedTailored);
-                            // Always clear the previous QA result after a patch — it was run against
-                            // the old resume and showing it would give a false pass/fail on the export step.
-                            setQa(null);
-                          } catch {
-                            // Local state is already updated; patch will persist on next manual save.
-                          }
-                        }}
+                        onSuggestPatches={addSuggestions}
                       />
                     </div>
                   )}
