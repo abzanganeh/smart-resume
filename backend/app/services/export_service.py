@@ -9,6 +9,7 @@ from docx import Document
 from docx.shared import Pt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from app.agent.phase3_postprocess import is_category_skill_line
 from app.models.cover_letter import CoverLetterOutput
 from app.models.session import Session
 
@@ -27,6 +28,15 @@ _PLACEHOLDER_EMAILS = {
     "email@example.com", "youremail@example.com", "",
 }
 _PLACEHOLDER_PHONES = {"123-456-7890", "(123) 456-7890", "555-555-5555", ""}
+
+
+def _format_skills_for_export(skills: list[str]) -> list[str]:
+    """Render skills as category lines when categorized, else comma-joined fallback."""
+    if not skills:
+        return []
+    if any(is_category_skill_line(s) for s in skills):
+        return [s.strip() for s in skills if s.strip()]
+    return [", ".join(skills)]
 
 
 def _authoritative_contact(llm_contact: object, user: object) -> dict:
@@ -74,7 +84,7 @@ def _resume_to_html(session: Session) -> str:
     return template.render(
         contact=contact,
         summary=output.summary,
-        skills=output.skills,
+        skill_lines=_format_skills_for_export(output.skills),
         experience=output.experience,
         projects=output.projects,
         education=output.education,
@@ -125,7 +135,8 @@ def render_docx(session: Session) -> bytes:
     # Skills
     if output.skills:
         doc.add_heading("Skills", level=1)
-        doc.add_paragraph(", ".join(output.skills))
+        for line in _format_skills_for_export(output.skills):
+            doc.add_paragraph(line)
 
     # Experience
     if output.experience:
@@ -189,7 +200,7 @@ def render_txt(session: Session) -> str:
         lines += ["SUMMARY", "-------", output.summary, ""]
 
     if output.skills:
-        lines += ["SKILLS", "------", ", ".join(output.skills), ""]
+        lines += ["SKILLS", "------", *_format_skills_for_export(output.skills), ""]
 
     if output.experience:
         lines += ["EXPERIENCE", "----------"]

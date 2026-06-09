@@ -11,6 +11,7 @@ from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
+from app.agent.phase3_postprocess import postprocess_tailored_output
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
 from app.services.company_intel import ensure_session_company_intel
@@ -155,9 +156,17 @@ def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutpu
             f"REGENERATE ONLY the education entry for institution "
             f"\"{scope.institution}\".  Return JSON with only the education array."
         )
+    skills_format = ""
+    if scope.section == "skills":
+        skills_format = (
+            " SKILLS FORMAT — each array entry MUST be a category string: "
+            "\"Category Name: skill1, skill2, skill3\". "
+            "Group into 3–5 categories ordered by JD relevance. "
+            "Do NOT return plain individual skill strings."
+        )
     return (
         f"REGENERATE ONLY the ``{scope.section}`` section.  "
-        f"Return JSON containing only that section's field(s)."
+        f"Return JSON containing only that section's field(s).{skills_format}"
     )
 
 
@@ -362,6 +371,16 @@ async def run(
             f"{session.phase3_output.model_dump_json()}\n\n"
             f"{_scoped_user_instruction(scope, session.phase3_output)}"
         )
+    elif not scoped and session.phase3_output:
+        # Full re-run: pass the current tailored resume as the baseline so that
+        # experience entries added from suggestions (not in the raw resume) are
+        # preserved and built upon rather than silently dropped.
+        user_content += (
+            f"\n\nCURRENT TAILORED RESUME (baseline from previous run with user edits applied — "
+            f"treat this as the starting point; preserve accepted experience entries and bullets "
+            f"while applying all Phase 3 quality rules: bullet limits, skill categories, keyword placement):\n"
+            f"{session.phase3_output.model_dump_json()}"
+        )
 
     # Prompt budget gate (§6a "Determinism and prompt budget contract").
     # Raises ``PromptBudgetExceededError`` → orchestrator surfaces 422.
@@ -389,6 +408,13 @@ async def run(
         output.selected_chunks = trace["selected_chunks"]
         output.skipped_chunks = trace["skipped_chunks"]
         output.retrieval_meta = trace["retrieval_meta"]
+
+    must_have = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else None
+    )
+    output = postprocess_tailored_output(output, must_have)
 
     await event_queue.put({"event": "partial", "phase": 3, "data": json.loads(output.model_dump_json())})
     log.info(

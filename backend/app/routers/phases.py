@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
+from app.agent.phase3_postprocess import normalize_skills_to_categories
 from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
@@ -451,6 +452,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
     output = session.phase3_output
     label = "User edit"
+    skills_edited = False
 
     if "section_id" in body:
         section_id = str(body["section_id"])
@@ -461,6 +463,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
             output.summary = str(content)
         elif section_id == "skills":
             output.skills = list(content) if isinstance(content, list) else output.skills
+            skills_edited = True
         elif section_id.startswith("experience:"):
             company = section_id.split(":", 1)[1]
             for entry in output.experience:
@@ -520,6 +523,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
             label = f"User edit: experience/{company}"
         elif section == "skills":
             output.skills = body.get("skills", output.skills)
+            skills_edited = True
             label = "User edit: skills"
         elif section == "education" and bullet_index is not None:
             institution = body.get("institution")
@@ -543,6 +547,14 @@ async def patch_tailored_resume(session_id: str, body: dict):
                     entry.bullets = body.get("bullets", entry.bullets)
                     break
             label = f"User edit: education/{institution}"
+
+    if skills_edited:
+        must_have = (
+            [k.term for k in session.phase1_output.must_have_keywords]
+            if session.phase1_output
+            else None
+        )
+        output.skills = normalize_skills_to_categories(output.skills, must_have)
 
     version = _append_version_snapshot(session, label=label, output=output)
     session.phase3_output = output
