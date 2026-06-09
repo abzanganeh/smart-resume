@@ -16,7 +16,7 @@ Group skills into 3–5 meaningful categories. Each category is ONE item in the 
 Examples:
   "Programming Languages & Frameworks: Python, FastAPI, REST APIs"
   "AI & Machine Learning: Generative AI, LLMs, RAG, NVIDIA NIM, GPU-accelerated training"
-  "DevOps & Infrastructure: CI/CD pipelines, MLOps, Kubernetes, Docker"
+  "DevOps & Infrastructure: CI/CD pipelines, MLOps, Kubernetes, Docker, containerized environments"
   "Cloud & Architecture: cloud-native architectures, microservices, AWS"
   "Engineering Domains: backend engineering, identity & security, data engineering"
 
@@ -44,7 +44,7 @@ If you cannot fit a keyword into an Experience bullet without fabricating, add i
 
 ━━━ PROJECTS ━━━
 - ALWAYS include ALL projects from the original resume. Never silently delete a project.
-- BULLET COUNT LIMIT: max 2–3 bullets per project. Keep the most impactful; trim the rest.
+- BULLET COUNT LIMIT: max 2–3 bullets per project. Keep the most impactful; trim or merge the rest.
 - If a project is not relevant to this JD, include it anyway and add a note in rewrite_notes like "Project X kept — not directly relevant to JD but shows initiative".
 - Enhance project bullets with JD keywords if applicable.
 

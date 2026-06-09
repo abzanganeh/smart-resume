@@ -21,9 +21,17 @@ class ChatMessage(BaseModel):
 class ResumePatch(BaseModel):
     """A single targeted, apply-able change to one section of the tailored resume."""
 
-    section: Literal["summary", "experience", "skills", "education", "certifications", "projects"]
+    section: Literal[
+        "summary", "experience", "skills", "education", "certifications", "projects", "contact"
+    ]
     description: str = Field(
         description="Short, plain-English description of what changed and why (shown to user)."
+    )
+
+    # ── Contact (header name on exported resume) ───────────────────────────────
+    new_name: str | None = Field(
+        default=None,
+        description="Replacement display name for contact.name. Only set when section='contact'.",
     )
 
     # ── Summary ──────────────────────────────────────────────────────────────
@@ -70,6 +78,23 @@ class ResumePatch(BaseModel):
     new_dates: str | None = Field(
         default=None,
         description="Replacement date range (e.g. '2022 – 2025'). Only set when section='experience'.",
+    )
+    delete_experience: bool = Field(
+        default=False,
+        description=(
+            "When true, remove the entire experience entry matched by company. "
+            "Use for deleting manual rows (e.g. Awards). Only set when section='experience'."
+        ),
+    )
+
+    # ── Certifications ───────────────────────────────────────────────────────
+    remove_certifications: list[str] = Field(
+        default_factory=list,
+        description="Certification or award strings to remove (exact match). section='certifications'.",
+    )
+    add_certifications: list[str] = Field(
+        default_factory=list,
+        description="Certification strings to append. section='certifications'.",
     )
 
     # ── Education ────────────────────────────────────────────────────────────

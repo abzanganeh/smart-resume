@@ -17,6 +17,7 @@ from app.agent.phase3_postprocess import (
 )
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
+from app.services.contact_authority import apply_authoritative_contact, resolve_account_email
 from app.services.company_intel import ensure_session_company_intel
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
@@ -108,7 +109,13 @@ def _merge_scoped_output(
                 replaced = False
                 for i, exp in enumerate(merged.experience):
                     if exp.company == scope.company:
-                        merged.experience[i] = partial.experience[0]
+                        incoming = partial.experience[0]
+                        merged.experience[i] = incoming.model_copy(
+                            update={
+                                "dates": exp.dates if exp.dates.strip() else incoming.dates,
+                                "title": exp.title if exp.title.strip() else incoming.title,
+                            }
+                        )
                         replaced = True
                         break
                 if not replaced:
@@ -429,6 +436,13 @@ async def run(
         else None
     )
     output = postprocess_tailored_output(output, must_have)
+
+    account_email = await resolve_account_email(session.user_id)
+    output = apply_authoritative_contact(
+        output,
+        user_info=session.user_info,
+        account_email=account_email,
+    )
 
     await event_queue.put({"event": "partial", "phase": 3, "data": json.loads(output.model_dump_json())})
     log.info(

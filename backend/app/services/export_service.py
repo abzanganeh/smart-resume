@@ -12,6 +12,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.agent.phase3_postprocess import is_category_skill_line
 from app.models.cover_letter import CoverLetterOutput
 from app.models.session import Session
+from app.models.userinfo import UserInfo
+from app.services.contact_authority import authoritative_contact
 
 log = structlog.get_logger()
 
@@ -22,12 +24,7 @@ _jinja_env = Environment(
 )
 
 # Common placeholder names/emails that LLMs emit when they lack real data
-_PLACEHOLDER_NAMES = {"john doe", "jane doe", "candidate name", "your name", "full name", ""}
-_PLACEHOLDER_EMAILS = {
-    "john.doe@example.com", "jane.doe@example.com",
-    "email@example.com", "youremail@example.com", "",
-}
-_PLACEHOLDER_PHONES = {"123-456-7890", "(123) 456-7890", "555-555-5555", ""}
+# (kept for backwards-compat re-exports; canonical logic lives in contact_authority.py)
 
 
 def _format_skills_for_export(skills: list[str]) -> list[str]:
@@ -39,41 +36,17 @@ def _format_skills_for_export(skills: list[str]) -> list[str]:
     return [", ".join(skills)]
 
 
-def _authoritative_contact(llm_contact: object, user: object) -> dict:
-    """Merge LLM-extracted contact with real authenticated-user data.
-
-    The LLM sometimes emits placeholder values (e.g. "John Doe", "john.doe@example.com")
-    when the user's original resume didn't contain their contact info.  We always
-    prefer the real user record for name/email/phone/linkedin/github.
-    """
-    c: dict = llm_contact if isinstance(llm_contact, dict) else {}
-    result = dict(c)
-
-    if user is None:
-        return result
-
-    # name — prefer user record unless LLM value looks legit
-    llm_name = (c.get("name") or "").strip()
-    if llm_name.lower() in _PLACEHOLDER_NAMES:
-        result["name"] = getattr(user, "name", "") or llm_name
-
-    # email — always prefer authenticated user email
-    llm_email = (c.get("email") or "").strip()
-    if llm_email.lower() in _PLACEHOLDER_EMAILS:
-        result["email"] = getattr(user, "email", "") or llm_email
-
-    # phone — user record wins if LLM produced a placeholder
-    llm_phone = (c.get("phone") or "").strip()
-    if llm_phone in _PLACEHOLDER_PHONES and getattr(user, "phone", None):
-        result["phone"] = user.phone  # type: ignore[union-attr]
-
-    # linkedin / github — user record fills gaps only (don't override real LLM values)
-    if not result.get("linkedin") and getattr(user, "linkedin", None):
-        result["linkedin"] = user.linkedin  # type: ignore[union-attr]
-    if not result.get("github") and getattr(user, "github", None):
-        result["github"] = user.github  # type: ignore[union-attr]
-
-    return result
+def _authoritative_contact(
+    llm_contact: object,
+    user: UserInfo | None,
+    *,
+    account_email: str | None = None,
+) -> dict:
+    return authoritative_contact(
+        llm_contact,
+        user_info=user,
+        account_email=account_email,
+    )
 
 
 def _resume_to_html(session: Session) -> str:
@@ -180,13 +153,13 @@ def render_docx(session: Session) -> bytes:
     return buf.read()
 
 
-def render_txt(session: Session) -> str:
+def render_txt(session: Session, *, account_email: str | None = None) -> str:
     """Plain-text resume for copy-paste."""
     output = session.phase3_output
     user = session.user_info
     lines: list[str] = []
 
-    contact = _authoritative_contact(output.contact, user)
+    contact = _authoritative_contact(output.contact, user, account_email=account_email)
     name = contact.get("name", "")
     email = contact.get("email", "")
     phone = contact.get("phone", "")

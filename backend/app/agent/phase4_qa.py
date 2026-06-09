@@ -18,6 +18,36 @@ _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text
 _PHASE4 = (Path(__file__).parent / "prompts" / "phase4.txt").read_text()
 
 
+import re as _re
+
+_HAS_NUMBER = _re.compile(r"\d")
+
+
+def _filter_stale_metrics_needed(tailored) -> list:
+    """Remove metrics_needed entries whose bullet has already been updated
+    by the user to include a number/percentage.  Phase 4 should not
+    auto-fail checklist #3 for bullets the user already quantified.
+    """
+    filtered = []
+    exp_by_company = {e.company: e for e in (getattr(tailored, "experience", []) or [])}
+    for entry in getattr(tailored, "metrics_needed", []) or []:
+        company = entry.company if hasattr(entry, "company") else (entry.get("company") if isinstance(entry, dict) else None)
+        idx = entry.bullet_index if hasattr(entry, "bullet_index") else (entry.get("bullet_index") if isinstance(entry, dict) else None)
+        if company is None or idx is None:
+            filtered.append(entry)
+            continue
+        exp = exp_by_company.get(company)
+        if exp is None:
+            # Company was removed from experience — entry is stale, skip it
+            continue
+        bullets = list(getattr(exp, "bullets", []) or [])
+        if idx < len(bullets) and _HAS_NUMBER.search(bullets[idx]):
+            # Bullet already contains a digit — user added a metric, entry is resolved
+            continue
+        filtered.append(entry)
+    return filtered
+
+
 def _collect_resume_text(tailored) -> str:
     """Concatenate every user-visible string in the tailored resume.
 
@@ -77,8 +107,6 @@ async def run(
     tailored = session.phase3_output
 
     existing_skills: list[str] = tailored.skills or []
-    # Flat individual terms parsed out of category lines so substring checks
-    # work whether the resume is categorized ("AI: Python, LLMs") or flat.
     flat_skill_terms: list[str] = flatten_skill_terms(existing_skills)
     must_have_terms: list[str] = (
         [k.term for k in session.phase1_output.must_have_keywords]
@@ -100,7 +128,7 @@ async def run(
                 f"INDIVIDUAL SKILL TERMS (parsed from category lines for keyword coverage):\n"
                 f"{', '.join(flat_skill_terms)}\n\n"
                 f"TAILORED RESUME (Phase 3 output):\n{tailored.model_dump_json()}\n\n"
-                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() for m in tailored.metrics_needed])}"
+                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() if hasattr(m, 'model_dump') else m for m in _filter_stale_metrics_needed(tailored)])}"
             ),
         ),
     ]
@@ -133,7 +161,6 @@ async def run(
     #   (b) For the remaining issues, if the keyword is already in
     #       Skills, rewrite the suggestion to point at Experience/Summary.
     full_text_corpus = _collect_resume_text(tailored).lower()
-    flat_skills_lower: set[str] = {s.lower() for s in flat_skill_terms}
 
     def _extract_quoted_terms(text: str) -> list[str]:
         """Find any 'X', \"X\", or 'X' style phrases in the suggestion."""
@@ -160,11 +187,9 @@ async def run(
         return terms
 
     def _skills_present(suggestion_lower: str) -> list[str]:
-        """Return individual skill terms referenced by the suggestion that are already in Skills."""
         return [t for t in flat_skill_terms if t.lower() in suggestion_lower]
 
     def _fix_suggestion(suggestion: str) -> str:
-        """Rewrite 'Add X to Skills' when X is already in Skills (categorized or flat)."""
         lower = suggestion.lower()
         if not any(
             phrase in lower
