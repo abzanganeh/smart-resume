@@ -6,6 +6,7 @@ from pathlib import Path
 
 import structlog
 
+from app.agent.phase3_postprocess import flatten_skill_terms
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
 from app.models.qa import QAOutput
@@ -15,6 +16,36 @@ log = structlog.get_logger()
 
 _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text()
 _PHASE4 = (Path(__file__).parent / "prompts" / "phase4.txt").read_text()
+
+
+import re as _re
+
+_HAS_NUMBER = _re.compile(r"\d")
+
+
+def _filter_stale_metrics_needed(tailored) -> list:
+    """Remove metrics_needed entries whose bullet has already been updated
+    by the user to include a number/percentage.  Phase 4 should not
+    auto-fail checklist #3 for bullets the user already quantified.
+    """
+    filtered = []
+    exp_by_company = {e.company: e for e in (getattr(tailored, "experience", []) or [])}
+    for entry in getattr(tailored, "metrics_needed", []) or []:
+        company = entry.company if hasattr(entry, "company") else (entry.get("company") if isinstance(entry, dict) else None)
+        idx = entry.bullet_index if hasattr(entry, "bullet_index") else (entry.get("bullet_index") if isinstance(entry, dict) else None)
+        if company is None or idx is None:
+            filtered.append(entry)
+            continue
+        exp = exp_by_company.get(company)
+        if exp is None:
+            # Company was removed from experience — entry is stale, skip it
+            continue
+        bullets = list(getattr(exp, "bullets", []) or [])
+        if idx < len(bullets) and _HAS_NUMBER.search(bullets[idx]):
+            # Bullet already contains a digit — user added a metric, entry is resolved
+            continue
+        filtered.append(entry)
+    return filtered
 
 
 def _collect_resume_text(tailored) -> str:
@@ -76,6 +107,12 @@ async def run(
     tailored = session.phase3_output
 
     existing_skills: list[str] = tailored.skills or []
+    flat_skill_terms: list[str] = flatten_skill_terms(existing_skills)
+    must_have_terms: list[str] = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else []
+    )
 
     messages = [
         LLMMessage(role="system", content=_SYSTEM_BASE + "\n\n" + _PHASE4),
@@ -85,11 +122,13 @@ async def run(
                 f"CAREER STAGE: {career_stage}\n"
                 f"CAREER TRANSITION: {is_career_transition}\n\n"
                 f"JOB DESCRIPTION:\n{jd_text}\n\n"
-                f"MUST-HAVE KEYWORDS:\n{json.dumps([k.term for k in session.phase1_output.must_have_keywords] if session.phase1_output else [])}\n\n"
-                f"SKILLS ALREADY IN THE RESUME (do NOT suggest adding these to Skills — suggest Experience/Summary instead):\n"
-                f"{', '.join(existing_skills)}\n\n"
+                f"MUST-HAVE KEYWORDS:\n{json.dumps(must_have_terms)}\n\n"
+                f"SKILLS ALREADY IN THE RESUME (categorized — do NOT suggest adding these to Skills again; suggest Experience/Summary instead):\n"
+                f"{json.dumps(existing_skills)}\n\n"
+                f"INDIVIDUAL SKILL TERMS (parsed from category lines for keyword coverage):\n"
+                f"{', '.join(flat_skill_terms)}\n\n"
                 f"TAILORED RESUME (Phase 3 output):\n{tailored.model_dump_json()}\n\n"
-                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() for m in tailored.metrics_needed])}"
+                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() if hasattr(m, 'model_dump') else m for m in _filter_stale_metrics_needed(tailored)])}"
             ),
         ),
     ]
@@ -122,41 +161,61 @@ async def run(
     #   (b) For the remaining issues, if the keyword is already in
     #       Skills, rewrite the suggestion to point at Experience/Summary.
     full_text_corpus = _collect_resume_text(tailored).lower()
-    skills_lower = {s.lower() for s in existing_skills}
 
     def _extract_quoted_terms(text: str) -> list[str]:
         """Find any 'X', \"X\", or 'X' style phrases in the suggestion."""
         import re
-        matches = re.findall(r"['\"\u2018\u2019\u201c\u201d]([^'\"\u2018\u2019\u201c\u201d]{2,80})['\"\u2018\u2019\u201c\u201d]", text)
+        matches = re.findall(
+            r"['\"\u2018\u2019\u201c\u201d]([^'\"\u2018\u2019\u201c\u201d]{2,80})['\"\u2018\u2019\u201c\u201d]",
+            text,
+        )
         return [m.strip() for m in matches if m.strip()]
 
-    def _fix_suggestion(suggestion: str) -> str:
-        """Rewrite 'Add X to Skills' when X is already in Skills."""
+    def _candidate_keywords(suggestion: str) -> list[str]:
+        """Terms that the suggestion is likely advocating for.
+
+        Uses both quoted phrases AND any Phase 1 must-have keyword whose
+        verbatim form appears inside the suggestion text. This catches
+        unquoted suggestions like "Add Python to the Skills section".
+        """
+        terms = _extract_quoted_terms(suggestion)
         lower = suggestion.lower()
-        if "skills section" in lower or "add to skills" in lower or "to the skills" in lower:
-            already_present = [s for s in existing_skills if s.lower() in lower]
-            if already_present:
-                kw_list = ", ".join(already_present)
-                return (
-                    f"Reinforce {kw_list} in at least one Experience bullet or your Professional Summary — "
-                    f"{'it' if len(already_present) == 1 else 'they'} already appear in your Skills section."
-                )
-        return suggestion
+        for term in must_have_terms:
+            t = term.strip()
+            if t and t.lower() in lower and t not in terms:
+                terms.append(t)
+        return terms
+
+    def _skills_present(suggestion_lower: str) -> list[str]:
+        return [t for t in flat_skill_terms if t.lower() in suggestion_lower]
+
+    def _fix_suggestion(suggestion: str) -> str:
+        lower = suggestion.lower()
+        if not any(
+            phrase in lower
+            for phrase in ("skills section", "add to skills", "to the skills", "to skills")
+        ):
+            return suggestion
+        already_present = _skills_present(lower)
+        if not already_present:
+            return suggestion
+        kw_list = ", ".join(already_present)
+        return (
+            f"Reinforce {kw_list} in at least one Experience bullet or your Professional Summary — "
+            f"{'it' if len(already_present) == 1 else 'they'} already appear in your Skills section."
+        )
 
     corrected_issues = []
     for issue in output.blocking_issues:
         if issue.category == "keyword":
-            # (a) Drop the issue entirely if every quoted/referenced
-            # keyword in the suggestion is already present in the resume.
-            quoted = _extract_quoted_terms(issue.suggestion)
-            if quoted and all(q.lower() in full_text_corpus for q in quoted):
+            candidates = _candidate_keywords(issue.suggestion)
+            if candidates and all(c.lower() in full_text_corpus for c in candidates):
                 log.info(
                     "phase4_keyword_issue_dropped",
                     suggestion=issue.suggestion[:120],
-                    terms=quoted,
+                    terms=candidates,
                 )
                 continue
-            # (b) Otherwise, rewrite Skills-targeted suggestions when applicable.
             if existing_skills:
                 fixed = _fix_suggestion(issue.suggestion)
                 if fixed != issue.suggestion:

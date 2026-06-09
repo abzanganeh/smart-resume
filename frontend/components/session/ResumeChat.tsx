@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MessageSquare, Send, SkipForward, Sparkles } from "lucide-react";
+import { Loader2, MessageSquare, Send, SkipForward, Sparkles, X } from "lucide-react";
 import {
   chatWithResume,
   type BlockingIssue,
@@ -10,6 +10,8 @@ import {
   type ResumePatch,
   type TailoredResumeOutput,
 } from "@/lib/api";
+import { countPlaceablePatches } from "@/lib/suggestionHighlight";
+import { normalizeResumePatch } from "@/lib/applyResumePatch";
 
 // ── Message types ─────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ interface AssistantMessage {
   role: "assistant";
   content: string;
   suggestionCount: number;
+  unplaceableCount: number;
 }
 interface UserMessageEntry {
   role: "user";
@@ -49,6 +52,17 @@ function AssistantBubble({ message }: { message: AssistantMessage }) {
             <div className="flex items-center gap-1.5 text-[11px] text-amber-400/80 border-t border-slate-700/50 pt-2">
               <Sparkles className="w-3 h-3" />
               {message.suggestionCount} yellow highlight{message.suggestionCount !== 1 ? "s" : ""} in resume — click Accept to apply (not applied yet)
+            </div>
+          )}
+          {message.unplaceableCount > 0 && (
+            <div className="text-[11px] text-red-300/90 border-t border-slate-700/50 pt-2 space-y-1">
+              <p>
+                {message.unplaceableCount} suggestion{message.unplaceableCount !== 1 ? "s" : ""} could not be matched to your resume
+                {message.suggestionCount === 0 ? " — nothing was highlighted" : ""}.
+              </p>
+              <p className="text-slate-400">
+                Check the <strong className="text-slate-300">Couldn&apos;t apply</strong> banner above the resume, or edit manually (trash icon / pencil).
+              </p>
             </div>
           )}
         </div>
@@ -127,8 +141,9 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
 
   async function send() {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || !tailored) return;
 
+    const resume = tailored;
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setLoading(true);
@@ -143,12 +158,16 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
         onSuggestPatches(res.patches);
       }
 
+      const normalized = res.patches.map((p) => normalizeResumePatch(resume, p));
+      const { placeable, unplaceable } = countPlaceablePatches(normalized, resume);
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content: res.reply,
-          suggestionCount: res.patches.length,
+          suggestionCount: placeable,
+          unplaceableCount: unplaceable,
         },
       ]);
     } catch {
@@ -158,6 +177,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
           role: "assistant",
           content: "Something went wrong. Please try again.",
           suggestionCount: 0,
+          unplaceableCount: 0,
         },
       ]);
     } finally {
@@ -194,7 +214,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[6.5rem]">
         {messages.length === 0 && (
           <div className="text-center py-8 space-y-3">
             <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mx-auto">
@@ -254,26 +274,41 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
                 e.preventDefault();
                 void send();
               }
+              if (e.key === "Escape") {
+                setInput("");
+              }
             }}
             disabled={loading || noResume}
             placeholder={noResume ? "Run rewrite first…" : "Ask me to change anything… (Enter to send)"}
-            rows={2}
-            className="flex-1 resize-none bg-slate-800 border border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed"
+            rows={4}
+            className="flex-1 resize-none bg-slate-800 border border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed min-h-[6.5rem]"
           />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={loading || !input.trim() || noResume}
-            className="p-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 disabled:opacity-40 transition-colors shrink-0"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
+          <div className="flex flex-col gap-2">
+            {input.trim() && !loading && (
+              <button
+                type="button"
+                onClick={() => setInput("")}
+                title="Clear message (Esc)"
+                className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={loading || !input.trim() || noResume}
+              className="p-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 disabled:opacity-40 transition-colors shrink-0"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+          </div>
         </div>
-        <p className="text-[10px] text-slate-600">Shift+Enter for new line · Enter to send</p>
+        <p className="text-[10px] text-slate-600">Shift+Enter for new line · Enter to send · Esc to clear</p>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import {
   matchExperienceCompany,
   matchProjectName,
 } from "@/lib/applyResumePatch";
-import type { TailoredEducation } from "@/lib/api";
+import type { ResumePatch, TailoredEducation, TailoredResumeOutput } from "@/lib/api";
 import type { ResumeSuggestion } from "@/lib/suggestions";
 
 export type HighlightTone = "none" | "pending" | "accepted" | "rejected";
@@ -31,6 +31,16 @@ export function toneForSuggestion(sug: ResumeSuggestion): HighlightTone {
   if (sug.status === "pending") return "pending";
   if (sug.status === "accepted") return "accepted";
   return "rejected";
+}
+
+// ── Contact ───────────────────────────────────────────────────────────────────
+
+export function contactNameSuggestion(
+  suggestions: ResumeSuggestion[],
+): ResumeSuggestion | undefined {
+  return suggestions.find(
+    (s) => s.patch.section === "contact" && !!s.patch.new_name?.trim() && s.status !== "rejected",
+  );
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
@@ -130,7 +140,24 @@ export function titleSuggestion(
   company: string,
 ): ResumeSuggestion | undefined {
   return experienceSuggestions(suggestions, company).find(
-    (s) => s.patch.new_title?.trim() && !s.patch.bullet_old,
+    (s) => s.patch.new_title?.trim() && !s.patch.bullet_old && !s.patch.delete_experience,
+  );
+}
+
+export function experienceDeleteSuggestion(
+  suggestions: ResumeSuggestion[],
+  company: string,
+): ResumeSuggestion | undefined {
+  return experienceSuggestions(suggestions, company).find(
+    (s) => s.patch.delete_experience && s.status === "pending",
+  );
+}
+
+export function certificationRemovalSuggestions(suggestions: ResumeSuggestion[]) {
+  return suggestions.filter(
+    (s) =>
+      s.patch.section === "certifications" &&
+      (s.patch.remove_certifications?.length ?? 0) > 0,
   );
 }
 
@@ -264,34 +291,110 @@ export function projectRemovalPending(
     );
 }
 
+function projectDisplayName(project: Record<string, unknown>): string {
+  return String(project.name ?? "").trim();
+}
+
+/** True when this patch targets something that exists in the current resume. */
+export function isPatchPlaceable(
+  patch: ResumePatch,
+  resume: TailoredResumeOutput,
+): boolean {
+  if (patch.section === "contact" && patch.new_name?.trim()) {
+    return true;
+  }
+
+  if (patch.section === "summary" && patch.new_summary?.trim()) {
+    return true;
+  }
+
+  if (patch.section === "skills") {
+    if (patch.add_skills?.length) return true;
+    if (patch.remove_skills?.length) {
+      return patch.remove_skills.some((skill) =>
+        resume.skills.some((s) => textsMatch(s, skill)),
+      );
+    }
+    return false;
+  }
+
+  if (patch.section === "experience" && patch.company?.trim()) {
+    const idx = resume.experience.findIndex((exp) =>
+      matchExperienceCompany(exp.company, patch.company!),
+    );
+    if (idx < 0) return false;
+    const exp = resume.experience[idx]!;
+    if (patch.delete_experience) return true;
+    if (patch.new_title?.trim() || patch.new_dates?.trim()) return true;
+    if (patch.bullet_old?.trim()) {
+      return exp.bullets.some((b) => b === patch.bullet_old || textsMatch(b, patch.bullet_old!));
+    }
+    return false;
+  }
+
+  if (patch.section === "education" && patch.institution?.trim()) {
+    return resume.education.some((edu) =>
+      matchEducationInstitution(edu.institution, patch.institution!),
+    );
+  }
+
+  if (patch.section === "certifications") {
+    if (patch.add_certifications?.length) return true;
+    if (patch.remove_certifications?.length) {
+      return patch.remove_certifications.some((cert) => resume.certifications.includes(cert));
+    }
+    return false;
+  }
+
+  if (patch.section === "projects") {
+    if (patch.new_project?.name?.trim()) {
+      const name = patch.new_project.name.trim();
+      return !resume.projects.some((proj) =>
+        matchProjectName(projectDisplayName(proj as Record<string, unknown>), name),
+      );
+    }
+    if (patch.remove_projects?.length) {
+      return patch.remove_projects.some((target) =>
+        resume.projects.some((proj) =>
+          matchProjectName(projectDisplayName(proj as Record<string, unknown>), target),
+        ),
+      );
+    }
+    if (patch.project_name?.trim()) {
+      return resume.projects.some((proj) =>
+        matchProjectName(
+          projectDisplayName(proj as Record<string, unknown>),
+          patch.project_name!,
+        ),
+      );
+    }
+    return false;
+  }
+
+  return false;
+}
+
+export function countPlaceablePatches(
+  patches: ResumePatch[],
+  resume: TailoredResumeOutput,
+): { placeable: number; unplaceable: number } {
+  let placeable = 0;
+  for (const patch of patches) {
+    if (isPatchPlaceable(patch, resume)) placeable += 1;
+  }
+  return { placeable, unplaceable: patches.length - placeable };
+}
+
 export function placedSuggestionIds(
   suggestions: ResumeSuggestion[],
-  resume: import("@/lib/api").TailoredResumeOutput,
+  resume: TailoredResumeOutput,
 ): Set<string> {
   const placed = new Set<string>();
-  for (const s of summarySuggestions(suggestions)) placed.add(s.id);
-  for (const s of skillsSuggestions(suggestions)) placed.add(s.id);
-  for (const exp of resume.experience) {
-    for (const s of experienceSuggestions(suggestions, exp.company)) placed.add(s.id);
-  }
-  for (const proj of resume.projects) {
-    const name = String((proj as Record<string, unknown>).name ?? "");
-    for (const s of projectEditSuggestions(suggestions, name)) placed.add(s.id);
-    const removal = projectRemovalPending(suggestions, name);
-    if (removal) placed.add(removal.id);
-  }
-  for (const edu of resume.education) {
-    for (const s of educationSuggestions(suggestions, edu.institution, resume.education)) {
-      placed.add(s.id);
-    }
-  }
   for (const s of suggestions) {
-    if (s.patch.section === "education" && inferEducationInstitution(resume.education, s.patch)) {
+    if (isPatchPlaceable(s.patch, resume)) {
       placed.add(s.id);
     }
   }
-  for (const s of newProjectSuggestions(suggestions)) placed.add(s.id);
-  for (const s of projectRemovalSuggestions(suggestions)) placed.add(s.id);
   return placed;
 }
 
@@ -301,8 +404,8 @@ export function pendingSuggestionCount(suggestions: ResumeSuggestion[]): number 
 
 export function orphanedSuggestions(
   suggestions: ResumeSuggestion[],
-  resume: import("@/lib/api").TailoredResumeOutput,
+  resume: TailoredResumeOutput,
 ) {
   const placed = placedSuggestionIds(suggestions, resume);
-  return suggestions.filter((s) => !placed.has(s.id));
+  return suggestions.filter((s) => s.status === "pending" && !placed.has(s.id));
 }

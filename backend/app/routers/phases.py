@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
+from app.agent.phase3_postprocess import normalize_skills_to_categories
 from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
@@ -451,6 +452,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
     output = session.phase3_output
     label = "User edit"
+    skills_edited = False
 
     if "section_id" in body:
         section_id = str(body["section_id"])
@@ -459,8 +461,14 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
         if section_id == "summary":
             output.summary = str(content)
+        elif section_id == "contact":
+            contact = dict(output.contact or {})
+            contact["name"] = str(content).strip()
+            output.contact = contact
+            label = "User edit: contact/name"
         elif section_id == "skills":
             output.skills = list(content) if isinstance(content, list) else output.skills
+            skills_edited = True
         elif section_id.startswith("experience:"):
             company = section_id.split(":", 1)[1]
             for entry in output.experience:
@@ -493,6 +501,18 @@ async def patch_tailored_resume(session_id: str, body: dict):
                         bullets=[text] if text else [],
                     )
                 )
+            elif section == "projects":
+                output.projects.append(
+                    {
+                        "name": str(content.get("title", "Project")),
+                        "description": str(content.get("company", "")),
+                        "bullets": [text] if text else [],
+                    }
+                )
+            elif section == "certifications":
+                cert = text.strip() or str(content.get("title", "")).strip()
+                if cert and cert not in output.certifications:
+                    output.certifications.append(cert)
             label = f"Manual add: {section}"
     else:
         section = body.get("section")
@@ -503,6 +523,11 @@ async def patch_tailored_resume(session_id: str, body: dict):
         if section == "summary":
             output.summary = new_text
             label = "User edit: summary"
+        elif section == "contact" and body.get("new_name") is not None:
+            contact = dict(output.contact or {})
+            contact["name"] = str(body["new_name"]).strip()
+            output.contact = contact
+            label = "User edit: contact/name"
         elif section == "experience" and company is not None and bullet_index is not None:
             for entry in output.experience:
                 if entry.company != company:
@@ -518,8 +543,44 @@ async def patch_tailored_resume(session_id: str, body: dict):
                 entry.bullets = bullets
                 break
             label = f"User edit: experience/{company}"
+        elif section == "experience" and company is not None and body.get("new_title") is not None:
+            new_title = str(body["new_title"]).strip()
+            for entry in output.experience:
+                if entry.company != company:
+                    continue
+                entry.title = new_title
+                break
+            label = f"User edit: experience/{company}/title"
+        elif section == "experience" and company is not None and body.get("new_company") is not None:
+            new_company = str(body["new_company"]).strip()
+            for entry in output.experience:
+                if entry.company == company:
+                    entry.company = new_company
+                    break
+            label = f"User edit: experience/{company}/company"
+        elif section == "experience" and company is not None and body.get("new_dates") is not None:
+            new_dates = str(body["new_dates"]).strip()
+            for entry in output.experience:
+                if entry.company == company:
+                    entry.dates = new_dates
+                    break
+            label = f"User edit: experience/{company}/dates"
+        elif section == "experience" and body.get("delete") is True:
+            exp_index = body.get("experience_index")
+            if exp_index is not None:
+                idx = int(exp_index)
+                if 0 <= idx < len(output.experience):
+                    output.experience.pop(idx)
+                    label = f"User edit: experience/delete/{idx}"
+            elif company is not None:
+                for i, entry in enumerate(output.experience):
+                    if entry.company == company:
+                        output.experience.pop(i)
+                        label = f"User edit: experience/delete/{company}"
+                        break
         elif section == "skills":
             output.skills = body.get("skills", output.skills)
+            skills_edited = True
             label = "User edit: skills"
         elif section == "education" and bullet_index is not None:
             institution = body.get("institution")
@@ -543,6 +604,69 @@ async def patch_tailored_resume(session_id: str, body: dict):
                     entry.bullets = body.get("bullets", entry.bullets)
                     break
             label = f"User edit: education/{institution}"
+        elif section == "education" and body.get("institution") is not None:
+            institution = str(body["institution"])
+            for entry in output.education:
+                if entry.institution != institution:
+                    continue
+                if body.get("new_institution") is not None:
+                    entry.institution = str(body["new_institution"]).strip()
+                if body.get("new_degree") is not None:
+                    entry.degree = str(body["new_degree"]).strip()
+                if body.get("new_year") is not None:
+                    entry.year = str(body["new_year"]).strip()
+                break
+            label = f"User edit: education/{institution}"
+        elif section == "certifications" and body.get("delete") is True:
+            cert_index = body.get("cert_index")
+            if cert_index is not None:
+                idx = int(cert_index)
+                if 0 <= idx < len(output.certifications):
+                    output.certifications.pop(idx)
+                    label = f"User edit: certifications/delete/{idx}"
+        elif section == "projects":
+            project_index = body.get("project_index")
+            if body.get("delete") is True and project_index is not None:
+                idx = int(project_index)
+                if 0 <= idx < len(output.projects):
+                    output.projects.pop(idx)
+                label = f"User edit: projects/delete/{project_index}"
+            elif body.get("add_project") is not None:
+                output.projects.append(body["add_project"])
+                label = "User edit: projects/add"
+            elif project_index is not None:
+                idx = int(project_index)
+                if 0 <= idx < len(output.projects):
+                    raw = output.projects[idx]
+                    proj = dict(raw) if isinstance(raw, dict) else {}
+                    if body.get("new_name") is not None:
+                        proj["name"] = str(body["new_name"]).strip()
+                    if body.get("new_description") is not None:
+                        proj["description"] = str(body["new_description"]).strip()
+                    bullet_index = body.get("bullet_index")
+                    if bullet_index is not None:
+                        bullets = list(proj.get("bullets") or [])
+                        bi = int(bullet_index)
+                        new_text = str(body.get("new_text", ""))
+                        if bi == len(bullets):
+                            if new_text.strip():
+                                bullets.append(new_text)
+                        elif bi < len(bullets):
+                            if new_text.strip():
+                                bullets[bi] = new_text
+                            else:
+                                bullets.pop(bi)
+                        proj["bullets"] = bullets
+                    output.projects[idx] = proj
+                label = f"User edit: projects/{project_index}"
+
+    if skills_edited:
+        must_have = (
+            [k.term for k in session.phase1_output.must_have_keywords]
+            if session.phase1_output
+            else None
+        )
+        output.skills = normalize_skills_to_categories(output.skills, must_have)
 
     version = _append_version_snapshot(session, label=label, output=output)
     session.phase3_output = output

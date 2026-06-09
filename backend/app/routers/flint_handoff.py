@@ -61,7 +61,7 @@ async def create_flint_handoff(
 ) -> FlintHandoffResponse:
     """Mint a single-use token for Flint to import tailored session context."""
     session = await assert_session_owned(session_id, str(user.id))
-    token, expires_in = await create_handoff_token(session)
+    token, expires_in = await create_handoff_token(session, account_email=user.email)
     return FlintHandoffResponse(token=token, expires_in=expires_in)
 
 

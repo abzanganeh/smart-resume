@@ -138,15 +138,29 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
   function pick(p: LLMProvider) {
     setSelected(p);
     setSelectedModel(p.model);
-    setSaved(false);
-    setApiKey("");
     setVerifyResult(null);
+    const stored = getStoredKey();
+    if (stored && stored.provider === p.id && stored.apiKey && stored.apiKey !== "__env__") {
+      setApiKey(stored.apiKey);
+      setSaved(true);
+    } else if (stored && stored.provider === p.id && stored.apiKey === "__env__") {
+      setApiKey("");
+      setSaved(true);
+    } else {
+      setApiKey("");
+      setSaved(false);
+    }
   }
 
   function pickModel(m: LLMModelOption) {
     setSelectedModel(m.id);
-    setSaved(false);
     setVerifyResult(null);
+    const stored = getStoredKey();
+    if (stored && stored.provider === selected?.id && stored.model === m.id) {
+      setSaved(true);
+    } else {
+      setSaved(false);
+    }
   }
 
   async function handleTest() {
@@ -361,8 +375,8 @@ export default function ProviderSetup({ onComplete, inline = false }: Props) {
                   </button>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-                  Stored in your browser's <code className="text-slate-400">sessionStorage</code> only.
-                  Disappears when the tab closes. Never logged or saved by this server.
+                  Stored in this browser&apos;s <code className="text-slate-400">localStorage</code> only
+                  (same device — not on Smart Resume servers). Use Clear to remove it.
                 </p>
                 {/* Test button — directly under key input */}
                 <button
