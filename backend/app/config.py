@@ -219,6 +219,15 @@ class Settings(BaseSettings):
             object.__setattr__(self, "ACCESS_TOKEN_TTL_SECONDS", 24 * 3600)
         return self
 
+    # Phase 3 — LLM rewrite can take 30–120 s on large resumes; cap it so
+    # the UI gets a clear timeout instead of hanging indefinitely.
+    PHASE3_LLM_TIMEOUT_SECONDS: int = 240
+    # Redis phase-lock TTL must exceed the LLM timeout so a second run cannot
+    # start while the first is still in flight.
+    PHASE_LOCK_TTL_SECONDS: int = 600
+    # SSE keepalive interval while the event queue is idle (during LLM calls).
+    SSE_KEEPALIVE_SECONDS: int = 15
+
 
 settings = Settings()
 

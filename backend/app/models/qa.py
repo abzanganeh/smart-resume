@@ -22,6 +22,18 @@ class BlockingIssue(BaseModel):
     fix_effort: Literal["one_click", "user_input", "manual_rewrite"]
 
 
+class ScoreAxis(BaseModel):
+    """Per-axis breakdown of the deterministic ATS score."""
+
+    key: str
+    label: str
+    score: float = Field(ge=0)
+    max: float = Field(ge=0)
+    status: Literal["pass", "warn", "fail"]
+    summary: str = ""
+    issues: list[str] = Field(default_factory=list)
+
+
 class QAOutput(BaseModel):
     checklist: list[QAItem] = Field(default_factory=list)
     overall_status: Literal["pass", "warn", "fail"] = "warn"
@@ -31,6 +43,10 @@ class QAOutput(BaseModel):
     blocking_issues: list[BlockingIssue] = Field(default_factory=list)
     score_ceiling: int = Field(default=0, ge=0, le=100)
     quick_wins: list[BlockingIssue] = Field(default_factory=list)
+    # Deterministic breakdown — populated by phase4_score; the LLM never writes here.
+    score_axes: list[ScoreAxis] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+    single_section_keywords: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

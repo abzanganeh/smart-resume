@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
 import { type BlockingIssue, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
 
 interface Props {
   output: QAOutput | null;
@@ -473,6 +474,14 @@ export function ATSGuidancePanel({
           )}
         </div>
       </div>
+
+      {/* Deterministic per-axis breakdown */}
+      {output.score_axes && output.score_axes.length > 0 && (
+        <ScoreBreakdownPanel
+          axes={output.score_axes}
+          defaultOpen={variant === "primary"}
+        />
+      )}
 
       {/* Quick wins */}
       {quickWins.length > 0 && (

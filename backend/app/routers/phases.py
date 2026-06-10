@@ -40,7 +40,13 @@ from app.services.billing.quota import (
 from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
 from app.services.llm_session_config import apply_llm_request_headers
-from app.services.session_store import get_session, reset_phase, update_session
+from app.services.session_store import (
+    get_session,
+    is_phase_lock_held,
+    release_phase_lock,
+    reset_phase,
+    update_session,
+)
 
 MAX_PHASE3_VERSIONS = 20
 
@@ -171,9 +177,28 @@ async def trigger_phase(
             detail="Phase 3 must complete before a scoped regeneration.",
         )
 
+    # Force runs always win — explicitly clear stale state before the lock check
+    # so the user can recover from a phase that crashed mid-run (e.g. backend
+    # restart left status="running" and the Redis lock orphaned).
+    if body.force:
+        await reset_phase(session_id, phase)
+        session = await get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
     phase_status = getattr(session, f"phase{phase}_status")
     if phase_status == PhaseStatus.running:
-        raise HTTPException(status_code=409, detail=f"Phase {phase} is already running.")
+        # Self-heal: if Redis no longer holds the lock, the previous run
+        # died without releasing it. Treat the running flag as stale.
+        if not await is_phase_lock_held(session_id, phase):
+            await reset_phase(session_id, phase)
+            session = await get_session(session_id)
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+        else:
+            raise HTTPException(
+                status_code=409, detail=f"Phase {phase} is already running."
+            )
 
     # Master resume is optional — Phase 3 runs with the session resume when
     # no chunks are present, so we no longer block here. The retrieval
@@ -241,12 +266,6 @@ async def trigger_phase(
     )
     await update_session(session)
 
-    if body.force:
-        await reset_phase(session_id, phase)
-        session = await get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-
     session.phase_run_requested = phase
     session.phase_run_scope = body.scope
     if phase == 3 and body.llm_tier is not None:
@@ -306,7 +325,11 @@ async def phase_events(session_id: str, phase: int):
         sentinel = object()
         while True:
             try:
-                item = await asyncio.wait_for(event_queue.get(), timeout=60)
+                from app.config import settings as _settings
+
+                item = await asyncio.wait_for(
+                    event_queue.get(), timeout=_settings.SSE_KEEPALIVE_SECONDS
+                )
             except asyncio.TimeoutError:
                 yield "data: {\"event\": \"keepalive\"}\n\n"
                 continue
@@ -328,7 +351,15 @@ async def phase_events(session_id: str, phase: int):
             await event_queue.put(object())
 
     asyncio.create_task(run_and_signal())
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 class TailoredInlinePatch(BaseModel):

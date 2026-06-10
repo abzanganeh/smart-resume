@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
 from pathlib import Path
 
 import structlog
 
+from app.config import settings
 from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
@@ -56,6 +58,91 @@ _SCOPED_INSTRUCTION = (
     "Return a JSON object containing ONLY the fields you are rewriting. "
     "Do not repeat unchanged sections.  Preserve all factual details."
 )
+
+_PHASE3_HEARTBEAT_MESSAGES = (
+    "Generating tailored resume (typically 30–90 seconds)…",
+    "Still writing experience bullets and skill categories…",
+    "Verifying keyword placement across Skills and Experience…",
+    "Almost done — polishing summary and final checks…",
+)
+
+
+def _compact_phase1_block(phase1_output) -> str:
+    """Send keyword lists only — the full Phase 1 JSON duplicates the JD parse."""
+    must = [k.term for k in (phase1_output.must_have_keywords or []) if k.term.strip()]
+    nice = [k.term for k in (phase1_output.nice_to_have_keywords or []) if k.term.strip()]
+    return (
+        f"MUST-HAVE KEYWORDS ({len(must)}): {', '.join(must)}\n"
+        f"NICE-TO-HAVE KEYWORDS ({len(nice)}): {', '.join(nice)}"
+    )
+
+
+def _compact_phase2_block(phase2_output) -> str:
+    """Send audit highlights only — full bullet_issues JSON bloats the prompt."""
+    cov = phase2_output.keyword_coverage
+    lines = [
+        f"AUDIT SCORE: {phase2_output.overall_score}/100",
+        f"Audit summary: {phase2_output.summary}",
+        f"Keywords already present: {', '.join(cov.present[:25])}",
+        f"Missing must-have keywords: {', '.join(cov.missing_must_have)}",
+        f"Missing nice-to-have keywords: {', '.join(cov.missing_nice_to_have[:15])}",
+    ]
+    for bi in phase2_output.bullet_issues:
+        if bi.severity not in ("high", "medium"):
+            continue
+        missing = ", ".join(bi.missing_keywords[:5])
+        lines.append(
+            f"Bullet fix [{bi.severity}] {bi.company or bi.section} "
+            f"bullet #{bi.bullet_index}: issues={bi.issues}"
+            + (f", missing keywords={missing}" if missing else "")
+        )
+        if len(lines) >= 12:
+            break
+    if phase2_output.cliches_found:
+        lines.append(f"Cliches to remove: {', '.join(phase2_output.cliches_found[:8])}")
+    if phase2_output.irrelevant_sections:
+        lines.append(f"Irrelevant sections: {', '.join(phase2_output.irrelevant_sections[:5])}")
+    return "\n".join(lines)
+
+
+async def _complete_phase3_llm(
+    llm: LLMClient,
+    messages: list[LLMMessage],
+    event_queue: asyncio.Queue,
+) -> TailoredResumeOutput:
+    """Run the Phase 3 structured LLM call with heartbeats and a hard timeout.
+
+    Without heartbeats the SSE stream goes silent for 60–120 s while the
+    model writes the full resume JSON, which browsers/proxies interpret as
+    a dead connection (``ERR_INCOMPLETE_CHUNKED_ENCODING``).
+    """
+    heartbeat_idx = 0
+
+    async def _heartbeat() -> None:
+        nonlocal heartbeat_idx
+        await asyncio.sleep(25)
+        while True:
+            msg = _PHASE3_HEARTBEAT_MESSAGES[
+                min(heartbeat_idx, len(_PHASE3_HEARTBEAT_MESSAGES) - 1)
+            ]
+            await event_queue.put({"event": "progress", "phase": 3, "message": msg})
+            heartbeat_idx += 1
+            await asyncio.sleep(25)
+
+    hb_task = asyncio.create_task(_heartbeat())
+    try:
+        return await asyncio.wait_for(
+            complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000),
+            timeout=settings.PHASE3_LLM_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(
+            f"Phase 3 rewrite exceeded {settings.PHASE3_LLM_TIMEOUT_SECONDS}s"
+        ) from exc
+    finally:
+        hb_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await hb_task
 
 
 def _merge_scoped_output(
@@ -381,8 +468,8 @@ async def run(
         f"{additions_section}"
         f"{chunks_prompt_block}\n"
         f"JOB DESCRIPTION:\n{jd_text}\n\n"
-        f"EXTRACTED KEYWORDS (Phase 1):\n{session.phase1_output.model_dump_json()}\n\n"
-        f"AUDIT RESULTS (Phase 2):\n{session.phase2_output.model_dump_json()}\n\n"
+        f"EXTRACTED KEYWORDS (Phase 1 — compact):\n{_compact_phase1_block(session.phase1_output)}\n\n"
+        f"AUDIT RESULTS (Phase 2 — compact):\n{_compact_phase2_block(session.phase2_output)}\n\n"
         f"ORIGINAL RESUME:\n{resume_text}"
     )
 
@@ -405,14 +492,19 @@ async def run(
 
     # Prompt budget gate (§6a "Determinism and prompt budget contract").
     # Raises ``PromptBudgetExceededError`` → orchestrator surfaces 422.
-    assert_prompt_fits(system_content, user_content, model=llm.model_name)
+    assert_prompt_fits(
+        system_content,
+        user_content,
+        model=llm.model_name,
+        output_reserve=6000,
+    )
 
     messages = [
         LLMMessage(role="system", content=system_content),
         LLMMessage(role="user", content=user_content),
     ]
 
-    output = await complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000)
+    output = await _complete_phase3_llm(llm, messages, event_queue)
 
     if scoped and session.phase3_output:
         output = _merge_scoped_output(session.phase3_output, output, scope)
