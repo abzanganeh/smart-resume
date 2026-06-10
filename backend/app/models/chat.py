@@ -25,7 +25,11 @@ class ResumePatch(BaseModel):
         "summary", "experience", "skills", "education", "certifications", "projects", "contact"
     ]
     description: str = Field(
-        description="Short, plain-English description of what changed and why (shown to user)."
+        default="",
+        description=(
+            "Short, plain-English description of what changed and why (shown to user). "
+            "Optional — when omitted, a fallback label is synthesized from the patch fields."
+        ),
     )
 
     # ── Contact (header name on exported resume) ───────────────────────────────

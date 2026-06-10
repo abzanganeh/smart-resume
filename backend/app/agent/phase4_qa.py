@@ -7,9 +7,10 @@ from pathlib import Path
 import structlog
 
 from app.agent.phase3_postprocess import flatten_skill_terms
+from app.agent.phase4_score import compute_ats_score
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
-from app.models.qa import QAOutput
+from app.models.qa import BlockingIssue, QAOutput
 from app.models.session import Session
 
 log = structlog.get_logger()
@@ -221,6 +222,93 @@ async def run(
                 if fixed != issue.suggestion:
                     issue = issue.model_copy(update={"suggestion": fixed})
         corrected_issues.append(issue)
+    # Inject deterministic findings that the LLM may have missed. The
+    # engine produces 11 axes (keyword presence, dual placement, metrics,
+    # action verbs, bullet length, resume length, weak phrases, first-person,
+    # buzzwords, sections, contact). Each axis's issues become blocking
+    # issues so the user sees every concrete gap and can ignore the ones
+    # that don't apply.
+    score_result = compute_ats_score(
+        tailored, must_have_terms, career_stage=career_stage
+    )
+
+    flagged_terms = {
+        term.lower()
+        for issue in corrected_issues
+        if issue.category == "keyword"
+        for term in _candidate_keywords(issue.suggestion)
+    }
+
+    # Keyword issues — generated per-keyword so each one becomes its own
+    # accept/ignore card in the UI rather than a single batched suggestion.
+    for kw in score_result.missing_keywords:
+        if kw.lower() in flagged_terms:
+            continue
+        corrected_issues.append(
+            BlockingIssue(
+                category="keyword",
+                description=f"Missing must-have keyword: {kw}",
+                suggestion=(
+                    f"Add '{kw}' to the Skills section AND reinforce it in an Experience bullet "
+                    "or your Professional Summary. If you don't have this skill, dismiss to ignore."
+                ),
+                impact="high",
+                fix_effort="one_click",
+            )
+        )
+
+    for kw in score_result.single_section_keywords:
+        if kw.lower() in flagged_terms:
+            continue
+        sections = score_result.keyword_section_map.get(kw, [])
+        section_label = sections[0] if sections else "skills"
+        other_targets = [s for s in ("experience", "summary") if s != section_label]
+        target_str = " or ".join(other_targets) if other_targets else "experience"
+        corrected_issues.append(
+            BlockingIssue(
+                category="keyword",
+                description=f"'{kw}' appears only in {section_label}",
+                suggestion=(
+                    f"Reinforce '{kw}' in your {target_str} so it appears in 2+ sections "
+                    "(ATS keyword density rule)."
+                ),
+                impact="high",
+                fix_effort="one_click",
+            )
+        )
+
+    # Non-keyword axes — translate axis issues to blocking_issues with the
+    # right category + impact mapping. Each axis already filters itself to
+    # the top 5 offending bullets so we don't flood the UI.
+    _axis_to_category = {
+        "bullet_metrics": ("metric", "high", "user_input"),
+        "action_verbs": ("bullet", "medium", "manual_rewrite"),
+        "bullet_length": ("bullet", "medium", "manual_rewrite"),
+        "resume_length": ("length", "medium", "manual_rewrite"),
+        "weak_phrases": ("bullet", "high", "one_click"),
+        "first_person": ("bullet", "high", "one_click"),
+        "buzzwords": ("bullet", "medium", "manual_rewrite"),
+        "section_completeness": ("section", "high", "user_input"),
+        "contact_completeness": ("section", "high", "user_input"),
+    }
+    for axis in score_result.axes:
+        if axis.status == "pass":
+            continue
+        mapping = _axis_to_category.get(axis.key)
+        if mapping is None:
+            continue
+        category, impact, fix_effort = mapping
+        for issue_text in axis.issues:
+            corrected_issues.append(
+                BlockingIssue(
+                    category=category,
+                    description=axis.label,
+                    suggestion=issue_text,
+                    impact=impact,
+                    fix_effort=fix_effort,
+                )
+            )
+
     output = output.model_copy(update={"blocking_issues": corrected_issues})
 
     # Rebuild quick_wins from the corrected blocking_issues (strict subset rule).
@@ -228,13 +316,28 @@ async def run(
         i for i in corrected_issues
         if i.impact == "high" and i.fix_effort == "one_click"
     ]
-    output = output.model_copy(update={"quick_wins": corrected_qw})
+    output = output.model_copy(
+        update={
+            "quick_wins": corrected_qw,
+            # Override the LLM-generated score with the deterministic one so
+            # regenerating the same resume always yields the same number.
+            "ats_score": score_result.ats_score,
+            "score_ceiling": score_result.score_ceiling,
+            "score_axes": [axis.to_dict() for axis in score_result.axes],
+            "missing_keywords": score_result.missing_keywords,
+            "single_section_keywords": score_result.single_section_keywords,
+        }
+    )
 
     await event_queue.put({"event": "partial", "phase": 4, "data": json.loads(output.model_dump_json())})
     log.info(
         "phase4_done",
         overall_status=output.overall_status,
         ats_score=output.ats_score,
+        score_ceiling=output.score_ceiling,
+        score_axes={a.key: round(a.score, 1) for a in score_result.axes},
+        missing_keywords=score_result.missing_keywords,
+        single_section_keywords=score_result.single_section_keywords,
         blocking=len(output.blocking_issues),
         actions=len(output.user_action_required),
     )

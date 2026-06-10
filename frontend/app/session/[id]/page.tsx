@@ -118,6 +118,7 @@ function SessionContent() {
   // Prevents the main lastEvent effect from double-firing when unstable deps
   // (e.g. NextAuth's updateAuthSession) cause it to re-run with the same event.
   const lastPhase3DoneRef = useRef<SSEEvent | null>(null);
+  const processedEventCountRef = useRef(0);
 
   const openAiSettings = useCallback(() => {
     setAiSettingsHighlight(true);
@@ -134,7 +135,7 @@ function SessionContent() {
   const llmErrorActive = runErrorType?.startsWith("llm_") ?? false;
 
   const { data: authSession, update: updateAuthSession } = useSession();
-  const { connect, reset, lastEvent, isConnected, isDone } = useSSE();
+  const { connect, reset, lastEvent, events, isConnected, isDone, error: sseError } = useSSE();
 
   useEffect(() => {
     activeStepRef.current = step;
@@ -281,6 +282,7 @@ function SessionContent() {
         if (targetStep === "export") setQa(null);
       }
       setProgressLog([]);
+      processedEventCountRef.current = 0;
       reset();
 
       try {
@@ -427,7 +429,9 @@ function SessionContent() {
   }, [lastEvent]);
 
   useEffect(() => {
-    if (!lastEvent) return;
+    if (!lastEvent || events.length === 0) return;
+    if (events.length <= processedEventCountRef.current) return;
+    processedEventCountRef.current = events.length;
 
     const activePhase = PHASE_FOR_STEP[activeStepRef.current];
     const isPhase4Recalc = phase4RecalcRef.current && lastEvent.phase === 4;
@@ -493,7 +497,23 @@ function SessionContent() {
       setRunErrorType(lastEvent.error_type ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
-  }, [lastEvent, applyPhaseOutput, authSession?.backendAccessToken, sessionId, updateAuthSession]);
+  }, [lastEvent, events.length, applyPhaseOutput, authSession?.backendAccessToken, sessionId, updateAuthSession]);
+
+  // When the SSE stream drops mid-phase the server may still finish, but the
+  // browser shows ERR_INCOMPLETE_CHUNKED_ENCODING. Clear the spinner and
+  // restore the pre-regen resume so the user is not stuck forever.
+  useEffect(() => {
+    if (!sseError) return;
+    setPhaseRunning(false);
+    runInFlightRef.current = false;
+    setPhase4RecalcActive(false);
+    setAtsRecalcRunning(false);
+    setRunError(sseError);
+    setRunErrorType("connection_lost");
+    if (activeStepRef.current === "rewrite" && tailoredBackupRef.current) {
+      setTailored(tailoredBackupRef.current);
+    }
+  }, [sseError]);
 
   useEffect(() => {
     let cancelled = false;

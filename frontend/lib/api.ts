@@ -715,6 +715,16 @@ export interface BlockingIssue {
   fix_effort: "one_click" | "user_input" | "manual_rewrite";
 }
 
+export interface ScoreAxis {
+  key: string;
+  label: string;
+  score: number;
+  max: number;
+  status: "pass" | "warn" | "fail";
+  summary: string;
+  issues: string[];
+}
+
 export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
@@ -724,6 +734,10 @@ export interface QAOutput {
   blocking_issues?: BlockingIssue[];
   score_ceiling?: number;
   quick_wins?: BlockingIssue[];
+  /** Deterministic per-axis breakdown — populated server-side by phase4_score. */
+  score_axes?: ScoreAxis[];
+  missing_keywords?: string[];
+  single_section_keywords?: string[];
 }
 
 // ── Fit analysis ─────────────────────────────────────────────────────────────

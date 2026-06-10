@@ -101,13 +101,28 @@ async def save_phase_output(session_id: str, phase: int, output: Any) -> None:
 
 
 async def reset_phase(session_id: str, phase: int) -> None:
-    """Clear cached output so the next SSE run executes a fresh LLM call."""
+    """Clear cached output and any held lock so the next run executes fresh.
+
+    Also drops the Redis phase lock — without this, a previous run that died
+    mid-flight (e.g. backend restart, network drop) can leave both the
+    ``phase{n}_status="running"`` flag and the lock in place, blocking
+    every subsequent ``force=true`` rerun with a 409.
+    """
     session = await get_session(session_id)
     if session is None:
         return
     setattr(session, f"phase{phase}_output", None)
     setattr(session, f"phase{phase}_status", "pending")
     await update_session(session)
+    await release_phase_lock(session_id, phase)
+
+
+async def is_phase_lock_held(session_id: str, phase: int) -> bool:
+    """Probe whether the Redis phase lock is currently held."""
+    key = f"lock:{session_id}:phase{phase}"
+    if _redis_client:
+        return bool(await _redis_client.exists(key))
+    return bool(_lock_store.get(key))
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +133,7 @@ async def acquire_phase_lock(session_id: str, phase: int) -> bool:
     """Returns True if lock acquired. False if already running."""
     key = f"lock:{session_id}:phase{phase}"
     if _redis_client:
-        result = await _redis_client.set(key, "1", nx=True, ex=300)
+        result = await _redis_client.set(key, "1", nx=True, ex=settings.PHASE_LOCK_TTL_SECONDS)
         return result is True
     else:
         if _lock_store.get(key):
