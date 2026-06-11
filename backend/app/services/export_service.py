@@ -295,3 +295,36 @@ def render_cover_letter_txt(session: Session) -> str:
 
     lines.extend(_cover_letter_paragraphs(output))
     return "\n\n".join(lines)
+
+
+def _slug(text: str) -> str:
+    cleaned = re.sub(r"[^\w\-]+", "_", text.strip().lower())
+    return (cleaned[:60] or "resume").strip("_")
+
+
+def _candidate_name(session: Session) -> str:
+    if session.phase3_output and session.phase3_output.contact:
+        name = (session.phase3_output.contact.get("name") or "").strip()
+        if name:
+            return name
+    if session.user_info and session.user_info.name:
+        return session.user_info.name.strip()
+    if session.resume_parsed and session.resume_parsed.contact.name:
+        return session.resume_parsed.contact.name.strip()
+    return ""
+
+
+def export_attachment_filename(session: Session, ext: str) -> str:
+    """Build a safe download filename: company when tailoring to a JD, else candidate name."""
+    from app.services.dashboard.resume_record import resolve_company_name
+
+    normalized_ext = ext.lstrip(".")
+    has_jd = bool((session.jd_raw or "").strip())
+    if has_jd:
+        company = resolve_company_name(session)
+        if company and company not in ("Unknown", "—"):
+            return f"{_slug(company)}_resume.{normalized_ext}"
+
+    name = _candidate_name(session)
+    slug = _slug(name) if name else "resume"
+    return f"{slug}_resume.{normalized_ext}"

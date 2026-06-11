@@ -233,7 +233,7 @@ export function SuggestedBulletRow({
     <div className={`group flex items-start gap-2 ${tone !== "none" ? HIGHLIGHT[tone] + " rounded-lg px-2 py-1.5" : ""}`}>
       <span className="text-slate-500 mt-1 shrink-0">•</span>
       <p className={`flex-1 text-sm leading-relaxed ${textClass}`}>{displayText}</p>
-      {tone === "none" && (onRegen || onEdit || onDelete) && (
+      {(onRegen || onEdit || onDelete) && (
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
           {onRegen && (
             <button

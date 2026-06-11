@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
+  mustCompleteOnboarding,
   parseOnboardingStepParam,
+  postAuthLandingPath,
   resolveOnboardingStepIndex,
 } from "@/lib/auth/onboarding"
 import type { BackendUser } from "@/auth"
@@ -19,6 +21,37 @@ const baseUser: BackendUser = {
   onboarding_completed_at: null,
   onboarding_ai_choice: null,
 }
+
+describe("mustCompleteOnboarding", () => {
+  it("treats missing backendUser as incomplete", () => {
+    expect(mustCompleteOnboarding({})).toBe(true)
+    expect(mustCompleteOnboarding(null)).toBe(false)
+  })
+
+  it("honors onboarding_completed_at on the profile", () => {
+    expect(mustCompleteOnboarding({ backendUser: baseUser })).toBe(true)
+    expect(
+      mustCompleteOnboarding({
+        backendUser: { ...baseUser, onboarding_completed_at: "2026-01-01T00:00:00Z" },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("postAuthLandingPath", () => {
+  it("sends incomplete users to onboarding", () => {
+    expect(postAuthLandingPath({ backendUser: baseUser })).toBe("/onboarding")
+    expect(postAuthLandingPath({})).toBe("/onboarding")
+  })
+
+  it("sends completed users to dashboard", () => {
+    expect(
+      postAuthLandingPath({
+        backendUser: { ...baseUser, onboarding_completed_at: "2026-01-01T00:00:00Z" },
+      }),
+    ).toBe("/dashboard")
+  })
+})
 
 describe("parseOnboardingStepParam", () => {
   it("parses 1-based step query values", () => {

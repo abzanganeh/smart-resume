@@ -34,7 +34,7 @@ from app.services.billing.quota import (
     PLAN_SEARCHES_PER_PERIOD,
 )
 from app.services.dashboard.activity import build_recent_activity
-from app.services.export_service import render_docx, render_pdf, render_txt
+from app.services.export_service import export_attachment_filename, render_docx, render_pdf, render_txt
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(tags=["dashboard"])
@@ -505,40 +505,42 @@ async def download_resume(
     if session is None or session.phase3_output is None:
         raise HTTPException(status_code=422, detail="No tailored resume available to export")
 
-    slug = record.jd_company.replace(" ", "_")[:40]
-
     if format == "zip":
         pdf_bytes = await render_pdf(session)
         docx_bytes = render_docx(session)
         txt_bytes = render_txt(session).encode()
+        pdf_name = export_attachment_filename(session, "pdf")
+        docx_name = export_attachment_filename(session, "docx")
+        txt_name = export_attachment_filename(session, "txt")
+        zip_stem = pdf_name.removesuffix("_resume.pdf")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(f"{slug}_resume.pdf", pdf_bytes)
-            zf.writestr(f"{slug}_resume.docx", docx_bytes)
-            zf.writestr(f"{slug}_resume.txt", txt_bytes)
+            zf.writestr(pdf_name, pdf_bytes)
+            zf.writestr(docx_name, docx_bytes)
+            zf.writestr(txt_name, txt_bytes)
         buf.seek(0)
         return StreamingResponse(
             iter([buf.read()]),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="{slug}_resume.zip"'
+                "Content-Disposition": f'attachment; filename="{zip_stem}_resume.zip"'
             },
         )
 
     if format == "pdf":
         content = await render_pdf(session)
         media_type = "application/pdf"
-        filename = f"{slug}_resume.pdf"
+        filename = export_attachment_filename(session, "pdf")
     elif format == "docx":
         content = render_docx(session)
         media_type = (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-        filename = f"{slug}_resume.docx"
+        filename = export_attachment_filename(session, "docx")
     else:
         content = render_txt(session).encode()
         media_type = "text/plain"
-        filename = f"{slug}_resume.txt"
+        filename = export_attachment_filename(session, "txt")
 
     return StreamingResponse(
         iter([content]),
