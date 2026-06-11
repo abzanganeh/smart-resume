@@ -49,21 +49,32 @@ function NewSessionContent() {
 
   useEffect(() => {
     async function initSession() {
-      const existing = sessionStorage.getItem("smart_resume_session_id");
-      if (existing) {
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/sessions/${existing}`
-          );
-          if (res.ok) {
-            setSessionId(existing);
-            return;
+      // No ?step= param means the user explicitly navigated to /session/new
+      // (e.g. clicked "New session" in the nav while mid-wizard).  Always
+      // create a fresh session in that case — never reuse the in-progress one.
+      const isFreshStart = !searchParams.get("step");
+
+      if (!isFreshStart) {
+        const existing = sessionStorage.getItem("smart_resume_session_id");
+        if (existing) {
+          try {
+            const res = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/sessions/${existing}`
+            );
+            if (res.ok) {
+              setSessionId(existing);
+              return;
+            }
+          } catch {
+            // backend unreachable — fall through to create
           }
-        } catch {
-          // backend unreachable — fall through to create
+          sessionStorage.removeItem("smart_resume_session_id");
         }
+      } else {
+        // Discard any in-progress session so the new one starts clean.
         sessionStorage.removeItem("smart_resume_session_id");
       }
+
       try {
         const r = await createSession();
         setSessionId(r.session_id);
@@ -137,10 +148,22 @@ function NewSessionContent() {
     router.replace(`/session/new?step=${s}`);
   };
 
-  // Browser back/forward: keep wizard step aligned with ?step=.
+  // Browser back/forward (and explicit "New session" clicks): keep wizard
+  // step aligned with the URL.  A missing ?step= param means the user
+  // navigated to /session/new fresh — reset to the first step so the wizard
+  // doesn't stay frozen on whatever step it was on before.
   useEffect(() => {
     const raw = searchParams.get("step");
-    if (!raw || !STEPS.includes(raw as Step)) return;
+    if (!raw || !STEPS.includes(raw as Step)) {
+      // No valid step param → treat as fresh start; clear in-memory wizard state.
+      if (step !== "ai") {
+        setStep("ai");
+        setParsedResume(null);
+        setJdText("");
+        setSessionId(null);
+      }
+      return;
+    }
     const urlStep = raw as Step;
     if (urlStep !== step) setStep(urlStep);
   }, [searchParams, step]);

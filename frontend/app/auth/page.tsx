@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState, useTransition } from "react"
+import { Suspense, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, signOut, useSession, getProviders } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
@@ -74,6 +74,7 @@ function AuthPageContent() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [strength, setStrength] = useState(0)
   const [ssoProviders, setSsoProviders] = useState<{ google?: boolean; github?: boolean }>({})
+  const postAuthRedirectRef = useRef(false)
 
   useEffect(() => {
     getProviders().then((providers) => {
@@ -101,11 +102,21 @@ function AuthPageContent() {
 
   // Redirect only when the backend token still resolves to a live user row.
   useEffect(() => {
-    if (status !== "authenticated") return
+    if (status !== "authenticated") {
+      postAuthRedirectRef.current = false
+      return
+    }
+
+    if (typeof window !== "undefined" && window.location.pathname !== "/auth") {
+      return
+    }
 
     if (session?.backendAccessToken) {
+      if (postAuthRedirectRef.current) return
       void fetchMe(session.backendAccessToken)
         .then((user) => {
+          if (postAuthRedirectRef.current) return
+          postAuthRedirectRef.current = true
           const callbackUrl = searchParams.get("callbackUrl") ?? ""
           doRedirect(callbackUrl, user.onboarding_completed_at)
         })

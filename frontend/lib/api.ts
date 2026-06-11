@@ -97,12 +97,26 @@ export interface BulletFixPayload {
   suggestion: string;
 }
 
+export interface ApprovedMetric {
+  scope: string;
+  metric: string;
+  source_note?: string;
+}
+
+export interface SuspiciousMetric {
+  scope: string;
+  bullet: string;
+  reason: "round_percentage" | "dollar_claim" | "stacked_metrics" | "no_source";
+}
+
 export async function checkSession(
   sessionId: string
 ): Promise<{
   session_id: string;
   ok: boolean;
   resume_raw: string;
+  has_jd?: boolean;
+  export_company?: string | null;
   phases: Record<string, { status: string; output: unknown | null }>;
   cover_letter?: CoverLetterOutput | null;
   stale: Record<string, string | null>;
@@ -111,8 +125,19 @@ export async function checkSession(
   user_claimed_keywords: string[];
   user_extra_notes: string;
   bullet_fixes: BulletFixPayload[];
+  approved_metrics: ApprovedMetric[];
 }> {
   return request(`/api/sessions/${sessionId}`);
+}
+
+export async function saveApprovedMetrics(
+  sessionId: string,
+  metrics: ApprovedMetric[]
+): Promise<{ ok: boolean; count: number }> {
+  return request(`/api/sessions/${sessionId}/approved-metrics`, {
+    method: "PATCH",
+    body: JSON.stringify({ approved_metrics: metrics }),
+  });
 }
 
 export async function saveResumeEdits(
@@ -274,6 +299,20 @@ export async function getVersions(sessionId: string) {
   return request<{ versions: ResumeVersionMeta[] }>(
     `/api/sessions/${sessionId}/resume/versions`
   );
+}
+
+export async function restoreResumeVersion(
+  sessionId: string,
+  snapshotId: string,
+): Promise<{
+  version: number;
+  snapshot_id: string;
+  tailored_output: TailoredResumeOutput;
+  stale?: Record<string, string | null>;
+}> {
+  return request(`/api/sessions/${sessionId}/resume/versions/${snapshotId}/restore`, {
+    method: "POST",
+  });
 }
 
 // ── LLM providers ───────────────────────────────────────────────────────────
@@ -661,6 +700,7 @@ export interface AuditOutput {
   contact_issues: string[];
   overall_score: number;
   summary: string;
+  unverified_metrics?: SuspiciousMetric[];
 }
 
 export interface TailoredExperience {
