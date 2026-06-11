@@ -11,6 +11,8 @@ import {
   getLLMUpgradeStatus,
   createLLMUpgradeCheckout,
   getSessionResumeRecord,
+  getVersions,
+  restoreResumeVersion,
   ApiError,
   type PhaseRunScope,
   type KeywordExtractionOutput,
@@ -30,13 +32,15 @@ import { refreshBackendSession } from "@/lib/auth/refreshBackendSession";
 import { useSession } from "next-auth/react";
 import { KeywordDashboard } from "@/components/session/KeywordDashboard";
 import { AuditPanel } from "@/components/session/AuditPanel";
+import { MetricsGate } from "@/components/session/MetricsGate";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
-import { ATSGuidancePanel } from "@/components/session/ATSGuidancePanel";
+import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
 import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { VersionHistory } from "@/components/session/VersionHistory";
+import { ResizableSplit } from "@/components/session/ResizableSplit";
 import { ProgressLog } from "@/components/session/ProgressLog";
 import { StaleBanner } from "@/components/session/StaleBanner";
 import {
@@ -75,8 +79,12 @@ function SessionContent() {
   const [sessionClaimedKeywords, setSessionClaimedKeywords] = useState<string[]>([]);
   const [sessionExtraNotes, setSessionExtraNotes] = useState("");
   const [sessionBulletFixes, setSessionBulletFixes] = useState<import("@/lib/api").BulletFixPayload[]>([]);
+  const [sessionApprovedMetrics, setSessionApprovedMetrics] = useState<import("@/lib/api").ApprovedMetric[]>([]);
+  const [exportCompany, setExportCompany] = useState<string | null>(null);
+  const [hasJd, setHasJd] = useState(false);
   const [costInfo, setCostInfo] = useState<{ cost_formatted: string; provider: string; model: string } | null>(null);
-  const [resumeVersion, setResumeVersion] = useState(0);
+  const [editorSyncKey, setEditorSyncKey] = useState(0);
+  const [savedVersionNumber, setSavedVersionNumber] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
   const [runErrorType, setRunErrorType] = useState<string | null>(null);
@@ -91,7 +99,6 @@ function SessionContent() {
   const [phase1Complete, setPhase1Complete] = useState(false);
   const [stale, setStale] = useState<Record<string, string | null>>({ "3": null, "4": null });
   const [atsScoreHistory, setAtsScoreHistory] = useState<number[]>([]);
-  const [appliedSuggestion, setAppliedSuggestion] = useState<string | null>(null);
   const [pendingSuggestions, setPendingSuggestions] = useState<ResumeSuggestion[]>([]);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
@@ -109,12 +116,15 @@ function SessionContent() {
   const [namePromptRecord, setNamePromptRecord] = useState<SessionResumeRecord | null>(null);
   const [namePromptValue, setNamePromptValue] = useState("");
   const [namePromptSaving, setNamePromptSaving] = useState(false);
+  const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
+  const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
+  const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
   const tailoredBackupRef = useRef<TailoredResumeOutput | null>(null);
   const aiControlsRef = useRef<HTMLDivElement>(null);
-  // Guard: track the last Phase 3 done event that already bumped resumeVersion.
+  // Guard: track the last Phase 3 done event that already bumped editorSyncKey.
   // Prevents the main lastEvent effect from double-firing when unstable deps
   // (e.g. NextAuth's updateAuthSession) cause it to re-run with the same event.
   const lastPhase3DoneRef = useRef<SSEEvent | null>(null);
@@ -197,12 +207,15 @@ function SessionContent() {
       const qaOut = output as QAOutput;
       setQa(qaOut);
       recordAtsScore(qaOut);
+      resetAtsIssueTracking();
     }
   }, [recordAtsScore]);
 
   const hydrateFromSession = useCallback((s: Awaited<ReturnType<typeof checkSession>>) => {
     setStale(s.stale ?? { "3": null, "4": null });
     setPhase1Complete(!!s.phase1_complete);
+    setHasJd(!!s.has_jd);
+    setExportCompany(s.export_company ?? null);
 
     const applyCached = (stepKey: Step, phaseNum: string) => {
       const cached = s.phases?.[phaseNum];
@@ -235,6 +248,7 @@ function SessionContent() {
     if (s.user_claimed_keywords?.length) setSessionClaimedKeywords(s.user_claimed_keywords);
     if (s.user_extra_notes) setSessionExtraNotes(s.user_extra_notes);
     if (s.bullet_fixes?.length) setSessionBulletFixes(s.bullet_fixes);
+    if (s.approved_metrics?.length) setSessionApprovedMetrics(s.approved_metrics);
   }, [applyPhaseOutput]);
 
   const persistTailoredBeforeExport = useCallback(async () => {
@@ -321,6 +335,7 @@ function SessionContent() {
 
   function startIssueQueue(issues: import("@/lib/api").BlockingIssue[]) {
     if (!issues.length) return;
+    pendingAtsFixRef.current = [issues[0]!];
     setIssueQueue(issues);
     setIssueQueueIdx(0);
     setChatPrefill(buildIssuePrefill(issues[0]!));
@@ -332,10 +347,41 @@ function SessionContent() {
     const next = idx + 1;
     setIssueQueueIdx(next);
     if (next < issueQueue.length) {
+      pendingAtsFixRef.current = [issueQueue[next]!];
       setChatPrefill(buildIssuePrefill(issueQueue[next]!));
     } else {
       setIssueQueue([]);
+      pendingAtsFixRef.current = [];
     }
+  }
+
+  function markAtsIssuesAddressed(issues: import("@/lib/api").BlockingIssue[]) {
+    if (issues.length === 0) return;
+    setAddressedAtsKeys((prev) => {
+      const next = new Set(prev);
+      issues.forEach((issue) => next.add(issueKey(issue)));
+      return next;
+    });
+  }
+
+  function skipAtsIssue(issue: import("@/lib/api").BlockingIssue) {
+    setSkippedAtsKeys((prev) => {
+      const next = new Set(prev);
+      next.add(issueKey(issue));
+      return next;
+    });
+  }
+
+  function openChatForAtsIssues(message: string, issues: import("@/lib/api").BlockingIssue[]) {
+    pendingAtsFixRef.current = issues;
+    setChatPrefill(message);
+    setSidebarTab("chat");
+  }
+
+  function resetAtsIssueTracking() {
+    pendingAtsFixRef.current = [];
+    setAddressedAtsKeys(new Set());
+    setSkippedAtsKeys(new Set());
   }
 
   function addSuggestions(patches: ResumePatch[]) {
@@ -353,8 +399,24 @@ function SessionContent() {
     const { updated, applied, failureReason } = applyResumePatch(tailored, patch);
     if (applied) {
       setTailored(updated);
+      setEditorSyncKey((k) => k + 1);
+      // Edits invalidate the score (it'll change on next recalc), but we keep
+      // the existing qa.blocking_issues/quick_wins visible so the user can keep
+      // fixing the remaining items without losing the list. Just remove the
+      // specific issue we were fixing (if any) and mark stale.
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-      setQa(null);
+      const activeIssue =
+        issueQueue.length > 0 && issueQueueIdx < issueQueue.length
+          ? issueQueue[issueQueueIdx]
+          : null;
+      const toMark: import("@/lib/api").BlockingIssue[] = [...pendingAtsFixRef.current];
+      if (activeIssue) {
+        toMark.push(activeIssue);
+      }
+      if (toMark.length > 0) {
+        markAtsIssuesAddressed(toMark);
+        pendingAtsFixRef.current = [];
+      }
       saveTailoredResume(sessionId, updated).catch((err) => {
         setRunError(
           err instanceof Error ? err.message : "Could not save this edit. Please try again.",
@@ -363,7 +425,6 @@ function SessionContent() {
       if (issueQueue.length > 0 && issueQueueIdx < issueQueue.length) {
         advanceIssueQueue(issueQueueIdx);
       }
-      // Keep accepted suggestions for persistent green highlighting in the resume.
       setPendingSuggestions((prev) =>
         prev.map((s) => (s.id === id ? { ...s, status: "accepted" } : s)),
       );
@@ -391,9 +452,51 @@ function SessionContent() {
     );
   }
 
+  function acceptAllSuggestions() {
+    const pending = pendingSuggestions.filter((s) => s.status === "pending");
+    if (!pending.length || !tailored) return;
+    // Apply all patches sequentially against an accumulator to avoid stale-closure issues
+    let current = tailored;
+    const acceptedIds: string[] = [];
+    for (const sug of pending) {
+      const patch = normalizeResumePatch(current, sug.patch);
+      const { updated, applied } = applyResumePatch(current, patch);
+      if (applied) {
+        current = updated;
+        acceptedIds.push(sug.id);
+      }
+    }
+    if (!acceptedIds.length) return;
+    setTailored(current);
+    setEditorSyncKey((k) => k + 1);
+    setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+    setPendingSuggestions((prev) =>
+      prev.map((s) => acceptedIds.includes(s.id) ? { ...s, status: "accepted" } : s),
+    );
+    saveTailoredResume(sessionId, current).catch((err) => {
+      setRunError(err instanceof Error ? err.message : "Could not save edits. Please try again.");
+    });
+  }
+
   function dismissSuggestion(id: string) {
     setPendingSuggestions((prev) => prev.filter((s) => s.id !== id));
   }
+
+  const restoreVersionSnapshot = useCallback(async (snapshotId: string) => {
+    try {
+      const result = await restoreResumeVersion(sessionId, snapshotId);
+      setTailored(result.tailored_output);
+      setSavedVersionNumber(result.version);
+      setEditorSyncKey((k) => k + 1);
+      setStale(result.stale ?? { "3": null, "4": new Date().toISOString() });
+      setPendingSuggestions([]);
+      setSuggestionError(null);
+    } catch (err) {
+      setRunError(
+        err instanceof Error ? err.message : "Could not restore that version.",
+      );
+    }
+  }, [sessionId]);
 
   const recalculateAts = useCallback(async () => {
     if (runInFlightRef.current) return;
@@ -424,9 +527,15 @@ function SessionContent() {
       lastPhase3DoneRef.current !== lastEvent
     ) {
       lastPhase3DoneRef.current = lastEvent;
-      setResumeVersion((v) => v + 1);
+      setEditorSyncKey((k) => k + 1);
+      getVersions(sessionId)
+        .then((r) => {
+          const latest = r.versions.reduce((max, v) => Math.max(max, v.version), 0);
+          setSavedVersionNumber(latest);
+        })
+        .catch(() => {});
     }
-  }, [lastEvent]);
+  }, [lastEvent, sessionId]);
 
   useEffect(() => {
     if (!lastEvent || events.length === 0) return;
@@ -519,13 +628,19 @@ function SessionContent() {
     let cancelled = false;
     setSessionLoaded(false);
     setAtsScoreHistory([]);
-    setAppliedSuggestion(null);
 
     checkSession(sessionId)
       .then((s) => {
         if (cancelled) return;
         hydrateFromSession(s);
         trackRecentSession(sessionId, s.resume_raw?.slice(0, 40) || undefined);
+        getVersions(sessionId)
+          .then((r) => {
+            if (cancelled) return;
+            const latest = r.versions.reduce((max, v) => Math.max(max, v.version), 0);
+            setSavedVersionNumber(latest);
+          })
+          .catch(() => {});
         setSessionLoaded(true);
       })
       .catch(() => {
@@ -906,6 +1021,16 @@ function SessionContent() {
                 initialBulletFixes={sessionBulletFixes}
                 onAuditEdited={(nextStale) => setStale((prev) => ({ ...prev, ...nextStale }))}
               />
+              {audit && !isStreaming && (audit.unverified_metrics?.length ?? 0) > 0 && (
+                <div className="mt-6">
+                  <MetricsGate
+                    sessionId={sessionId}
+                    unverifiedMetrics={audit.unverified_metrics!}
+                    initialApprovedMetrics={sessionApprovedMetrics}
+                    onSaved={setSessionApprovedMetrics}
+                  />
+                </div>
+              )}
               {audit && !isStreaming && (
                 <button
                   onClick={() => goTo("rewrite")}
@@ -987,114 +1112,134 @@ function SessionContent() {
               )}
               {tailored && (
                 <div className="mb-4">
-                  <VersionHistory sessionId={sessionId} currentVersion={resumeVersion} onRestore={() => {}} />
-                </div>
-              )}
-              <div className="flex flex-col lg:flex-row gap-6">
-                <div className="flex-1 min-w-0">
-                  {suggestionError && (
-                    <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                      {suggestionError}
-                    </div>
-                  )}
-                  <ResumeDiff
-                    tailored={tailored}
-                    editorRevision={resumeVersion}
-                    streaming={isStreaming && !showProgress}
-                    costInfo={costInfo}
+                  <VersionHistory
                     sessionId={sessionId}
-                    onEdited={(updated) => {
-                      setTailored(updated);
-                      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-                    }}
-                    onScopedRun={(scope) => runPhase("rewrite", { scope })}
-                    phaseRunning={phaseRunning}
-                    suggestionDraft={appliedSuggestion}
-                    onClearSuggestion={() => setAppliedSuggestion(null)}
-                    suggestions={pendingSuggestions}
-                    onAcceptSuggestion={acceptSuggestion}
-                    onRejectSuggestion={rejectSuggestion}
-                    onDismissSuggestion={dismissSuggestion}
+                    currentVersion={savedVersionNumber}
+                    onRestore={restoreVersionSnapshot}
                   />
                 </div>
-
-                {/* Right sidebar — ATS Guidance + Chat (tabbed) */}
-                <div className="lg:w-80 shrink-0 flex flex-col border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60" style={{ height: "fit-content", minHeight: 480 }}>
-                  {/* Tab bar */}
-                  <div className="flex border-b border-slate-700 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab("ats")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
-                        sidebarTab === "ats"
-                          ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
-                          : "text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      ATS Guidance
-                      {qa && (
-                        <span className="ml-0.5 tabular-nums text-[10px]">{qa.ats_score}/100</span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSidebarTab("chat")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
-                        sidebarTab === "chat"
-                          ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
-                          : "text-slate-400 hover:text-slate-200"
-                      }`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Chat
-                    </button>
-                  </div>
-
-                  {/* Tab content */}
-                  {sidebarTab === "ats" ? (
-                    <div className="p-4">
-                      {(qa || atsRecalcRunning) ? (
-                        <ATSGuidancePanel
-                          output={qa}
-                          streaming={atsRecalcRunning}
-                          scoreHistory={atsScoreHistory}
-                          variant="sidebar"
-                          onApplySuggestion={setAppliedSuggestion}
-                          onSendToChat={(msg) => {
-                            setChatPrefill(msg);
-                            setSidebarTab("chat");
-                          }}
-                        />
-                      ) : (
-                        <p className="text-slate-500 text-xs py-4 text-center">
-                          Run QA &amp; Export to see your ATS score and guidance.
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col" style={{ height: 580 }}>
-                      <ResumeChat
-                        sessionId={sessionId}
-                        tailored={tailored}
-                        prefillMessage={chatPrefill}
-                        onClearPrefill={() => setChatPrefill(null)}
-                        queueBanner={
-                          issueQueue.length > 0 && issueQueueIdx < issueQueue.length
-                            ? {
-                                issue: issueQueue[issueQueueIdx]!,
-                                current: issueQueueIdx + 1,
-                                total: issueQueue.length,
-                                onSkip: () => advanceIssueQueue(issueQueueIdx),
-                              }
-                            : null
+              )}
+              <ResizableSplit
+                storageKey="smart-resume:tailoring-sidebar-width"
+                defaultRightWidth={400}
+                minRightWidth={300}
+                maxRightWidth={760}
+                minLeftWidth={340}
+                left={
+                  <>
+                    {suggestionError && (
+                      <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                        {suggestionError}
+                      </div>
+                    )}
+                    <ResumeDiff
+                      tailored={tailored}
+                      editorRevision={editorSyncKey}
+                      streaming={isStreaming && !showProgress}
+                      costInfo={costInfo}
+                      sessionId={sessionId}
+                      onEdited={(updated, meta) => {
+                        setTailored(updated);
+                        setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+                        if (meta?.source === "undo" || meta?.source === "redo") {
+                          saveTailoredResume(sessionId, updated).catch((err) => {
+                            setRunError(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not save this edit. Please try again.",
+                            );
+                          });
                         }
-                        onSuggestPatches={addSuggestions}
-                      />
+                      }}
+                      onVersionSnapshot={setSavedVersionNumber}
+                      onScopedRun={(scope) => runPhase("rewrite", { scope })}
+                      phaseRunning={phaseRunning}
+                      suggestions={pendingSuggestions}
+                      onAcceptSuggestion={acceptSuggestion}
+                      onAcceptAllSuggestions={acceptAllSuggestions}
+                      onRejectSuggestion={rejectSuggestion}
+                      onDismissSuggestion={dismissSuggestion}
+                    />
+                  </>
+                }
+                right={
+                  <div className="flex flex-col h-[clamp(480px,75vh,820px)] border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60">
+                    {/* Tab bar */}
+                    <div className="flex border-b border-slate-700 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSidebarTab("ats")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
+                          sidebarTab === "ats"
+                            ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        ATS Guidance
+                        {qa && (
+                          <span className="ml-0.5 tabular-nums text-[10px]">{qa.ats_score}/100</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSidebarTab("chat")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
+                          sidebarTab === "chat"
+                            ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Chat
+                      </button>
                     </div>
-                  )}
-                </div>
-              </div>
+
+                    {/* Tab content — keep both mounted so ATS dismiss state survives tab switches */}
+                    <div className={cn("p-4 overflow-y-auto flex-1 min-h-0", sidebarTab !== "ats" && "hidden")}>
+                        {(qa || atsRecalcRunning) ? (
+                          <ATSGuidancePanel
+                            output={qa}
+                            streaming={atsRecalcRunning}
+                            scoreHistory={atsScoreHistory}
+                            variant="sidebar"
+                            staleSince={stale["4"]}
+                            onRecalculate={recalculateAts}
+                            recalculateDisabled={atsRecalcRunning || phaseRunning}
+                            addressedKeys={addressedAtsKeys}
+                            skippedKeys={skippedAtsKeys}
+                            onSkipIssue={skipAtsIssue}
+                            onStartQueue={startIssueQueue}
+                            onSendToChat={openChatForAtsIssues}
+                          />
+                        ) : (
+                          <p className="text-slate-500 text-xs py-4 text-center">
+                            Run QA &amp; Export to see your ATS score and guidance.
+                          </p>
+                        )}
+                    </div>
+                    <div className={cn("flex-1 flex flex-col min-h-0", sidebarTab !== "chat" && "hidden")}>
+                        <ResumeChat
+                          sessionId={sessionId}
+                          tailored={tailored}
+                          prefillMessage={chatPrefill}
+                          onClearPrefill={() => setChatPrefill(null)}
+                          queueBanner={
+                            issueQueue.length > 0 && issueQueueIdx < issueQueue.length
+                              ? {
+                                  issue: issueQueue[issueQueueIdx]!,
+                                  current: issueQueueIdx + 1,
+                                  total: issueQueue.length,
+                                  onSkip: () => advanceIssueQueue(issueQueueIdx),
+                                }
+                              : null
+                          }
+                          onSuggestPatches={addSuggestions}
+                        />
+                    </div>
+                  </div>
+                }
+              />
               {tailored && !isStreaming && (
                 <button
                   onClick={() => void goToExport()}
@@ -1130,11 +1275,17 @@ function SessionContent() {
                   streaming={isStreaming && !showProgress}
                   scoreHistory={atsScoreHistory}
                   variant="primary"
-                  onApplySuggestion={(text) => {
-                    setAppliedSuggestion(text);
+                  staleSince={stale["4"]}
+                  onRecalculate={recalculateAts}
+                  recalculateDisabled={atsRecalcRunning || phaseRunning}
+                  addressedKeys={addressedAtsKeys}
+                  skippedKeys={skippedAtsKeys}
+                  onSkipIssue={skipAtsIssue}
+                  onStartQueue={startIssueQueue}
+                  onSendToChat={(msg, issues) => {
+                    openChatForAtsIssues(msg, issues);
                     goTo("rewrite");
                   }}
-                  onStartQueue={startIssueQueue}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />
@@ -1142,7 +1293,13 @@ function SessionContent() {
                 <div className="mt-6 space-y-4">
                   <div>
                     <h2 className="text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
-                    <ExportButtons sessionId={sessionId} disabled={false} />
+                    <ExportButtons
+                      sessionId={sessionId}
+                      disabled={false}
+                      candidateName={tailored?.contact?.name}
+                      companyName={exportCompany ?? undefined}
+                      hasJd={hasJd}
+                    />
                   </div>
                   <div>
                     <h2 className="text-slate-300 font-semibold mb-3 text-sm">Prepare for the interview</h2>

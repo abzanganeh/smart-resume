@@ -13,7 +13,9 @@ from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.dashboard import ResumeRecord
+from app.services.dashboard.resume_record import resolve_company_name
 from app.models.rewrite import TailoredResumeOutput
+from app.models.session import ApprovedMetric
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
@@ -80,10 +82,19 @@ async def check_session(session_id: str):
         "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
     }
 
+    has_jd = bool((session.jd_raw or "").strip())
+    export_company: str | None = None
+    if has_jd:
+        company = resolve_company_name(session)
+        if company and company not in ("Unknown", "—"):
+            export_company = company
+
     return {
         "session_id": session.session_id,
         "ok": True,
         "resume_raw": session.resume_raw or "",
+        "has_jd": has_jd,
+        "export_company": export_company,
         "phases": phases_out,
         "cover_letter": (
             json.loads(session.cover_letter_output.model_dump_json())
@@ -97,11 +108,32 @@ async def check_session(session_id: str):
         "user_claimed_keywords": session.user_claimed_keywords,
         "user_extra_notes": session.user_extra_notes,
         "bullet_fixes": [bf.model_dump() for bf in session.bullet_fixes],
+        "approved_metrics": [am.model_dump() for am in (session.approved_metrics or [])],
     }
 
 
 class TailoredEditRequest(BaseModel):
     tailored_output: dict
+
+
+class ApprovedMetricsRequest(BaseModel):
+    approved_metrics: list[ApprovedMetric]
+
+
+@router.patch("/{session_id}/approved-metrics")
+async def save_approved_metrics(session_id: str, body: ApprovedMetricsRequest):
+    """Persist the user-verified metrics list before Phase 3 runs.
+
+    Replaces the full approved_metrics list on the session — the UI always
+    sends the complete current state, not a delta.  Phase 3 will only embed
+    numbers that appear in this list; everything else goes to metrics_needed.
+    """
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.approved_metrics = body.approved_metrics
+    await update_session(session)
+    return {"ok": True, "count": len(body.approved_metrics)}
 
 
 @router.patch("/{session_id}/tailored")

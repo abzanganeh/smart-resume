@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -29,6 +29,8 @@ import {
   activeSummarySuggestion,
   bulletEditSuggestion,
   datesSuggestion,
+  dismissExperienceBulletSuggestions,
+  dismissProjectBulletSuggestions,
   educationBulletAddSuggestions,
   educationSuggestions,
   hasPendingEducationSuggestions,
@@ -60,13 +62,17 @@ import {
 interface Props {
   initial: TailoredResumeOutput;
   sessionId: string;
-  onSaved?: (updated: TailoredResumeOutput) => void;
+  /** Bump when the parent replaces tailored output (phase 3, chat, restore). */
+  editorSyncKey?: number;
+  onSaved?: (updated: TailoredResumeOutput, meta?: { source: "edit" | "undo" | "redo" }) => void;
+  onVersionSnapshot?: (version: number) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
   suggestionDraft?: string | null;
   onClearSuggestion?: () => void;
   suggestions?: ResumeSuggestion[];
   onAcceptSuggestion?: (id: string) => void;
+  onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
 }
@@ -487,11 +493,11 @@ function ScopedBulletList({
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onRejectSuggestion, onDismissSuggestion }: Props) {
+export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion }: Props) {
   function acceptSug(id: string) { onAcceptSuggestion?.(id); }
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
 
-  const { present: data, push, replace, undo, redo, canUndo, canRedo } = useVersionStack(initial);
+  const { present: data, push, replace, reset, undo, redo, canUndo, canRedo } = useVersionStack(initial);
   const [draftText, setDraftText] = useState(suggestionDraft ?? "");
 
   useEffect(() => {
@@ -523,9 +529,38 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
     "experience" | "projects" | "certifications"
   >("experience");
 
+  const initialRef = useRef(initial);
+  initialRef.current = initial;
+
   useEffect(() => {
-    replace(initial);
-  }, [initial, replace]);
+    reset(initialRef.current);
+  }, [editorSyncKey, reset]);
+
+  const handleUndo = useCallback(() => {
+    const prev = undo();
+    if (prev) onSaved?.(prev, { source: "undo" });
+  }, [undo, onSaved]);
+
+  const handleRedo = useCallback(() => {
+    const next = redo();
+    if (next) onSaved?.(next, { source: "redo" });
+  }, [redo, onSaved]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        handleRedo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleUndo, handleRedo]);
 
   useEffect(() => {
     const pendingExp = data.experience.find((exp) =>
@@ -541,6 +576,9 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
 
   async function patch(payload: Record<string, unknown>) {
     const result = await patchTailoredResume(sessionId, payload);
+    if (typeof result.version === "number") {
+      onVersionSnapshot?.(result.version);
+    }
     return result;
   }
 
@@ -684,6 +722,8 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   // ── Experience bullets ───────────────────────────────────────────────────
 
   async function saveExpBullet(company: string, idx: number, text: string) {
+    const previousText =
+      data.experience.find((e) => e.company === company)?.bullets[idx] ?? "";
     await patch({ section: "experience", company, bullet_index: idx, new_text: text });
     updateLocal((p) => ({
       ...p,
@@ -693,10 +733,11 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           : e
       ),
     }));
-    dismissAcceptedForSection(
+    dismissExperienceBulletSuggestions(
       suggestions,
       onDismissSuggestion,
-      (s) => s.patch.section === "experience",
+      company,
+      [previousText, text],
     );
   }
 
@@ -759,6 +800,9 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   }
 
   async function saveProjectBullet(projectIndex: number, bulletIndex: number, text: string) {
+    const project = data.projects[projectIndex] as Record<string, unknown> | undefined;
+    const projectName = String(project?.name ?? "").trim();
+    const previousText = ((project?.bullets as string[]) ?? [])[bulletIndex] ?? "";
     await patch({
       section: "projects",
       project_index: projectIndex,
@@ -776,9 +820,20 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         return next;
       }),
     }));
+    if (projectName) {
+      dismissProjectBulletSuggestions(
+        suggestions,
+        onDismissSuggestion,
+        projectName,
+        [previousText, text],
+      );
+    }
   }
 
   async function deleteProjectBullet(projectIndex: number, bulletIndex: number) {
+    const project = data.projects[projectIndex] as Record<string, unknown> | undefined;
+    const projectName = String(project?.name ?? "").trim();
+    const removedText = ((project?.bullets as string[]) ?? [])[bulletIndex] ?? "";
     await patch({
       section: "projects",
       project_index: projectIndex,
@@ -795,6 +850,14 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         return next;
       }),
     }));
+    if (projectName) {
+      dismissProjectBulletSuggestions(
+        suggestions,
+        onDismissSuggestion,
+        projectName,
+        [removedText],
+      );
+    }
   }
 
   async function addProjectBullet(projectIndex: number, text: string) {
@@ -830,6 +893,7 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
   async function deleteExpBullet(company: string, idx: number) {
     const entry = data.experience.find((e) => e.company === company);
     if (!entry) return;
+    const removedText = entry.bullets[idx] ?? "";
     const bullets = entry.bullets.filter((_, i) => i !== idx);
     await patch({ section: "experience", company, bullet_index: idx, new_text: "" });
     updateLocal((p) => ({
@@ -838,6 +902,12 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         e.company === company ? { ...e, bullets } : e
       ),
     }));
+    dismissExperienceBulletSuggestions(
+      suggestions,
+      onDismissSuggestion,
+      company,
+      [removedText],
+    );
   }
 
   async function addExpBullet(company: string, text: string) {
@@ -964,19 +1034,38 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
             <p className="font-semibold text-amber-300">
               {pendingCount} pending suggestion{pendingCount !== 1 ? "s" : ""} — not applied yet
             </p>
-            {onRejectSuggestion && (
-              <button
-                type="button"
-                onClick={() => {
-                  for (const s of suggestions) {
-                    if (s.status === "pending") onRejectSuggestion(s.id);
-                  }
-                }}
-                className="shrink-0 text-amber-300/80 hover:text-amber-200 underline text-[11px]"
-              >
-                Ignore all
-              </button>
-            )}
+            <div className="flex items-center gap-3 shrink-0">
+              {(onAcceptAllSuggestions || onAcceptSuggestion) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onAcceptAllSuggestions) {
+                      onAcceptAllSuggestions();
+                    } else {
+                      for (const s of suggestions) {
+                        if (s.status === "pending") onAcceptSuggestion?.(s.id);
+                      }
+                    }
+                  }}
+                  className="shrink-0 text-emerald-300 hover:text-emerald-100 underline text-[11px] font-semibold"
+                >
+                  Accept all
+                </button>
+              )}
+              {onRejectSuggestion && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    for (const s of suggestions) {
+                      if (s.status === "pending") onRejectSuggestion(s.id);
+                    }
+                  }}
+                  className="shrink-0 text-amber-300/80 hover:text-amber-200 underline text-[11px]"
+                >
+                  Ignore all
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-amber-200/80">
             <span className="inline-block w-2 h-2 rounded-sm bg-amber-500/60 mr-1 align-middle" />
@@ -985,7 +1074,7 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
             <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500/60 mr-1 align-middle" />
             Green = accepted
             <span className="mx-2">·</span>
-            Click <strong>Accept</strong> on each highlight to update your resume
+            Click <strong>Accept</strong> on each highlight to update your resume, or use <strong>Accept all</strong> above
           </p>
         </div>
       )}
@@ -1013,7 +1102,7 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={undo}
+            onClick={handleUndo}
             disabled={!canUndo}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
             title="Undo (Ctrl+Z)"
@@ -1022,7 +1111,7 @@ export function TailoredEditor({ initial, sessionId, onSaved, onScopedRun, phase
           </button>
           <button
             type="button"
-            onClick={redo}
+            onClick={handleRedo}
             disabled={!canRedo}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
             title="Redo (Ctrl+Y)"

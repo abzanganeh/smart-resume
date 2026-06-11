@@ -11,18 +11,23 @@ interface Props {
   sessionId: string;
   /** Bump when chat (or external) replaces the full tailored doc so the editor re-syncs. */
   editorRevision?: number;
-  onEdited?: (updated: TailoredResumeOutput) => void;
+  onEdited?: (
+    updated: TailoredResumeOutput,
+    meta?: { source: "edit" | "undo" | "redo" },
+  ) => void;
+  onVersionSnapshot?: (version: number) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
   suggestionDraft?: string | null;
   onClearSuggestion?: () => void;
   suggestions?: ResumeSuggestion[];
   onAcceptSuggestion?: (id: string) => void;
+  onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onRejectSuggestion, onDismissSuggestion }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -57,16 +62,18 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         </div>
       )}
       <TailoredEditor
-        key={`${sessionId}-${editorRevision}`}
         initial={tailored}
         sessionId={sessionId}
+        editorSyncKey={editorRevision}
         onSaved={onEdited}
+        onVersionSnapshot={onVersionSnapshot}
         onScopedRun={onScopedRun}
         phaseRunning={phaseRunning}
         suggestionDraft={suggestionDraft}
         onClearSuggestion={onClearSuggestion}
         suggestions={suggestions}
         onAcceptSuggestion={onAcceptSuggestion}
+        onAcceptAllSuggestions={onAcceptAllSuggestions}
         onRejectSuggestion={onRejectSuggestion}
         onDismissSuggestion={onDismissSuggestion}
       />

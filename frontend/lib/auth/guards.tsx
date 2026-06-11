@@ -7,7 +7,7 @@ import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, ComponentType } from "react"
 import { fetchMe } from "@/lib/auth/api"
-import { isOnboardingExempt, needsOnboarding } from "@/lib/auth/onboarding"
+import { isOnboardingExempt, mustCompleteOnboarding, needsOnboarding } from "@/lib/auth/onboarding"
 import { refreshBackendSession, isRefreshRateLimited } from "@/lib/auth/refreshBackendSession"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { saveAuthReturnUrl } from "@/lib/auth/returnUrl"
@@ -27,6 +27,7 @@ export function useRequireAuth(callbackUrl?: string) {
   const router = useRouter()
   const refreshingRef = useRef(false)
   const onboardingVerifyRef = useRef(false)
+  const onboardingRedirectedRef = useRef(false)
 
   useEffect(() => {
     if (status === "loading") return
@@ -35,6 +36,7 @@ export function useRequireAuth(callbackUrl?: string) {
     const authUrl = `/auth?callbackUrl=${encodeURIComponent(dest)}`
 
     if (!session) {
+      onboardingRedirectedRef.current = false
       saveAuthReturnUrl(dest)
       router.replace(authUrl)
       return
@@ -61,12 +63,17 @@ export function useRequireAuth(callbackUrl?: string) {
     }
 
     const path = typeof window !== "undefined" ? window.location.pathname : dest
-    if (
-      session.backendUser &&
-      needsOnboarding(session.backendUser) &&
-      path &&
-      !isOnboardingExempt(path)
-    ) {
+    if (path === "/onboarding") {
+      onboardingRedirectedRef.current = false
+    }
+
+    const redirectToOnboarding = () => {
+      if (!path || path === "/onboarding" || onboardingRedirectedRef.current) return
+      onboardingRedirectedRef.current = true
+      router.replace("/onboarding")
+    }
+
+    if (mustCompleteOnboarding(session) && path && !isOnboardingExempt(path)) {
       const accessToken = session.backendAccessToken
       if (accessToken && !onboardingVerifyRef.current) {
         onboardingVerifyRef.current = true
@@ -74,18 +81,22 @@ export function useRequireAuth(callbackUrl?: string) {
           .then(async (user) => {
             onboardingVerifyRef.current = false
             if (!needsOnboarding(user)) {
+              onboardingRedirectedRef.current = false
               await update({ backendUser: user })
               return
             }
-            router.replace("/onboarding")
+            redirectToOnboarding()
           })
           .catch(() => {
             onboardingVerifyRef.current = false
-            router.replace("/onboarding")
+            redirectToOnboarding()
           })
         return
       }
-      router.replace("/onboarding")
+
+      if (!onboardingVerifyRef.current) {
+        redirectToOnboarding()
+      }
     }
   }, [session, status, router, callbackUrl, update])
 

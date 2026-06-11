@@ -3,14 +3,28 @@
 import { useState } from "react";
 import { Download, Copy, FileText, File } from "lucide-react";
 import { exportUrl } from "@/lib/api";
+import { resumeExportFilename } from "@/lib/exportFilename";
 import { cn } from "@/lib/utils";
 
 interface Props {
   sessionId: string;
   disabled?: boolean;
+  candidateName?: string;
+  companyName?: string;
+  hasJd?: boolean;
 }
 
-export function ExportButtons({ sessionId, disabled }: Props) {
+export function ExportButtons({
+  sessionId,
+  disabled,
+  candidateName,
+  companyName,
+  hasJd,
+}: Props) {
+  const exportOpts = { companyName, hasJd };
+  const pdfName = resumeExportFilename(candidateName, "pdf", exportOpts);
+  const docxName = resumeExportFilename(candidateName, "docx", exportOpts);
+  const txtName = resumeExportFilename(candidateName, "txt", exportOpts);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -28,7 +42,7 @@ export function ExportButtons({ sessionId, disabled }: Props) {
     <div className="flex flex-wrap gap-3">
       <a
         href={disabled ? undefined : exportUrl(sessionId, "pdf")}
-        download="tailored_resume.pdf"
+        download={pdfName}
         className={cn(btnCls, disabled ? "pointer-events-none opacity-40 bg-amber-400 text-slate-900" : "bg-amber-400 text-slate-900 hover:bg-amber-300")}
       >
         <Download className="w-4 h-4" />
@@ -36,7 +50,7 @@ export function ExportButtons({ sessionId, disabled }: Props) {
       </a>
       <a
         href={disabled ? undefined : exportUrl(sessionId, "docx")}
-        download="tailored_resume.docx"
+        download={docxName}
         className={cn(btnCls, disabled ? "pointer-events-none opacity-40 bg-slate-700 text-slate-300" : "bg-slate-700 text-slate-300 hover:bg-slate-600")}
       >
         <File className="w-4 h-4" />
@@ -44,7 +58,7 @@ export function ExportButtons({ sessionId, disabled }: Props) {
       </a>
       <a
         href={disabled ? undefined : exportUrl(sessionId, "txt")}
-        download="tailored_resume.txt"
+        download={txtName}
         className={cn(btnCls, "bg-slate-800 text-slate-400 hover:bg-slate-700", disabled && "pointer-events-none opacity-40")}
       >
         <FileText className="w-4 h-4" />

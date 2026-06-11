@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.limiter import limiter
-from app.services.export_service import render_docx, render_pdf, render_txt
+from app.services.export_service import export_attachment_filename, render_docx, render_pdf, render_txt
 from app.services.session_store import get_session
 
 router = APIRouter(prefix="/api/sessions", tags=["export"])
@@ -22,15 +22,15 @@ async def export_resume(request: Request, session_id: str, format: str = "pdf"):
     if format == "pdf":
         content = await render_pdf(session)
         media_type = "application/pdf"
-        filename = "tailored_resume.pdf"
+        filename = export_attachment_filename(session, "pdf")
     elif format == "docx":
         content = render_docx(session)
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "tailored_resume.docx"
+        filename = export_attachment_filename(session, "docx")
     elif format == "txt":
         content = render_txt(session).encode()
         media_type = "text/plain"
-        filename = "tailored_resume.txt"
+        filename = export_attachment_filename(session, "txt")
     else:
         raise HTTPException(status_code=400, detail="format must be pdf, docx, or txt")
 

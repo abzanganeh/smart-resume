@@ -120,6 +120,12 @@ export function resumeDownloadUrl(
   return `${BASE}/api/resumes/${id}/download?format=${format}`
 }
 
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+  const match = /filename="([^"]+)"/i.exec(header)
+  return match?.[1] ?? null
+}
+
 export async function downloadResume(
   token: string,
   id: string,
@@ -137,7 +143,9 @@ export async function downloadResume(
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = filename
+  a.download =
+    filenameFromContentDisposition(res.headers.get("Content-Disposition")) ??
+    filename
   a.click()
   URL.revokeObjectURL(url)
 }

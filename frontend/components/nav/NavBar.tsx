@@ -15,12 +15,20 @@ export function NavBar() {
   const { data: session, status } = useSession()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const hadUserMenuRef = useRef(false)
 
   const accessToken =
     session?.error === "TokenExpired" ? undefined : session?.backendAccessToken
 
   // Keep the user menu mounted while NextAuth refreshes the JWT (status === "loading").
   const showUserMenu = Boolean(session?.user ?? session?.backendAccessToken)
+  if (showUserMenu) {
+    hadUserMenuRef.current = true
+  } else if (status === "unauthenticated") {
+    hadUserMenuRef.current = false
+  }
+  const renderUserMenu =
+    showUserMenu || (status === "loading" && hadUserMenuRef.current)
 
   // Close dropdown on outside click — only while open.
   useEffect(() => {
@@ -55,7 +63,7 @@ export function NavBar() {
         </Link>
 
         {/* Nav links (authenticated) */}
-        {showUserMenu && (
+        {renderUserMenu && (
           <div className="flex items-center gap-1 text-sm text-slate-400 overflow-x-auto">
             <NavLink href="/session/new">New session</NavLink>
             <NavLink href="/profile">Edit master resume</NavLink>
@@ -68,15 +76,15 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
-          {showUserMenu && (
+          {renderUserMenu && (
             <>
               <NotificationBell />
               <UsageWidget />
             </>
           )}
-          {status === "loading" && !showUserMenu ? (
+          {status === "loading" && !renderUserMenu ? (
             <div className="w-20 h-7 bg-slate-800 rounded animate-pulse" />
-          ) : showUserMenu ? (
+          ) : renderUserMenu ? (
             <UserMenu
               displayName={session!.backendUser?.display_name ?? session!.user?.name ?? "You"}
               email={session!.user?.email ?? ""}

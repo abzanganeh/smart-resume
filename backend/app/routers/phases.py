@@ -727,3 +727,29 @@ async def get_versions(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"versions": _versions_payload(session)}
+
+
+@router.post("/{session_id}/resume/versions/{snapshot_id}/restore")
+async def restore_version(session_id: str, snapshot_id: str):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    match = next(
+        (v for v in session.phase3_versions if v.snapshot_id == snapshot_id),
+        None,
+    )
+    if not match:
+        raise HTTPException(status_code=404, detail="Version not found")
+    session.phase3_output = match.output
+    now = datetime.now(timezone.utc)
+    session.stale_since = now
+    session.phase4_stale_since = now
+    await update_session(session)
+    return {
+        "version": match.version,
+        "snapshot_id": match.snapshot_id,
+        "tailored_output": match.output.model_dump(),
+        "stale": {
+            "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
+        },
+    }

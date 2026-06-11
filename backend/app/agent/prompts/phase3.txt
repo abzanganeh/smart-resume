@@ -36,7 +36,8 @@ For every must-have keyword: verify it appears in Skills AND weave it into at le
 If you cannot fit a keyword into an Experience bullet without fabricating, add it to the Summary.
 
 ━━━ EXPERIENCE ━━━
-- For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing.
+- For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric ONLY if it appears in the APPROVED METRICS list provided below — do NOT carry forward any number from the original resume unless it is explicitly listed there, (c) integrate missing must-have keywords using EXACT JD phrasing.
+- If no approved metric exists for a role or project, write the strongest possible bullet without a number and add it to metrics_needed. Never inherit or re-use a number from the original resume that is not in the approved list.
 - BULLET COUNT LIMITS (strict): most recent role → max 5 bullets. Every prior role → max 3 bullets. Trim weakest bullets first — never fabricate to fill quota.
 - CRITICAL: If a role has NO bullets relevant to this JD, DO NOT include that role in the experience array at all. Omit the entire entry — a title-only entry is worse than no entry.
 - Add removed bullets to "removed_bullets" for user review.
@@ -57,7 +58,8 @@ If you cannot fit a keyword into an Experience bullet without fabricating, add i
 - If email is not present in the original resume, leave "email" as an empty string.
 
 ━━━ GENERAL CONSTRAINTS ━━━
-- NEVER fabricate metrics, titles, or experience. If a bullet has no metric, keep the structure and add it to metrics_needed.
+- NEVER fabricate metrics, titles, or experience. If a bullet has no metric in the approved list, keep the structure and add it to metrics_needed.
+- Treat every number in the ORIGINAL RESUME as UNVERIFIED unless it appears verbatim in the APPROVED METRICS block below. Unverified numbers must not appear in output bullets.
 - NEVER change job titles, company names, or dates.
 - Keywords must appear verbatim — do not paraphrase JD terms.
 - For every change, add a note to rewrite_notes explaining what changed and why.

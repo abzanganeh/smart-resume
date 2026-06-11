@@ -432,6 +432,28 @@ async def run(
             f"corrected versions as the basis and polish them with JD keywords):\n{fixes_block}\n"
         )
 
+    # Approved metrics gate — inject user-verified numbers so Phase 3 can
+    # use them in bullets.  When this block is non-empty, every other number
+    # in the original resume is treated as unverified and must go to
+    # metrics_needed rather than being carried forward.
+    approved_metrics = getattr(session, "approved_metrics", []) or []
+    if approved_metrics:
+        by_scope: dict[str, list[str]] = {}
+        for am in approved_metrics:
+            by_scope.setdefault(am.scope, []).append(am.metric)
+        lines = ["APPROVED METRICS (use ONLY these verified numbers in bullets):"]
+        for scope, metrics in by_scope.items():
+            lines.append(f"  {scope}:")
+            for m in metrics:
+                lines.append(f"    - {m}")
+        additions_section += "\n" + "\n".join(lines) + "\n"
+    else:
+        additions_section += (
+            "\nAPPROVED METRICS: none provided — treat ALL numbers in the original resume "
+            "as UNVERIFIED. Do not use them in output bullets. Add metrics_needed entries "
+            "for every bullet that would normally carry a number.\n"
+        )
+
     # Compose the system prompt — append extension blocks in priority order.
     system_content = _SYSTEM_BASE + "\n\n" + _PHASE3
     if scoped:

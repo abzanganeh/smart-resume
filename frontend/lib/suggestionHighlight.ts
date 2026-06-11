@@ -135,6 +135,52 @@ export function acceptedBulletSuggestion(
   );
 }
 
+export function dismissExperienceBulletSuggestions(
+  suggestions: ResumeSuggestion[],
+  onDismiss: ((id: string) => void) | undefined,
+  company: string,
+  bulletTexts: string[],
+) {
+  if (!onDismiss) return;
+  const texts = bulletTexts.map((t) => normalizeText(t)).filter(Boolean);
+  if (!texts.length) return;
+  for (const s of suggestions) {
+    if (s.patch.section !== "experience") continue;
+    if (!matchExperienceCompany(company, s.patch.company ?? "")) continue;
+    const old = s.patch.bullet_old ? normalizeText(s.patch.bullet_old) : "";
+    const next = s.patch.bullet_new ? normalizeText(s.patch.bullet_new) : "";
+    const tied = texts.some(
+      (t) =>
+        (old && textsMatch(old, t)) ||
+        (next && textsMatch(next, t)),
+    );
+    if (tied) onDismiss(s.id);
+  }
+}
+
+export function dismissProjectBulletSuggestions(
+  suggestions: ResumeSuggestion[],
+  onDismiss: ((id: string) => void) | undefined,
+  projectName: string,
+  bulletTexts: string[],
+) {
+  if (!onDismiss) return;
+  const texts = bulletTexts.map((t) => normalizeText(t)).filter(Boolean);
+  if (!texts.length) return;
+  for (const s of suggestions) {
+    if (s.patch.section !== "projects") continue;
+    if (!matchProjectName(projectName, s.patch.project_name ?? "")) continue;
+    const old = s.patch.project_bullet_old ? normalizeText(s.patch.project_bullet_old) : "";
+    const next = s.patch.project_bullet_new ? normalizeText(s.patch.project_bullet_new) : "";
+    const tied = texts.some(
+      (t) =>
+        (old && textsMatch(old, t)) ||
+        (next && textsMatch(next, t)),
+    );
+    if (tied) onDismiss(s.id);
+  }
+}
+
 export function titleSuggestion(
   suggestions: ResumeSuggestion[],
   company: string,

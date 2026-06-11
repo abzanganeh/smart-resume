@@ -15,6 +15,22 @@ export function needsOnboarding(user?: BackendUser | null): boolean {
   return Boolean(user && !user.onboarding_completed_at)
 }
 
+/** True when an authenticated session should finish onboarding before app routes. */
+export function mustCompleteOnboarding(
+  session?: { backendUser?: BackendUser | null } | null,
+): boolean {
+  if (!session) return false
+  if (!session.backendUser) return true
+  return needsOnboarding(session.backendUser)
+}
+
+/** Landing route after sign-in when the user should not stay on /auth. */
+export function postAuthLandingPath(
+  session?: { backendUser?: BackendUser | null } | null,
+): "/onboarding" | "/dashboard" {
+  return mustCompleteOnboarding(session) ? "/onboarding" : "/dashboard"
+}
+
 export function postOnboardingDestination(_user?: BackendUser | null): string {
   return "/dashboard"
 }
