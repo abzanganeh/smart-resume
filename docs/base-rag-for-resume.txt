@@ -1,0 +1,217 @@
+ALIREZA BARZIN ZANGANEH — FULL CONTEXT PACK (RAG‑READY)
+
+INFO:
+Phone Number: +1 360 947 7777
+email: alireza@zanganehai.com
+github: https://github.com/abzanganeh
+linkedIn: https://www.linkedin.com/in/alireza-barzin
+Website: https://www.zanganehai.com/
+
+AI/ML Engineer • Backend & Identity Systems Engineer • LLM/RAG Architect
+Independent Consulting (2025–Present)
+
+1. PROFESSIONAL SUMMARY
+
+Alireza is an AI/ML engineer and backend systems architect specializing in:
+
+agentic AI
+hybrid RAG
+identity security
+device identity
+zero‑trust risk engines
+retrieval systems
+MFA and authentication
+backend microservices
+
+He has delivered 5+ production platforms across IAM, MFA, device trust, and LLM agents.
+He builds systems that are eval‑gated, secure, observable, and production‑ready.
+
+2. EXPERIENCE
+
+AI/ML Engineer & Backend Systems Engineer — Independent Consulting
+2025 – Present
+
+Role Summary
+Delivered production systems for stakeholders across identity, MFA, device trust, and agentic AI.
+
+Core Responsibilities
+Architected and shipped Trust, Rai, Asar, Trust Mobile, Entros, and idMe24.
+Built agentic AI systems with tool‑calling, FSM planners, hybrid RAG, grounding, and eval gates.
+Designed retrieval systems using pgvector, Titan embeddings, BM25, and RRF fusion.
+Engineered IAM backends with OAuth/OIDC/SAML/SCIM and adaptive MFA.
+Built device identity platforms with fingerprinting, matching, risk engines, and anomaly detection.
+Delivered Flutter mobile apps for MFA, device trust, and secure identity flows.
+Implemented CI/CD pipelines with GitLab/GitHub → ECS, staging→prod gates, smoke tests.
+Supported high‑volume identity events in multi‑tenant AWS deployments.
+
+Senior Software Engineer — SecureAuth
+2021 – 2024
+
+Role Summary
+Led engineering for identity and risk systems powering enterprise authentication.
+
+Core Responsibilities
+Built adaptive MFA flows, risk scoring engines, and identity orchestration pipelines.
+Delivered backend services supporting thousands of identity events per second.
+Modernized CI/CD pipelines and improved deployment reliability.
+Collaborated with product/security teams to deliver compliant identity features.
+
+Software Engineer — Acceptto
+2019 – 2021
+
+Role Summary
+Built early versions of behavioral MFA, device identity, and risk‑based authentication.
+
+Core Responsibilities
+Implemented device fingerprinting, behavioral biometrics, and anomaly detection.
+Built backend services and SDKs for enterprise customers.
+Contributed to mobile MFA flows and secure client integrations.
+
+3. PROJECTS — CANONICAL KNOWLEDGE
+
+Below is the complete per‑project knowledge for your RAG.
+
+1. TRUST (Kia + Trace + Dashboard)
+Backend / IAM / Risk
+
+What it is
+Production IAM/MFA platform with Rails core, Node fingerprint/risk service, and Vue analytics dashboard.
+
+What Alireza did
+Designed multi‑service IAM architecture (Kia, Trace, Dashboard).
+Built 12+ API surfaces (device JWT v10, OAuth2/OIDC, SCIM, integration APIs).
+Implemented adaptive MFA (push, TOTP, WebAuthn, SMS, email, QR).
+Built pluggable risk engine (20+ analyzers, weighted scoring, conditional policies).
+Integrated ML inference with circuit‑breaker fail‑open behavior.
+Hardened security (Rai BFF proxy, SSRF protection, device trust, ActionCable MFA).
+Ran GitLab CI/CD → ECS with staging→prod gates.
+
+Keywords
+IAM, MFA, OAuth 2.0, OIDC, SAML, SCIM 2.0, WebAuthn, device trust, zero‑trust, risk scoring, DBFP, browser fingerprinting, Sidekiq, PostgreSQL, Redis, ECS Fargate, GitLab CI/CD.
+
+2. RAI — Agentic AI / LLM / ML Systems
+
+What it is
+FastAPI agentic AI service with tool‑calling agents, hybrid RAG, grounding, and eval gates.
+
+What Alireza did
+Built specialist agents + orchestrator.
+Implemented tool‑calling loop with FSM planner.
+Built hybrid RAG (BM25 + dense + pgvector/HNSW + Titan embeddings).
+Added citation grounding + RBAC filtering.
+Designed three‑layer assurance gates (L1/L2/L3).
+Shipped eval gates (recall@5, regression, shadow tests).
+Deployed via GitHub Actions → ECS.
+
+Keywords
+agentic AI, tool‑calling, RAG, hybrid retrieval, pgvector, HNSW, embeddings, BM25, RRF, grounding, eval harness, FastAPI, Pydantic.
+
+3. ASAR — Backend / IdP / Device Identity
+
+What it is
+Device‑bound identity platform with fingerprinting, matching, MFA orchestration, and Go‑based IdP.
+
+What Alireza did
+Architected microservices pipeline (collector → processor → matcher → decision → MFA orchestrator).
+Built Go dashboard API (RBAC, pairing, SCIM, analytics).
+Implemented OIDC IdP (ES384 JWKS, OAuth2, SAML, passkeys).
+Built anomaly engine (behavioral profiling, impossible travel, velocity, flood).
+Designed zero‑trust risk engine with pluggable analyzers.
+Integrated Rai for MFA/risk Q&A.
+
+Keywords
+device identity, XXHash, zero‑trust, anomaly detection, OIDC provider, JWKS, SCIM, SAML, Go/chi, MFA orchestration.
+
+4. ENTROS — Mobile Companion for Asar
+
+What it is
+Flutter app for device pairing, MFA push, TOTP, and device JWT auth.
+
+What Alireza did
+Built QR/deep‑link pairing.
+Implemented ES256 device JWT auth.
+Synced fingerprint payloads.
+Integrated MFA approve/reject + push registration.
+
+Keywords
+Flutter, Riverpod, GoRouter, ES256 JWT, device pairing, TLS pinning.
+
+5. TRUST MOBILE — Mobile Companion for Trust/Kia
+
+What it is
+Flutter MFA app for Trust/Kia.
+
+What Alireza did
+Integrated Kia v10 API with ES256 envelopes.
+Built pairing, push MFA, TOTP, QR sign‑in, device management.
+Added mobile security (integrity gate, jailbreak detection, TLS pinning).
+Integrated Mobile Rai + Tour Rai.
+
+Keywords
+Flutter, device JWT, push MFA, TOTP, Firebase Messaging.
+
+6. IDME24 — Web / Brand + Auth Integration
+
+What it is
+React/Vite marketing SPA with TrustAuth browser SDK.
+
+What Alireza did
+Built marketing site + compliance pages.
+Integrated TrustAuth SDK with client‑side risk signals.
+Deployed via Terraform (S3, CloudFront, WAF, SES).
+
+Keywords
+React, Vite, Tailwind, TrustAuth SDK, CloudFront, Terraform.
+
+4. EDUCATION
+
+Executive MBA, Industrial Management Institute
+B.A. Economics, Allameh Tabataba'i University
+AIML Software Engineering Program, Interview Kickstart
+Web Development & Design Certificate, Portland Community College
+
+5. SKILLS (GLOBAL)
+
+AI/ML & LLM Systems
+agentic AI, tool‑calling, RAG, hybrid retrieval, embeddings, pgvector, FAISS, Titan embeddings, eval harness, grounding, hallucination reduction, FSM planners.
+
+Backend Engineering
+FastAPI, Go, Node.js, Rails, microservices, event pipelines, observability, distributed systems, API design, RBAC, audit logging.
+
+Identity & Security
+OAuth2, OIDC, SAML, SCIM, WebAuthn, MFA, device identity, risk scoring, anomaly detection, zero‑trust, IdP, JWT/JWKS.
+
+Mobile
+Flutter, secure storage, TLS pinning, push MFA, TOTP, QR pairing, deep linking.
+
+Cloud & DevOps
+AWS ECS/Fargate, S3, CloudFront, GitLab CI, GitHub Actions, Docker, IaC patterns.
+
+Databases
+Postgres, pgvector, Redis, DynamoDB, Elasticsearch.
+
+6. RAG TAGS (CHUNKING)
+
+agentic-ai
+tool-calling
+rag
+hybrid-rag
+pgvector
+identity-security
+oauth
+oidc
+saml
+scim
+device-identity
+zero-trust
+risk-engine
+anomaly-detection
+mfa
+flutter
+fastapi
+ecs
+retrieval
+eval-harness
+golden-set
+rrf-fusion
+titan-embeddings
