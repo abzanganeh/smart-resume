@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -24,15 +24,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
-from app.models.user import AuthAuditEvent, AuthProvider, User
-from app.routers.auth import MeResponse, _me
+from app.models.user import (
+    AuthAuditEvent,
+    AuthProvider,
+    CreditTransaction,
+    CreditTransactionAction,
+    User,
+    UserTier,
+)
+from app.routers.auth import REGISTRATION_GRANT_CREDITS, MeResponse, _me
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.exceptions import (
+    OAuthError,
     RefreshTokenReuseError,
     TokenExpiredError,
     TokenInvalidError,
 )
+from app.services.auth.oauth import exchange_google_code
 from app.services.auth.password import verify_password
 from app.services.auth.tokens import (
     create_access_token,
@@ -53,6 +62,12 @@ class ExtensionLoginRequest(BaseModel):
 
 class ExtensionRefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=1, max_length=512)
+
+
+class ExtensionOAuthCallbackRequest(BaseModel):
+    provider: Literal["google"]
+    code: str = Field(..., min_length=1, max_length=4096)
+    redirect_uri: str = Field(..., min_length=1, max_length=1024)
 
 
 class ExtensionAuthResponse(BaseModel):
@@ -272,3 +287,90 @@ async def extension_refresh(
         expires_in=settings.ACCESS_TOKEN_TTL_SECONDS,
         user=_me(user),
     )
+
+
+@router.post("/callback", response_model=ExtensionAuthResponse)
+@limiter.limit("10/minute")
+async def extension_oauth_callback(
+    request: Request,
+    payload: ExtensionOAuthCallbackRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExtensionAuthResponse:
+    """Exchange a Google OAuth code for extension tokens (body-based, no cookie).
+
+    The extension uses ``chrome.identity.launchWebAuthFlow`` to obtain an
+    authorization code, then POSTs it here with the chromiumapp.org redirect
+    URI that Chrome registered on its behalf.
+    """
+    _require_enabled()
+
+    try:
+        profile = await exchange_google_code(payload.code, payload.redirect_uri)
+    except OAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "oauth_failed", "message": str(exc)},
+        ) from exc
+
+    user = (
+        await db.execute(
+            select(User).where(
+                User.auth_provider == AuthProvider.google,
+                User.provider_id == profile["provider_id"],
+            )
+        )
+    ).scalar_one_or_none()
+
+    if user is None:
+        existing = (
+            await db.execute(select(User).where(User.email == profile["email"]))
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "email_already_registered",
+                    "with_provider": existing.auth_provider.value,
+                },
+            )
+        user = User(
+            id=uuid.uuid4(),
+            email=profile["email"],
+            display_name=profile["display_name"] or profile["email"].split("@", 1)[0],
+            auth_provider=AuthProvider.google,
+            provider_id=profile["provider_id"],
+            email_verified_at=datetime.now(timezone.utc),
+            tier=UserTier.free,
+            credit_balance=REGISTRATION_GRANT_CREDITS,
+            accepted_tos_version="oauth",
+            last_login_ip=_client_ip(request) or None,
+        )
+        db.add(user)
+        await db.flush()
+        db.add(
+            CreditTransaction(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                delta=REGISTRATION_GRANT_CREDITS,
+                action=CreditTransactionAction.registration_grant,
+                reason="registration_grant",
+                note="registration grant via google (extension)",
+            )
+        )
+        await db.flush()
+
+    if user.is_suspended:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "account_suspended"},
+        )
+
+    await record_auth_event(
+        db,
+        user_id=user.id,
+        event=AuthAuditEvent.login_success,
+        ip=_client_ip(request),
+        user_agent=_user_agent(request),
+        metadata={"provider": "google", "source": "extension"},
+    )
+    return await _issue_extension_session(db, request, user)
