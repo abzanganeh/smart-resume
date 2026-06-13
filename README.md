@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="docs/assets/marketing/smart-resume-photo-03.png" alt="Smart Resume Agent — resume tailoring session" width="720" />
+  <img src="docs/assets/marketing/smart-resume-photo-03.png" alt="Flint Resume — AI tailoring and company intel" width="720" />
 </p>
 
 # Smart Resume Agent
