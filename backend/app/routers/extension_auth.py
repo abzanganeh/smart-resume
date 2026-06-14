@@ -5,6 +5,18 @@ have access to cookies), so these endpoints return the refresh token in the
 JSON response body. Everything else — lockout, audit, rotation — is identical
 to the web auth flow.
 
+The cookie-vs-body design choice is documented in
+``flint-extension/docs/adr/002-extension-desktop-ipc.md`` (ADR-002):
+Phase 2 ships a one-way `flint://` deep link that carries only an opaque
+token, so the refresh token must travel in the response body to reach
+``chrome.storage.local``.
+
+TOTP is intentionally NOT supported here. The web 2FA challenge flow is
+cookie-based, and adding a parallel cookieless flow would expand auth
+surface area beyond Phase 2 scope. TOTP-enrolled users get a clear
+``totp_not_supported_on_extension`` error and are told to remove TOTP or
+wait for Phase 3 (Supabase SSO).
+
 Guarded by ``EXTENSION_AUTH_ENABLED`` feature flag so it can be disabled
 in production before the extension is publicly released.
 """
@@ -32,6 +44,10 @@ from app.models.user import (
     User,
     UserTier,
 )
+# Cross-router import: ``_me`` builds the canonical MeResponse from a User.
+# This is a deliberate coupling — keep both routers in sync if the
+# response shape changes. Renaming or moving ``_me`` will break this
+# import silently at runtime.
 from app.routers.auth import REGISTRATION_GRANT_CREDITS, MeResponse, _me
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
@@ -119,6 +135,11 @@ async def _issue_extension_session(
         ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
     )
     user.last_login_at = datetime.now(timezone.utc)
+    # flush() pushes the last_login_at update + refresh token row to the
+    # connection. The transaction commit is owned by the get_db dependency
+    # (see app/db/engine.py): it commits on successful response, rolls
+    # back on any exception. If a downstream raise happens after this
+    # flush, the rollback restores the prior last_login_at value.
     await db.flush()
     return ExtensionAuthResponse(
         access_token=access,
@@ -195,9 +216,37 @@ async def extension_login(
             metadata={"reason": "bad_password", "source": "extension"},
         )
         await db.commit()
+        # Re-evaluate lockout AFTER recording the failure so a threshold-
+        # crossing failure surfaces 429 on the same call instead of 401
+        # now and 429 on the next attempt. Mirrors the web flow's
+        # _process_failed_login behavior without the cross-router import.
+        if await is_account_locked(db, user_id=user.id):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "account_locked"},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "invalid_credentials"},
+        )
+
+    if user.has_totp:
+        # See module docstring: TOTP enrolment uses the cookie-based 2fa
+        # challenge flow which the extension cannot participate in. Reject
+        # cleanly so the popup can show actionable guidance instead of
+        # silently falling through to a half-authenticated session.
+        await record_auth_event(
+            db,
+            user_id=user.id,
+            event=AuthAuditEvent.login_failure,
+            ip=_client_ip(request),
+            user_agent=_user_agent(request),
+            metadata={"reason": "totp_required", "source": "extension"},
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "totp_not_supported_on_extension"},
         )
 
     await record_auth_event(

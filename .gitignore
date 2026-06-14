@@ -15,6 +15,11 @@ Thumbs.db
 .env.local
 *.env
 *client_secret*.json
+*.pem
+*.key
+docs/**/*.json
+docs/**/*.yml
+docs/**/*.yaml
 
 # Python
 __pycache__/

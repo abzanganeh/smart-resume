@@ -93,7 +93,17 @@ async def save_job_description(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SaveJDResponse:
-    """Persist a job description from the extension and mint a Flint handoff token."""
+    """Persist a job description from the extension and mint a Flint handoff token.
+
+    Atomicity: ``db.flush()`` writes the JD row to the connection but does
+    not commit. Commit is owned by the ``get_db`` dependency, which only
+    runs after this function returns successfully. If ``create_jd_handoff_token``
+    raises an HTTPException (for example a 503 on Redis collision), the
+    surrounding rollback drops the JD row too — so callers either get back
+    both a persisted JD AND a working token, or neither. This is the
+    intended coupling: a JD without a token is unreachable from the
+    "Open in Flint" flow, and a token without a JD is dangling state.
+    """
     # Enforce the 20k-char cap server-side (extension may send raw DOM text).
     text = body.text[: settings.JD_TEXT_MAX_CHARS]
 
@@ -109,6 +119,8 @@ async def save_job_description(
     db.add(jd)
     await db.flush()
 
+    # Both the persisted row and the handoff payload use the same `text`
+    # variable, so truncation applies consistently to storage and export.
     export_token, expires_in = await create_jd_handoff_token(
         jd_id=str(jd.id),
         jd_text=text,
