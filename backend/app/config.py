@@ -50,8 +50,12 @@ class Settings(BaseSettings):
     FLINT_HANDOFF_TTL_SECONDS: int = 600
 
     # Strategy B Phase 2 — Extension auth
-    # Disabled by default; enable after extension is released to avoid
-    # exposing a cookie-less refresh endpoint unnecessarily.
+    # Default is True so local development and CI exercise the route
+    # without an extra env var. Production deployments should explicitly
+    # set EXTENSION_AUTH_ENABLED=False until the extension is published —
+    # disabling returns 403 with code "extension_auth_disabled" from both
+    # /api/auth/extension/login and /refresh, fail-closed without leaking
+    # endpoint existence (404 would imply the route never existed).
     EXTENSION_AUTH_ENABLED: bool = True
     JD_TEXT_MAX_CHARS: int = 20_000
 
