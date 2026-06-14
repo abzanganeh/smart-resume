@@ -23,6 +23,58 @@ async def _register(client: AsyncClient, suffix: str = "") -> tuple[str, str]:
 
 
 @pytest.mark.asyncio
+async def test_get_job_description_returns_saved_jd(app_client: AsyncClient) -> None:
+    token, _ = await _register(app_client, "get")
+
+    save_r = await app_client.post(
+        "/api/job-descriptions",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "title": "Staff Engineer",
+            "company": "StreamCo",
+            "text": "Build real-time pipelines using Apache Flink and Kafka for this senior role.",
+            "source": "extension",
+        },
+    )
+    assert save_r.status_code == 200
+    jd_id = save_r.json()["jd_id"]
+
+    get_r = await app_client.get(
+        f"/api/job-descriptions/{jd_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_r.status_code == 200, get_r.text
+    body = get_r.json()
+    assert body["id"] == jd_id
+    assert body["company"] == "StreamCo"
+    assert "Flink" in body["text"]
+
+
+@pytest.mark.asyncio
+async def test_get_job_description_isolation_between_users(app_client: AsyncClient) -> None:
+    token_a, _ = await _register(app_client, "geta")
+    token_b, _ = await _register(app_client, "getb")
+
+    save_r = await app_client.post(
+        "/api/job-descriptions",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={
+            "title": "Private Role",
+            "company": "SecretCo",
+            "text": "Confidential job description text for user A only with enough length here.",
+            "source": "extension",
+        },
+    )
+    jd_id = save_r.json()["jd_id"]
+
+    forbidden = await app_client.get(
+        f"/api/job-descriptions/{jd_id}",
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert forbidden.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_save_jd_returns_jd_id_and_export_token(app_client: AsyncClient) -> None:
     token, _ = await _register(app_client, "save")
 

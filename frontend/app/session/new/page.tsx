@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { getExtensionJobDescription } from "@/lib/extensionJobDescription";
 import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
 import { UserInfoForm } from "@/components/wizard/UserInfoForm";
@@ -105,43 +106,58 @@ function NewSessionContent() {
       return;
     }
 
-    const jdId = searchParams.get("jd_id");
-    const token = session?.backendAccessToken;
+  }, [searchParams, router]);
 
-    // Check if user has a master resume (for story mode promo card)
-    if (token) {
-      void (async () => {
-        try {
-          const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-          const res = await fetch(`${BASE}/api/profile/resume`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const profile = await res.json() as { chunk_count?: number };
-            setHasMasterResume((profile.chunk_count ?? 0) > 0);
-          } else {
-            setHasMasterResume(false);
-          }
-        } catch {
+  // Separate effect: load JD from extension or jobs API once the backend token
+  // is available. Runs when token arrives (may be after the init effect above).
+  const backendToken = session?.backendAccessToken;
+  useEffect(() => {
+    if (!backendToken) return;
+
+    const jdId = searchParams.get("jd_id");
+    const jdSource = searchParams.get("source");
+
+    void (async () => {
+      try {
+        const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+        const res = await fetch(`${BASE}/api/profile/resume`, {
+          headers: { Authorization: `Bearer ${backendToken}` },
+        });
+        if (res.ok) {
+          const profile = await res.json() as { chunk_count?: number };
+          setHasMasterResume((profile.chunk_count ?? 0) > 0);
+        } else {
           setHasMasterResume(false);
         }
-      })();
-    }
-    if (jdId && token) {
-      void (async () => {
-        try {
-          const job = await getJob(token, jdId);
-          if (job.description?.trim()) {
-            setJdText(job.description);
+      } catch {
+        setHasMasterResume(false);
+      }
+    })();
+
+    if (!jdId) return;
+
+    void (async () => {
+      try {
+        if (jdSource === "extension") {
+          const saved = await getExtensionJobDescription(backendToken, jdId);
+          if (saved.text?.trim()) {
+            setJdText(saved.text);
             setStep("jd");
-            router.replace(`/session/new?step=jd&jd_id=${jdId}`);
+            router.replace(`/session/new?step=jd&jd_id=${jdId}&source=extension`);
           }
-        } catch {
-          // User can paste JD manually if fetch fails
+          return;
         }
-      })();
-    }
-  }, [searchParams, session?.backendAccessToken, router]);
+        const job = await getJob(backendToken, jdId);
+        if (job.description?.trim()) {
+          setJdText(job.description);
+          setStep("jd");
+          router.replace(`/session/new?step=jd&jd_id=${jdId}`);
+        }
+      } catch {
+        // User can paste JD manually if fetch fails
+      }
+    })();
+  }, [backendToken, searchParams, router]);
 
   const goTo = (s: Step) => {
     setStep(s);
@@ -155,7 +171,10 @@ function NewSessionContent() {
   useEffect(() => {
     const raw = searchParams.get("step");
     if (!raw || !STEPS.includes(raw as Step)) {
-      // No valid step param → treat as fresh start; clear in-memory wizard state.
+      // If a jd_id is present, the token effect will set step once the JD
+      // loads and push ?step=jd into the URL. Resetting here would race.
+      if (searchParams.get("jd_id")) return;
+      // No valid step param → fresh navigation; clear in-memory wizard state.
       if (step !== "ai") {
         setStep("ai");
         setParsedResume(null);
