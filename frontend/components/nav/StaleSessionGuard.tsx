@@ -15,10 +15,13 @@ export function StaleSessionGuard() {
   const checkedTokenRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (status !== "authenticated") {
+    // Reset only on hard sign-out, not on transient "loading" caused by update() calls.
+    // Resetting during "loading" would re-fire fetchMe on every session update.
+    if (status === "unauthenticated") {
       checkedTokenRef.current = null
       return
     }
+    if (status !== "authenticated") return
 
     const token = session?.backendAccessToken
     if (!token || checkedTokenRef.current === token) return

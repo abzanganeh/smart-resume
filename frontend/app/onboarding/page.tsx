@@ -211,7 +211,11 @@ function OnboardingPageContent() {
         ])
         if (cancelled) return
 
-        await updateRef.current({ backendUser: user })
+        // Fire-and-forget: awaiting update() causes NextAuth to briefly flip
+        // status to "loading", which cancels this effect before setHydrated(true)
+        // runs, creating an infinite loop. The session sync is best-effort here;
+        // completeOnboarding() does a proper await before navigating away.
+        void updateRef.current({ backendUser: user })
 
         if (!needsOnboarding(user)) {
           router.replace(postOnboardingDestination(user))

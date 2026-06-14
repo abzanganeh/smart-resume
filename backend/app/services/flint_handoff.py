@@ -170,6 +170,20 @@ async def redeem_handoff_token(token: str, *, client_ip: str) -> dict[str, Any]:
     return payload
 
 
+def _derive_jd_session_name(company: str, title: str) -> str:
+    """Build the human-readable session name for a JD-only handoff.
+
+    Edge cases (validated by ``test_jd_handoff_session_name``):
+    - both empty → ``"New Interview"``
+    - only company → strips the trailing ``" — "`` separator
+    - only title → strips the leading ``" — "`` separator
+    - both populated → ``"{company} — {title}"``
+    """
+    if not (company or title):
+        return "New Interview"
+    return f"{company} — {title}".strip(" —")
+
+
 async def create_jd_handoff_token(
     *,
     jd_id: str,
@@ -180,8 +194,14 @@ async def create_jd_handoff_token(
 ) -> tuple[str, int]:
     """Mint a single-use token for a JD-only (no tailoring session) import.
 
-    Resume summary is intentionally empty — Flint will use the user's
-    locally-stored profile instead.
+    ``smart_resume_session_id`` is intentionally empty: this handoff comes
+    from the extension, which never has a tailoring session. Flint's
+    ``import_from_smart_resume`` command treats an empty session id as
+    "JD-only mode" and uses the desktop's locally stored profile instead
+    of fetching a tailored resume from Smart Resume. Keep this contract
+    in sync with ``smart_resume_session_id`` handling on the Flint side
+    (``flint/src-tauri/src/commands/import_from_smart_resume.rs``).
+    Resume summary is empty for the same reason.
 
     TODO: company_intel is not included here. The company profile may exist in
     the DB (extracted when the JD was saved) but fetching it would require a DB
@@ -190,7 +210,7 @@ async def create_jd_handoff_token(
     from the job_descriptions router.
     """
     payload: dict[str, Any] = {
-        "session_name": f"{company} — {title}".strip(" —") if (company or title) else "New Interview",
+        "session_name": _derive_jd_session_name(company, title),
         "session_type": "interview",
         "domain": "software engineering",
         "jd_text": jd_text.strip(),

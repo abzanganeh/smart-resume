@@ -54,8 +54,12 @@ class Settings(BaseSettings):
     COMPANY_INTEL_CACHE_DAYS: int = 30
 
     # Strategy B Phase 2 — Extension auth
-    # Enabled for Phase 2 rollout.  Set to False in production environments
-    # where the extension has not yet been released.
+    # Default is True so local development and CI exercise the route
+    # without an extra env var. Production deployments should explicitly
+    # set EXTENSION_AUTH_ENABLED=False until the extension is published —
+    # disabling returns 403 with code "extension_auth_disabled" from both
+    # /api/auth/extension/login and /refresh, fail-closed without leaking
+    # endpoint existence (404 would imply the route never existed).
     EXTENSION_AUTH_ENABLED: bool = True
     JD_TEXT_MAX_CHARS: int = 20_000
 

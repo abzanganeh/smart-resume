@@ -49,7 +49,17 @@ def upgrade() -> None:
         ["user_id", sa.text("created_at DESC")],
     )
 
-    # Row-level security: users see only their own rows.
+    # Row-level security policy is declared up front so the table is ready
+    # for Phase 3 (Supabase). At Phase 2 the application does NOT inject
+    # ``app.current_user_id`` per request — see app/db/engine.py — so the
+    # policy currently filters every row out for any direct connection.
+    # Authorisation is enforced at the route layer instead: the
+    # ``POST /api/job-descriptions`` handler restricts writes to the JWT's
+    # user_id, and reads happen only via the ``flint:`` handoff token (a
+    # capability) so the route never queries job_descriptions back. When
+    # Phase 3 wires Supabase JWT claims to ``set_config('app.current_user_id', …)``
+    # in middleware, this policy becomes the second line of defence
+    # without any change here.
     op.execute("ALTER TABLE job_descriptions ENABLE ROW LEVEL SECURITY")
     op.execute(
         """
