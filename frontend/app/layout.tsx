@@ -7,17 +7,17 @@ import { SessionProvider } from "@/components/nav/SessionProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Smart Resume Agent — AI job search co-pilot",
+  title: "Flint Resume — AI tailoring & company intel",
   description:
-    "Build your master resume by voice, tailor it to every job description, find matching jobs, write cover letters, and track applications — all in one place.",
+    "Build your master resume, tailor it to every job description, extract company intel, and track applications.",
   icons: {
     icon: "/brand/logo.png",
   },
   openGraph: {
-    title: "Smart Resume Agent",
+    title: "Flint Resume",
     description:
-      "AI-powered job search platform — master resume, JD tailoring, ATS guidance, and application tracking.",
-    images: [{ url: "/brand/logo.png", width: 514, height: 305, alt: "Smart Resume Agent" }],
+      "AI resume tailoring, company intel, and job search workflow.",
+    images: [{ url: "/brand/logo.png", width: 1536, height: 1024, alt: "Flint Resume" }],
   },
 };
 

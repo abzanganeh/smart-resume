@@ -9,8 +9,9 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.config import settings
 from app.db.engine import get_db
@@ -36,6 +37,52 @@ class SaveJDResponse(BaseModel):
     jd_id: str
     export_token: str
     expires_in: int
+
+
+class JobDescriptionResponse(BaseModel):
+    id: str
+    url: str | None
+    title: str | None
+    company: str | None
+    text: str
+    source: str
+    created_at: str
+
+
+@router.get("/api/job-descriptions/{jd_id}", response_model=JobDescriptionResponse)
+@limiter.limit("60/minute")
+async def get_job_description(
+    request: Request,
+    jd_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> JobDescriptionResponse:
+    """Load an extension-saved JD for the tailoring wizard (Flint Resume web)."""
+    try:
+        jd_uuid = uuid.UUID(jd_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found") from exc
+
+    row = (
+        await db.execute(
+            select(JobDescription).where(
+                JobDescription.id == jd_uuid,
+                JobDescription.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    return JobDescriptionResponse(
+        id=str(row.id),
+        url=row.url,
+        title=row.title,
+        company=row.company,
+        text=row.text,
+        source=row.source,
+        created_at=row.created_at.isoformat(),
+    )
 
 
 @router.post("/api/job-descriptions", response_model=SaveJDResponse)

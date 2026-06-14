@@ -1,8 +1,8 @@
 import Image from "next/image";
 
-/** Master asset: `docs/assets/brand/logo.png` → `public/brand/logo.png` (transparent, trimmed). */
-const LOGO_WIDTH = 514;
-const LOGO_HEIGHT = 305;
+/** Master asset: `Flint/src/assets/flint-logo-resume.png` → `public/brand/logo.png`. */
+const LOGO_WIDTH = 1536;
+const LOGO_HEIGHT = 1024;
 
 type BrandLogoProps = {
   className?: string;
@@ -15,7 +15,7 @@ export function BrandLogo({ className = "h-10 w-auto", priority = false }: Brand
   return (
     <Image
       src="/brand/logo.png"
-      alt="Smart Resume Agent — AI-powered job search platform"
+      alt="Flint Resume — AI tailoring and company intel"
       width={LOGO_WIDTH}
       height={LOGO_HEIGHT}
       className={className}

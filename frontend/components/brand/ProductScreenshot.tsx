@@ -13,9 +13,9 @@ export function ProductScreenshot({
   return (
     <Image
       src="/marketing/smart-resume-photo-03.jpg"
-      alt="Smart Resume Agent tailoring a resume to a job description with ATS guidance"
-      width={1200}
-      height={655}
+      alt="Flint Resume — AI tailoring and company intel, framed brand mockup"
+      width={1536}
+      height={1024}
       className={className}
       priority={priority}
     />
