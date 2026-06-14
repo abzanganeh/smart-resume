@@ -16,6 +16,8 @@ from fastapi import HTTPException, status
 
 from app.config import settings
 from app.models.session import Session
+from app.services.company_intel import ensure_session_company_intel
+from app.services.dashboard.resume_record import resolve_company_name
 from app.services.export_service import render_txt
 from app.services.session_store import (
     get_session,
@@ -41,22 +43,10 @@ def _rate_key(client_ip: str) -> str:
 
 
 def _derive_session_name(session: Session) -> str:
-    company = ""
+    company = resolve_company_name(session)
+    if company == "Unknown":
+        company = ""
     role = "Interview"
-
-    if session.phase2_output is not None:
-        audit = session.phase2_output
-        if getattr(audit, "company", None):
-            company = str(audit.company).strip()
-
-    if not company and session.phase3_output is not None:
-        contact = session.phase3_output.contact or {}
-        if isinstance(contact, dict):
-            company = str(contact.get("company") or "").strip()
-
-    if not company and session.jd_raw:
-        first_line = session.jd_raw.strip().splitlines()[0][:120]
-        company = first_line.strip()
 
     if session.phase3_output is not None:
         contact = session.phase3_output.contact or {}
@@ -78,7 +68,7 @@ def _derive_domain(session: Session) -> str:
     return "software engineering"
 
 
-def build_handoff_payload(session: Session) -> dict[str, Any]:
+def build_handoff_payload(session: Session, *, account_email: str | None = None) -> dict[str, Any]:
     """Build the JSON blob stored in Redis for a handoff token."""
     if session.phase3_output is None:
         raise HTTPException(
@@ -91,9 +81,9 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
             detail="No job description on this session.",
         )
 
-    resume_summary = render_txt(session)[:_RESUME_SUMMARY_MAX]
+    resume_summary = render_txt(session, account_email=account_email)[:_RESUME_SUMMARY_MAX]
 
-    return {
+    payload: dict[str, Any] = {
         "session_name": _derive_session_name(session),
         "session_type": "interview",
         "domain": _derive_domain(session),
@@ -105,10 +95,26 @@ def build_handoff_payload(session: Session) -> dict[str, Any]:
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Include company intel when available so Flint can surface employer values
+    # in {interviewer_priorities} during live sessions.
+    if session.company_intel and not session.company_intel.is_empty():
+        payload["company_intel"] = {
+            "mission": session.company_intel.mission,
+            "values": session.company_intel.values,
+            "culture_notes": session.company_intel.culture_notes,
+        }
 
-async def create_handoff_token(session: Session) -> tuple[str, int]:
+    return payload
+
+
+async def create_handoff_token(
+    session: Session,
+    *,
+    account_email: str | None = None,
+) -> tuple[str, int]:
     """Mint a single-use token. Returns (token, expires_in_seconds)."""
-    payload = build_handoff_payload(session)
+    await ensure_session_company_intel(session)
+    payload = build_handoff_payload(session, account_email=account_email)
     token = str(uuid.uuid4())
     ttl = settings.FLINT_HANDOFF_TTL_SECONDS
     key = _handoff_key(token)
@@ -196,6 +202,12 @@ async def create_jd_handoff_token(
     in sync with ``smart_resume_session_id`` handling on the Flint side
     (``flint/src-tauri/src/commands/import_from_smart_resume.rs``).
     Resume summary is empty for the same reason.
+
+    TODO: company_intel is not included here. The company profile may exist in
+    the DB (extracted when the JD was saved) but fetching it would require a DB
+    lookup on the hot token-creation path. Revisit when the extension flow
+    accounts for >20% of handoffs — pass `company_intel` as an optional param
+    from the job_descriptions router.
     """
     payload: dict[str, Any] = {
         "session_name": _derive_jd_session_name(company, title),

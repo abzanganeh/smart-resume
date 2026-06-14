@@ -1,34 +1,98 @@
+/**
+ * Open in Flint button flow tests (Strategy B Phase 1.3).
+ *
+ * Simulates the async handoff + deep-link contract without a DOM renderer,
+ * matching the pattern used by UsageWidget.test.tsx and flintDeepLink.test.ts.
+ *
+ * Run with: npm run test:unit
+ */
+
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// Pure-function unit tests for the deep-link and fallback logic in OpenInFlintButton.
-// These exercise the exact same logic used by the component (copied here because
-// buildDeepLink is not exported — a future refactor could extract it to a util).
+import {
+  buildFlintImportLink,
+  FLINT_OPEN_FALLBACK_MS,
+} from "../../lib/flintDeepLink";
 
-const FLINT_SCHEME = "flint://import";
-const FALLBACK_MS = 3000;
+type HandoffResult = { token: string };
 
-function buildDeepLink(token: string): string {
-  return `${FLINT_SCHEME}?token=${encodeURIComponent(token)}`;
+async function simulateOpenInFlintFlow(options: {
+  createHandoff: () => Promise<HandoffResult>;
+  navigate: (deepLink: string) => void;
+  hasFocus: () => boolean;
+  schedule: (fn: () => void, delayMs: number) => void;
+}): Promise<{ deepLink: string; showFallback: () => boolean; handoffCalls: number }> {
+  let handoffCalls = 0;
+  let showFallback = false;
+
+  const { token } = await (async () => {
+    handoffCalls += 1;
+    return options.createHandoff();
+  })();
+
+  const deepLink = buildFlintImportLink(token);
+  options.navigate(deepLink);
+
+  options.schedule(() => {
+    if (options.hasFocus()) {
+      showFallback = true;
+    }
+  }, FLINT_OPEN_FALLBACK_MS);
+
+  return { deepLink, showFallback: () => showFallback, handoffCalls };
 }
 
-test("buildDeepLink produces a valid flint:// deep link", () => {
-  const uuid = "550e8400-e29b-41d4-a716-446655440000";
-  const url = buildDeepLink(uuid);
-  assert.equal(url, `flint://import?token=${uuid}`);
-  // Must start with the correct scheme so OS-level deep-link routing works.
-  assert.ok(url.startsWith("flint://import?token="), "must use flint://import scheme");
+test("calls handoff once and builds flint://import link", async () => {
+  const navigated: string[] = [];
+
+  const result = await simulateOpenInFlintFlow({
+    createHandoff: async () => ({ token: "550e8400-e29b-41d4-a716-446655440000" }),
+    navigate: (deepLink) => navigated.push(deepLink),
+    hasFocus: () => false,
+    schedule: () => {},
+  });
+
+  assert.equal(result.handoffCalls, 1);
+  assert.equal(
+    result.deepLink,
+    "flint://import?token=550e8400-e29b-41d4-a716-446655440000",
+  );
+  assert.deepEqual(navigated, [result.deepLink]);
 });
 
-test("buildDeepLink percent-encodes tokens with special characters", () => {
-  const token = "tok+en=val&ue";
-  const url = buildDeepLink(token);
-  // '+', '=', '&' must be encoded so they don't break URL parsing.
-  assert.ok(!url.slice(url.indexOf("?token=") + 7).includes("&"), "& must be encoded");
-  assert.ok(!url.slice(url.indexOf("?token=") + 7).includes("="), "= must be encoded");
+test("shows fallback hint when window still has focus after 3s", async () => {
+  let scheduledDelay = -1;
+  let scheduledFn: (() => void) | null = null;
+
+  const result = await simulateOpenInFlintFlow({
+    createHandoff: async () => ({ token: "abc-def-123" }),
+    navigate: () => {},
+    hasFocus: () => true,
+    schedule: (fn, delayMs) => {
+      scheduledDelay = delayMs;
+      scheduledFn = fn;
+    },
+  });
+
+  assert.equal(scheduledDelay, 3000);
+  assert.equal(result.showFallback(), false);
+  scheduledFn?.();
+  assert.equal(result.showFallback(), true);
 });
 
-test("fallback window is 3 seconds", () => {
-  // 3s gives the OS enough time to launch Flint; longer risks a false positive.
-  assert.equal(FALLBACK_MS, 3000);
+test("does not show fallback when Flint takes focus before timeout", async () => {
+  let scheduledFn: (() => void) | null = null;
+
+  const result = await simulateOpenInFlintFlow({
+    createHandoff: async () => ({ token: "abc-def-123" }),
+    navigate: () => {},
+    hasFocus: () => false,
+    schedule: (fn) => {
+      scheduledFn = fn;
+    },
+  });
+
+  scheduledFn?.();
+  assert.equal(result.showFallback(), false);
 });

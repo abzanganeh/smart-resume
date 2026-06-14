@@ -6,15 +6,47 @@ from pathlib import Path
 
 import structlog
 
+from app.agent.phase3_postprocess import flatten_skill_terms
+from app.agent.phase4_score import compute_ats_score
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
-from app.models.qa import QAOutput
+from app.models.qa import BlockingIssue, QAOutput
 from app.models.session import Session
 
 log = structlog.get_logger()
 
 _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text()
 _PHASE4 = (Path(__file__).parent / "prompts" / "phase4.txt").read_text()
+
+
+import re as _re
+
+_HAS_NUMBER = _re.compile(r"\d")
+
+
+def _filter_stale_metrics_needed(tailored) -> list:
+    """Remove metrics_needed entries whose bullet has already been updated
+    by the user to include a number/percentage.  Phase 4 should not
+    auto-fail checklist #3 for bullets the user already quantified.
+    """
+    filtered = []
+    exp_by_company = {e.company: e for e in (getattr(tailored, "experience", []) or [])}
+    for entry in getattr(tailored, "metrics_needed", []) or []:
+        company = entry.company if hasattr(entry, "company") else (entry.get("company") if isinstance(entry, dict) else None)
+        idx = entry.bullet_index if hasattr(entry, "bullet_index") else (entry.get("bullet_index") if isinstance(entry, dict) else None)
+        if company is None or idx is None:
+            filtered.append(entry)
+            continue
+        exp = exp_by_company.get(company)
+        if exp is None:
+            # Company was removed from experience — entry is stale, skip it
+            continue
+        bullets = list(getattr(exp, "bullets", []) or [])
+        if idx < len(bullets) and _HAS_NUMBER.search(bullets[idx]):
+            # Bullet already contains a digit — user added a metric, entry is resolved
+            continue
+        filtered.append(entry)
+    return filtered
 
 
 def _collect_resume_text(tailored) -> str:
@@ -76,6 +108,12 @@ async def run(
     tailored = session.phase3_output
 
     existing_skills: list[str] = tailored.skills or []
+    flat_skill_terms: list[str] = flatten_skill_terms(existing_skills)
+    must_have_terms: list[str] = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else []
+    )
 
     messages = [
         LLMMessage(role="system", content=_SYSTEM_BASE + "\n\n" + _PHASE4),
@@ -85,11 +123,13 @@ async def run(
                 f"CAREER STAGE: {career_stage}\n"
                 f"CAREER TRANSITION: {is_career_transition}\n\n"
                 f"JOB DESCRIPTION:\n{jd_text}\n\n"
-                f"MUST-HAVE KEYWORDS:\n{json.dumps([k.term for k in session.phase1_output.must_have_keywords] if session.phase1_output else [])}\n\n"
-                f"SKILLS ALREADY IN THE RESUME (do NOT suggest adding these to Skills — suggest Experience/Summary instead):\n"
-                f"{', '.join(existing_skills)}\n\n"
+                f"MUST-HAVE KEYWORDS:\n{json.dumps(must_have_terms)}\n\n"
+                f"SKILLS ALREADY IN THE RESUME (categorized — do NOT suggest adding these to Skills again; suggest Experience/Summary instead):\n"
+                f"{json.dumps(existing_skills)}\n\n"
+                f"INDIVIDUAL SKILL TERMS (parsed from category lines for keyword coverage):\n"
+                f"{', '.join(flat_skill_terms)}\n\n"
                 f"TAILORED RESUME (Phase 3 output):\n{tailored.model_dump_json()}\n\n"
-                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() for m in tailored.metrics_needed])}"
+                f"UNRESOLVED METRICS NEEDED: {json.dumps([m.model_dump() if hasattr(m, 'model_dump') else m for m in _filter_stale_metrics_needed(tailored)])}"
             ),
         ),
     ]
@@ -122,46 +162,153 @@ async def run(
     #   (b) For the remaining issues, if the keyword is already in
     #       Skills, rewrite the suggestion to point at Experience/Summary.
     full_text_corpus = _collect_resume_text(tailored).lower()
-    skills_lower = {s.lower() for s in existing_skills}
 
     def _extract_quoted_terms(text: str) -> list[str]:
         """Find any 'X', \"X\", or 'X' style phrases in the suggestion."""
         import re
-        matches = re.findall(r"['\"\u2018\u2019\u201c\u201d]([^'\"\u2018\u2019\u201c\u201d]{2,80})['\"\u2018\u2019\u201c\u201d]", text)
+        matches = re.findall(
+            r"['\"\u2018\u2019\u201c\u201d]([^'\"\u2018\u2019\u201c\u201d]{2,80})['\"\u2018\u2019\u201c\u201d]",
+            text,
+        )
         return [m.strip() for m in matches if m.strip()]
 
-    def _fix_suggestion(suggestion: str) -> str:
-        """Rewrite 'Add X to Skills' when X is already in Skills."""
+    def _candidate_keywords(suggestion: str) -> list[str]:
+        """Terms that the suggestion is likely advocating for.
+
+        Uses both quoted phrases AND any Phase 1 must-have keyword whose
+        verbatim form appears inside the suggestion text. This catches
+        unquoted suggestions like "Add Python to the Skills section".
+        """
+        terms = _extract_quoted_terms(suggestion)
         lower = suggestion.lower()
-        if "skills section" in lower or "add to skills" in lower or "to the skills" in lower:
-            already_present = [s for s in existing_skills if s.lower() in lower]
-            if already_present:
-                kw_list = ", ".join(already_present)
-                return (
-                    f"Reinforce {kw_list} in at least one Experience bullet or your Professional Summary — "
-                    f"{'it' if len(already_present) == 1 else 'they'} already appear in your Skills section."
-                )
-        return suggestion
+        for term in must_have_terms:
+            t = term.strip()
+            if t and t.lower() in lower and t not in terms:
+                terms.append(t)
+        return terms
+
+    def _skills_present(suggestion_lower: str) -> list[str]:
+        return [t for t in flat_skill_terms if t.lower() in suggestion_lower]
+
+    def _fix_suggestion(suggestion: str) -> str:
+        lower = suggestion.lower()
+        if not any(
+            phrase in lower
+            for phrase in ("skills section", "add to skills", "to the skills", "to skills")
+        ):
+            return suggestion
+        already_present = _skills_present(lower)
+        if not already_present:
+            return suggestion
+        kw_list = ", ".join(already_present)
+        return (
+            f"Reinforce {kw_list} in at least one Experience bullet or your Professional Summary — "
+            f"{'it' if len(already_present) == 1 else 'they'} already appear in your Skills section."
+        )
 
     corrected_issues = []
     for issue in output.blocking_issues:
         if issue.category == "keyword":
-            # (a) Drop the issue entirely if every quoted/referenced
-            # keyword in the suggestion is already present in the resume.
-            quoted = _extract_quoted_terms(issue.suggestion)
-            if quoted and all(q.lower() in full_text_corpus for q in quoted):
+            candidates = _candidate_keywords(issue.suggestion)
+            if candidates and all(c.lower() in full_text_corpus for c in candidates):
                 log.info(
                     "phase4_keyword_issue_dropped",
                     suggestion=issue.suggestion[:120],
-                    terms=quoted,
+                    terms=candidates,
                 )
                 continue
-            # (b) Otherwise, rewrite Skills-targeted suggestions when applicable.
             if existing_skills:
                 fixed = _fix_suggestion(issue.suggestion)
                 if fixed != issue.suggestion:
                     issue = issue.model_copy(update={"suggestion": fixed})
         corrected_issues.append(issue)
+    # Inject deterministic findings that the LLM may have missed. The
+    # engine produces 11 axes (keyword presence, dual placement, metrics,
+    # action verbs, bullet length, resume length, weak phrases, first-person,
+    # buzzwords, sections, contact). Each axis's issues become blocking
+    # issues so the user sees every concrete gap and can ignore the ones
+    # that don't apply.
+    score_result = compute_ats_score(
+        tailored, must_have_terms, career_stage=career_stage
+    )
+
+    flagged_terms = {
+        term.lower()
+        for issue in corrected_issues
+        if issue.category == "keyword"
+        for term in _candidate_keywords(issue.suggestion)
+    }
+
+    # Keyword issues — generated per-keyword so each one becomes its own
+    # accept/ignore card in the UI rather than a single batched suggestion.
+    for kw in score_result.missing_keywords:
+        if kw.lower() in flagged_terms:
+            continue
+        corrected_issues.append(
+            BlockingIssue(
+                category="keyword",
+                description=f"Missing must-have keyword: {kw}",
+                suggestion=(
+                    f"Add '{kw}' to the Skills section AND reinforce it in an Experience bullet "
+                    "or your Professional Summary. If you don't have this skill, dismiss to ignore."
+                ),
+                impact="high",
+                fix_effort="one_click",
+            )
+        )
+
+    for kw in score_result.single_section_keywords:
+        if kw.lower() in flagged_terms:
+            continue
+        sections = score_result.keyword_section_map.get(kw, [])
+        section_label = sections[0] if sections else "skills"
+        other_targets = [s for s in ("experience", "summary") if s != section_label]
+        target_str = " or ".join(other_targets) if other_targets else "experience"
+        corrected_issues.append(
+            BlockingIssue(
+                category="keyword",
+                description=f"'{kw}' appears only in {section_label}",
+                suggestion=(
+                    f"Reinforce '{kw}' in your {target_str} so it appears in 2+ sections "
+                    "(ATS keyword density rule)."
+                ),
+                impact="high",
+                fix_effort="one_click",
+            )
+        )
+
+    # Non-keyword axes — translate axis issues to blocking_issues with the
+    # right category + impact mapping. Each axis already filters itself to
+    # the top 5 offending bullets so we don't flood the UI.
+    _axis_to_category = {
+        "bullet_metrics": ("metric", "high", "user_input"),
+        "action_verbs": ("bullet", "medium", "manual_rewrite"),
+        "bullet_length": ("bullet", "medium", "manual_rewrite"),
+        "resume_length": ("length", "medium", "manual_rewrite"),
+        "weak_phrases": ("bullet", "high", "one_click"),
+        "first_person": ("bullet", "high", "one_click"),
+        "buzzwords": ("bullet", "medium", "manual_rewrite"),
+        "section_completeness": ("section", "high", "user_input"),
+        "contact_completeness": ("section", "high", "user_input"),
+    }
+    for axis in score_result.axes:
+        if axis.status == "pass":
+            continue
+        mapping = _axis_to_category.get(axis.key)
+        if mapping is None:
+            continue
+        category, impact, fix_effort = mapping
+        for issue_text in axis.issues:
+            corrected_issues.append(
+                BlockingIssue(
+                    category=category,
+                    description=axis.label,
+                    suggestion=issue_text,
+                    impact=impact,
+                    fix_effort=fix_effort,
+                )
+            )
+
     output = output.model_copy(update={"blocking_issues": corrected_issues})
 
     # Rebuild quick_wins from the corrected blocking_issues (strict subset rule).
@@ -169,13 +316,28 @@ async def run(
         i for i in corrected_issues
         if i.impact == "high" and i.fix_effort == "one_click"
     ]
-    output = output.model_copy(update={"quick_wins": corrected_qw})
+    output = output.model_copy(
+        update={
+            "quick_wins": corrected_qw,
+            # Override the LLM-generated score with the deterministic one so
+            # regenerating the same resume always yields the same number.
+            "ats_score": score_result.ats_score,
+            "score_ceiling": score_result.score_ceiling,
+            "score_axes": [axis.to_dict() for axis in score_result.axes],
+            "missing_keywords": score_result.missing_keywords,
+            "single_section_keywords": score_result.single_section_keywords,
+        }
+    )
 
     await event_queue.put({"event": "partial", "phase": 4, "data": json.loads(output.model_dump_json())})
     log.info(
         "phase4_done",
         overall_status=output.overall_status,
         ats_score=output.ats_score,
+        score_ceiling=output.score_ceiling,
+        score_axes={a.key: round(a.score, 1) for a in score_result.axes},
+        missing_keywords=score_result.missing_keywords,
+        single_section_keywords=score_result.single_section_keywords,
         blocking=len(output.blocking_issues),
         actions=len(output.user_action_required),
     )

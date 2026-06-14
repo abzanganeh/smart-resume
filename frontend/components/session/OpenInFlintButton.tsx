@@ -1,23 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { Copy, ExternalLink } from "lucide-react";
 
 import { ApiError, createFlintHandoff } from "@/lib/api";
+import {
+  buildFlintImportLink,
+  FLINT_OPEN_FALLBACK_MS,
+  navigateFlintImportCarrier,
+  openFlintImportCarrier,
+} from "@/lib/flintDeepLink";
 import { cn } from "@/lib/utils";
-
-const FLINT_SCHEME = "flint://import";
-const FALLBACK_MS = 3000;
 
 interface Props {
   sessionId: string;
   disabled?: boolean;
   /** Optional download page when Flint is not installed. */
   flintDownloadUrl?: string;
-}
-
-function buildDeepLink(token: string): string {
-  return `${FLINT_SCHEME}?token=${encodeURIComponent(token)}`;
 }
 
 export function OpenInFlintButton({
@@ -27,30 +26,65 @@ export function OpenInFlintButton({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showFallback, setShowFallback] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [handoffReady, setHandoffReady] = useState(false);
+  const [showAutoOpenHint, setShowAutoOpenHint] = useState(false);
+  const [lastDeepLink, setLastDeepLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleOpen = async () => {
+  const handleOpen = () => {
     if (disabled || loading) return;
     setError(null);
-    setShowFallback(false);
+    setHandoffReady(false);
+    setShowAutoOpenHint(false);
+    setCopied(false);
+    setStatus("Preparing import link…");
+
+    // Must happen synchronously in the click handler — async breaks custom-scheme launch.
+    const carrier = openFlintImportCarrier();
+    if (!carrier) {
+      setError(
+        "Popup blocked — allow popups for this site, or use Copy import link after handoff.",
+      );
+    }
     setLoading(true);
+
+    void (async () => {
+      try {
+        const { token } = await createFlintHandoff(sessionId);
+        const deepLink = buildFlintImportLink(token);
+        setLastDeepLink(deepLink);
+        setHandoffReady(true);
+        setStatus("Opening Flint…");
+        const launched = navigateFlintImportCarrier(carrier, deepLink);
+        window.setTimeout(() => {
+          if (document.hasFocus() || !launched) {
+            setShowAutoOpenHint(true);
+            setStatus(null);
+          }
+        }, FLINT_OPEN_FALLBACK_MS);
+      } catch (err) {
+        carrier?.close();
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : "Could not prepare Flint import. Please try again.";
+        setError(message);
+        setStatus(null);
+        setHandoffReady(false);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  };
+
+  const copyDeepLink = async () => {
+    if (!lastDeepLink) return;
     try {
-      const { token } = await createFlintHandoff(sessionId);
-      const deepLink = buildDeepLink(token);
-      window.location.href = deepLink;
-      window.setTimeout(() => {
-        if (document.hasFocus()) {
-          setShowFallback(true);
-        }
-      }, FALLBACK_MS);
-    } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : "Could not prepare Flint import. Please try again.";
-      setError(message);
-    } finally {
-      setLoading(false);
+      await navigator.clipboard.writeText(lastDeepLink);
+      setCopied(true);
+    } catch {
+      setCopied(false);
     }
   };
 
@@ -61,7 +95,7 @@ export function OpenInFlintButton({
     <div className="flex flex-col gap-2">
       <button
         type="button"
-        onClick={() => void handleOpen()}
+        onClick={handleOpen}
         disabled={disabled || loading}
         className={cn(
           btnCls,
@@ -72,24 +106,49 @@ export function OpenInFlintButton({
         <ExternalLink className="w-4 h-4" />
         {loading ? "Preparing…" : "Open in Flint"}
       </button>
+      {status && (
+        <p className="text-sm text-slate-400" role="status" aria-live="polite">
+          {status}
+        </p>
+      )}
       {error && (
         <p className="text-sm text-red-400" role="alert">
           {error}
         </p>
       )}
-      {showFallback && (
-        <p className="text-sm text-slate-400">
-          Flint did not open.{" "}
-          <a
-            href={flintDownloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-400 hover:text-indigo-300 underline"
+      {handoffReady && lastDeepLink && (
+        <div className="rounded-lg border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-2">
+          {showAutoOpenHint ? (
+            <p className="text-sm text-slate-300">
+              Flint did not open automatically (common on Linux dev builds). Paste the
+              link below into Flint → New Session → Import from Smart Resume link.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-300">
+              Import link ready. If Flint does not open, paste the link there manually.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => void copyDeepLink()}
+            className="flex items-center gap-1.5 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
           >
-            Download Flint
-          </a>{" "}
-          or return here and click again.
-        </p>
+            <Copy className="w-3.5 h-3.5" />
+            {copied ? "Link copied" : "Copy import link"}
+          </button>
+          <p className="text-xs text-slate-500 break-all font-mono">{lastDeepLink}</p>
+          <p className="text-sm text-slate-400">
+            Don&apos;t have Flint yet?{" "}
+            <a
+              href={flintDownloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 underline"
+            >
+              Download Flint
+            </a>
+          </p>
+        </div>
       )}
     </div>
   );

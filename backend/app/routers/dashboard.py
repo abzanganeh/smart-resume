@@ -22,6 +22,7 @@ from app.models.dashboard import (
     ResumeRecord,
     ResumeRecordStatus,
 )
+from app.models.master_resume import MasterResume
 from app.models.tracker import Application
 from app.models.jobs import SavedJob
 from app.models.session import PhaseStatus
@@ -33,7 +34,7 @@ from app.services.billing.quota import (
     PLAN_SEARCHES_PER_PERIOD,
 )
 from app.services.dashboard.activity import build_recent_activity
-from app.services.export_service import render_docx, render_pdf, render_txt
+from app.services.export_service import export_attachment_filename, render_docx, render_pdf, render_txt
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(tags=["dashboard"])
@@ -66,6 +67,7 @@ class DashboardSummaryResponse(BaseModel):
 class ResumeListItem(BaseModel):
     id: uuid.UUID
     session_id: str
+    display_name: str | None
     jd_title: str
     jd_company: str
     tags: list[str]
@@ -73,6 +75,7 @@ class ResumeListItem(BaseModel):
     starting_ats_score: int
     ats_score_delta: int
     status: str
+    tailoring_stage: str
     created_at: datetime
     updated_at: datetime
 
@@ -93,6 +96,7 @@ class ResumeDetailResponse(ResumeListItem):
 class ResumePatchRequest(BaseModel):
     tags: list[str] | None = None
     status: ResumeRecordStatus | None = None
+    display_name: str | None = None
 
 
 class BulkActionRequest(BaseModel):
@@ -133,6 +137,7 @@ def _record_to_list_item(record: ResumeRecord) -> ResumeListItem:
     return ResumeListItem(
         id=record.id,
         session_id=record.session_id,
+        display_name=record.display_name,
         jd_title=record.jd_title,
         jd_company=record.jd_company,
         tags=list(record.tags or []),
@@ -140,6 +145,7 @@ def _record_to_list_item(record: ResumeRecord) -> ResumeListItem:
         starting_ats_score=record.starting_ats_score,
         ats_score_delta=record.ats_score_delta,
         status=record.status.value,
+        tailoring_stage=record.tailoring_stage.value,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -230,6 +236,13 @@ async def dashboard_summary(
         )
     ).scalar_one()
 
+    master_row = (
+        await db.execute(
+            select(MasterResume.chunk_count).where(MasterResume.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    master_chunk_count = int(master_row or 0)
+
     free_credits = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
 
     subscription_payload: dict[str, Any] | None = None
@@ -267,6 +280,7 @@ async def dashboard_summary(
         subscription=subscription_payload,
         counts={
             "resumes": resume_count,
+            "master_chunks": master_chunk_count,
             "applications": application_count,
             "saved_jobs": saved_jobs_count,
         },
@@ -303,6 +317,7 @@ async def list_resumes(
             or_(
                 func.lower(ResumeRecord.jd_title).like(pattern),
                 func.lower(ResumeRecord.jd_company).like(pattern),
+                func.lower(func.coalesce(ResumeRecord.display_name, "")).like(pattern),
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
@@ -336,6 +351,7 @@ async def list_resumes(
             or_(
                 func.lower(ResumeRecord.jd_title).like(pattern),
                 func.lower(ResumeRecord.jd_company).like(pattern),
+                func.lower(func.coalesce(ResumeRecord.display_name, "")).like(pattern),
                 ResumeRecord.tags.astext.ilike(pattern),
             )
         )
@@ -419,6 +435,9 @@ async def patch_resume(
         record.tags = body.tags
     if body.status is not None:
         record.status = body.status
+    if body.display_name is not None:
+        cleaned = body.display_name.strip()
+        record.display_name = cleaned or None
     record.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return _record_to_list_item(record)
@@ -486,40 +505,42 @@ async def download_resume(
     if session is None or session.phase3_output is None:
         raise HTTPException(status_code=422, detail="No tailored resume available to export")
 
-    slug = record.jd_company.replace(" ", "_")[:40]
-
     if format == "zip":
         pdf_bytes = await render_pdf(session)
         docx_bytes = render_docx(session)
         txt_bytes = render_txt(session).encode()
+        pdf_name = export_attachment_filename(session, "pdf")
+        docx_name = export_attachment_filename(session, "docx")
+        txt_name = export_attachment_filename(session, "txt")
+        zip_stem = pdf_name.removesuffix("_resume.pdf")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(f"{slug}_resume.pdf", pdf_bytes)
-            zf.writestr(f"{slug}_resume.docx", docx_bytes)
-            zf.writestr(f"{slug}_resume.txt", txt_bytes)
+            zf.writestr(pdf_name, pdf_bytes)
+            zf.writestr(docx_name, docx_bytes)
+            zf.writestr(txt_name, txt_bytes)
         buf.seek(0)
         return StreamingResponse(
             iter([buf.read()]),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="{slug}_resume.zip"'
+                "Content-Disposition": f'attachment; filename="{zip_stem}_resume.zip"'
             },
         )
 
     if format == "pdf":
         content = await render_pdf(session)
         media_type = "application/pdf"
-        filename = f"{slug}_resume.pdf"
+        filename = export_attachment_filename(session, "pdf")
     elif format == "docx":
         content = render_docx(session)
         media_type = (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-        filename = f"{slug}_resume.docx"
+        filename = export_attachment_filename(session, "docx")
     else:
         content = render_txt(session).encode()
         media_type = "text/plain"
-        filename = f"{slug}_resume.txt"
+        filename = export_attachment_filename(session, "txt")
 
     return StreamingResponse(
         iter([content]),

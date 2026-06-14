@@ -4,12 +4,26 @@ Your task: compare the candidate's resume against the extracted JD keywords and 
 
 Instructions:
 - For keyword_coverage: DO NOT output this field — it is pre-computed from Phase 1. Focus on bullets, clichés, score, and summary.
-- For bullet_issues: flag every bullet that (a) does not start with an action verb, (b) has no quantified metric, (c) contains a cliché, (d) is irrelevant to the JD, or (e) is missing a keyword that should be there.
+- For bullet_issues: include ONLY bullets from experience/projects that are relevant to THIS job description. Skip hobbies, unrelated old roles, and bullets with no JD connection (put those in irrelevant_sections instead — do not create bullet_issues for them). Within JD-relevant bullets, flag the worst gaps: missing must-have keywords, weak action verbs, no metrics, clichés. Return at most 10 bullet_issues, ranked by impact on getting this specific job — not every bullet in the file.
 - For cliches_found: list every cliché phrase found in the full resume.
 - For irrelevant_sections: name any section that has no connection to this JD (e.g. "Hobbies", very old unrelated roles).
 - For page_estimate: estimate the page count based on text volume (assume ~500 words per page).
 - For contact_issues: flag unprofessional email addresses (nickname, numbers-only, etc.).
 - overall_score: integer 0-100 representing the Phase 2 Audit score. Base it on keyword coverage and quality rule compliance.
 
-Be thorough. Every issue the recruiter might see is an issue you must find.
+Skill format note: tailored output presents skills as 3-5 "Category: items" lines (JobRight-style). Do not flag this as a structural issue; treat each comma-separated entry inside a category as an individual skill when checking coverage.
+
+Prioritize quality over quantity: a short list of high-impact JD-aligned fixes beats flagging every bullet.
+
+━━━ UNVERIFIED METRICS DETECTION ━━━
+- For unverified_metrics: scan every experience and project bullet for metrics that appear fabricated or impossible to verify from the resume content alone. Flag with the appropriate reason:
+  (a) "round_percentage" — any percentage that is a round multiple of 5 with no baseline or comparison point (e.g. "reducing hallucinations by 50%", "improved by 30%"). A percentage is acceptable if it has a baseline ("from X to Y") or is derived from an eval dataset.
+  (b) "dollar_claim" — any dollar-amount impact (revenue, savings, loss reduction) with no named client, product, or attributed source (e.g. "$250,000 reduction in fraud losses", "$100,000 increase in revenue").
+  (c) "stacked_metrics" — three or more distinct numbers crammed into a single bullet (e.g. "reducing latency by 30%, reliability by 40%, and satisfaction by 20%"). This pattern is a strong signal of AI-generated content.
+  (d) "no_source" — a metric that could only have come from a prior AI rewrite cycle rather than the candidate's actual experience (e.g. "deployment readiness by 30%", "user satisfaction by 20%" with no grounding in the resume).
+- Set scope to the company name (for experience) or project name (for projects).
+- Set bullet to the FULL verbatim bullet text containing the suspicious metric.
+- These flags do NOT lower overall_score — they are a user-facing warning, not a penalty.
+- If no suspicious metrics are found, return unverified_metrics as an empty array.
+
 Output ONLY valid JSON. No prose before or after.

@@ -28,6 +28,14 @@ class FlintContextRequest(BaseModel):
     token: str = Field(min_length=1, max_length=64)
 
 
+class CompanyIntelBlock(BaseModel):
+    """Employer signals passed to Flint for live-session grounding."""
+
+    mission: str = ""
+    values: list[str] = Field(default_factory=list)
+    culture_notes: str = ""
+
+
 class FlintContextResponse(BaseModel):
     session_name: str
     session_type: str
@@ -41,6 +49,7 @@ class FlintContextResponse(BaseModel):
     # Present when the handoff originated from a saved job description
     # (extension JD-only flow). Absent for session-based handoffs.
     jd_id: str | None = None
+    company_intel: CompanyIntelBlock | None = None
 
 
 @router.post("/api/sessions/{session_id}/flint-handoff", response_model=FlintHandoffResponse)
@@ -52,7 +61,7 @@ async def create_flint_handoff(
 ) -> FlintHandoffResponse:
     """Mint a single-use token for Flint to import tailored session context."""
     session = await assert_session_owned(session_id, str(user.id))
-    token, expires_in = await create_handoff_token(session)
+    token, expires_in = await create_handoff_token(session, account_email=user.email)
     return FlintHandoffResponse(token=token, expires_in=expires_in)
 
 

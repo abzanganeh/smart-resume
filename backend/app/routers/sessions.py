@@ -1,18 +1,35 @@
 from __future__ import annotations
 
 import json
+import uuid
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import chat as chat_agent
+from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.models.chat import ChatRequest, ChatResponse
+from app.models.dashboard import ResumeRecord
+from app.services.dashboard.resume_record import resolve_company_name
 from app.models.rewrite import TailoredResumeOutput
+from app.models.session import ApprovedMetric
+from app.models.user import User
+from app.services.auth.dependencies import get_current_user
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+class SessionResumeRecordResponse(BaseModel):
+    id: uuid.UUID
+    display_name: str | None
+    jd_title: str
+    jd_company: str
+    tailoring_stage: str
 
 
 @router.post("", status_code=201)
@@ -65,10 +82,19 @@ async def check_session(session_id: str):
         "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
     }
 
+    has_jd = bool((session.jd_raw or "").strip())
+    export_company: str | None = None
+    if has_jd:
+        company = resolve_company_name(session)
+        if company and company not in ("Unknown", "—"):
+            export_company = company
+
     return {
         "session_id": session.session_id,
         "ok": True,
         "resume_raw": session.resume_raw or "",
+        "has_jd": has_jd,
+        "export_company": export_company,
         "phases": phases_out,
         "cover_letter": (
             json.loads(session.cover_letter_output.model_dump_json())
@@ -82,11 +108,32 @@ async def check_session(session_id: str):
         "user_claimed_keywords": session.user_claimed_keywords,
         "user_extra_notes": session.user_extra_notes,
         "bullet_fixes": [bf.model_dump() for bf in session.bullet_fixes],
+        "approved_metrics": [am.model_dump() for am in (session.approved_metrics or [])],
     }
 
 
 class TailoredEditRequest(BaseModel):
     tailored_output: dict
+
+
+class ApprovedMetricsRequest(BaseModel):
+    approved_metrics: list[ApprovedMetric]
+
+
+@router.patch("/{session_id}/approved-metrics")
+async def save_approved_metrics(session_id: str, body: ApprovedMetricsRequest):
+    """Persist the user-verified metrics list before Phase 3 runs.
+
+    Replaces the full approved_metrics list on the session — the UI always
+    sends the complete current state, not a delta.  Phase 3 will only embed
+    numbers that appear in this list; everything else goes to metrics_needed.
+    """
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.approved_metrics = body.approved_metrics
+    await update_session(session)
+    return {"ok": True, "count": len(body.approved_metrics)}
 
 
 @router.patch("/{session_id}/tailored")
@@ -98,8 +145,50 @@ async def save_tailored_edits(session_id: str, body: TailoredEditRequest):
     try:
         session.phase3_output = TailoredResumeOutput.model_validate(body.tailored_output)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}")
+        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
     await update_session(session)
+    return {"ok": True}
+
+
+class CommitTailoredRequest(BaseModel):
+    tailored_output: dict
+
+
+@router.post("/{session_id}/tailored/commit")
+async def commit_tailored_edits(
+    session_id: str,
+    body: CommitTailoredRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Save polished resume and sync master resume + RAG corpus (name, dates, titles)."""
+    from app.services.tailored_persistence import commit_tailored_resume
+
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        tailored = TailoredResumeOutput.model_validate(body.tailored_output)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
+
+    account_email: str | None = None
+    user_id = session.user_id
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            try:
+                claims = decode_access_token(token)
+                user_id = claims.get("sub") or user_id
+                account_email = claims.get("email")
+            except (TokenExpiredError, TokenInvalidError):
+                pass
+
+    await commit_tailored_resume(
+        session_id,
+        tailored,
+        user_id=user_id,
+        account_email=account_email,
+    )
     return {"ok": True}
 
 
@@ -117,3 +206,30 @@ async def chat_with_resume(session_id: str, body: ChatRequest) -> ChatResponse:
         api_key=getattr(session, "byok_api_key", None),
     )
     return await chat_agent.run(session, body, llm)
+
+
+@router.get("/{session_id}/resume-record", response_model=SessionResumeRecordResponse)
+async def get_session_resume_record(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> SessionResumeRecordResponse:
+    """Dashboard row linked to this tailoring session, if any."""
+    record = (
+        await db.execute(
+            select(ResumeRecord).where(
+                ResumeRecord.user_id == user.id,
+                ResumeRecord.session_id == session_id,
+                ResumeRecord.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Resume record not found")
+    return SessionResumeRecordResponse(
+        id=record.id,
+        display_name=record.display_name,
+        jd_title=record.jd_title,
+        jd_company=record.jd_company,
+        tailoring_stage=record.tailoring_stage.value,
+    )

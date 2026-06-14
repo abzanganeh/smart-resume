@@ -101,9 +101,11 @@ const GUIDES: Record<string, ProviderGuide> = {
 
 interface Props {
   onComplete: (provider: string, model: string) => void;
+  /** When true, save button reads "Save AI settings" (in-session panel). */
+  inline?: boolean;
 }
 
-export default function ProviderSetup({ onComplete }: Props) {
+export default function ProviderSetup({ onComplete, inline = false }: Props) {
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [selected, setSelected] = useState<LLMProvider | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
@@ -136,15 +138,29 @@ export default function ProviderSetup({ onComplete }: Props) {
   function pick(p: LLMProvider) {
     setSelected(p);
     setSelectedModel(p.model);
-    setSaved(false);
-    setApiKey("");
     setVerifyResult(null);
+    const stored = getStoredKey();
+    if (stored && stored.provider === p.id && stored.apiKey && stored.apiKey !== "__env__") {
+      setApiKey(stored.apiKey);
+      setSaved(true);
+    } else if (stored && stored.provider === p.id && stored.apiKey === "__env__") {
+      setApiKey("");
+      setSaved(true);
+    } else {
+      setApiKey("");
+      setSaved(false);
+    }
   }
 
   function pickModel(m: LLMModelOption) {
     setSelectedModel(m.id);
-    setSaved(false);
     setVerifyResult(null);
+    const stored = getStoredKey();
+    if (stored && stored.provider === selected?.id && stored.model === m.id) {
+      setSaved(true);
+    } else {
+      setSaved(false);
+    }
   }
 
   async function handleTest() {
@@ -203,6 +219,7 @@ export default function ProviderSetup({ onComplete }: Props) {
     ? selected.id === "ollama" || selected.has_env_key || !!apiKey.trim()
     : false;
   const testedOk = verifyResult?.valid === true;
+  const continueLabel = inline ? "Save AI settings" : "Continue to upload resume";
 
   return (
     <div className="space-y-6">
@@ -358,8 +375,8 @@ export default function ProviderSetup({ onComplete }: Props) {
                   </button>
                 </div>
                 <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-                  Stored in your browser's <code className="text-slate-400">sessionStorage</code> only.
-                  Disappears when the tab closes. Never logged or saved by this server.
+                  Stored in this browser&apos;s <code className="text-slate-400">localStorage</code> only
+                  (same device — not on Smart Resume servers). Use Clear to remove it.
                 </p>
                 {/* Test button — directly under key input */}
                 <button
@@ -424,13 +441,19 @@ export default function ProviderSetup({ onComplete }: Props) {
               </div>
             )}
 
-            {!testedOk && selected && canTest && !testing && (
+            {!testedOk && selected && canTest && !testing && !inline && (
               <p className="text-xs text-slate-500 text-center">
                 Test your key before continuing to upload your resume.
               </p>
             )}
 
-            {/* Continue — only enabled after a successful test */}
+            {!testedOk && selected && canTest && !testing && inline && selected.requires_key && !selected.has_env_key && !saved && (
+              <p className="text-xs text-slate-500 text-center">
+                Optionally test your key before saving.
+              </p>
+            )}
+
+            {/* Continue — onboarding requires a passing test; inline only requires selectable credentials */}
             {selected.id === "ollama" ? (
               <div className="space-y-2">
                 <button
@@ -450,10 +473,10 @@ export default function ProviderSetup({ onComplete }: Props) {
                 <button
                   type="button"
                   onClick={handleContinueOllama}
-                  disabled={!testedOk}
+                  disabled={inline ? false : !testedOk}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
                 >
-                  Continue to upload resume <ChevronRight className="h-4 w-4" />
+                  {inline ? continueLabel : <>Continue to upload resume <ChevronRight className="h-4 w-4" /></>}
                 </button>
               </div>
             ) : (
@@ -461,10 +484,10 @@ export default function ProviderSetup({ onComplete }: Props) {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!testedOk}
+                  disabled={inline ? !canTest : !testedOk}
                   className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
                 >
-                  Continue to upload resume <ChevronRight className="h-4 w-4" />
+                  {continueLabel} {!inline && <ChevronRight className="h-4 w-4" />}
                 </button>
                 {saved && (
                   <button

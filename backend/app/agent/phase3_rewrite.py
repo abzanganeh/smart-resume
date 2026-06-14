@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
 from pathlib import Path
 
 import structlog
 
+from app.config import settings
 from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
 from app.llm.structured import complete_structured
+from app.agent.phase3_postprocess import (
+    flatten_skill_terms,
+    postprocess_tailored_output,
+)
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
+from app.services.contact_authority import apply_authoritative_contact, resolve_account_email
+from app.services.company_intel import ensure_session_company_intel
 from app.services.retrieval.exceptions import (
     MasterResumeRequiredError,
     PromptBudgetExceededError,
@@ -27,6 +35,12 @@ log = structlog.get_logger()
 
 _SYSTEM_BASE = (Path(__file__).parent / "prompts" / "system_base.txt").read_text()
 _PHASE3 = (Path(__file__).parent / "prompts" / "phase3.txt").read_text()
+
+_COMPANY_INTEL_INSTRUCTION = (
+    "\n\nCOMPANY INTELLIGENCE — use these signals to align the summary and bullet "
+    "phrasing with the employer's stated values where it is authentic.  Never "
+    "fabricate alignment that is not supported by the candidate's actual experience."
+)
 
 
 # Snippet appended to the system prompt when retrieval has produced
@@ -45,6 +59,91 @@ _SCOPED_INSTRUCTION = (
     "Do not repeat unchanged sections.  Preserve all factual details."
 )
 
+_PHASE3_HEARTBEAT_MESSAGES = (
+    "Generating tailored resume (typically 30–90 seconds)…",
+    "Still writing experience bullets and skill categories…",
+    "Verifying keyword placement across Skills and Experience…",
+    "Almost done — polishing summary and final checks…",
+)
+
+
+def _compact_phase1_block(phase1_output) -> str:
+    """Send keyword lists only — the full Phase 1 JSON duplicates the JD parse."""
+    must = [k.term for k in (phase1_output.must_have_keywords or []) if k.term.strip()]
+    nice = [k.term for k in (phase1_output.nice_to_have_keywords or []) if k.term.strip()]
+    return (
+        f"MUST-HAVE KEYWORDS ({len(must)}): {', '.join(must)}\n"
+        f"NICE-TO-HAVE KEYWORDS ({len(nice)}): {', '.join(nice)}"
+    )
+
+
+def _compact_phase2_block(phase2_output) -> str:
+    """Send audit highlights only — full bullet_issues JSON bloats the prompt."""
+    cov = phase2_output.keyword_coverage
+    lines = [
+        f"AUDIT SCORE: {phase2_output.overall_score}/100",
+        f"Audit summary: {phase2_output.summary}",
+        f"Keywords already present: {', '.join(cov.present[:25])}",
+        f"Missing must-have keywords: {', '.join(cov.missing_must_have)}",
+        f"Missing nice-to-have keywords: {', '.join(cov.missing_nice_to_have[:15])}",
+    ]
+    for bi in phase2_output.bullet_issues:
+        if bi.severity not in ("high", "medium"):
+            continue
+        missing = ", ".join(bi.missing_keywords[:5])
+        lines.append(
+            f"Bullet fix [{bi.severity}] {bi.company or bi.section} "
+            f"bullet #{bi.bullet_index}: issues={bi.issues}"
+            + (f", missing keywords={missing}" if missing else "")
+        )
+        if len(lines) >= 12:
+            break
+    if phase2_output.cliches_found:
+        lines.append(f"Cliches to remove: {', '.join(phase2_output.cliches_found[:8])}")
+    if phase2_output.irrelevant_sections:
+        lines.append(f"Irrelevant sections: {', '.join(phase2_output.irrelevant_sections[:5])}")
+    return "\n".join(lines)
+
+
+async def _complete_phase3_llm(
+    llm: LLMClient,
+    messages: list[LLMMessage],
+    event_queue: asyncio.Queue,
+) -> TailoredResumeOutput:
+    """Run the Phase 3 structured LLM call with heartbeats and a hard timeout.
+
+    Without heartbeats the SSE stream goes silent for 60–120 s while the
+    model writes the full resume JSON, which browsers/proxies interpret as
+    a dead connection (``ERR_INCOMPLETE_CHUNKED_ENCODING``).
+    """
+    heartbeat_idx = 0
+
+    async def _heartbeat() -> None:
+        nonlocal heartbeat_idx
+        await asyncio.sleep(25)
+        while True:
+            msg = _PHASE3_HEARTBEAT_MESSAGES[
+                min(heartbeat_idx, len(_PHASE3_HEARTBEAT_MESSAGES) - 1)
+            ]
+            await event_queue.put({"event": "progress", "phase": 3, "message": msg})
+            heartbeat_idx += 1
+            await asyncio.sleep(25)
+
+    hb_task = asyncio.create_task(_heartbeat())
+    try:
+        return await asyncio.wait_for(
+            complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000),
+            timeout=settings.PHASE3_LLM_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(
+            f"Phase 3 rewrite exceeded {settings.PHASE3_LLM_TIMEOUT_SECONDS}s"
+        ) from exc
+    finally:
+        hb_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await hb_task
+
 
 def _merge_scoped_output(
     existing: TailoredResumeOutput,
@@ -62,11 +161,16 @@ def _merge_scoped_output(
         elif scope.section == "education" and partial.education:
             merged.education = [*merged.education, *partial.education]
         elif scope.section == "skills" and partial.skills:
-            seen = {s.lower() for s in merged.skills}
-            for skill in partial.skills:
-                if skill.lower() not in seen:
-                    merged.skills.append(skill)
-                    seen.add(skill.lower())
+            # Existing skills may be categorized lines like "AI: Python, LLMs".
+            # Dedupe against the FLATTENED individual terms, not the raw lines,
+            # so we don't double-add a skill that's already inside a category.
+            existing_terms = {t.lower() for t in flatten_skill_terms(merged.skills)}
+            for raw_skill in partial.skills:
+                for new_term in flatten_skill_terms([raw_skill]):
+                    if new_term.lower() in existing_terms:
+                        continue
+                    merged.skills.append(new_term)
+                    existing_terms.add(new_term.lower())
         elif scope.section == "summary" and partial.summary:
             merged.summary = partial.summary
         return merged
@@ -92,7 +196,13 @@ def _merge_scoped_output(
                 replaced = False
                 for i, exp in enumerate(merged.experience):
                     if exp.company == scope.company:
-                        merged.experience[i] = partial.experience[0]
+                        incoming = partial.experience[0]
+                        merged.experience[i] = incoming.model_copy(
+                            update={
+                                "dates": exp.dates if exp.dates.strip() else incoming.dates,
+                                "title": exp.title if exp.title.strip() else incoming.title,
+                            }
+                        )
                         replaced = True
                         break
                 if not replaced:
@@ -120,10 +230,16 @@ def _merge_scoped_output(
 
 def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutput) -> str:
     if scope.mode == "add" and scope.chunk_content:
+        skills_clause = ""
+        if scope.section == "skills":
+            skills_clause = (
+                " Return skills as 'Category Name: skill1, skill2' lines so they "
+                "merge cleanly into the existing categorized skills."
+            )
         return (
             f"ADD SECTION MODE — convert the following master-resume chunk into a "
             f"tailored ``{scope.section}`` section entry and return ONLY that section "
-            f"in the JSON output.\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
+            f"in the JSON output.{skills_clause}\n\nCHUNK CONTENT:\n{scope.chunk_content}\n"
         )
     if scope.bullet_index is not None and scope.section == "experience":
         company = scope.company or ""
@@ -148,9 +264,17 @@ def _scoped_user_instruction(scope: PhaseRunScope, existing: TailoredResumeOutpu
             f"REGENERATE ONLY the education entry for institution "
             f"\"{scope.institution}\".  Return JSON with only the education array."
         )
+    skills_format = ""
+    if scope.section == "skills":
+        skills_format = (
+            " SKILLS FORMAT — each array entry MUST be a category string: "
+            "\"Category Name: skill1, skill2, skill3\". "
+            "Group into 3–5 categories ordered by JD relevance. "
+            "Do NOT return plain individual skill strings."
+        )
     return (
         f"REGENERATE ONLY the ``{scope.section}`` section.  "
-        f"Return JSON containing only that section's field(s)."
+        f"Return JSON containing only that section's field(s).{skills_format}"
     )
 
 
@@ -197,6 +321,11 @@ async def _run_retrieval(
             await db.rollback()
 
 
+async def _ensure_company_intel(session: Session) -> None:
+    """Load company intel when the Phase 1 background task has not finished yet."""
+    await ensure_session_company_intel(session)
+
+
 async def run(
     session: Session,
     llm: LLMClient,
@@ -217,6 +346,8 @@ async def run(
         raise RuntimeError("Phases 1 and 2 must complete before Phase 3.")
     if scoped and not session.phase3_output:
         raise RuntimeError("Phase 3 must complete before a scoped regeneration.")
+
+    await _ensure_company_intel(session)
 
     if scoped and scope is not None:
         scope = await _resolve_chunk_content(scope, session.user_id)
@@ -260,6 +391,8 @@ async def run(
     estimated_input = (len(resume_text) + len(jd_text)) // 3
     if retrieval_result is not None:
         estimated_input += retrieval_result.total_tokens
+    if session.company_intel and not session.company_intel.is_empty():
+        estimated_input += len(session.company_intel.render_for_prompt()) // 3
     estimated_output = 2000
     cost = estimate_cost(estimated_input, estimated_output, llm.provider_name, llm.model_name)
     await event_queue.put({
@@ -299,8 +432,29 @@ async def run(
             f"corrected versions as the basis and polish them with JD keywords):\n{fixes_block}\n"
         )
 
-    # Compose the system prompt — append the retrieval instructions when
-    # we have chunks to pin the LLM against.
+    # Approved metrics gate — inject user-verified numbers so Phase 3 can
+    # use them in bullets.  When this block is non-empty, every other number
+    # in the original resume is treated as unverified and must go to
+    # metrics_needed rather than being carried forward.
+    approved_metrics = getattr(session, "approved_metrics", []) or []
+    if approved_metrics:
+        by_scope: dict[str, list[str]] = {}
+        for am in approved_metrics:
+            by_scope.setdefault(am.scope, []).append(am.metric)
+        lines = ["APPROVED METRICS (use ONLY these verified numbers in bullets):"]
+        for scope, metrics in by_scope.items():
+            lines.append(f"  {scope}:")
+            for m in metrics:
+                lines.append(f"    - {m}")
+        additions_section += "\n" + "\n".join(lines) + "\n"
+    else:
+        additions_section += (
+            "\nAPPROVED METRICS: none provided — treat ALL numbers in the original resume "
+            "as UNVERIFIED. Do not use them in output bullets. Add metrics_needed entries "
+            "for every bullet that would normally carry a number.\n"
+        )
+
+    # Compose the system prompt — append extension blocks in priority order.
     system_content = _SYSTEM_BASE + "\n\n" + _PHASE3
     if scoped:
         system_content += _SCOPED_INSTRUCTION
@@ -312,15 +466,32 @@ async def run(
             f"{retrieval_result.render_for_prompt()}\n"
         )
 
+    # Company intelligence block — prepended to user_content so the LLM
+    # sees it before the JD.  Only injected when intel was successfully
+    # fetched and contains at least one signal field.
+    company_intel_block = ""
+    if session.company_intel and not session.company_intel.is_empty():
+        system_content += _COMPANY_INTEL_INSTRUCTION
+        company_intel_block = (
+            "COMPANY INTELLIGENCE:\n"
+            f"{session.company_intel.render_for_prompt()}\n\n"
+        )
+        log.info(
+            "phase3_company_intel_injected",
+            company=session.company_intel.company_name,
+            source=session.company_intel.source,
+        )
+
     user_content = (
         f"CAREER STAGE: {career_stage}\n"
         f"TARGET ROLE: {target_role}\n"
         f"CAREER TRANSITION: {is_career_transition}\n"
+        f"{company_intel_block}"
         f"{additions_section}"
         f"{chunks_prompt_block}\n"
         f"JOB DESCRIPTION:\n{jd_text}\n\n"
-        f"EXTRACTED KEYWORDS (Phase 1):\n{session.phase1_output.model_dump_json()}\n\n"
-        f"AUDIT RESULTS (Phase 2):\n{session.phase2_output.model_dump_json()}\n\n"
+        f"EXTRACTED KEYWORDS (Phase 1 — compact):\n{_compact_phase1_block(session.phase1_output)}\n\n"
+        f"AUDIT RESULTS (Phase 2 — compact):\n{_compact_phase2_block(session.phase2_output)}\n\n"
         f"ORIGINAL RESUME:\n{resume_text}"
     )
 
@@ -330,17 +501,32 @@ async def run(
             f"{session.phase3_output.model_dump_json()}\n\n"
             f"{_scoped_user_instruction(scope, session.phase3_output)}"
         )
+    elif not scoped and session.phase3_output:
+        # Full re-run: pass the current tailored resume as the baseline so that
+        # experience entries added from suggestions (not in the raw resume) are
+        # preserved and built upon rather than silently dropped.
+        user_content += (
+            f"\n\nCURRENT TAILORED RESUME (baseline from previous run with user edits applied — "
+            f"treat this as the starting point; preserve accepted experience entries and bullets "
+            f"while applying all Phase 3 quality rules: bullet limits, skill categories, keyword placement):\n"
+            f"{session.phase3_output.model_dump_json()}"
+        )
 
     # Prompt budget gate (§6a "Determinism and prompt budget contract").
     # Raises ``PromptBudgetExceededError`` → orchestrator surfaces 422.
-    assert_prompt_fits(system_content, user_content, model=llm.model_name)
+    assert_prompt_fits(
+        system_content,
+        user_content,
+        model=llm.model_name,
+        output_reserve=6000,
+    )
 
     messages = [
         LLMMessage(role="system", content=system_content),
         LLMMessage(role="user", content=user_content),
     ]
 
-    output = await complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000)
+    output = await _complete_phase3_llm(llm, messages, event_queue)
 
     if scoped and session.phase3_output:
         output = _merge_scoped_output(session.phase3_output, output, scope)
@@ -357,6 +543,20 @@ async def run(
         output.selected_chunks = trace["selected_chunks"]
         output.skipped_chunks = trace["skipped_chunks"]
         output.retrieval_meta = trace["retrieval_meta"]
+
+    must_have = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else None
+    )
+    output = postprocess_tailored_output(output, must_have)
+
+    account_email = await resolve_account_email(session.user_id)
+    output = apply_authoritative_contact(
+        output,
+        user_info=session.user_info,
+        account_email=account_email,
+    )
 
     await event_queue.put({"event": "partial", "phase": 3, "data": json.loads(output.model_dump_json())})
     log.info(

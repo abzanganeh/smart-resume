@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Always load backend/.env regardless of the shell's current working directory.
@@ -48,6 +48,10 @@ class Settings(BaseSettings):
 
     # Flint cross-product handoff (Strategy B Phase 1)
     FLINT_HANDOFF_TTL_SECONDS: int = 600
+
+    # Company intelligence cache TTL in days.  Profiles older than this are
+    # re-extracted on the next Phase 1 completion for that company.
+    COMPANY_INTEL_CACHE_DAYS: int = 30
 
     # Strategy B Phase 2 — Extension auth
     # Default is True so local development and CI exercise the route
@@ -148,6 +152,9 @@ class Settings(BaseSettings):
 
     # Default currency code surfaced by /api/billing/prices (Step 7).
     BILLING_CURRENCY: str = "USD"
+    # When true, phase runs and other quota-gated actions skip credit checks.
+    # In ``local`` / ``development`` this defaults to enabled unless explicitly false.
+    BILLING_SKIP_QUOTA: bool | None = None
 
     # Hard server-side limits enforced before calling Stripe (§7.7).
     SUBSCRIPTION_PAUSE_MIN_DAYS: int = 7
@@ -206,6 +213,25 @@ class Settings(BaseSettings):
             )
         return v
 
+    @model_validator(mode="after")
+    def _apply_environment_defaults(self) -> "Settings":
+        # Local/dev: 24-hour access tokens (production keeps 15-minute cap).
+        if (
+            self.APP_ENV in {"local", "development"}
+            and self.ACCESS_TOKEN_TTL_SECONDS == 15 * 60
+        ):
+            object.__setattr__(self, "ACCESS_TOKEN_TTL_SECONDS", 24 * 3600)
+        return self
+
+    # Phase 3 — LLM rewrite can take 30–120 s on large resumes; cap it so
+    # the UI gets a clear timeout instead of hanging indefinitely.
+    PHASE3_LLM_TIMEOUT_SECONDS: int = 240
+    # Redis phase-lock TTL must exceed the LLM timeout so a second run cannot
+    # start while the first is still in flight.
+    PHASE_LOCK_TTL_SECONDS: int = 600
+    # SSE keepalive interval while the event queue is idle (during LLM calls).
+    SSE_KEEPALIVE_SECONDS: int = 15
+
 
 settings = Settings()
 
@@ -218,3 +244,12 @@ def is_production_grade() -> bool:
     relaxed CORS, etc.) must gate on this helper, never on raw APP_ENV strings.
     """
     return settings.APP_ENV in {"ci", "staging", "production"}
+
+
+def should_skip_billing_quota() -> bool:
+    """Return True when quota checks should be bypassed (local dev by default)."""
+    if settings.BILLING_SKIP_QUOTA is True:
+        return True
+    if settings.BILLING_SKIP_QUOTA is False:
+        return False
+    return settings.APP_ENV in {"local", "development"}

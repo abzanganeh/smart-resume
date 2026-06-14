@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.models.audit import AuditOutput
+from app.models.company_profile import CompanyIntelOutput
 from app.models.cover_letter import CoverLetterOutput
 from app.models.keywords import KeywordExtractionOutput
 from app.models.qa import QAOutput
@@ -20,6 +21,24 @@ class BulletFix(BaseModel):
 
     original: str
     suggestion: str
+
+
+class ApprovedMetric(BaseModel):
+    """A metric the user has explicitly verified and approved for use in tailored bullets.
+
+    The ``scope`` maps to a company name (for experience) or project name (for
+    projects).  Phase 3 is instructed to use ONLY metrics present in this list
+    when writing bullets — any number from the original resume that is not
+    approved here must be omitted and added to ``metrics_needed`` instead.
+
+    ``source_note`` is optional user-supplied provenance (e.g. "from eval_run.json"
+    or "from SecureAuth internal dashboard Q3 2024").  It is never sent to the LLM;
+    it exists solely so the user can reference it later.
+    """
+
+    scope: str
+    metric: str
+    source_note: str = ""
 
 
 class PhaseStatus(str, Enum):
@@ -61,11 +80,19 @@ class Session(BaseModel):
     # Ephemeral — user-supplied API key (BYOK). Never logged. Cleared on session expiry.
     byok_api_key: str | None = None
 
+    # Company intelligence extracted from the JD after Phase 1 completes.
+    # Injected into the Phase 3 prompt when present and non-empty.
+    company_intel: CompanyIntelOutput | None = None
+
     # User-declared additions: skills/keywords they have but weren't in the original resume
     user_claimed_keywords: list[str] = []
     user_extra_notes: str = ""  # free-text: "I also have experience with X and Y"
     # User-supplied corrections for specific Phase 2 bullet flags (Fix 4).
     bullet_fixes: list[BulletFix] = []
+    # Metrics the user has verified as defensible — Phase 3 only uses numbers from
+    # this list.  Numbers present in the input resume but absent here are treated
+    # as unverified and moved to metrics_needed instead of being carried forward.
+    approved_metrics: list[ApprovedMetric] = []
 
     phase1_status: PhaseStatus = PhaseStatus.pending
     phase1_output: KeywordExtractionOutput | None = None

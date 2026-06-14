@@ -15,6 +15,45 @@ export class ApiError extends Error {
   }
 }
 
+function formatApiErrorMessage(
+  detail: unknown,
+  status: number,
+): { message: string; code?: string } {
+  if (typeof detail === "string") {
+    return { message: detail };
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as Record<string, unknown>;
+    const code = typeof d.code === "string" ? d.code : undefined;
+    const candidate = d.message ?? d.error;
+    if (typeof candidate === "string") {
+      return { message: candidate, code };
+    }
+    if (code === "insufficient_credits") {
+      const action = typeof d.action === "string" ? d.action : undefined;
+      if (action === "ats_recalc") {
+        return {
+          code,
+          message:
+            "You're out of credits. ATS score recalculation costs 1 credit.",
+        };
+      }
+      return {
+        code,
+        message: "You're out of credits. Upgrade or wait for your next grant.",
+      };
+    }
+    if (code === "subscription_required") {
+      return { code, message: "This feature requires an active subscription." };
+    }
+    if (typeof code === "string") {
+      return { message: code, code };
+    }
+    return { message: JSON.stringify(detail) };
+  }
+  return { message: `HTTP ${status}` };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Attach the NextAuth bearer token on every API call when a session exists.
   // Falls back gracefully for anonymous (unauthenticated) usage.
@@ -41,23 +80,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const detail = body?.detail;
-    let message: string;
-    let errorCode: string | undefined;
-    if (typeof detail === "string") {
-      message = detail;
-    } else if (detail && typeof detail === "object") {
-      // FastAPI sometimes returns structured detail (e.g. {code, message, ...}).
-      // Prefer a human-readable field; fall back to JSON so we never show "[object Object]".
-      const d = detail as Record<string, unknown>;
-      errorCode = typeof d.code === "string" ? d.code : undefined;
-      const candidate = d.message ?? d.error ?? d.code;
-      message =
-        typeof candidate === "string" ? candidate : JSON.stringify(detail);
-    } else {
-      message = `HTTP ${res.status}`;
-    }
-    throw new ApiError(message, res.status, errorCode);
+    const { message, code } = formatApiErrorMessage(body?.detail, res.status);
+    throw new ApiError(message, res.status, code);
   }
   return res.json() as Promise<T>;
 }
@@ -73,12 +97,26 @@ export interface BulletFixPayload {
   suggestion: string;
 }
 
+export interface ApprovedMetric {
+  scope: string;
+  metric: string;
+  source_note?: string;
+}
+
+export interface SuspiciousMetric {
+  scope: string;
+  bullet: string;
+  reason: "round_percentage" | "dollar_claim" | "stacked_metrics" | "no_source";
+}
+
 export async function checkSession(
   sessionId: string
 ): Promise<{
   session_id: string;
   ok: boolean;
   resume_raw: string;
+  has_jd?: boolean;
+  export_company?: string | null;
   phases: Record<string, { status: string; output: unknown | null }>;
   cover_letter?: CoverLetterOutput | null;
   stale: Record<string, string | null>;
@@ -87,8 +125,19 @@ export async function checkSession(
   user_claimed_keywords: string[];
   user_extra_notes: string;
   bullet_fixes: BulletFixPayload[];
+  approved_metrics: ApprovedMetric[];
 }> {
   return request(`/api/sessions/${sessionId}`);
+}
+
+export async function saveApprovedMetrics(
+  sessionId: string,
+  metrics: ApprovedMetric[]
+): Promise<{ ok: boolean; count: number }> {
+  return request(`/api/sessions/${sessionId}/approved-metrics`, {
+    method: "PATCH",
+    body: JSON.stringify({ approved_metrics: metrics }),
+  });
 }
 
 export async function saveResumeEdits(
@@ -151,6 +200,16 @@ export async function saveAdditions(
     `/api/sessions/${sessionId}/additions`,
     { method: "PATCH", body: JSON.stringify(payload) }
   );
+}
+
+export async function suggestBulletFixes(
+  sessionId: string,
+  indices: number[],
+): Promise<{ fixes: { index: number; suggestion: string }[] }> {
+  return request(`/api/sessions/${sessionId}/audit/suggest-bullet-fixes`, {
+    method: "POST",
+    body: JSON.stringify({ indices }),
+  });
 }
 
 export async function saveUserInfo(
@@ -240,6 +299,20 @@ export async function getVersions(sessionId: string) {
   return request<{ versions: ResumeVersionMeta[] }>(
     `/api/sessions/${sessionId}/resume/versions`
   );
+}
+
+export async function restoreResumeVersion(
+  sessionId: string,
+  snapshotId: string,
+): Promise<{
+  version: number;
+  snapshot_id: string;
+  tailored_output: TailoredResumeOutput;
+  stale?: Record<string, string | null>;
+}> {
+  return request(`/api/sessions/${sessionId}/resume/versions/${snapshotId}/restore`, {
+    method: "POST",
+  });
 }
 
 // ── LLM providers ───────────────────────────────────────────────────────────
@@ -385,10 +458,64 @@ export async function getBillingPrices(token?: string): Promise<BillingPricesRes
   })
 }
 
-export async function getSubscriptionCurrent(token: string): Promise<SubscriptionCurrentResponse> {
+const SUBSCRIPTION_CACHE_TTL_MS = 60_000
+let subscriptionCache: {
+  token: string
+  data: SubscriptionCurrentResponse
+  fetchedAt: number
+} | null = null
+let subscriptionInflight: Promise<SubscriptionCurrentResponse> | null = null
+let subscriptionBlockedUntil = 0
+
+async function fetchSubscriptionCurrentRaw(
+  token: string,
+): Promise<SubscriptionCurrentResponse> {
   return request("/api/subscriptions/current", {
     headers: { Authorization: `Bearer ${token}` },
   })
+}
+
+/** Drop cached subscription/credit snapshot (e.g. after a credit-consuming action). */
+export function invalidateSubscriptionCache(): void {
+  subscriptionCache = null
+  subscriptionInflight = null
+}
+
+/** Cached, single-flight subscription snapshot for nav widgets. */
+export async function getSubscriptionCurrent(
+  token: string,
+): Promise<SubscriptionCurrentResponse> {
+  const now = Date.now()
+  if (now < subscriptionBlockedUntil) {
+    if (subscriptionCache?.token === token) return subscriptionCache.data
+    throw new ApiError("rate_limited", 429, "rate_limited")
+  }
+
+  if (
+    subscriptionCache?.token === token &&
+    now - subscriptionCache.fetchedAt < SUBSCRIPTION_CACHE_TTL_MS
+  ) {
+    return subscriptionCache.data
+  }
+
+  if (subscriptionInflight) return subscriptionInflight
+
+  subscriptionInflight = fetchSubscriptionCurrentRaw(token)
+    .then((data) => {
+      subscriptionCache = { token, data, fetchedAt: Date.now() }
+      return data
+    })
+    .catch((err) => {
+      if (err instanceof ApiError && err.status === 429) {
+        subscriptionBlockedUntil = Date.now() + 60_000
+      }
+      throw err
+    })
+    .finally(() => {
+      subscriptionInflight = null
+    })
+
+  return subscriptionInflight
 }
 
 export async function createCheckoutSession(
@@ -573,6 +700,7 @@ export interface AuditOutput {
   contact_issues: string[];
   overall_score: number;
   summary: string;
+  unverified_metrics?: SuspiciousMetric[];
 }
 
 export interface TailoredExperience {
@@ -627,6 +755,16 @@ export interface BlockingIssue {
   fix_effort: "one_click" | "user_input" | "manual_rewrite";
 }
 
+export interface ScoreAxis {
+  key: string;
+  label: string;
+  score: number;
+  max: number;
+  status: "pass" | "warn" | "fail";
+  summary: string;
+  issues: string[];
+}
+
 export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
@@ -636,6 +774,10 @@ export interface QAOutput {
   blocking_issues?: BlockingIssue[];
   score_ceiling?: number;
   quick_wins?: BlockingIssue[];
+  /** Deterministic per-axis breakdown — populated server-side by phase4_score. */
+  score_axes?: ScoreAxis[];
+  missing_keywords?: string[];
+  single_section_keywords?: string[];
 }
 
 // ── Fit analysis ─────────────────────────────────────────────────────────────
@@ -868,6 +1010,7 @@ export interface DashboardSummaryResponse {
   } | null;
   counts: {
     resumes: number;
+    master_chunks: number;
     applications: number;
     saved_jobs: number;
   };
@@ -884,6 +1027,7 @@ export interface DashboardSummaryResponse {
 export interface ResumeListItem {
   id: string;
   session_id: string;
+  display_name: string | null;
   jd_title: string;
   jd_company: string;
   tags: string[];
@@ -891,8 +1035,23 @@ export interface ResumeListItem {
   starting_ats_score: number;
   ats_score_delta: number;
   status: ResumeRecordStatus;
+  tailoring_stage: "in_progress" | "polished";
   created_at: string;
   updated_at: string;
+}
+
+export interface SessionResumeRecord {
+  id: string;
+  display_name: string | null;
+  jd_title: string;
+  jd_company: string;
+  tailoring_stage: "in_progress" | "polished";
+}
+
+export async function getSessionResumeRecord(
+  sessionId: string,
+): Promise<SessionResumeRecord> {
+  return request(`/api/sessions/${sessionId}/resume-record`);
 }
 
 export interface ResumeListResponse {
@@ -927,17 +1086,42 @@ export interface SubscriptionCurrentResponse {
 // ── Resume Chat ──────────────────────────────────────────────────────────────
 
 export interface ResumePatch {
-  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects";
+  section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects" | "contact";
   description: string;
+  // Contact
+  new_name?: string;
   // Summary
   new_summary?: string;
   // Skills
   add_skills?: string[];
   remove_skills?: string[];
-  // Experience bullet
+  // Experience
   company?: string;
   bullet_old?: string;
   bullet_new?: string;
+  title_old?: string;
+  new_title?: string;
+  dates_old?: string;
+  new_dates?: string;
+  delete_experience?: boolean;
+  // Certifications
+  remove_certifications?: string[];
+  add_certifications?: string[];
+  // Education
+  institution?: string;
+  institution_old?: string;
+  new_institution?: string;
+  new_degree?: string;
+  add_education_bullets?: string[];
+  education_bullet_old?: string;
+  education_bullet_new?: string;
+  // Projects
+  remove_projects?: string[];
+  project_name?: string;
+  project_bullet_old?: string;
+  project_bullet_new?: string;
+  project_bullets_replace_all?: string[];
+  new_project?: { name: string; description?: string; bullets: string[] } | null;
 }
 
 export interface ChatMessage {
@@ -957,6 +1141,17 @@ export async function saveTailoredResume(
 ): Promise<{ ok: boolean }> {
   return request(`/api/sessions/${sessionId}/tailored`, {
     method: "PATCH",
+    body: JSON.stringify({ tailored_output: tailored }),
+  });
+}
+
+/** Save polished resume and sync master profile + RAG vectors (name, dates, titles). */
+export async function commitTailoredResume(
+  sessionId: string,
+  tailored: TailoredResumeOutput,
+): Promise<{ ok: boolean }> {
+  return request(`/api/sessions/${sessionId}/tailored/commit`, {
+    method: "POST",
     body: JSON.stringify({ tailored_output: tailored }),
   });
 }

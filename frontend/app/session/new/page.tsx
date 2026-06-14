@@ -12,6 +12,7 @@ import {
   createSession,
   saveUserInfo,
   submitJD,
+  checkSession,
   type JDPayload,
   type ParsedResume,
   type UserInfoPayload,
@@ -48,21 +49,32 @@ function NewSessionContent() {
 
   useEffect(() => {
     async function initSession() {
-      const existing = sessionStorage.getItem("smart_resume_session_id");
-      if (existing) {
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/sessions/${existing}`
-          );
-          if (res.ok) {
-            setSessionId(existing);
-            return;
+      // No ?step= param means the user explicitly navigated to /session/new
+      // (e.g. clicked "New session" in the nav while mid-wizard).  Always
+      // create a fresh session in that case — never reuse the in-progress one.
+      const isFreshStart = !searchParams.get("step");
+
+      if (!isFreshStart) {
+        const existing = sessionStorage.getItem("smart_resume_session_id");
+        if (existing) {
+          try {
+            const res = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/sessions/${existing}`
+            );
+            if (res.ok) {
+              setSessionId(existing);
+              return;
+            }
+          } catch {
+            // backend unreachable — fall through to create
           }
-        } catch {
-          // backend unreachable — fall through to create
+          sessionStorage.removeItem("smart_resume_session_id");
         }
+      } else {
+        // Discard any in-progress session so the new one starts clean.
         sessionStorage.removeItem("smart_resume_session_id");
       }
+
       try {
         const r = await createSession();
         setSessionId(r.session_id);
@@ -136,6 +148,42 @@ function NewSessionContent() {
     router.replace(`/session/new?step=${s}`);
   };
 
+  // Browser back/forward (and explicit "New session" clicks): keep wizard
+  // step aligned with the URL.  A missing ?step= param means the user
+  // navigated to /session/new fresh — reset to the first step so the wizard
+  // doesn't stay frozen on whatever step it was on before.
+  useEffect(() => {
+    const raw = searchParams.get("step");
+    if (!raw || !STEPS.includes(raw as Step)) {
+      // No valid step param → treat as fresh start; clear in-memory wizard state.
+      if (step !== "ai") {
+        setStep("ai");
+        setParsedResume(null);
+        setJdText("");
+        setSessionId(null);
+      }
+      return;
+    }
+    const urlStep = raw as Step;
+    if (urlStep !== step) setStep(urlStep);
+  }, [searchParams, step]);
+
+  // If user backs into the wizard after finishing, skip to the live session.
+  useEffect(() => {
+    if (step !== "info" || !sessionId) return;
+    let cancelled = false;
+    checkSession(sessionId)
+      .then((s) => {
+        if (!cancelled && s.phase1_complete) {
+          router.replace(`/session/${sessionId}?step=keywords`);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [step, sessionId, router]);
+
   const handleAiComplete = (p: string, m: string) => {
     setProvider(p);
     setModel(m);
@@ -167,7 +215,8 @@ function NewSessionContent() {
     setLoading(true);
     try {
       await saveUserInfo(sessionId, info);
-      router.push(`/session/${sessionId}?step=keywords`);
+      sessionStorage.removeItem("smart_resume_session_id");
+      router.replace(`/session/${sessionId}?step=keywords`);
     } finally {
       setLoading(false);
     }
@@ -175,16 +224,25 @@ function NewSessionContent() {
 
   const stepIndex = STEPS.indexOf(step);
 
+  function handleWizardBack() {
+    if (stepIndex <= 0) {
+      router.push("/dashboard");
+      return;
+    }
+    goTo(STEPS[stepIndex - 1]!);
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="max-w-2xl mx-auto px-6 py-12">
 
-        <a
-          href="/"
+        <button
+          type="button"
+          onClick={handleWizardBack}
           className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-8 transition-colors"
         >
           ← Back
-        </a>
+        </button>
 
         {/* Progress bar */}
         <div className="flex items-center gap-2 mb-10">
@@ -257,6 +315,7 @@ function NewSessionContent() {
                 token={session?.backendAccessToken ?? undefined}
                 onParsed={handleResumeParsed}
                 hasMasterResume={hasMasterResume}
+                onMasterResumeSaved={() => setHasMasterResume(true)}
               />
             </div>
           )}

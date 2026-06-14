@@ -2,11 +2,27 @@ PHASE 4 — QA SELF-CHECK + ATS GUIDANCE
 
 Your task: evaluate the tailored resume against the 8-point QA checklist AND produce ATS score guidance. Be strict and objective.
 
+Skill format note (REQUIRED reading):
+- Skills are intentionally presented as 3-5 CATEGORY LINES in the format "Category Name: skill1, skill2, skill3" (JobRight/ATS-optimized).
+- This is the CORRECT format. Do NOT flag categorized skills as a format issue, do NOT recommend converting to a flat list, do NOT count category headings as duplicate skills.
+- When checking whether a keyword is in Skills, scan the entries inside the colon-separated lists, not just the category names.
+
+━━━ IMPORTANT: ATS SCORE vs HUMAN REVIEW ━━━
+Real ATS scanners primarily check: keyword presence, keyword density, section headers, and parseable structure.
+Real ATS scanners do NOT check: whether bullets have metrics, tone of language, action verb strength, or sentence style.
+Items 3–5 below are human-reviewer quality signals. Weight them lower than items 1–2 in the ats_score.
+The ats_score should primarily reflect how well must-have keywords are placed — not whether every bullet has a percentage.
+
 Checklist items to evaluate:
 1. "Tailored to one specific JD" — are all sections clearly targeting this specific role?
 2. "Top JD keywords in Skills, Experience, Summary" — does each of the top 5-8 must-have keywords appear in at least two of: Skills, an Experience bullet, and the Summary?
-   IMPORTANT: Read the resume carefully. If a keyword already appears in the Skills section, do NOT suggest adding it to Skills again. Only create a blocking_issue for the section(s) where the keyword is genuinely absent. If the keyword is in Skills but missing from Experience and Summary, the suggestion must say something like "Reinforce [keyword] in an Experience bullet or your Professional Summary — it currently only appears in the Skills section." Never suggest adding a keyword to a section where it is already present.
-3. "Bullets start with action verbs + metrics" — does every single bullet start with an action verb AND include a quantified metric?
+   IMPORTANT: Read the resume carefully. If a keyword already appears anywhere in the Skills section (including inside a "Category: ..." line), do NOT suggest adding it to Skills again. Only create a blocking_issue for the section(s) where the keyword is genuinely absent. If the keyword is in Skills but missing from Experience and Summary, the suggestion must say something like "Reinforce [keyword] in an Experience bullet or your Professional Summary — it currently only appears in the Skills section." Never suggest adding a keyword to a section where it is already present.
+3. "Bullets start with action verbs + metrics" — do most bullets start with an action verb AND include a quantified metric?
+   - Count the total bullets and the number that lack a metric.
+   - 0 unresolved metrics_needed AND ≤15% of bullets without metrics → "pass"
+   - 1–2 unresolved metrics_needed OR 16–30% of bullets without metrics → "warn"
+   - 3+ unresolved metrics_needed OR >30% of bullets without metrics → "fail"
+   Note: the UNRESOLVED METRICS NEEDED list passed in already excludes entries the user resolved by editing bullets.
 4. "Recruiter-friendly language" — is there any internal jargon, acronym not in the JD, or obscure title?
 5. "Only relevant experience included" — are there any bullets or sections with no connection to this JD?
 6. "Within page limits" — is it within 1 page (early/mid) or 2 pages (senior)?
@@ -21,11 +37,27 @@ Rules:
 - user_action_required: list only items the USER must fix (e.g. supply a missing metric). Do not include items the AI already resolved.
 - overall_status: "fail" if any item is fail; "warn" if any item is warn; "pass" only if all pass.
 
+━━━ ATS SCORE CALIBRATION ━━━
+Use these anchors for ats_score. Most tailored resumes land in the 65–85 range.
+
+| Range | Criteria |
+|---|---|
+| 90–100 | 90%+ of must-have keywords in 2+ sections; all bullets have action verb + metric; perfect page length; clean contact |
+| 80–89 | 80%+ of keywords placed in 2+ sections; ≤2 bullets without metrics; minor issues only |
+| 70–79 | 60–79% of keywords placed; 3–5 bullets without metrics; or keyword in only 1 section for 2–3 terms |
+| 60–69 | <60% of keywords placed; or 6+ bullets without metrics; or structural issues |
+| Below 60 | Major keyword gaps, missing critical sections, or completely wrong target role |
+
+A resume with strong keyword coverage but some unquantified bullets should score in the 70–80 range, not below 65.
+NEVER score a resume with 80%+ keyword placement below 65 solely because some bullets lack metrics.
+
 ATS GUIDANCE (required fields — emit all four directly in JSON, no post-processing):
 
 ats_score (0–100):
 - Integer ATS compatibility score for the current tailored resume against this JD.
 - This is NOT the Phase 2 audit score; it reflects post-rewrite ATS readiness only.
+- Keyword placement (checklist #2) is the strongest driver of ats_score.
+- Missing metrics (checklist #3) deduct at most 8–10 points from the ats_score.
 
 score_ceiling (0–100):
 - Maximum ATS score achievable with the current JD + master resume content (before further user edits).

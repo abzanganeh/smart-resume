@@ -9,21 +9,43 @@ Your task: produce a fully tailored version of the candidate's resume, optimized
 - No clichés: "results-driven", "passionate", "dynamic professional" → forbidden.
 - Formula: "[Level] [Title] with [X] years in [domain], specializing in [JD kw1] and [JD kw2]. [Quantified outcome involving JD kw3]. [JD kw4] applied at [scale/company type]."
 
-━━━ SKILLS ━━━
-- Each skill MUST be a short noun phrase: 1–5 words (e.g. "Python", "PyTorch", "AWS SageMaker", "CI/CD pipelines").
-- NEVER write full sentences, competency statements, or descriptive claims as skills (e.g. "Write production-quality code", "Strong foundation in supervised learning", "Proven experience building data platforms" → all FORBIDDEN).
-- Add exact JD keyword phrases that are missing from the existing skill list.
-- Remove entries that are sentences or longer than 6 words.
-- Reorder by JD relevance (most relevant first).
-- Cap at 20 skills total. Prefer specificity over count: "PyTorch" beats "Machine learning frameworks".
+━━━ SKILLS — JobRight-style categories (REQUIRED) ━━━
+Group skills into 3–5 meaningful categories. Each category is ONE item in the skills array:
+  "Category Name: skill1, skill2, skill3"
+
+Examples:
+  "Programming Languages & Frameworks: Python, FastAPI, REST APIs"
+  "AI & Machine Learning: Generative AI, LLMs, RAG, NVIDIA NIM, GPU-accelerated training"
+  "DevOps & Infrastructure: CI/CD pipelines, MLOps, Kubernetes, Docker, containerized environments"
+  "Cloud & Architecture: cloud-native architectures, microservices, AWS"
+  "Engineering Domains: backend engineering, identity & security, data engineering"
+
+Rules:
+- NEVER return a flat list of individual skills — ALWAYS use category lines
+- Categories must map to the JD's core competency areas (choose names relevant to the role)
+- Individual skills within a category are comma-separated, each 1–5 words (short noun phrases)
+- NEVER write standalone sentences as skills — only short noun phrases
+- Add missing JD keyword phrases to the most relevant category
+- Cap at 5 categories, 5–8 skills per category (max 40 terms total)
+- Reorder categories by JD relevance (most important first)
+
+━━━ KEYWORD PLACEMENT — critical for ATS ━━━
+Phase 4 requires each must-have keyword in AT LEAST TWO of: Skills, at least one Experience bullet, Summary.
+Adding a keyword ONLY to Skills is NOT enough — Phase 4 will flag it as a blocking issue.
+For every must-have keyword: verify it appears in Skills AND weave it into at least one Experience bullet OR the Summary.
+If you cannot fit a keyword into an Experience bullet without fabricating, add it to the Summary.
 
 ━━━ EXPERIENCE ━━━
-- For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric, (c) integrate missing must-have keywords using EXACT JD phrasing.
+- For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric ONLY if it appears in the APPROVED METRICS list provided below — do NOT carry forward any number from the original resume unless it is explicitly listed there, (c) integrate missing must-have keywords using EXACT JD phrasing.
+- If no approved metric exists for a role or project, write the strongest possible bullet without a number and add it to metrics_needed. Never inherit or re-use a number from the original resume that is not in the approved list.
+- BULLET COUNT LIMITS (strict): most recent role → max 5 bullets. Every prior role → max 3 bullets. Trim weakest bullets first — never fabricate to fill quota.
 - CRITICAL: If a role has NO bullets relevant to this JD, DO NOT include that role in the experience array at all. Omit the entire entry — a title-only entry is worse than no entry.
 - Add removed bullets to "removed_bullets" for user review.
+- When CURRENT TAILORED RESUME is provided, preserve user-accepted experience entries and bullets unless trimming for limits or improving JD alignment.
 
 ━━━ PROJECTS ━━━
 - ALWAYS include ALL projects from the original resume. Never silently delete a project.
+- BULLET COUNT LIMIT: max 2–3 bullets per project. Keep the most impactful; trim or merge the rest.
 - If a project is not relevant to this JD, include it anyway and add a note in rewrite_notes like "Project X kept — not directly relevant to JD but shows initiative".
 - Enhance project bullets with JD keywords if applicable.
 
@@ -31,8 +53,13 @@ Your task: produce a fully tailored version of the candidate's resume, optimized
 - Keep degree, institution, and year exactly as in the original resume. Do NOT add empty parentheses () for missing years — omit the year field if unknown.
 - Add an optional "bullets" array for relevant coursework, honors, GPA, thesis, or activities if they strengthen the application. Leave bullets as an empty array [] if nothing is relevant.
 
+━━━ CONTACT ━━━
+- Copy contact details EXACTLY from ORIGINAL RESUME. Do NOT invent or guess email addresses, phone numbers, or URLs.
+- If email is not present in the original resume, leave "email" as an empty string.
+
 ━━━ GENERAL CONSTRAINTS ━━━
-- NEVER fabricate metrics, titles, or experience. If a bullet has no metric, keep the structure and add it to metrics_needed.
+- NEVER fabricate metrics, titles, or experience. If a bullet has no metric in the approved list, keep the structure and add it to metrics_needed.
+- Treat every number in the ORIGINAL RESUME as UNVERIFIED unless it appears verbatim in the APPROVED METRICS block below. Unverified numbers must not appear in output bullets.
 - NEVER change job titles, company names, or dates.
 - Keywords must appear verbatim — do not paraphrase JD terms.
 - For every change, add a note to rewrite_notes explaining what changed and why.
@@ -44,7 +71,10 @@ You MUST include ALL fields. Every experience entry with bullets MUST have a non
 {
   "contact": {"name": "...", "email": "...", "phone": "...", "linkedin": "...", "github": "..."},
   "summary": "2-3 sentences, max 60 words, 3-4 exact JD keywords verbatim",
-  "skills": ["Python", "PyTorch", "AWS SageMaker", "CI/CD pipelines"],  // SHORT noun phrases only — NO sentences
+  "skills": [
+    "AI & Machine Learning: Generative AI, LLMs, RAG, PyTorch",
+    "DevOps & Infrastructure: CI/CD pipelines, Kubernetes, Docker, MLOps"
+  ],
   "experience": [
     {
       "title": "EXACT job title — do not change",

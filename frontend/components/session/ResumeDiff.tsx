@@ -2,20 +2,32 @@
 
 import { type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
 import { TailoredEditor } from "./TailoredEditor";
+import type { ResumeSuggestion } from "@/lib/suggestions";
 
 interface Props {
   tailored: TailoredResumeOutput | null;
   streaming: boolean;
   costInfo?: { cost_formatted: string; provider: string; model: string } | null;
   sessionId: string;
-  onEdited?: (updated: TailoredResumeOutput) => void;
+  /** Bump when chat (or external) replaces the full tailored doc so the editor re-syncs. */
+  editorRevision?: number;
+  onEdited?: (
+    updated: TailoredResumeOutput,
+    meta?: { source: "edit" | "undo" | "redo" },
+  ) => void;
+  onVersionSnapshot?: (version: number) => void;
   onScopedRun?: (scope: PhaseRunScope) => void;
   phaseRunning?: boolean;
   suggestionDraft?: string | null;
   onClearSuggestion?: () => void;
+  suggestions?: ResumeSuggestion[];
+  onAcceptSuggestion?: (id: string) => void;
+  onAcceptAllSuggestions?: () => void;
+  onRejectSuggestion?: (id: string) => void;
+  onDismissSuggestion?: (id: string) => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -52,11 +64,18 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, onEdited,
       <TailoredEditor
         initial={tailored}
         sessionId={sessionId}
+        editorSyncKey={editorRevision}
         onSaved={onEdited}
+        onVersionSnapshot={onVersionSnapshot}
         onScopedRun={onScopedRun}
         phaseRunning={phaseRunning}
         suggestionDraft={suggestionDraft}
         onClearSuggestion={onClearSuggestion}
+        suggestions={suggestions}
+        onAcceptSuggestion={onAcceptSuggestion}
+        onAcceptAllSuggestions={onAcceptAllSuggestions}
+        onRejectSuggestion={onRejectSuggestion}
+        onDismissSuggestion={onDismissSuggestion}
       />
     </div>
   );

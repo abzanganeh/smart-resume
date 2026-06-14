@@ -1,7 +1,8 @@
 import Image from "next/image";
 
-const LOGO_WIDTH = 480;
-const LOGO_HEIGHT = 262;
+/** Master asset: `docs/assets/brand/logo.png` → `public/brand/logo.png` (transparent, trimmed). */
+const LOGO_WIDTH = 514;
+const LOGO_HEIGHT = 305;
 
 type BrandLogoProps = {
   className?: string;
@@ -10,7 +11,7 @@ type BrandLogoProps = {
 };
 
 /** Transparent brand mark served from `/brand/logo.png`. */
-export function BrandLogo({ className = "h-9 w-auto", priority = false }: BrandLogoProps) {
+export function BrandLogo({ className = "h-10 w-auto", priority = false }: BrandLogoProps) {
   return (
     <Image
       src="/brand/logo.png"
@@ -19,6 +20,7 @@ export function BrandLogo({ className = "h-9 w-auto", priority = false }: BrandL
       height={LOGO_HEIGHT}
       className={className}
       priority={priority}
+      unoptimized
     />
   );
 }

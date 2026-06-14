@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 const MAX_STEPS = 20;
 
@@ -30,39 +30,35 @@ export function useVersionStack<T>(initial: T) {
     setPresent(next);
   }, []);
 
-  const undo = useCallback(() => {
-    if (pastRef.current.length === 0) return;
+  const reset = useCallback(
+    (next: T) => {
+      pastRef.current = [];
+      futureRef.current = [];
+      setPresent(next);
+      syncFlags();
+    },
+    [syncFlags],
+  );
+
+  const undo = useCallback((): T | null => {
+    if (pastRef.current.length === 0) return null;
     const prev = pastRef.current[pastRef.current.length - 1];
     pastRef.current = pastRef.current.slice(0, -1);
     futureRef.current = [present, ...futureRef.current].slice(0, MAX_STEPS);
     setPresent(prev);
     syncFlags();
+    return prev;
   }, [present, syncFlags]);
 
-  const redo = useCallback(() => {
-    if (futureRef.current.length === 0) return;
+  const redo = useCallback((): T | null => {
+    if (futureRef.current.length === 0) return null;
     const next = futureRef.current[0];
     futureRef.current = futureRef.current.slice(1);
     pastRef.current = [...pastRef.current, present].slice(-MAX_STEPS);
     setPresent(next);
     syncFlags();
+    return next;
   }, [present, syncFlags]);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
-        e.preventDefault();
-        redo();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo]);
-
-  return { present, push, replace, undo, redo, canUndo, canRedo };
+  return { present, push, replace, reset, undo, redo, canUndo, canRedo };
 }

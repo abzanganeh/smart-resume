@@ -14,6 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.orchestrator import run_phase
+from app.agent.phase3_postprocess import normalize_skills_to_categories
+from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
@@ -37,7 +39,14 @@ from app.services.billing.quota import (
 )
 from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
-from app.services.session_store import get_session, reset_phase, update_session
+from app.services.llm_session_config import apply_llm_request_headers
+from app.services.session_store import (
+    get_session,
+    is_phase_lock_held,
+    release_phase_lock,
+    reset_phase,
+    update_session,
+)
 
 MAX_PHASE3_VERSIONS = 20
 
@@ -141,6 +150,7 @@ async def trigger_phase(
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
+    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
@@ -167,15 +177,34 @@ async def trigger_phase(
             detail="Phase 3 must complete before a scoped regeneration.",
         )
 
+    # Force runs always win — explicitly clear stale state before the lock check
+    # so the user can recover from a phase that crashed mid-run (e.g. backend
+    # restart left status="running" and the Redis lock orphaned).
+    if body.force:
+        await reset_phase(session_id, phase)
+        session = await get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
     phase_status = getattr(session, f"phase{phase}_status")
     if phase_status == PhaseStatus.running:
-        raise HTTPException(status_code=409, detail=f"Phase {phase} is already running.")
+        # Self-heal: if Redis no longer holds the lock, the previous run
+        # died without releasing it. Treat the running flag as stale.
+        if not await is_phase_lock_held(session_id, phase):
+            await reset_phase(session_id, phase)
+            session = await get_session(session_id)
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+        else:
+            raise HTTPException(
+                status_code=409, detail=f"Phase {phase} is already running."
+            )
 
     # Master resume is optional — Phase 3 runs with the session resume when
     # no chunks are present, so we no longer block here. The retrieval
     # service handles zero-chunk gracefully by skipping the retrieval step.
 
-    if body.scope is not None and user_id:
+    if body.scope is not None and user_id and not should_skip_billing_quota():
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -191,10 +220,16 @@ async def trigger_phase(
                 except AccountSuspendedError:
                     raise HTTPException(status_code=403, detail={"code": "account_suspended"})
                 except InsufficientCreditsError:
-                    raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "insufficient_credits",
+                            "message": "You're out of credits. Section regeneration costs 1 credit.",
+                        },
+                    )
 
     # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
-    if phase == 4 and user_id:
+    if phase == 4 and user_id and not should_skip_billing_quota():
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -215,23 +250,21 @@ async def trigger_phase(
                 except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError) as exc:
                     raise HTTPException(
                         status_code=402,
-                        detail={"code": "insufficient_credits", "action": "ats_recalc"},
+                        detail={
+                            "code": "insufficient_credits",
+                            "action": "ats_recalc",
+                            "message": "You're out of credits. ATS score recalculation costs 1 credit.",
+                        },
                     ) from exc
 
-    if x_provider and session.provider != x_provider:
-        session.provider = x_provider
-        await update_session(session)
-    if x_model and session.model != x_model:
-        session.model = x_model
-        await update_session(session)
-    if x_api_key:
-        session.byok_api_key = x_api_key
-
-    if body.force:
-        await reset_phase(session_id, phase)
-        session = await get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    apply_llm_request_headers(
+        session,
+        x_use_platform=x_use_platform,
+        x_api_key=x_api_key,
+        x_provider=x_provider,
+        x_model=x_model,
+    )
+    await update_session(session)
 
     session.phase_run_requested = phase
     session.phase_run_scope = body.scope
@@ -292,7 +325,11 @@ async def phase_events(session_id: str, phase: int):
         sentinel = object()
         while True:
             try:
-                item = await asyncio.wait_for(event_queue.get(), timeout=60)
+                from app.config import settings as _settings
+
+                item = await asyncio.wait_for(
+                    event_queue.get(), timeout=_settings.SSE_KEEPALIVE_SECONDS
+                )
             except asyncio.TimeoutError:
                 yield "data: {\"event\": \"keepalive\"}\n\n"
                 continue
@@ -314,7 +351,15 @@ async def phase_events(session_id: str, phase: int):
             await event_queue.put(object())
 
     asyncio.create_task(run_and_signal())
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 class TailoredInlinePatch(BaseModel):
@@ -373,6 +418,60 @@ async def post_audit_output(session_id: str, body: AuditPatchRequest):
     return await _apply_audit_patch(session_id, body)
 
 
+def _maybe_embed_edited_bullet(session: "Session", body: dict) -> None:  # type: ignore[name-defined]
+    """Fire-and-forget: embed an accepted experience bullet into the corpus.
+
+    Only embeds when the edit targets a single named experience bullet
+    and the session has an authenticated user.  Skips silently on any
+    missing context so the response is never blocked.
+    """
+    if not settings.DATABASE_URL.strip():
+        return
+
+    user_id_str = getattr(session, "user_id", None)
+    if not user_id_str:
+        return
+
+    section = body.get("section") or (
+        # section_id path: e.g. "experience:Acme Corp"
+        body.get("section_id", "").split(":")[0]
+        if "section_id" in body
+        else ""
+    )
+    if section != "experience":
+        return
+
+    new_text = (body.get("new_text") or body.get("content") or "").strip()
+    if not new_text:
+        return
+
+    company = body.get("company") or (
+        body.get("section_id", "").split(":", 1)[1]
+        if ":" in body.get("section_id", "")
+        else None
+    )
+    bullet_index = body.get("bullet_index")
+
+    try:
+        user_id = uuid.UUID(user_id_str)
+    except ValueError:
+        return
+
+    from app.services.corpus_writer import embed_bullet_fix
+
+    asyncio.create_task(
+        embed_bullet_fix(
+            user_id=user_id,
+            session_id=session.session_id,
+            bullet_text=new_text,
+            company=company,
+            bullet_index=bullet_index,
+            section_type="experience",
+        ),
+        name=f"corpus_bullet:{session.session_id}",
+    )
+
+
 @router.patch("/{session_id}/resume/tailored")
 async def patch_tailored_resume(session_id: str, body: dict):
     """Save inline edits; supports legacy field patches and section_id updates."""
@@ -384,6 +483,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
     output = session.phase3_output
     label = "User edit"
+    skills_edited = False
 
     if "section_id" in body:
         section_id = str(body["section_id"])
@@ -392,8 +492,14 @@ async def patch_tailored_resume(session_id: str, body: dict):
 
         if section_id == "summary":
             output.summary = str(content)
+        elif section_id == "contact":
+            contact = dict(output.contact or {})
+            contact["name"] = str(content).strip()
+            output.contact = contact
+            label = "User edit: contact/name"
         elif section_id == "skills":
             output.skills = list(content) if isinstance(content, list) else output.skills
+            skills_edited = True
         elif section_id.startswith("experience:"):
             company = section_id.split(":", 1)[1]
             for entry in output.experience:
@@ -426,6 +532,18 @@ async def patch_tailored_resume(session_id: str, body: dict):
                         bullets=[text] if text else [],
                     )
                 )
+            elif section == "projects":
+                output.projects.append(
+                    {
+                        "name": str(content.get("title", "Project")),
+                        "description": str(content.get("company", "")),
+                        "bullets": [text] if text else [],
+                    }
+                )
+            elif section == "certifications":
+                cert = text.strip() or str(content.get("title", "")).strip()
+                if cert and cert not in output.certifications:
+                    output.certifications.append(cert)
             label = f"Manual add: {section}"
     else:
         section = body.get("section")
@@ -436,6 +554,11 @@ async def patch_tailored_resume(session_id: str, body: dict):
         if section == "summary":
             output.summary = new_text
             label = "User edit: summary"
+        elif section == "contact" and body.get("new_name") is not None:
+            contact = dict(output.contact or {})
+            contact["name"] = str(body["new_name"]).strip()
+            output.contact = contact
+            label = "User edit: contact/name"
         elif section == "experience" and company is not None and bullet_index is not None:
             for entry in output.experience:
                 if entry.company != company:
@@ -451,8 +574,44 @@ async def patch_tailored_resume(session_id: str, body: dict):
                 entry.bullets = bullets
                 break
             label = f"User edit: experience/{company}"
+        elif section == "experience" and company is not None and body.get("new_title") is not None:
+            new_title = str(body["new_title"]).strip()
+            for entry in output.experience:
+                if entry.company != company:
+                    continue
+                entry.title = new_title
+                break
+            label = f"User edit: experience/{company}/title"
+        elif section == "experience" and company is not None and body.get("new_company") is not None:
+            new_company = str(body["new_company"]).strip()
+            for entry in output.experience:
+                if entry.company == company:
+                    entry.company = new_company
+                    break
+            label = f"User edit: experience/{company}/company"
+        elif section == "experience" and company is not None and body.get("new_dates") is not None:
+            new_dates = str(body["new_dates"]).strip()
+            for entry in output.experience:
+                if entry.company == company:
+                    entry.dates = new_dates
+                    break
+            label = f"User edit: experience/{company}/dates"
+        elif section == "experience" and body.get("delete") is True:
+            exp_index = body.get("experience_index")
+            if exp_index is not None:
+                idx = int(exp_index)
+                if 0 <= idx < len(output.experience):
+                    output.experience.pop(idx)
+                    label = f"User edit: experience/delete/{idx}"
+            elif company is not None:
+                for i, entry in enumerate(output.experience):
+                    if entry.company == company:
+                        output.experience.pop(i)
+                        label = f"User edit: experience/delete/{company}"
+                        break
         elif section == "skills":
             output.skills = body.get("skills", output.skills)
+            skills_edited = True
             label = "User edit: skills"
         elif section == "education" and bullet_index is not None:
             institution = body.get("institution")
@@ -476,6 +635,69 @@ async def patch_tailored_resume(session_id: str, body: dict):
                     entry.bullets = body.get("bullets", entry.bullets)
                     break
             label = f"User edit: education/{institution}"
+        elif section == "education" and body.get("institution") is not None:
+            institution = str(body["institution"])
+            for entry in output.education:
+                if entry.institution != institution:
+                    continue
+                if body.get("new_institution") is not None:
+                    entry.institution = str(body["new_institution"]).strip()
+                if body.get("new_degree") is not None:
+                    entry.degree = str(body["new_degree"]).strip()
+                if body.get("new_year") is not None:
+                    entry.year = str(body["new_year"]).strip()
+                break
+            label = f"User edit: education/{institution}"
+        elif section == "certifications" and body.get("delete") is True:
+            cert_index = body.get("cert_index")
+            if cert_index is not None:
+                idx = int(cert_index)
+                if 0 <= idx < len(output.certifications):
+                    output.certifications.pop(idx)
+                    label = f"User edit: certifications/delete/{idx}"
+        elif section == "projects":
+            project_index = body.get("project_index")
+            if body.get("delete") is True and project_index is not None:
+                idx = int(project_index)
+                if 0 <= idx < len(output.projects):
+                    output.projects.pop(idx)
+                label = f"User edit: projects/delete/{project_index}"
+            elif body.get("add_project") is not None:
+                output.projects.append(body["add_project"])
+                label = "User edit: projects/add"
+            elif project_index is not None:
+                idx = int(project_index)
+                if 0 <= idx < len(output.projects):
+                    raw = output.projects[idx]
+                    proj = dict(raw) if isinstance(raw, dict) else {}
+                    if body.get("new_name") is not None:
+                        proj["name"] = str(body["new_name"]).strip()
+                    if body.get("new_description") is not None:
+                        proj["description"] = str(body["new_description"]).strip()
+                    bullet_index = body.get("bullet_index")
+                    if bullet_index is not None:
+                        bullets = list(proj.get("bullets") or [])
+                        bi = int(bullet_index)
+                        new_text = str(body.get("new_text", ""))
+                        if bi == len(bullets):
+                            if new_text.strip():
+                                bullets.append(new_text)
+                        elif bi < len(bullets):
+                            if new_text.strip():
+                                bullets[bi] = new_text
+                            else:
+                                bullets.pop(bi)
+                        proj["bullets"] = bullets
+                    output.projects[idx] = proj
+                label = f"User edit: projects/{project_index}"
+
+    if skills_edited:
+        must_have = (
+            [k.term for k in session.phase1_output.must_have_keywords]
+            if session.phase1_output
+            else None
+        )
+        output.skills = normalize_skills_to_categories(output.skills, must_have)
 
     version = _append_version_snapshot(session, label=label, output=output)
     session.phase3_output = output
@@ -483,6 +705,11 @@ async def patch_tailored_resume(session_id: str, body: dict):
     session.stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
+
+    # Embed the edited bullet into the corpus so future sessions can
+    # retrieve it.  Only experience bullets carry enough signal — summary
+    # and skills are too session-specific to be useful in cross-session RAG.
+    _maybe_embed_edited_bullet(session, body)
 
     return {
         "version": version.version,
@@ -500,3 +727,29 @@ async def get_versions(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"versions": _versions_payload(session)}
+
+
+@router.post("/{session_id}/resume/versions/{snapshot_id}/restore")
+async def restore_version(session_id: str, snapshot_id: str):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    match = next(
+        (v for v in session.phase3_versions if v.snapshot_id == snapshot_id),
+        None,
+    )
+    if not match:
+        raise HTTPException(status_code=404, detail="Version not found")
+    session.phase3_output = match.output
+    now = datetime.now(timezone.utc)
+    session.stale_since = now
+    session.phase4_stale_since = now
+    await update_session(session)
+    return {
+        "version": match.version,
+        "snapshot_id": match.snapshot_id,
+        "tailored_output": match.output.model_dump(),
+        "stale": {
+            "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
+        },
+    }
