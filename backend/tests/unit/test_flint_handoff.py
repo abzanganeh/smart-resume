@@ -98,3 +98,40 @@ async def test_assert_session_owned_rejects_wrong_user() -> None:
     with pytest.raises(HTTPException) as exc:
         await flint_handoff.assert_session_owned(session.session_id, "owner-b")
     assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "company,title,expected",
+    [
+        ("", "", "New Interview"),
+        ("Acme", "", "Acme"),
+        ("", "Senior Engineer", "Senior Engineer"),
+        ("Acme", "Senior Engineer", "Acme — Senior Engineer"),
+        ("   ", "Engineer", "Engineer"),
+    ],
+)
+def test_jd_handoff_session_name(company: str, title: str, expected: str) -> None:
+    """Session name derivation handles every empty/non-empty company/title combo."""
+    assert flint_handoff._derive_jd_session_name(company.strip(), title.strip()) == expected
+
+
+@pytest.mark.asyncio
+async def test_create_jd_handoff_token_round_trip() -> None:
+    """JD-only handoff payload is well-formed and round-trips through Redis."""
+    token, expires_in = await flint_handoff.create_jd_handoff_token(
+        jd_id="00000000-0000-0000-0000-000000000001",
+        jd_text="  Build distributed systems at Acme Corp.  ",
+        title="Senior Engineer",
+        company="Acme Corp",
+        user_id="user-1",
+    )
+    assert expires_in == 600
+    assert len(token) == 36
+
+    payload = await flint_handoff.redeem_handoff_token(token, client_ip="127.0.0.1")
+    assert payload["session_name"] == "Acme Corp — Senior Engineer"
+    assert payload["jd_text"].startswith("Build distributed systems")
+    assert payload["resume_summary"] == ""
+    assert payload["smart_resume_session_id"] == ""
+    assert payload["jd_id"] == "00000000-0000-0000-0000-000000000001"
+    assert payload["export_version"] == flint_handoff._EXPORT_VERSION
