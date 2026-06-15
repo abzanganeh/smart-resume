@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.db.engine import get_db
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
+from app.models.job_description import JobDescription
 from app.models.resume import ParsedResume
 from app.models.session import BulletFix
 from app.models.userinfo import UserInfo
@@ -40,6 +45,9 @@ class JDRequest(BaseModel):
     jd_url: str | None = None
     provider: str | None = None
     model: str | None = None
+    # When provided, the JobDescription row is updated so subsequent visits
+    # from the extension can detect and reopen the existing session.
+    jd_id: str | None = None
 
 
 async def _structure_resume(raw_text: str, llm) -> ParsedResume:
@@ -147,7 +155,12 @@ async def paste_resume(
 
 
 @router.post("/{session_id}/userinfo")
-async def save_userinfo(session_id: str, body: UserInfo):
+async def save_userinfo(
+    session_id: str,
+    body: UserInfo,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    jd_id: str | None = Query(default=None),
+):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -156,6 +169,24 @@ async def save_userinfo(session_id: str, body: UserInfo):
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
     await sync_dashboard_record_from_session(session)
+
+    # Link extension-saved JD only after wizard info step — not on JD submit alone.
+    if jd_id and session.user_id:
+        try:
+            jd_uuid = uuid.UUID(jd_id)
+            row = (
+                await db.execute(
+                    select(JobDescription).where(
+                        JobDescription.id == jd_uuid,
+                        JobDescription.user_id == uuid.UUID(session.user_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is not None:
+                row.session_id = session_id
+        except (ValueError, Exception):
+            pass
+
     return {"ok": True}
 
 
@@ -266,7 +297,10 @@ async def save_additions(session_id: str, body: AdditionsRequest):
 
 
 @router.post("/{session_id}/jd")
-async def submit_jd(session_id: str, body: JDRequest):
+async def submit_jd(
+    session_id: str,
+    body: JDRequest,
+):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -329,4 +363,5 @@ async def submit_jd(session_id: str, body: JDRequest):
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
     await sync_dashboard_record_from_session(session)
+
     return {"ok": True, "jd_changed": jd_changed}

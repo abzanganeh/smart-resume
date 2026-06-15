@@ -152,6 +152,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
       const res: ChatResponse = await chatWithResume(sessionId, {
         message: text,
         history: buildHistory(),
+        tailored_snapshot: resume,
       });
 
       if (res.patches.length > 0) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
 import { type JDPayload } from "@/lib/api";
+import { uncertainJdHostLabel } from "@/lib/jdCompleteness";
 
 interface Props {
   onSubmit: (payload: JDPayload) => void;
@@ -10,20 +11,39 @@ interface Props {
   selectedModel: string;
   loading?: boolean;
   initialJdText?: string;
+  jdId?: string;
+  showCompletenessWarning?: boolean;
+  sourceUrl?: string | null;
 }
 
 const MAX_JD = 10_000;
 
-export function JDInput({ onSubmit, selectedProvider, selectedModel, loading, initialJdText = "" }: Props) {
+export function JDInput({
+  onSubmit,
+  selectedProvider,
+  selectedModel,
+  loading,
+  initialJdText = "",
+  jdId,
+  showCompletenessWarning = false,
+  sourceUrl,
+}: Props) {
   const [jdText, setJdText] = useState(initialJdText);
-  const [jdUrl, setJdUrl] = useState("");
+  const [jdUrl, setJdUrl] = useState(sourceUrl ?? "");
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (initialJdText) {
       setJdText(initialJdText);
     }
   }, [initialJdText]);
+
+  useEffect(() => {
+    if (sourceUrl) {
+      setJdUrl(sourceUrl);
+    }
+  }, [sourceUrl]);
 
   const handleSubmit = () => {
     setError(null);
@@ -35,14 +55,51 @@ export function JDInput({ onSubmit, selectedProvider, selectedModel, loading, in
       setError(`Job description exceeds ${MAX_JD.toLocaleString()} characters. Paste only the requirements section.`);
       return;
     }
-    onSubmit({ jd_text: jdText, jd_url: jdUrl || undefined, provider: selectedProvider, model: selectedModel });
+    onSubmit({ jd_text: jdText, jd_url: jdUrl || undefined, provider: selectedProvider, model: selectedModel, jd_id: jdId });
   };
+
+  const hostLabel = uncertainJdHostLabel(sourceUrl ?? jdUrl);
 
   return (
     <div className="space-y-4">
+      {showCompletenessWarning && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-2 text-sm">
+              <p className="text-amber-100 font-medium">
+                Review this job description before continuing
+              </p>
+              <p className="text-amber-100/80 leading-relaxed">
+                This posting was auto-captured from the browser extension
+                {hostLabel ? ` (${hostLabel})` : ""}. Some job boards and aggregators
+                hide parts of the listing or summarize requirements, so sections may be
+                missing or reformatted.
+              </p>
+              <p className="text-amber-100/80 leading-relaxed">
+                Scroll through the text below and compare it to the original posting.
+                Paste any missing requirements, qualifications, or benefits directly into
+                the box before you analyze.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              textareaRef.current?.focus();
+              textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            className="text-xs font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+          >
+            Jump to job description text
+          </button>
+        </div>
+      )}
+
       <div>
         <label className="block text-slate-400 text-xs mb-1 font-medium">Paste the job description *</label>
         <textarea
+          ref={textareaRef}
           value={jdText}
           onChange={(e) => setJdText(e.target.value)}
           placeholder="Paste the full job description here…"

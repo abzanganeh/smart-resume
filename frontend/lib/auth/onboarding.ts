@@ -1,4 +1,8 @@
 import type { BackendUser } from "@/auth"
+import {
+  buildSessionNewUrl,
+  getExtensionHandoff,
+} from "@/lib/extensionHandoff"
 
 /** Paths reachable while onboarding is incomplete (AI choice not finished). */
 export const ONBOARDING_EXEMPT_PREFIXES = ["/onboarding", "/profile", "/session/new"]
@@ -32,6 +36,15 @@ export function postAuthLandingPath(
 }
 
 export function postOnboardingDestination(_user?: BackendUser | null): string {
+  if (typeof window !== "undefined") {
+    const stored = sessionStorage.getItem("sr_auth_return_url")
+    if (stored && !stored.startsWith("/auth") && stored !== "/onboarding") {
+      sessionStorage.removeItem("sr_auth_return_url")
+      return stored
+    }
+    const handoff = getExtensionHandoff()
+    if (handoff) return buildSessionNewUrl(handoff)
+  }
   return "/dashboard"
 }
 

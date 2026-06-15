@@ -54,7 +54,18 @@ export default auth(async function proxy(req) {
 
   if (isProtected && !session) {
     const url = new URL("/auth", req.url)
-    url.searchParams.set("callbackUrl", pathname)
+    // Preserve query string (e.g. extension handoff ?jd_id=…&source=extension).
+    url.searchParams.set("callbackUrl", `${pathname}${req.nextUrl.search}`)
+    // Duplicate jd_id at top level — OAuth providers sometimes strip nested
+    // query params from callbackUrl during the redirect round-trip.
+    const jdId = req.nextUrl.searchParams.get("jd_id")
+    if (jdId) {
+      url.searchParams.set("jd_id", jdId)
+      const source = req.nextUrl.searchParams.get("source")
+      if (source) url.searchParams.set("source", source)
+      const jdReview = req.nextUrl.searchParams.get("jd_review")
+      if (jdReview) url.searchParams.set("jd_review", jdReview)
+    }
     return NextResponse.redirect(url)
   }
 

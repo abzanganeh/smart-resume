@@ -306,6 +306,30 @@ function runTests() {
     "one education bullet added",
   );
 
+  const withLongProject: TailoredResumeOutput = {
+    ...base,
+    projects: [
+      {
+        name: "Flint - AI Resume Tailoring Platform and Interview Co-Pilot",
+        description: "",
+        bullets: ["Built desktop app."],
+      },
+    ],
+  };
+  const shortenTitlePatch: ResumePatch = {
+    section: "projects",
+    description: "Shorten project title",
+    project_name: "Flint - AI Resume Tailoring Platform and Interview Co-Pilot",
+    new_project_title: "Flint",
+    new_project_description: "AI Resume Tailoring Platform and Interview Co-Pilot",
+  };
+  const projectTitleResult = applyResumePatch(withLongProject, shortenTitlePatch);
+  assert(projectTitleResult.applied, "project title/description patch applies");
+  assert(
+    projectDisplayName(projectTitleResult.updated.projects[0] as Record<string, unknown>) === "Flint",
+    "project title shortened",
+  );
+
   console.log("\nAll applyResumePatch tests passed.\n");
 }
 

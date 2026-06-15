@@ -547,6 +547,16 @@ export function applyResumePatch(
       }
 
       const proj = { ...(before[projIdx] as Record<string, unknown>) };
+
+      if (effectivePatch.new_project_title?.trim()) {
+        proj.name = effectivePatch.new_project_title.trim();
+        applied = true;
+      }
+      if (effectivePatch.new_project_description != null) {
+        proj.description = effectivePatch.new_project_description.trim();
+        applied = true;
+      }
+
       const bullets = Array.isArray(proj.bullets) ? [...(proj.bullets as string[])] : [];
 
       // Replace all bullets at once
@@ -577,6 +587,11 @@ export function applyResumePatch(
         proj.bullets = bullets;
         updated.projects = before.map((p, i) => (i === projIdx ? proj : p));
         applied = true;
+      } else if (
+        effectivePatch.new_project_title?.trim() ||
+        effectivePatch.new_project_description != null
+      ) {
+        updated.projects = before.map((p, i) => (i === projIdx ? proj : p));
       }
     }
   }

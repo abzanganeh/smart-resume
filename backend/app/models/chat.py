@@ -165,6 +165,20 @@ class ResumePatch(BaseModel):
             "project_bullet_old/new takes priority when both are set."
         ),
     )
+    new_project_title: str | None = Field(
+        default=None,
+        description=(
+            "Short replacement title for an existing project. Set project_name to the "
+            "current projects[].name and new_project_title to the shortened name."
+        ),
+    )
+    new_project_description: str | None = Field(
+        default=None,
+        description=(
+            "One-line subtitle for an existing project. Set project_name to match and "
+            "new_project_description to the replacement (empty string clears it)."
+        ),
+    )
     new_project: NewProject | None = Field(
         default=None,
         description=(
@@ -178,6 +192,13 @@ class ResumePatch(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = Field(default_factory=list)
+    tailored_snapshot: dict | None = Field(
+        default=None,
+        description=(
+            "Client's current tailored resume JSON (includes accepted chat edits). "
+            "When set, used instead of the stored phase3_output for patch generation."
+        ),
+    )
 
 
 class ChatResponse(BaseModel):

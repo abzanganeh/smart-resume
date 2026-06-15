@@ -10,6 +10,7 @@ export interface ExtensionJobDescription {
   text: string;
   source: string;
   created_at: string;
+  session_id: string | null;
 }
 
 export async function getExtensionJobDescription(

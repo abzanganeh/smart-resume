@@ -255,7 +255,7 @@ export function educationBulletAddSuggestions(
   allEducation: TailoredEducation[],
 ): ResumeSuggestion[] {
   return educationSuggestions(suggestions, institution, allEducation).filter(
-    (s) => (s.patch.add_education_bullets?.length ?? 0) > 0,
+    (s) => s.status === "pending" && (s.patch.add_education_bullets?.length ?? 0) > 0,
   );
 }
 
@@ -316,10 +316,79 @@ export function projectReplaceAllSuggestion(
   );
 }
 
-export function newProjectSuggestions(suggestions: ResumeSuggestion[]) {
-  return suggestions.filter(
-    (s) => s.patch.section === "projects" && !!s.patch.new_project?.name?.trim(),
+export function projectTitleSuggestion(
+  suggestions: ResumeSuggestion[],
+  projectName: string,
+): ResumeSuggestion | undefined {
+  return suggestions.find(
+    (s) =>
+      s.status === "pending" &&
+      s.patch.section === "projects" &&
+      s.patch.project_name &&
+      matchProjectName(projectName, s.patch.project_name) &&
+      !!s.patch.new_project_title?.trim(),
   );
+}
+
+export function projectDescriptionSuggestion(
+  suggestions: ResumeSuggestion[],
+  projectName: string,
+): ResumeSuggestion | undefined {
+  return suggestions.find(
+    (s) =>
+      s.status === "pending" &&
+      s.patch.section === "projects" &&
+      s.patch.project_name &&
+      matchProjectName(projectName, s.patch.project_name) &&
+      s.patch.new_project_description !== undefined,
+  );
+}
+
+export function dismissProjectMetaSuggestions(
+  suggestions: ResumeSuggestion[],
+  onDismiss: ((id: string) => void) | undefined,
+  projectName: string,
+) {
+  if (!onDismiss) return;
+  for (const s of suggestions) {
+    if (s.patch.section !== "projects" || s.status !== "pending") continue;
+    if (!s.patch.project_name || !matchProjectName(projectName, s.patch.project_name)) continue;
+    if (s.patch.new_project_title?.trim() || s.patch.new_project_description !== undefined) {
+      onDismiss(s.id);
+    }
+  }
+}
+
+export function newProjectSuggestions(
+  suggestions: ResumeSuggestion[],
+  resume?: TailoredResumeOutput,
+) {
+  return suggestions.filter((s) => {
+    if (s.patch.section !== "projects" || !s.patch.new_project?.name?.trim()) return false;
+    if (s.status !== "pending") return false;
+    if (resume) {
+      const name = s.patch.new_project.name.trim();
+      const alreadyPresent = resume.projects.some((proj) =>
+        matchProjectName(projectDisplayName(proj as Record<string, unknown>), name),
+      );
+      if (alreadyPresent) return false;
+    }
+    return true;
+  });
+}
+
+export function dismissNewProjectSuggestions(
+  suggestions: ResumeSuggestion[],
+  onDismiss: ((id: string) => void) | undefined,
+  projectName: string,
+) {
+  if (!onDismiss) return;
+  for (const s of suggestions) {
+    if (s.patch.section !== "projects" || !s.patch.new_project?.name?.trim()) continue;
+    if (matchProjectName(projectName, s.patch.new_project.name)) {
+      onDismiss(s.id);
+    }
+  }
 }
 
 export function projectRemovalSuggestions(suggestions: ResumeSuggestion[]) {

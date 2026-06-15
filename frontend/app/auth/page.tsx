@@ -15,6 +15,10 @@ import {
 } from "@/lib/auth/api"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
+import {
+  captureExtensionHandoffFromParams,
+  captureExtensionHandoffFromUrl,
+} from "@/lib/extensionHandoff"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -86,6 +90,13 @@ function AuthPageContent() {
     })
   }, [])
 
+  // Persist extension JD handoff before OAuth round-trips strip nested query params.
+  useEffect(() => {
+    const callbackUrl = searchParams.get("callbackUrl")
+    if (callbackUrl) captureExtensionHandoffFromUrl(callbackUrl)
+    captureExtensionHandoffFromParams(searchParams)
+  }, [searchParams])
+
   function doRedirect(
     callbackUrl: string,
     onboardingCompletedAt: string | null | undefined,
@@ -94,6 +105,8 @@ function AuthPageContent() {
     if (dest && dest !== "/auth" && onboardingCompletedAt) {
       router.replace(dest)
     } else if (!onboardingCompletedAt) {
+      // Keep extension / deep-link return paths across onboarding.
+      saveAuthReturnUrl(dest !== "/dashboard" ? dest : undefined)
       router.replace("/onboarding")
     } else {
       router.replace("/dashboard")

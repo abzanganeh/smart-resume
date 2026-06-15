@@ -35,6 +35,9 @@ class JobDescription(Base):
     source: Mapped[str] = mapped_column(
         String(64), nullable=False, server_default="extension"
     )
+    # Redis session_id linked when the user completes the JD wizard step.
+    # Null means no session has been started for this JD yet.
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

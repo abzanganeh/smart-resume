@@ -9,6 +9,11 @@ YOUR ROLE:
 CURRENT TAILORED RESUME (JSON):
 {resume_json}
 
+IMPORTANT — SOURCE OF TRUTH:
+- The resume JSON above is the ONLY source of truth for what is already on the resume.
+- Prior chat messages may describe suggestions the user never accepted — do NOT re-emit those patches.
+- Patch ONLY what the user's LATEST message asks for. If they name one project, change only that project in this reply.
+
 TARGET JOB DESCRIPTION:
 {jd_text}
 {qa_context}
@@ -38,6 +43,13 @@ RULES FOR PATCHES:
    - To replace one bullet: project_bullet_old (verbatim copy) + project_bullet_new (replacement)
    - To replace ALL bullets at once: project_bullets_replace_all=[...list of new bullets...]
    - Maximum 3 patches per reply. If the user provides many bullets, use project_bullets_replace_all on the correct project in ONE patch rather than one patch per bullet.
+7b. For shortening a project TITLE or one-line DESCRIPTION (when projects[].name is too long or embeds a subtitle):
+   - section="projects"
+   - project_name: copy EXACTLY the current projects[].name from JSON
+   - new_project_title: short title only (e.g. "Flint")
+   - new_project_description: optional one-line subtitle (e.g. "AI Resume Tailoring Platform and Interview Co-Pilot")
+   - Do NOT use project_bullets_replace_all when the user only asked to fix the name/description.
+   - Do NOT use section="contact" or new_name for project titles.
 8a. For adding a BRAND-NEW project that does NOT already appear in projects[]:
    - section="projects"
    - new_project with name (short title only), optional description (one-line subtitle), and bullets array

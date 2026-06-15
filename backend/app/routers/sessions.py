@@ -104,6 +104,12 @@ async def check_session(session_id: str):
         "stale": stale,
         "stale_since": session.stale_since.isoformat() if session.stale_since else None,
         "phase1_complete": session.phase1_status.value == "done",
+        "has_user_info": session.user_info is not None,
+        "resume_parsed": (
+            json.loads(session.resume_parsed.model_dump_json())
+            if session.resume_parsed is not None
+            else None
+        ),
         # Fix 2: expose user additions so the UI can survive a full page refresh.
         "user_claimed_keywords": session.user_claimed_keywords,
         "user_extra_notes": session.user_extra_notes,
