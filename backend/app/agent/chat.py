@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import structlog
@@ -14,6 +15,66 @@ from app.models.session import Session
 log = structlog.get_logger("chat_agent")
 
 _SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.txt").read_text()
+
+
+def _normalize_name(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def _names_match(a: str, b: str) -> bool:
+    left = _normalize_name(a)
+    right = _normalize_name(b)
+    if not left or not right:
+        return False
+    return left == right or left in right or right in left
+
+
+def _patch_project_name(patch: ResumePatch) -> str | None:
+    if patch.section != "projects":
+        return None
+    if patch.project_name and patch.project_name.strip():
+        return patch.project_name.strip()
+    if patch.new_project and patch.new_project.name.strip():
+        return patch.new_project.name.strip()
+    return None
+
+
+def _infer_target_projects(message: str, project_names: list[str]) -> list[str] | None:
+    """When the user clearly names one or more projects, constrain patches to those targets."""
+
+    explicit = [
+        m.strip()
+        for m in re.findall(r"Project\s*[—–-]\s*(.+?)(?:\n|$)", message, flags=re.I | re.M)
+        if m.strip()
+    ]
+    if explicit:
+        return explicit
+
+    hits = [name for name in project_names if name.lower() in message.lower()]
+    if len(hits) == 1:
+        return hits
+    return None
+
+
+def _filter_patches_to_message_targets(
+    patches: list[ResumePatch],
+    message: str,
+    project_names: list[str],
+) -> list[ResumePatch]:
+    targets = _infer_target_projects(message, project_names)
+    if not targets:
+        return patches
+
+    filtered: list[ResumePatch] = []
+    for patch in patches:
+        pname = _patch_project_name(patch)
+        if pname is None:
+            if patch.section != "projects":
+                filtered.append(patch)
+            continue
+        if any(_names_match(pname, target) for target in targets):
+            filtered.append(patch)
+    return filtered
 
 
 def _synthesize_description(patch: ResumePatch) -> str:
@@ -50,6 +111,10 @@ def _synthesize_description(patch: ResumePatch) -> str:
             return f"Add project: {patch.new_project.name}"
         if patch.remove_projects:
             return f"Remove project: {patch.remove_projects[0]}"
+        if patch.new_project_title and patch.project_name:
+            return f"Shorten project title: {patch.project_name} → {patch.new_project_title}"
+        if patch.new_project_description is not None and patch.project_name:
+            return f"Update project subtitle for {patch.project_name}"
         if patch.project_bullets_replace_all and patch.project_name:
             return f"Rewrite bullets in {patch.project_name}"
         if patch.project_bullet_old and patch.project_name:
@@ -85,13 +150,23 @@ async def run(
 ) -> ChatResponse:
     """Generate a conversational reply and optional resume patches for the user's message."""
 
-    if session.phase3_output is None:
+    if session.phase3_output is None and not request.tailored_snapshot:
         return ChatResponse(
             reply="No tailored resume exists yet. Please run the Tailored Rewrite phase first, then come back here to make targeted edits.",
             patches=[],
         )
 
-    resume_json = json.dumps(session.phase3_output.model_dump(), indent=2)
+    if request.tailored_snapshot:
+        resume_data = request.tailored_snapshot
+    else:
+        resume_data = session.phase3_output.model_dump()
+
+    resume_json = json.dumps(resume_data, indent=2)
+    project_names = [
+        str(p.get("name", "")).strip()
+        for p in (resume_data.get("projects") or [])
+        if str(p.get("name", "")).strip()
+    ]
     jd_text = session.jd_raw or ""
 
     # Inject Phase 4 QA results when available so the agent can answer
@@ -120,12 +195,23 @@ async def run(
     messages: list[LLMMessage] = [
         LLMMessage(role="system", content=system_content),
         *[LLMMessage(role=m.role, content=m.content) for m in request.history],
-        LLMMessage(role="user", content=request.message),
+        LLMMessage(
+            role="user",
+            content=(
+                "[Latest request — emit patches ONLY for this message, not prior chat turns]\n"
+                f"{request.message}"
+            ),
+        ),
     ]
 
     try:
         result = await complete_structured(
             llm, messages, ChatResponse, max_tokens=4000, temperature=0.3
+        )
+        result.patches = _filter_patches_to_message_targets(
+            result.patches,
+            request.message,
+            project_names,
         )
         return _fill_missing_descriptions(result)
     except Exception as exc:

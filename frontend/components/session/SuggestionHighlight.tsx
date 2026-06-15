@@ -330,7 +330,11 @@ export function InlineFieldSuggestion({
         ? suggestion.patch.new_dates
         : label === "name"
           ? suggestion.patch.new_name
-          : suggestion.patch.new_institution;
+          : label === "project_title"
+            ? suggestion.patch.new_project_title
+            : label === "project_description"
+              ? suggestion.patch.new_project_description
+              : suggestion.patch.new_institution;
 
   if (!proposed) return <span>{current}</span>;
 

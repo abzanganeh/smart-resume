@@ -52,7 +52,7 @@ import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-
 import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
-import { makeSuggestions, type ResumeSuggestion } from "@/lib/suggestions";
+import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
 
 type Step = "keywords" | "audit" | "rewrite" | "export";
 
@@ -388,7 +388,7 @@ function SessionContent() {
     if (patches.length === 0 || !tailored) return;
     setSuggestionError(null);
     const normalized = patches.map((p) => normalizeResumePatch(tailored, p));
-    setPendingSuggestions((prev) => [...prev, ...makeSuggestions(normalized)]);
+    setPendingSuggestions((prev) => mergeSuggestionBatch(prev, normalized));
   }
 
   function acceptSuggestion(id: string) {
@@ -425,9 +425,7 @@ function SessionContent() {
       if (issueQueue.length > 0 && issueQueueIdx < issueQueue.length) {
         advanceIssueQueue(issueQueueIdx);
       }
-      setPendingSuggestions((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, status: "accepted" } : s)),
-      );
+      setPendingSuggestions((prev) => prev.filter((s) => s.id !== id));
       return;
     }
     setSuggestionError(
@@ -470,9 +468,7 @@ function SessionContent() {
     setTailored(current);
     setEditorSyncKey((k) => k + 1);
     setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-    setPendingSuggestions((prev) =>
-      prev.map((s) => acceptedIds.includes(s.id) ? { ...s, status: "accepted" } : s),
-    );
+    setPendingSuggestions((prev) => prev.filter((s) => !acceptedIds.includes(s.id)));
     saveTailoredResume(sessionId, current).catch((err) => {
       setRunError(err instanceof Error ? err.message : "Could not save edits. Please try again.");
     });
