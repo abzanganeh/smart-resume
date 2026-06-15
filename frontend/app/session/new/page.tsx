@@ -1,9 +1,16 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getExtensionJobDescription } from "@/lib/extensionJobDescription";
+import {
+  captureExtensionHandoffFromParams,
+  getExtensionHandoff,
+  buildSessionNewUrl,
+  saveExtensionHandoff,
+} from "@/lib/extensionHandoff";
+import { shouldReviewExtensionJd } from "@/lib/jdCompleteness";
 import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
 import { UserInfoForm } from "@/components/wizard/UserInfoForm";
@@ -41,12 +48,26 @@ function NewSessionContent() {
   // Carry forward between steps
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jdText, setJdText] = useState("");
+  const [jdSourceUrl, setJdSourceUrl] = useState<string | null>(null);
+  const [jdReviewRecommended, setJdReviewRecommended] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const jdLoadedRef = useRef(false);
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("gpt-4o");
   const [aiReady, setAiReady] = useState(false);
   const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
+
+  // Restore extension handoff if OAuth stripped jd_id from the URL.
+  useEffect(() => {
+    const urlHandoff = captureExtensionHandoffFromParams(searchParams);
+    if (urlHandoff) return;
+
+    const stored = getExtensionHandoff();
+    if (stored && !searchParams.get("jd_id")) {
+      router.replace(buildSessionNewUrl(stored));
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     async function initSession() {
@@ -114,8 +135,29 @@ function NewSessionContent() {
   useEffect(() => {
     if (!backendToken) return;
 
-    const jdId = searchParams.get("jd_id");
-    const jdSource = searchParams.get("source");
+    const urlJdId = searchParams.get("jd_id");
+    const storedHandoff = getExtensionHandoff();
+    const jdId = urlJdId ?? storedHandoff?.jd_id ?? null;
+    const jdSource = searchParams.get("source") ?? storedHandoff?.source ?? "extension";
+    const jdReviewFlag =
+      searchParams.get("jd_review") === "1" || storedHandoff?.jd_review === true;
+
+    if (jdId && !urlJdId) {
+      saveExtensionHandoff({
+        jd_id: jdId,
+        source: jdSource,
+        step: storedHandoff?.step ?? "jd",
+        jd_review: jdReviewFlag,
+      });
+      router.replace(
+        buildSessionNewUrl({
+          jd_id: jdId,
+          source: jdSource,
+          step: storedHandoff?.step ?? "jd",
+          jd_review: jdReviewFlag,
+        }),
+      );
+    }
 
     void (async () => {
       try {
@@ -136,19 +178,52 @@ function NewSessionContent() {
 
     if (!jdId) return;
 
+    // Only load the JD once. Subsequent searchParams changes (e.g. goTo("info")
+    // changing the URL) must not reset the wizard back to the JD step.
+    if (jdLoadedRef.current) return;
+
     void (async () => {
       try {
         if (jdSource === "extension") {
           const saved = await getExtensionJobDescription(backendToken, jdId);
           if (saved.text?.trim()) {
+            jdLoadedRef.current = true;
+            setJdSourceUrl(saved.url);
+            setJdReviewRecommended(
+              shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag),
+            );
+
+            // If a session was already linked to this JD, verify it is still
+            // alive and redirect to the existing draft instead of starting over.
+            if (saved.session_id) {
+              try {
+                const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+                const check = await fetch(`${BASE}/api/sessions/${saved.session_id}`, {
+                  headers: { Authorization: `Bearer ${backendToken}` },
+                });
+                if (check.ok) {
+                  router.replace(`/session/${saved.session_id}?step=keywords`);
+                  return;
+                }
+              } catch {
+                // Session expired or unreachable — fall through to wizard.
+              }
+            }
+
             setJdText(saved.text);
             setStep("jd");
-            router.replace(`/session/new?step=jd&jd_id=${jdId}&source=extension`);
+            const reviewParams = shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag)
+              ? "&jd_review=1"
+              : "";
+            router.replace(
+              `/session/new?step=jd&jd_id=${jdId}&source=extension${reviewParams}`,
+            );
           }
           return;
         }
         const job = await getJob(backendToken, jdId);
         if (job.description?.trim()) {
+          jdLoadedRef.current = true;
           setJdText(job.description);
           setStep("jd");
           router.replace(`/session/new?step=jd&jd_id=${jdId}`);
@@ -161,7 +236,16 @@ function NewSessionContent() {
 
   const goTo = (s: Step) => {
     setStep(s);
-    router.replace(`/session/new?step=${s}`);
+    const params = new URLSearchParams();
+    params.set("step", s);
+    const handoff = getExtensionHandoff();
+    const jdId = searchParams.get("jd_id") ?? handoff?.jd_id;
+    const jdSource = searchParams.get("source") ?? handoff?.source;
+    const jdReview = searchParams.get("jd_review") === "1" || handoff?.jd_review === true;
+    if (jdId) params.set("jd_id", jdId);
+    if (jdSource) params.set("source", jdSource);
+    if (jdReview) params.set("jd_review", "1");
+    router.replace(`/session/new?${params.toString()}`);
   };
 
   // Browser back/forward (and explicit "New session" clicks): keep wizard
@@ -212,17 +296,24 @@ function NewSessionContent() {
 
   const handleResumeParsed = (parsed: ParsedResume) => {
     setParsedResume(parsed);
-    goTo("jd");
+    // If JD is already filled (extension flow: JD → Resume → Info), advance to info.
+    // Otherwise follow the normal flow: Resume → JD.
+    goTo(jdText.trim() ? "info" : "jd");
   };
 
-  // JD submitted → save to backend, store text locally, advance to info
+  // JD submitted → save to backend, store text locally, advance to next step.
+  // In the extension flow the user lands directly on JD having skipped resume
+  // upload, so we redirect them to "resume" next. In the normal flow they
+  // already uploaded a resume (parsedResume is set) or have a master resume
+  // saved, so we can go straight to "info".
   const handleJD = async (payload: JDPayload) => {
     if (!sessionId) return;
     setLoading(true);
     setJdText(payload.jd_text);
     try {
       await submitJD(sessionId, { ...payload, provider, model });
-      goTo("info");
+      const hasResume = parsedResume !== null || hasMasterResume === true;
+      goTo(hasResume ? "info" : "resume");
     } finally {
       setLoading(false);
     }
@@ -366,6 +457,9 @@ function NewSessionContent() {
                 selectedModel={model}
                 loading={loading}
                 initialJdText={jdText}
+                jdId={searchParams.get("jd_id") ?? undefined}
+                showCompletenessWarning={jdReviewRecommended}
+                sourceUrl={jdSourceUrl}
               />
             </div>
           )}

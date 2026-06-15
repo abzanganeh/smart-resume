@@ -47,6 +47,7 @@ class JobDescriptionResponse(BaseModel):
     text: str
     source: str
     created_at: str
+    session_id: str | None = None
 
 
 @router.get("/api/job-descriptions/{jd_id}", response_model=JobDescriptionResponse)
@@ -82,6 +83,7 @@ async def get_job_description(
         text=row.text,
         source=row.source,
         created_at=row.created_at.isoformat(),
+        session_id=row.session_id,
     )
 
 

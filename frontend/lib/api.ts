@@ -627,6 +627,7 @@ export interface JDPayload {
   jd_url?: string;
   provider?: string;
   model?: string;
+  jd_id?: string;
 }
 
 export interface LLMModelOption {
