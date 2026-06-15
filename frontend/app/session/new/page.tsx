@@ -21,6 +21,7 @@ import {
   saveUserInfo,
   submitJD,
   checkSession,
+  pasteResumeText,
   type JDPayload,
   type ParsedResume,
   type UserInfoPayload,
@@ -50,6 +51,7 @@ function NewSessionContent() {
   const [jdText, setJdText] = useState("");
   const [jdSourceUrl, setJdSourceUrl] = useState<string | null>(null);
   const [jdReviewRecommended, setJdReviewRecommended] = useState(false);
+  const [infoHydrating, setInfoHydrating] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const jdLoadedRef = useRef(false);
@@ -193,31 +195,32 @@ function NewSessionContent() {
               shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag),
             );
 
-            // If a session was already linked to this JD, verify it is still
-            // alive and redirect to the existing draft instead of starting over.
+            // Resume only when the linked session finished the wizard (info saved
+            // or keywords already run). A JD-only link would hijack refresh mid-flow.
             if (saved.session_id) {
               try {
-                const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-                const check = await fetch(`${BASE}/api/sessions/${saved.session_id}`, {
-                  headers: { Authorization: `Bearer ${backendToken}` },
-                });
-                if (check.ok) {
+                const snap = await checkSession(saved.session_id);
+                if (snap.has_user_info || snap.phase1_complete) {
                   router.replace(`/session/${saved.session_id}?step=keywords`);
                   return;
                 }
               } catch {
-                // Session expired or unreachable — fall through to wizard.
+                // Session expired — continue wizard with this JD text.
               }
             }
 
             setJdText(saved.text);
-            setStep("jd");
-            const reviewParams = shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag)
-              ? "&jd_review=1"
-              : "";
-            router.replace(
-              `/session/new?step=jd&jd_id=${jdId}&source=extension${reviewParams}`,
-            );
+            const urlStep = searchParams.get("step");
+            const onLaterWizardStep = urlStep === "info" || urlStep === "resume";
+            if (!onLaterWizardStep) {
+              setStep("jd");
+              const reviewParams = shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag)
+                ? "&jd_review=1"
+                : "";
+              router.replace(
+                `/session/new?step=jd&jd_id=${jdId}&source=extension${reviewParams}`,
+              );
+            }
           }
           return;
         }
@@ -271,6 +274,44 @@ function NewSessionContent() {
     if (urlStep !== step) setStep(urlStep);
   }, [searchParams, step]);
 
+  // Hydrate resume parse state when landing on info (refresh or master import).
+  useEffect(() => {
+    if (step !== "info" || !sessionId || parsedResume) return;
+
+    let cancelled = false;
+    setInfoHydrating(true);
+    void (async () => {
+      try {
+        const snapshot = await checkSession(sessionId);
+        if (cancelled) return;
+        if (snapshot.resume_parsed) {
+          setParsedResume(snapshot.resume_parsed);
+          return;
+        }
+
+        if (!backendToken) return;
+        const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+        const res = await fetch(`${BASE}/api/profile/resume`, {
+          headers: { Authorization: `Bearer ${backendToken}` },
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { raw_text?: string };
+        if (!data.raw_text?.trim()) return;
+        const result = await pasteResumeText(sessionId, data.raw_text);
+        if (!cancelled) setParsedResume(result.parsed);
+      } catch {
+        // User can fill the form manually or go back to upload resume.
+      } finally {
+        if (!cancelled) setInfoHydrating(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setInfoHydrating(false);
+    };
+  }, [step, sessionId, parsedResume, backendToken]);
+
   // If user backs into the wizard after finishing, skip to the live session.
   useEffect(() => {
     if (step !== "info" || !sessionId) return;
@@ -312,8 +353,44 @@ function NewSessionContent() {
     setJdText(payload.jd_text);
     try {
       await submitJD(sessionId, { ...payload, provider, model });
-      const hasResume = parsedResume !== null || hasMasterResume === true;
-      goTo(hasResume ? "info" : "resume");
+
+      let resumeData: ParsedResume | null = parsedResume;
+
+      if (!resumeData) {
+        try {
+          const snapshot = await checkSession(sessionId);
+          if (snapshot.resume_parsed) {
+            resumeData = snapshot.resume_parsed;
+          }
+        } catch {
+          // continue to profile import
+        }
+      }
+
+      if (!resumeData && backendToken) {
+        try {
+          const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+          const res = await fetch(`${BASE}/api/profile/resume`, {
+            headers: { Authorization: `Bearer ${backendToken}` },
+          });
+          if (res.ok) {
+            const data = (await res.json()) as { raw_text?: string };
+            if (data.raw_text?.trim()) {
+              const result = await pasteResumeText(sessionId, data.raw_text);
+              resumeData = result.parsed;
+            }
+          }
+        } catch {
+          // fall through to resume upload step
+        }
+      }
+
+      if (resumeData) {
+        setParsedResume(resumeData);
+        goTo("info");
+      } else {
+        goTo("resume");
+      }
     } finally {
       setLoading(false);
     }
@@ -324,7 +401,9 @@ function NewSessionContent() {
     if (!sessionId) return;
     setLoading(true);
     try {
-      await saveUserInfo(sessionId, info);
+      const handoff = getExtensionHandoff();
+      const jdId = searchParams.get("jd_id") ?? handoff?.jd_id ?? undefined;
+      await saveUserInfo(sessionId, info, jdId);
       sessionStorage.removeItem("smart_resume_session_id");
       router.replace(`/session/${sessionId}?step=keywords`);
     } finally {
@@ -472,12 +551,16 @@ function NewSessionContent() {
                 We pre-filled everything we found in your resume.
                 Correct anything that looks wrong, then add your target role.
               </p>
-              <UserInfoForm
-                onSubmit={handleUserInfo}
-                loading={loading}
-                parsedResume={parsedResume}
-                jdText={jdText}
-              />
+              {infoHydrating && !parsedResume ? (
+                <p className="text-slate-500 text-sm">Loading your resume details…</p>
+              ) : (
+                <UserInfoForm
+                  onSubmit={handleUserInfo}
+                  loading={loading}
+                  parsedResume={parsedResume}
+                  jdText={jdText}
+                />
+              )}
             </div>
           )}
         </div>

@@ -78,6 +78,19 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
     if (!certsInput) setCertsInput(parsedResume.certifications.join(", "));
   }, [parsedResume]);
 
+  // Extension JD captures often lead with the role title on line 1.
+  useEffect(() => {
+    if (!jdText.trim()) return;
+    const firstLine = jdText.trim().split("\n")[0]?.trim() ?? "";
+    const looksLikeTitle =
+      firstLine.length > 0 &&
+      firstLine.length <= 80 &&
+      !firstLine.includes("|") &&
+      !/^salary:/i.test(firstLine);
+    if (!looksLikeTitle) return;
+    setForm((f) => (f.target_role ? f : { ...f, target_role: firstLine }));
+  }, [jdText]);
+
   const set = <K extends keyof UserInfoPayload>(key: K, value: UserInfoPayload[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 

@@ -31,6 +31,7 @@ import {
   datesSuggestion,
   dismissExperienceBulletSuggestions,
   dismissProjectBulletSuggestions,
+  dismissNewProjectSuggestions,
   educationBulletAddSuggestions,
   educationSuggestions,
   hasPendingEducationSuggestions,
@@ -44,6 +45,9 @@ import {
   pendingSuggestionCount,
   projectRemovalPending,
   projectReplaceAllSuggestion,
+  projectTitleSuggestion,
+  projectDescriptionSuggestion,
+  dismissProjectMetaSuggestions,
   skillChipTone,
   skillsSuggestions,
   contactNameSuggestion,
@@ -797,6 +801,11 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
         return next;
       }),
     }));
+    const project = data.projects[projectIndex] as Record<string, unknown> | undefined;
+    const currentName = String(project?.name ?? "").trim();
+    if (currentName) {
+      dismissProjectMetaSuggestions(suggestions, onDismissSuggestion, currentName);
+    }
   }
 
   async function saveProjectBullet(projectIndex: number, bulletIndex: number, text: string) {
@@ -888,6 +897,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       ...p,
       projects: [...p.projects, project],
     }));
+    dismissNewProjectSuggestions(suggestions, onDismissSuggestion, name);
   }
 
   async function deleteExpBullet(company: string, idx: number) {
@@ -2151,6 +2161,8 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               const bullets = (p.bullets as string[]) ?? [];
               const removalSug = projectRemovalPending(suggestions, projectName);
               const replaceAllSug = projectReplaceAllSuggestion(suggestions, projectName);
+              const titleSug = projectTitleSuggestion(suggestions, projectName);
+              const descSug = projectDescriptionSuggestion(suggestions, projectName);
               const removalTone = removalSug?.status === "accepted"
                 ? "accepted"
                 : removalSug?.status === "pending"
@@ -2197,21 +2209,29 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           </button>
                         </div>
                       ) : (
-                        <p className={`text-sm font-semibold flex items-center gap-1 ${
+                        <p className={`text-sm font-semibold flex items-center gap-1 flex-wrap ${
                           removalTone === "pending" ? "text-red-300 line-through" : "text-slate-100"
                         }`}>
-                          {projectName}
-                          <button
-                            type="button"
-                            title="Edit project name"
-                            onClick={() => {
-                              setEditingProjectField(`${i}:name`);
-                              setEditingProjectValue(projectName);
-                            }}
-                            className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
+                          <InlineFieldSuggestion
+                            current={projectName}
+                            suggestion={titleSug}
+                            label="project_title"
+                            onAccept={acceptSug}
+                            onReject={rejectSug}
+                          />
+                          {!titleSug && (
+                            <button
+                              type="button"
+                              title="Edit project name"
+                              onClick={() => {
+                                setEditingProjectField(`${i}:name`);
+                                setEditingProjectValue(projectName);
+                              }}
+                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
                         </p>
                       )}
                       {(projectDesc || editingProjectField === `${i}:description`) && (
@@ -2235,19 +2255,27 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             </button>
                           </div>
                         ) : (
-                          <p className="text-slate-400 text-xs flex items-center gap-1">
-                            {projectDesc}
-                            <button
-                              type="button"
-                              title="Edit description"
-                              onClick={() => {
-                                setEditingProjectField(`${i}:description`);
-                                setEditingProjectValue(projectDesc);
-                              }}
-                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
+                          <p className="text-slate-400 text-xs flex items-center gap-1 flex-wrap">
+                            <InlineFieldSuggestion
+                              current={projectDesc}
+                              suggestion={descSug}
+                              label="project_description"
+                              onAccept={acceptSug}
+                              onReject={rejectSug}
+                            />
+                            {!descSug && (
+                              <button
+                                type="button"
+                                title="Edit description"
+                                onClick={() => {
+                                  setEditingProjectField(`${i}:description`);
+                                  setEditingProjectValue(projectDesc);
+                                }}
+                                className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            )}
                           </p>
                         )
                       )}
@@ -2330,7 +2358,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
           </div>
         )}
 
-        {newProjectSuggestions(suggestions).map((sug) => (
+        {newProjectSuggestions(suggestions, data).map((sug) => (
           <PendingAdditionCard
             key={sug.id}
             suggestion={sug}

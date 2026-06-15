@@ -122,6 +122,8 @@ export async function checkSession(
   stale: Record<string, string | null>;
   stale_since?: string | null;
   phase1_complete: boolean;
+  has_user_info?: boolean;
+  resume_parsed?: ParsedResume | null;
   user_claimed_keywords: string[];
   user_extra_notes: string;
   bullet_fixes: BulletFixPayload[];
@@ -214,9 +216,11 @@ export async function suggestBulletFixes(
 
 export async function saveUserInfo(
   sessionId: string,
-  info: UserInfoPayload
+  info: UserInfoPayload,
+  jdId?: string,
 ): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/api/sessions/${sessionId}/userinfo`, {
+  const qs = jdId ? `?jd_id=${encodeURIComponent(jdId)}` : "";
+  return request<{ ok: boolean }>(`/api/sessions/${sessionId}/userinfo${qs}`, {
     method: "POST",
     body: JSON.stringify(info),
   });
@@ -1122,6 +1126,8 @@ export interface ResumePatch {
   project_bullet_old?: string;
   project_bullet_new?: string;
   project_bullets_replace_all?: string[];
+  new_project_title?: string;
+  new_project_description?: string;
   new_project?: { name: string; description?: string; bullets: string[] } | null;
 }
 
@@ -1159,7 +1165,11 @@ export async function commitTailoredResume(
 
 export async function chatWithResume(
   sessionId: string,
-  payload: { message: string; history: ChatMessage[] },
+  payload: {
+    message: string;
+    history: ChatMessage[];
+    tailored_snapshot?: TailoredResumeOutput;
+  },
 ): Promise<ChatResponse> {
   return request(`/api/sessions/${sessionId}/chat`, {
     method: "POST",

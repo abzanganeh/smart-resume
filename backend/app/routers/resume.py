@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -155,7 +155,12 @@ async def paste_resume(
 
 
 @router.post("/{session_id}/userinfo")
-async def save_userinfo(session_id: str, body: UserInfo):
+async def save_userinfo(
+    session_id: str,
+    body: UserInfo,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    jd_id: str | None = Query(default=None),
+):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -164,6 +169,24 @@ async def save_userinfo(session_id: str, body: UserInfo):
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
     await sync_dashboard_record_from_session(session)
+
+    # Link extension-saved JD only after wizard info step — not on JD submit alone.
+    if jd_id and session.user_id:
+        try:
+            jd_uuid = uuid.UUID(jd_id)
+            row = (
+                await db.execute(
+                    select(JobDescription).where(
+                        JobDescription.id == jd_uuid,
+                        JobDescription.user_id == uuid.UUID(session.user_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is not None:
+                row.session_id = session_id
+        except (ValueError, Exception):
+            pass
+
     return {"ok": True}
 
 
@@ -277,7 +300,6 @@ async def save_additions(session_id: str, body: AdditionsRequest):
 async def submit_jd(
     session_id: str,
     body: JDRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     session = await get_session(session_id)
     if not session:
@@ -341,23 +363,5 @@ async def submit_jd(
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
     await sync_dashboard_record_from_session(session)
-
-    # Link this session back to the extension-saved JD so subsequent visits
-    # can detect the existing draft and redirect instead of starting fresh.
-    if body.jd_id and session.user_id:
-        try:
-            jd_uuid = uuid.UUID(body.jd_id)
-            row = (
-                await db.execute(
-                    select(JobDescription).where(
-                        JobDescription.id == jd_uuid,
-                        JobDescription.user_id == uuid.UUID(session.user_id),
-                    )
-                )
-            ).scalar_one_or_none()
-            if row is not None:
-                row.session_id = session_id
-        except (ValueError, Exception):
-            pass  # malformed UUID or DB error — non-fatal
 
     return {"ok": True, "jd_changed": jd_changed}
