@@ -39,6 +39,9 @@ services:
       - ALLOWED_ORIGINS=["http://localhost:3000","http://frontend:3000"]
       - DATABASE_URL=postgresql+asyncpg://smart_resume:${POSTGRES_PASSWORD:-password}@postgres:5432/smart_resume
       - APP_ENV=development
+      # OAuth — root .env overrides backend/.env so web + extension share one secret.
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     env_file:
       - ./backend/.env
     depends_on:
@@ -60,14 +63,17 @@ services:
     env_file:
       - path: .env
         required: false
-      - path: ./backend/.env
-        required: false
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - INTERNAL_API_URL=http://backend:8000
       - NEXTAUTH_URL=http://localhost:3000
       - AUTH_TRUST_HOST=true
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-local-docker-dev-secret-change-me}
+      # OAuth — from repo root .env only (do not load backend/.env here; secrets diverge).
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
     depends_on:
       - backend
 

@@ -125,6 +125,11 @@ app.add_middleware(AdminDefaultDenyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    # Browser extension origins are not stable: Chrome uses chrome-extension://<id>,
+    # Firefox uses moz-extension://<random-uuid> (regenerated for every temporary
+    # add-on session). Matching by scheme regex avoids a brittle allowlist while
+    # keeping the extension auth API reachable cross-origin.
+    allow_origin_regex=r"^(chrome-extension|moz-extension)://[A-Za-z0-9._-]+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
