@@ -666,6 +666,8 @@ function friendlyError(code: string): string {
     OAuthBackendSyncPending:
       "SSO sign-in succeeded, but your account wasn't linked to the backend yet. Please sign in with email/password to complete setup, or try again later.",
     OAuthSignin: "Could not initiate SSO. Please try again.",
+    Configuration:
+      "Google sign-in is misconfigured. Rebuild the frontend after syncing GOOGLE_CLIENT_SECRET in .env.",
     OAuthCallback: "SSO callback failed. Please try again.",
     Default: "Something went wrong. Please try again.",
   }
