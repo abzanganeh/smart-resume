@@ -82,6 +82,12 @@ function formatDate(iso: string): string {
   })
 }
 
+function isResumeNotFoundError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const msg = err.message.toLowerCase()
+  return msg.includes("not found") || msg.includes("http 404")
+}
+
 function AtsBadge({
   score,
   delta,
@@ -173,6 +179,7 @@ export function DashboardView({ token }: { token: string }) {
   } | null>(null)
   const [exports, setExports] = useState<ExportListItem[]>([])
   const [masterProfile, setMasterProfile] = useState<ProfileResume | null>(null)
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
   const masterChunkCount =
     masterProfile?.chunk_count ?? summary?.counts.master_chunks ?? 0
@@ -264,12 +271,50 @@ export function DashboardView({ token }: { token: string }) {
     })
   }
 
+  const removeResumesFromList = (ids: Iterable<string>) => {
+    const idSet = new Set(ids)
+    setResumes((prev) => prev.filter((item) => !idSet.has(item.id)))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of idSet) next.delete(id)
+      return next
+    })
+    if (expandedResumeId && idSet.has(expandedResumeId)) {
+      setExpandedResumeId(null)
+    }
+  }
+
+  const refreshAfterDelete = async () => {
+    try {
+      await loadResumes()
+      await loadSummary()
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "Failed to refresh dashboard"
+      if (isStaleAuthError(raw)) {
+        void signOut({ callbackUrl: "/auth?callbackUrl=%2Fdashboard" })
+        return
+      }
+      setError(
+        raw.includes("sqlalchemy") || raw.startsWith("Server error:")
+          ? "We couldn't refresh your dashboard. Please reload the page."
+          : raw,
+      )
+    }
+  }
+
   const handleBulkDelete = async () => {
     if (selected.size === 0) return
-    await bulkResumeAction(token, { action: "delete", ids: [...selected] })
-    setSelected(new Set())
-    await loadResumes()
-    await loadSummary()
+    const ids = [...selected]
+    try {
+      await bulkResumeAction(token, { action: "delete", ids })
+    } catch (e) {
+      if (!isResumeNotFoundError(e)) {
+        setError(e instanceof Error ? e.message : "Bulk delete failed")
+        return
+      }
+    }
+    removeResumesFromList(ids)
+    await refreshAfterDelete()
   }
 
   const handleBulkTag = async () => {
@@ -319,9 +364,27 @@ export function DashboardView({ token }: { token: string }) {
   }
 
   const handleDelete = async (id: string) => {
-    await deleteResume(token, id)
-    await loadResumes()
-    await loadSummary()
+    if (deletingIds.has(id)) return
+
+    setDeletingIds((prev) => new Set(prev).add(id))
+    try {
+      await deleteResume(token, id)
+    } catch (e) {
+      if (!isResumeNotFoundError(e)) {
+        setError(e instanceof Error ? e.message : "Delete failed")
+        return
+      }
+      // Already deleted server-side — drop the stale row and resync.
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+
+    removeResumesFromList([id])
+    await refreshAfterDelete()
   }
 
   if (loading) {
@@ -751,7 +814,19 @@ export function DashboardView({ token }: { token: string }) {
                     <button type="button" onClick={() => void handleRename(r)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg" title="Rename"><Pencil className="w-3.5 h-3.5" /> Name</button>
                     <button type="button" onClick={() => void handleDuplicate(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Copy className="w-3.5 h-3.5" /> Duplicate</button>
                     <button type="button" onClick={() => void downloadResume(token, r.id, "pdf", `${r.jd_company}_resume.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Download className="w-3.5 h-3.5" /> PDF</button>
-                    <button type="button" onClick={() => void handleDelete(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-red-400 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button
+                      type="button"
+                      disabled={deletingIds.has(r.id)}
+                      onClick={() => void handleDelete(r.id)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-red-400 bg-slate-800 px-2.5 py-1.5 rounded-lg disabled:opacity-40"
+                      aria-label={`Delete ${resumeTitle(r)}`}
+                    >
+                      {deletingIds.has(r.id) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   </div>
                 </div>
                 {expandedResumeId === r.id && summary && (

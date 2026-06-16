@@ -451,7 +451,30 @@ async def delete_resume(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, bool]:
-    record = await _get_owned_record(db, user.id, record_id)
+    record = (
+        await db.execute(
+            select(ResumeRecord).where(
+                ResumeRecord.id == record_id,
+                ResumeRecord.user_id == user.id,
+                ResumeRecord.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        # Idempotent delete: row may have been removed in a prior request while
+        # the dashboard list was still stale client-side.
+        already_gone = (
+            await db.execute(
+                select(ResumeRecord.id).where(
+                    ResumeRecord.id == record_id,
+                    ResumeRecord.user_id == user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if already_gone is None:
+            raise HTTPException(status_code=404, detail="Resume record not found")
+        return {"ok": True}
+
     record.deleted_at = datetime.now(timezone.utc)
     return {"ok": True}
 

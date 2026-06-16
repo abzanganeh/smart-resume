@@ -71,6 +71,40 @@ log = structlog.get_logger("auth.extension")
 router = APIRouter(prefix="/api/auth/extension", tags=["auth-extension"])
 
 
+def _is_valid_extension_redirect_uri(redirect_uri: str) -> bool:
+    """Accept the two legitimate extension redirect URIs.
+
+    Chrome uses chrome.identity.getRedirectURL() which returns a URI of the
+    form ``https://<ext-id>.chromiumapp.org/``.  Google already validates that
+    this matches the registered OAuth client, so a suffix-check here is safe.
+
+    Firefox uses the dedicated web-app callback registered in Google Console.
+    """
+    normalised = redirect_uri.rstrip("/")
+    web_callback = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/auth/extension/google/callback"
+    if normalised == web_callback:
+        return True
+    if normalised.endswith(".chromiumapp.org") or ".chromiumapp.org/" in redirect_uri:
+        return True
+    return False
+
+
+def _validate_extension_oauth_redirect(redirect_uri: str) -> None:
+    if not _is_valid_extension_redirect_uri(redirect_uri):
+        web_callback = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/auth/extension/google/callback"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_redirect_uri",
+                "message": (
+                    f"redirect_uri must be {web_callback} (Firefox) "
+                    "or a *.chromiumapp.org URL (Chrome)"
+                ),
+            },
+        )
+
+
+
 class ExtensionLoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=200)
@@ -347,11 +381,12 @@ async def extension_oauth_callback(
 ) -> ExtensionAuthResponse:
     """Exchange a Google OAuth code for extension tokens (body-based, no cookie).
 
-    The extension uses ``chrome.identity.launchWebAuthFlow`` to obtain an
-    authorization code, then POSTs it here with the chromiumapp.org redirect
-    URI that Chrome registered on its behalf.
+    The extension opens Google OAuth in a tab and intercepts the redirect to
+    ``{FRONTEND_BASE_URL}/auth/extension/google/callback``. That URI is shared
+    by Chrome and Firefox (unlike per-browser ``chromiumapp.org`` URLs).
     """
     _require_enabled()
+    _validate_extension_oauth_redirect(payload.redirect_uri)
 
     try:
         profile = await exchange_google_code(payload.code, payload.redirect_uri)

@@ -119,7 +119,9 @@ def main() -> None:
     print("\n--- Then start ---")
     print("  docker compose up --build")
     print("\n--- Google sign-in ---")
-    print("  Redirect URI must include: http://localhost:3000/api/auth/callback/google")
+    print("  Web redirect URI:       http://localhost:3000/api/auth/callback/google")
+    print("  Extension redirect URI: http://localhost:3000/auth/extension/google/callback")
+    print("  Add BOTH in Google Cloud Console → OAuth client → Authorized redirect URIs")
     print("  After rebuild, verify: curl -s http://localhost:3000/api/auth/providers | grep google")
 
 
