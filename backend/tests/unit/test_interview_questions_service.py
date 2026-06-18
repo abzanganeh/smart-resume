@@ -8,9 +8,10 @@ from app.services.questions.service import _load_bank, list_interview_questions
 def test_bank_loads_seed_packs() -> None:
     _load_bank.cache_clear()
     bank = _load_bank()
-    assert len(bank) >= 30
+    assert len(bank) >= 200
     assert any(q.domain == "universal" for q in bank)
     assert any(q.domain == "software_engineering" for q in bank)
+    assert any(q.domain == "finance" for q in bank)
 
 
 def test_list_returns_universal_without_domain() -> None:
@@ -31,7 +32,7 @@ def test_seed_includes_canonical_answers() -> None:
     _load_bank.cache_clear()
     bank = _load_bank()
     answered = [q for q in bank if q.canonical_answer]
-    assert len(answered) >= 3
+    assert len(answered) >= 200
 
 
 def test_role_param_preserves_full_merge_set() -> None:
