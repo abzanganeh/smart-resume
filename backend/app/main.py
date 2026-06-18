@@ -28,6 +28,7 @@ from app.routers import (
     extension_auth,
     fit,
     flint_handoff,
+    interview_questions,
     job_descriptions,
     jobs,
     legal,
@@ -222,6 +223,7 @@ app.include_router(notifications.router)
 app.include_router(account.router)
 app.include_router(export.router)
 app.include_router(flint_handoff.router)
+app.include_router(interview_questions.router)
 app.include_router(job_descriptions.router)
 app.include_router(llm.router)
 # Step 35 - admin domain
