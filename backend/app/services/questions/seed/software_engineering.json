@@ -1,0 +1,126 @@
+{
+  "domain": "software_engineering",
+  "version": 1,
+  "questions": [
+    {
+      "id": "swe-t1-tech-001",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Explain the difference between processes and threads. When would you choose one over the other?"
+    },
+    {
+      "id": "swe-t1-tech-002",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Walk me through how a hash map works under the hood. What happens when there is a collision?"
+    },
+    {
+      "id": "swe-t1-tech-003",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "What is the difference between TCP and UDP? Give a real-world example where you would pick one over the other."
+    },
+    {
+      "id": "swe-t1-tech-004",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Compare optimistic and pessimistic concurrency control. When does each break down?"
+    },
+    {
+      "id": "swe-t1-tech-005",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Walk me through what happens, end to end, when a user types a URL into a browser and hits enter."
+    },
+    {
+      "id": "swe-t1-sd-001",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a URL shortener. Walk me through the data model, the read path, and how you would scale it to a billion URLs."
+    },
+    {
+      "id": "swe-t1-sd-002",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a real-time chat application. How would you handle message ordering, delivery guarantees, and offline users?"
+    },
+    {
+      "id": "swe-t1-sd-003",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a rate limiter for an API gateway. Compare token bucket, leaky bucket, and sliding window approaches."
+    },
+    {
+      "id": "swe-t1-sd-004",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design Twitter's home timeline. How do you handle fan-out for a celebrity with 100 million followers?"
+    },
+    {
+      "id": "swe-t1-sd-005",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a distributed key-value store with strong consistency. How does your design handle network partitions?"
+    },
+    {
+      "id": "swe-t1-sd-006",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a global content delivery network. How do you decide which edge node serves a given user?"
+    },
+    {
+      "id": "swe-t1-sd-007",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a notification service that can deliver push, email, and SMS at a rate of one million per minute."
+    },
+    {
+      "id": "swe-t1-sd-008",
+      "domain": "software_engineering",
+      "category": "system_design",
+      "text": "Design a payment system. What are the consistency and idempotency requirements, and how do you enforce them?"
+    },
+    {
+      "id": "swe-t1-tech-006",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Explain CAP theorem. Walk through a real system you have worked on and the trade-off it made."
+    },
+    {
+      "id": "swe-t1-tech-007",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Describe how an L1 cache, L2 cache, and main memory differ, and how that affects how you write performance-sensitive code."
+    },
+    {
+      "id": "swe-t2-tech-001",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Describe what happens when you call an async function in your language of choice. Where does the work actually run?"
+    },
+    {
+      "id": "swe-t2-tech-002",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "Walk me through how you would design a retry policy for an HTTP client that talks to an external API."
+    },
+    {
+      "id": "swe-t2-tech-003",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "How do you decide between a microservice and a modular monolith for a new product team of five engineers?"
+    },
+    {
+      "id": "swe-t2-tech-004",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "What is the difference between unit, integration, and end-to-end tests? How do you decide what to cover at each level?"
+    },
+    {
+      "id": "swe-t2-tech-005",
+      "domain": "software_engineering",
+      "category": "technical",
+      "text": "How would you debug a memory leak in a long-running service that you only see in production?"
+    }
+  ]
+}
