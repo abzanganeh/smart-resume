@@ -6,7 +6,8 @@
       "id": "uni-intro-001",
       "domain": "universal",
       "category": "introduction",
-      "text": "Tell me about yourself."
+      "text": "Tell me about yourself.",
+      "canonical_answer": "Open with your current role and scope, highlight 2\u20133 relevant accomplishments tied to this job, then connect your trajectory to why this team and role are the right next step."
     },
     {
       "id": "uni-intro-002",
@@ -18,7 +19,8 @@
       "id": "uni-intro-003",
       "domain": "universal",
       "category": "introduction",
-      "text": "Why are you interested in this role, and why now?"
+      "text": "Why are you interested in this role, and why now?",
+      "canonical_answer": "Reference specific responsibilities from the JD, tie them to evidence from your background, and explain what you want to learn or deliver in the first 6\u201312 months."
     },
     {
       "id": "uni-intro-004",
@@ -48,7 +50,8 @@
       "id": "uni-strength-001",
       "domain": "universal",
       "category": "strengths",
-      "text": "What is your greatest strength, and how has it shown up in your work?"
+      "text": "What is your greatest strength, and how has it shown up in your work?",
+      "canonical_answer": "Pick one strength with a concrete example: context, action, measurable outcome, and why it matters for the role you are interviewing for."
     },
     {
       "id": "uni-strength-002",
@@ -150,7 +153,8 @@
       "id": "uni-star-010",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you handled a high-pressure situation. What kept you grounded?"
+      "text": "Tell me about a time you handled a high-pressure situation. What kept you grounded?",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs considered, and a quantified or qualitative result plus what you would do differently."
     },
     {
       "id": "uni-star-011",

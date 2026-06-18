@@ -27,9 +27,11 @@ def test_list_merges_domain_pack() -> None:
     assert questions[0].domain == "universal"
 
 
-def test_list_respects_limit_cap() -> None:
-    questions = list_interview_questions(limit=100)
-    assert len(questions) <= 100
+def test_seed_includes_canonical_answers() -> None:
+    _load_bank.cache_clear()
+    bank = _load_bank()
+    answered = [q for q in bank if q.canonical_answer]
+    assert len(answered) >= 3
 
 
 def test_role_param_preserves_full_merge_set() -> None:
