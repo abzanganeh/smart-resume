@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Request
 
 from app.limiter import limiter
 from app.services.questions.models import InterviewQuestionsResponse
-from app.services.questions.service import list_interview_questions
+from app.services.questions.service import _load_bank, list_interview_questions
 
 router = APIRouter(tags=["interview-questions"])
 
@@ -37,3 +37,24 @@ async def get_interview_questions(
         questions=questions,
         total=len(questions),
     )
+
+
+@router.get("/api/interview-questions/stats")
+@limiter.limit("60/minute")
+async def get_interview_question_stats(request: Request) -> dict[str, int | str]:
+    """Return bank statistics for admin/ops visibility (Phase 11.5 read path)."""
+    del request
+    _load_bank.cache_clear()
+    bank = _load_bank()
+    by_domain: dict[str, int] = {}
+    with_canonical = 0
+    for q in bank:
+        by_domain[q.domain] = by_domain.get(q.domain, 0) + 1
+        if q.canonical_answer:
+            with_canonical += 1
+    return {
+        "total": len(bank),
+        "with_canonical_answer": with_canonical,
+        "domains": len(by_domain),
+        **{f"domain_{k}": v for k, v in sorted(by_domain.items())},
+    }

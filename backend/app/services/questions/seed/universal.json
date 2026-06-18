@@ -1,250 +1,286 @@
 {
   "domain": "universal",
-  "version": 1,
+  "version": 2,
   "questions": [
     {
       "id": "uni-intro-001",
       "domain": "universal",
       "category": "introduction",
       "text": "Tell me about yourself.",
-      "canonical_answer": "Open with your current role and scope, highlight 2\u20133 relevant accomplishments tied to this job, then connect your trajectory to why this team and role are the right next step."
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-002",
       "domain": "universal",
       "category": "introduction",
-      "text": "Walk me through your resume."
+      "text": "Walk me through your resume.",
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-003",
       "domain": "universal",
       "category": "introduction",
       "text": "Why are you interested in this role, and why now?",
-      "canonical_answer": "Reference specific responsibilities from the JD, tie them to evidence from your background, and explain what you want to learn or deliver in the first 6\u201312 months."
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-004",
       "domain": "universal",
       "category": "introduction",
-      "text": "Why this company over others you are talking to?"
+      "text": "Why this company over others you are talking to?",
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-005",
       "domain": "universal",
       "category": "introduction",
-      "text": "Where do you see yourself in five years?"
+      "text": "Where do you see yourself in five years?",
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-006",
       "domain": "universal",
       "category": "introduction",
-      "text": "What are you looking for in your next role that you do not have today?"
+      "text": "What are you looking for in your next role that you do not have today?",
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-intro-007",
       "domain": "universal",
       "category": "introduction",
-      "text": "What questions do you have for me about the role or the team?"
+      "text": "What questions do you have for me about the role or the team?",
+      "canonical_answer": "Open with current role and scope, cite 2\u20133 relevant outcomes, then connect your trajectory to this role and team."
     },
     {
       "id": "uni-strength-001",
       "domain": "universal",
       "category": "strengths",
       "text": "What is your greatest strength, and how has it shown up in your work?",
-      "canonical_answer": "Pick one strength with a concrete example: context, action, measurable outcome, and why it matters for the role you are interviewing for."
+      "canonical_answer": "Name one strength, give a concrete STAR example with measurable impact, and tie it to a requirement from the job description."
     },
     {
       "id": "uni-strength-002",
       "domain": "universal",
       "category": "strengths",
-      "text": "What are you better at than 90 percent of your peers?"
+      "text": "What are you better at than 90 percent of your peers?",
+      "canonical_answer": "Name one strength, give a concrete STAR example with measurable impact, and tie it to a requirement from the job description."
     },
     {
       "id": "uni-strength-003",
       "domain": "universal",
       "category": "strengths",
-      "text": "What would your last manager say is the most valuable thing you brought to the team?"
+      "text": "What would your last manager say is the most valuable thing you brought to the team?",
+      "canonical_answer": "Name one strength, give a concrete STAR example with measurable impact, and tie it to a requirement from the job description."
     },
     {
       "id": "uni-strength-004",
       "domain": "universal",
       "category": "strengths",
-      "text": "Tell me about the accomplishment you are most proud of."
+      "text": "Tell me about the accomplishment you are most proud of.",
+      "canonical_answer": "Name one strength, give a concrete STAR example with measurable impact, and tie it to a requirement from the job description."
     },
     {
       "id": "uni-weakness-001",
       "domain": "universal",
       "category": "weaknesses",
-      "text": "What is a weakness you have actively worked on improving?"
+      "text": "What is a weakness you have actively worked on improving?",
+      "canonical_answer": "Choose a real growth area, show deliberate improvement actions and results, and explain how you manage it in high-stakes work."
     },
     {
       "id": "uni-weakness-002",
       "domain": "universal",
       "category": "weaknesses",
-      "text": "Tell me about a time you failed. What did you take away from it?"
+      "text": "Tell me about a time you failed. What did you take away from it?",
+      "canonical_answer": "Choose a real growth area, show deliberate improvement actions and results, and explain how you manage it in high-stakes work."
     },
     {
       "id": "uni-weakness-003",
       "domain": "universal",
       "category": "weaknesses",
-      "text": "Tell me about a piece of feedback that was hard to hear. What did you do with it?"
+      "text": "Tell me about a piece of feedback that was hard to hear. What did you do with it?",
+      "canonical_answer": "Choose a real growth area, show deliberate improvement actions and results, and explain how you manage it in high-stakes work."
     },
     {
       "id": "uni-weakness-004",
       "domain": "universal",
       "category": "weaknesses",
-      "text": "What is something you would do differently if you could go back to your last role?"
+      "text": "What is something you would do differently if you could go back to your last role?",
+      "canonical_answer": "Choose a real growth area, show deliberate improvement actions and results, and explain how you manage it in high-stakes work."
     },
     {
       "id": "uni-star-001",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you led a project from start to finish."
+      "text": "Tell me about a time you led a project from start to finish.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-002",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to make a decision without enough information."
+      "text": "Tell me about a time you had to make a decision without enough information.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-003",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to resolve a conflict with a colleague."
+      "text": "Tell me about a time you had to resolve a conflict with a colleague.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-004",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to influence someone more senior than you."
+      "text": "Tell me about a time you had to influence someone more senior than you.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-005",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to push back on a decision you disagreed with."
+      "text": "Tell me about a time you had to push back on a decision you disagreed with.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-006",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to work with someone who was very different from you."
+      "text": "Tell me about a time you had to work with someone who was very different from you.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-007",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you went above and beyond your job description."
+      "text": "Tell me about a time you went above and beyond your job description.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-008",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you took on something outside your area of expertise."
+      "text": "Tell me about a time you took on something outside your area of expertise.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-009",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to deliver a project under a tight deadline."
+      "text": "Tell me about a time you had to deliver a project under a tight deadline.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-010",
       "domain": "universal",
       "category": "star_story",
       "text": "Tell me about a time you handled a high-pressure situation. What kept you grounded?",
-      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs considered, and a quantified or qualitative result plus what you would do differently."
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-011",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you turned an unhappy customer or stakeholder around."
+      "text": "Tell me about a time you turned an unhappy customer or stakeholder around.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-012",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you spotted a problem before anyone else did."
+      "text": "Tell me about a time you spotted a problem before anyone else did.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-013",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to make an unpopular decision."
+      "text": "Tell me about a time you had to make an unpopular decision.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-014",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you mentored or coached someone. What changed for them?"
+      "text": "Tell me about a time you mentored or coached someone. What changed for them?",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-015",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to recover from a public mistake."
+      "text": "Tell me about a time you had to recover from a public mistake.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-016",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to manage your own time across competing priorities."
+      "text": "Tell me about a time you had to manage your own time across competing priorities.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-017",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to step into a leadership role you were not formally given."
+      "text": "Tell me about a time you had to step into a leadership role you were not formally given.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-018",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to make a trade-off between speed and quality."
+      "text": "Tell me about a time you had to make a trade-off between speed and quality.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-019",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you had to advocate for something you believed in against pushback."
+      "text": "Tell me about a time you had to advocate for something you believed in against pushback.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-star-020",
       "domain": "universal",
       "category": "star_story",
-      "text": "Tell me about a time you adapted quickly to a major change at work."
+      "text": "Tell me about a time you adapted quickly to a major change at work.",
+      "canonical_answer": "Use STAR: situation with stakes, your specific actions, trade-offs, and a quantified or qualitative outcome plus one lesson learned."
     },
     {
       "id": "uni-beh-001",
       "domain": "universal",
       "category": "behavioural",
-      "text": "How do you handle stress when multiple priorities collide?"
+      "text": "How do you handle stress when multiple priorities collide?",
+      "canonical_answer": "Describe the situation briefly, your approach, collaboration choices, and a clear outcome that demonstrates mature professional judgment."
     },
     {
       "id": "uni-beh-002",
       "domain": "universal",
       "category": "behavioural",
-      "text": "How do you handle disagreement with someone you respect?"
+      "text": "How do you handle disagreement with someone you respect?",
+      "canonical_answer": "Describe the situation briefly, your approach, collaboration choices, and a clear outcome that demonstrates mature professional judgment."
     },
     {
       "id": "uni-beh-003",
       "domain": "universal",
       "category": "behavioural",
-      "text": "How do you keep learning in a field that moves quickly?"
+      "text": "How do you keep learning in a field that moves quickly?",
+      "canonical_answer": "Describe the situation briefly, your approach, collaboration choices, and a clear outcome that demonstrates mature professional judgment."
     },
     {
       "id": "uni-beh-004",
       "domain": "universal",
       "category": "behavioural",
-      "text": "Describe the kind of manager you do your best work for."
+      "text": "Describe the kind of manager you do your best work for.",
+      "canonical_answer": "Describe the situation briefly, your approach, collaboration choices, and a clear outcome that demonstrates mature professional judgment."
     },
     {
       "id": "uni-beh-005",
       "domain": "universal",
       "category": "behavioural",
-      "text": "Why are you leaving your current role?"
+      "text": "Why are you leaving your current role?",
+      "canonical_answer": "Describe the situation briefly, your approach, collaboration choices, and a clear outcome that demonstrates mature professional judgment."
     }
   ]
 }
