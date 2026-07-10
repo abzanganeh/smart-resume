@@ -59,10 +59,17 @@ from app.services.billing.credits import get_balance
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
+    InsufficientCreditsError,
     PriceUnresolvedError,
     RefundError,
     SubscriptionPauseNotAllowedError,
     WebhookSignatureError,
+)
+from app.services.billing.flint_credits import (
+    FLINT_PRODUCT,
+    create_hold,
+    deduct_flint_credits,
+    release_hold,
 )
 from app.services.billing.llm_upgrade import (
     VALID_LLM_UPGRADE_CODES,
@@ -105,6 +112,30 @@ class CreditTransactionItem(BaseModel):
 class CreditTransactionPage(BaseModel):
     items: list[CreditTransactionItem]
     total: int
+
+
+class FlintDeductRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=64)
+    product: str = Field(default=FLINT_PRODUCT, min_length=1, max_length=64)
+    session_id: str = Field(..., min_length=1, max_length=64)
+
+
+class FlintDeductResponse(BaseModel):
+    balance: int
+    transaction_id: str
+
+
+class FlintHoldRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    amount: int = Field(..., gt=0, le=10_000)
+
+
+class FlintHoldResponse(BaseModel):
+    hold_id: str
+
+
+class FlintReleaseHoldRequest(BaseModel):
+    hold_id: str = Field(..., min_length=36, max_length=36)
 
 
 class CheckoutRequest(BaseModel):
@@ -283,6 +314,88 @@ async def credits_transactions(
         for r in rows
     ]
     return CreditTransactionPage(items=items, total=len(items))
+
+
+@router.post("/api/credits/deduct")
+@limiter.limit("30/minute")
+async def credits_deduct(
+    request: Request,
+    payload: FlintDeductRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> FlintDeductResponse:
+    """Flint metered debit — Strategy B Phase 3 scaffold."""
+    try:
+        balance, tx_id = await deduct_flint_credits(
+            db,
+            user_id=user.id,
+            action=payload.action,
+            product=payload.product,
+            session_id=payload.session_id,
+        )
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_credits",
+                "credit_kind": exc.credit_kind,
+                "balance": exc.balance,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_credit_action", "message": str(exc)},
+        ) from exc
+    await db.commit()
+    return FlintDeductResponse(balance=balance, transaction_id=str(tx_id))
+
+
+@router.post("/api/credits/hold")
+@limiter.limit("30/minute")
+async def credits_hold(
+    request: Request,
+    payload: FlintHoldRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> FlintHoldResponse:
+    """Reserve credits for a live session — in-process stub until Postgres holds."""
+    hold_id = create_hold(
+        user_id=user.id,
+        session_id=payload.session_id,
+        amount=payload.amount,
+    )
+    return FlintHoldResponse(hold_id=str(hold_id))
+
+
+@router.post("/api/credits/release-hold")
+@limiter.limit("30/minute")
+async def credits_release_hold(
+    request: Request,
+    payload: FlintReleaseHoldRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, bool]:
+    try:
+        hold_uuid = uuid.UUID(payload.hold_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_hold_id"},
+        ) from exc
+    try:
+        release_hold(hold_id=hold_uuid, user_id=user.id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "hold_not_found"},
+        ) from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "hold_forbidden"},
+        ) from exc
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
