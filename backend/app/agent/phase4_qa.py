@@ -7,10 +7,16 @@ from pathlib import Path
 import structlog
 
 from app.agent.phase3_postprocess import flatten_skill_terms
-from app.agent.phase4_score import compute_ats_score
+from app.agent.phase4_deterministic import (
+    build_blocking_issues_from_score,
+    compute_score_result,
+    issue_anchor_from_dict,
+)
+from app.agent.phase4_narrative import synthesize_phase4_narrative
+from app.agent.phase4_rank import compute_rank_label
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
-from app.models.qa import BlockingIssue, QAOutput
+from app.models.qa import BlockingIssue, IssueAnchor, QAOutput
 from app.models.session import Session
 
 log = structlog.get_logger()
@@ -89,6 +95,10 @@ def _collect_resume_text(tailored) -> str:
         elif isinstance(entry, dict):
             parts.extend(str(v) for v in entry.values() if isinstance(v, (str, int)))
     return " \n ".join(p for p in parts if p)
+
+
+def _issue_anchor_from_dict(anchor: dict[str, int | str] | None) -> IssueAnchor | None:
+    return issue_anchor_from_dict(anchor)
 
 
 async def run(
@@ -223,12 +233,12 @@ async def run(
                     issue = issue.model_copy(update={"suggestion": fixed})
         corrected_issues.append(issue)
     # Inject deterministic findings that the LLM may have missed. The
-    # engine produces 11 axes (keyword presence, dual placement, metrics,
+    # engine produces 12 axes (keyword presence, dual placement, metrics,
     # action verbs, bullet length, resume length, weak phrases, first-person,
-    # buzzwords, sections, contact). Each axis's issues become blocking
-    # issues so the user sees every concrete gap and can ignore the ones
-    # that don't apply.
-    score_result = compute_ats_score(
+    # buzzwords, sections, contact, field completeness). Each axis's issues
+    # become blocking issues so the user sees every concrete gap and can
+    # ignore the ones that don't apply.
+    score_result = compute_score_result(
         tailored, must_have_terms, career_stage=career_stage
     )
 
@@ -239,75 +249,11 @@ async def run(
         for term in _candidate_keywords(issue.suggestion)
     }
 
-    # Keyword issues — generated per-keyword so each one becomes its own
-    # accept/ignore card in the UI rather than a single batched suggestion.
-    for kw in score_result.missing_keywords:
-        if kw.lower() in flagged_terms:
-            continue
-        corrected_issues.append(
-            BlockingIssue(
-                category="keyword",
-                description=f"Missing must-have keyword: {kw}",
-                suggestion=(
-                    f"Add '{kw}' to the Skills section AND reinforce it in an Experience bullet "
-                    "or your Professional Summary. If you don't have this skill, dismiss to ignore."
-                ),
-                impact="high",
-                fix_effort="one_click",
-            )
-        )
-
-    for kw in score_result.single_section_keywords:
-        if kw.lower() in flagged_terms:
-            continue
-        sections = score_result.keyword_section_map.get(kw, [])
-        section_label = sections[0] if sections else "skills"
-        other_targets = [s for s in ("experience", "summary") if s != section_label]
-        target_str = " or ".join(other_targets) if other_targets else "experience"
-        corrected_issues.append(
-            BlockingIssue(
-                category="keyword",
-                description=f"'{kw}' appears only in {section_label}",
-                suggestion=(
-                    f"Reinforce '{kw}' in your {target_str} so it appears in 2+ sections "
-                    "(ATS keyword density rule)."
-                ),
-                impact="high",
-                fix_effort="one_click",
-            )
-        )
-
-    # Non-keyword axes — translate axis issues to blocking_issues with the
-    # right category + impact mapping. Each axis already filters itself to
-    # the top 5 offending bullets so we don't flood the UI.
-    _axis_to_category = {
-        "bullet_metrics": ("metric", "high", "user_input"),
-        "action_verbs": ("bullet", "medium", "manual_rewrite"),
-        "bullet_length": ("bullet", "medium", "manual_rewrite"),
-        "resume_length": ("length", "medium", "manual_rewrite"),
-        "weak_phrases": ("bullet", "high", "one_click"),
-        "first_person": ("bullet", "high", "one_click"),
-        "buzzwords": ("bullet", "medium", "manual_rewrite"),
-        "section_completeness": ("section", "high", "user_input"),
-        "contact_completeness": ("section", "high", "user_input"),
-    }
-    for axis in score_result.axes:
-        if axis.status == "pass":
-            continue
-        mapping = _axis_to_category.get(axis.key)
-        if mapping is None:
-            continue
-        category, impact, fix_effort = mapping
-        for issue_text in axis.issues:
-            corrected_issues.append(
-                BlockingIssue(
-                    category=category,
-                    description=axis.label,
-                    suggestion=issue_text,
-                    impact=impact,
-                    fix_effort=fix_effort,
-                )
-            )
+    corrected_issues = build_blocking_issues_from_score(
+        score_result,
+        existing_issues=corrected_issues,
+        flagged_keyword_terms=flagged_terms,
+    )
 
     output = output.model_copy(update={"blocking_issues": corrected_issues})
 
@@ -326,8 +272,32 @@ async def run(
             "score_axes": [axis.to_dict() for axis in score_result.axes],
             "missing_keywords": score_result.missing_keywords,
             "single_section_keywords": score_result.single_section_keywords,
+            "rank_label": compute_rank_label(score_result.ats_score),
         }
     )
+
+    target_role = ""
+    if user_info and user_info.target_role.strip():
+        target_role = user_info.target_role.strip()
+    elif session.phase1_output and session.phase1_output.role_context.primary_domain:
+        target_role = session.phase1_output.role_context.primary_domain.strip()
+
+    try:
+        narrative = await synthesize_phase4_narrative(
+            llm=llm,
+            score_result=score_result,
+            target_role=target_role,
+            rank_label=output.rank_label,
+        )
+        output = output.model_copy(
+            update={
+                "rank_label": narrative.rank_label,
+                "headline": narrative.headline,
+                "category_summaries": [item.model_dump() for item in narrative.category_summaries],
+            }
+        )
+    except Exception as exc:
+        log.warning("phase4_narrative_failed", error=str(exc))
 
     await event_queue.put({"event": "partial", "phase": 4, "data": json.loads(output.model_dump_json())})
     log.info(

@@ -1,6 +1,7 @@
 "use client";
 
 import { type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
+import type { EntryIssueBadge } from "@/lib/issueAnchors";
 import { TailoredEditor } from "./TailoredEditor";
 import type { ResumeSuggestion } from "@/lib/suggestions";
 
@@ -25,9 +26,10 @@ interface Props {
   onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
+  entryIssueBadges?: Record<string, EntryIssueBadge>;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, entryIssueBadges }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -76,6 +78,7 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         onAcceptAllSuggestions={onAcceptAllSuggestions}
         onRejectSuggestion={onRejectSuggestion}
         onDismissSuggestion={onDismissSuggestion}
+        entryIssueBadges={entryIssueBadges}
       />
     </div>
   );

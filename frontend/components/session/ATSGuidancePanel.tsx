@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
-import { type BlockingIssue, type QAOutput } from "@/lib/api";
+import { type BlockingIssue, type IssueAnchor, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
 
@@ -30,6 +30,10 @@ interface Props {
   onRecalculate?: () => void;
   /** Disables the recalc button while a phase is already in flight. */
   recalculateDisabled?: boolean;
+  /** Scroll the tailored editor to an anchored resume entry. */
+  onScrollToAnchor?: (anchor: IssueAnchor) => void;
+  /** Apply a mechanical one-click fix (e.g. insert missing keyword into Skills). */
+  onApplyMechanicalFix?: (issue: BlockingIssue) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -49,6 +53,28 @@ const IMPACT_STYLES: Record<BlockingIssue["impact"], string> = {
   medium: "bg-amber-400/15 text-amber-300 border-amber-400/30",
   low: "bg-slate-600/40 text-slate-400 border-slate-600",
 };
+
+const RANK_LABELS = {
+  needs_work: "Needs work",
+  fair: "Fair",
+  good: "Good",
+  great: "Great",
+  excellent: "Excellent",
+} as const;
+
+const RANK_STYLES = {
+  needs_work: "bg-red-400/15 text-red-300 border-red-400/30",
+  fair: "bg-amber-400/15 text-amber-300 border-amber-400/30",
+  good: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
+  great: "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
+  excellent: "bg-emerald-400/25 text-emerald-100 border-emerald-400/50",
+} as const;
+
+const NARRATIVE_SEVERITY_STYLES = {
+  minor: "bg-slate-600/30 text-slate-300 border-slate-600",
+  urgent: "bg-amber-400/15 text-amber-300 border-amber-400/30",
+  critical: "bg-red-400/15 text-red-300 border-red-400/30",
+} as const;
 
 function scoreColor(score: number): string {
   if (score >= 70) return "text-green-400";
@@ -192,11 +218,13 @@ function QuickWinCard({
   addressed = false,
   onSkip,
   onFixWithAI,
+  onApplyMechanical,
 }: {
   issue: BlockingIssue;
   addressed?: boolean;
   onSkip: () => void;
   onFixWithAI?: () => void;
+  onApplyMechanical?: () => void;
 }) {
   return (
     <div
@@ -240,6 +268,16 @@ function QuickWinCard({
       </div>
 
       <div className="flex gap-2 flex-wrap">
+        {onApplyMechanical && !addressed && (
+          <button
+            type="button"
+            onClick={onApplyMechanical}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
+          >
+            <Check className="w-3 h-3" />
+            Apply fix
+          </button>
+        )}
         {onFixWithAI && (
           <button
             type="button"
@@ -276,6 +314,7 @@ function BlockingIssueRow({
   addressed = false,
   onSendToChat,
   onStartQueue,
+  onScrollToAnchor,
   selected,
   onToggleSelect,
 }: {
@@ -284,6 +323,7 @@ function BlockingIssueRow({
   addressed?: boolean;
   onSendToChat?: () => void;
   onStartQueue?: () => void;
+  onScrollToAnchor?: (anchor: IssueAnchor) => void;
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
@@ -365,6 +405,15 @@ function BlockingIssueRow({
           <p className="text-[10px] text-slate-600">
             Fix effort: {issue.fix_effort.replace(/_/g, " ")}
           </p>
+          {issue.anchor && onScrollToAnchor && (
+            <button
+              type="button"
+              onClick={() => onScrollToAnchor(issue.anchor!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+            >
+              Jump to entry →
+            </button>
+          )}
           {/* Primary variant: queue-based flow */}
           {onStartQueue && (
             <button
@@ -439,6 +488,8 @@ export function ATSGuidancePanel({
   staleSince = null,
   onRecalculate,
   recalculateDisabled = false,
+  onScrollToAnchor,
+  onApplyMechanicalFix,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -534,12 +585,25 @@ export function ATSGuidancePanel({
       <div className="flex items-center gap-4 flex-wrap">
         <ScoreRing score={output.ats_score} size={ringSize} />
         <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <h2 className={cn("font-bold text-slate-100", variant === "primary" ? "text-lg" : "text-base")}>
               ATS Score
             </h2>
+            {output.rank_label && (
+              <span
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border",
+                  RANK_STYLES[output.rank_label],
+                )}
+              >
+                {RANK_LABELS[output.rank_label]}
+              </span>
+            )}
           </div>
+          {output.headline && (
+            <p className="text-sm text-slate-300 leading-relaxed">{output.headline}</p>
+          )}
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-slate-400">Ceiling</span>
             <span className="text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>
@@ -563,6 +627,42 @@ export function ATSGuidancePanel({
           axes={output.score_axes}
           defaultOpen={variant === "primary"}
         />
+      )}
+
+      {output.category_summaries && output.category_summaries.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-200">Analysis highlights</h3>
+          <div className="space-y-2">
+            {output.category_summaries.map((category) => (
+              <div
+                key={category.category_key}
+                className="border border-slate-700 rounded-lg bg-slate-900/40 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-slate-100">{category.label}</span>
+                  <div className="flex items-center gap-2">
+                    {category.issue_count > 0 && (
+                      <span className="text-xs text-slate-400 tabular-nums">
+                        {category.issue_count} issue{category.issue_count === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border",
+                        NARRATIVE_SEVERITY_STYLES[category.severity],
+                      )}
+                    >
+                      {category.severity}
+                    </span>
+                  </div>
+                </div>
+                {category.why_it_matters && (
+                  <p className="text-xs text-slate-400 leading-relaxed">{category.why_it_matters}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Quick wins */}
@@ -590,6 +690,11 @@ export function ATSGuidancePanel({
                 addressed={addressed}
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
+                onApplyMechanical={
+                  onApplyMechanicalFix && !addressed
+                    ? () => onApplyMechanicalFix(issue)
+                    : undefined
+                }
               />
             );})}
           </div>
@@ -699,6 +804,7 @@ export function ATSGuidancePanel({
                       onStartQueue([issue, ...others]);
                     }
                   : undefined}
+                onScrollToAnchor={onScrollToAnchor}
               />
             );})}
           </div>

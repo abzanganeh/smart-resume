@@ -752,12 +752,19 @@ export interface QAItem {
   note: string;
 }
 
+export interface IssueAnchor {
+  section: "experience" | "projects" | "education";
+  entry_index: number;
+  bullet_index?: number;
+}
+
 export interface BlockingIssue {
   category: "keyword" | "bullet" | "metric" | "format" | "length" | "section";
   description: string;
   suggestion: string;
   impact: "high" | "medium" | "low";
   fix_effort: "one_click" | "user_input" | "manual_rewrite";
+  anchor?: IssueAnchor | null;
 }
 
 export interface ScoreAxis {
@@ -768,6 +775,16 @@ export interface ScoreAxis {
   status: "pass" | "warn" | "fail";
   summary: string;
   issues: string[];
+}
+
+export type RankLabel = "needs_work" | "fair" | "good" | "great" | "excellent";
+
+export interface NarrativeCategorySummary {
+  category_key: string;
+  label: string;
+  severity: "minor" | "urgent" | "critical";
+  issue_count: number;
+  why_it_matters: string;
 }
 
 export interface QAOutput {
@@ -783,6 +800,46 @@ export interface QAOutput {
   score_axes?: ScoreAxis[];
   missing_keywords?: string[];
   single_section_keywords?: string[];
+  rank_label?: RankLabel;
+  headline?: string;
+  category_summaries?: NarrativeCategorySummary[];
+}
+
+export interface CheckupResponse {
+  result: QAOutput;
+}
+
+export async function runCheckup(params: {
+  jdText: string;
+  jobTitle?: string;
+  resumeText?: string;
+  file?: File | null;
+}): Promise<QAOutput> {
+  const form = new FormData();
+  form.append("jd_text", params.jdText.trim());
+  if (params.jobTitle?.trim()) {
+    form.append("job_title", params.jobTitle.trim());
+  }
+  if (params.resumeText?.trim()) {
+    form.append("resume_text", params.resumeText.trim());
+  }
+  if (params.file) {
+    form.append("file", params.file);
+  }
+
+  const res = await fetch(`${BASE}/api/checkup`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const { message, code } = formatApiErrorMessage(body?.detail ?? body, res.status);
+    throw new ApiError(message, res.status, code);
+  }
+
+  const data = (await res.json()) as CheckupResponse;
+  return data.result;
 }
 
 // ── Fit analysis ─────────────────────────────────────────────────────────────

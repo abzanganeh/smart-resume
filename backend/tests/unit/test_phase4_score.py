@@ -1,7 +1,7 @@
 """Deterministic ATS scoring engine tests.
 
 These tests pin the score curve to specific resume shapes so a regression
-in the weights or detection logic shows up immediately. The engine has 11
+in the weights or detection logic shows up immediately. The engine has 12
 axes whose weights total 100; any change to those weights must update both
 the engine and these tests in lockstep.
 """
@@ -15,6 +15,7 @@ from app.agent.phase4_score import (
     compute_ats_score,
 )
 from app.models.rewrite import (
+    TailoredEducationEntry,
     TailoredExperienceEntry,
     TailoredResumeOutput,
 )
@@ -26,14 +27,16 @@ def _resume(
     skills: list[str] | None = None,
     experience: list[dict] | None = None,
     contact: dict | None = None,
+    projects: list[dict] | None = None,
+    education: list[dict] | None = None,
 ) -> TailoredResumeOutput:
     return TailoredResumeOutput(
         contact=contact or {"name": "Jane Doe", "email": "jane@example.com"},
         summary=summary,
         skills=skills or [],
         experience=[TailoredExperienceEntry(**e) for e in (experience or [])],
-        education=[],
-        projects=[],
+        education=[TailoredEducationEntry(**e) for e in (education or [])],
+        projects=projects or [],
         certifications=[],
     )
 
@@ -259,6 +262,73 @@ def test_bullet_length_axis_flags_short_and_long_bullets() -> None:
     result = compute_ats_score(resume, ["Python"])
     axis = _axis(result, "bullet_length")
     assert axis.status != "pass"
+
+
+def test_field_completeness_passes_when_no_projects_or_education() -> None:
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {"title": "Engineer", "company": "Acme", "dates": "2024", "bullets": ["Shipped Python service handling 1M req/day"]}
+        ],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "field_completeness")
+    assert axis.status == "pass"
+    assert axis.issues == []
+
+
+def test_field_completeness_flags_project_missing_name_and_education_missing_institution() -> None:
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {"title": "Engineer", "company": "Acme", "dates": "2024", "bullets": ["Shipped Python service handling 1M req/day"]}
+        ],
+        projects=[{"name": "", "description": "A tool", "bullets": []}],
+        education=[{"degree": "B.S. CS", "institution": "", "year": "2020"}],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "field_completeness")
+    assert axis.status == "fail"
+    assert len(axis.issues) == 2
+    assert any("project" in issue.lower() for issue in axis.issues)
+    assert any("education" in issue.lower() for issue in axis.issues)
+
+
+def test_field_completeness_passes_when_all_entries_have_required_fields() -> None:
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {"title": "Engineer", "company": "Acme", "dates": "2024", "bullets": ["Shipped Python service handling 1M req/day"]}
+        ],
+        projects=[{"name": "Churn Predictor", "description": "ML pipeline", "bullets": []}],
+        education=[{"degree": "B.S. CS", "institution": "State University", "year": "2020"}],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "field_completeness")
+    assert axis.status == "pass"
+    assert axis.issues == []
+
+
+def test_metrics_axis_includes_entry_anchor() -> None:
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {
+                "title": "Engineer",
+                "company": "Acme",
+                "dates": "2024",
+                "bullets": ["Built dashboards without any numbers"],
+            }
+        ],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "bullet_metrics")
+    assert axis.anchored_issues
+    assert axis.anchored_issues[0].anchor == {
+        "section": "experience",
+        "entry_index": 0,
+        "bullet_index": 0,
+    }
 
 
 def test_score_axes_total_to_one_hundred() -> None:

@@ -10,6 +10,7 @@ import {
   buildSessionNewUrl,
   saveExtensionHandoff,
 } from "@/lib/extensionHandoff";
+import { clearCheckupHandoff, getCheckupHandoff } from "@/lib/checkupHandoff";
 import { shouldReviewExtensionJd } from "@/lib/jdCompleteness";
 import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
@@ -127,6 +128,23 @@ function NewSessionContent() {
         setStep("jd");
       }
       return;
+    }
+
+    if (searchParams.get("from") === "checkup") {
+      const handoff = getCheckupHandoff();
+      if (handoff) {
+        let jd = handoff.jdText;
+        const title = handoff.jobTitle.trim();
+        if (title && !jd.toLowerCase().includes(title.toLowerCase())) {
+          jd = `${title}\n\n${jd}`;
+        }
+        setJdText(jd);
+        setStep("jd");
+        if (handoff.resumeText.trim()) {
+          sessionStorage.setItem("sr_checkup_resume_text", handoff.resumeText);
+        }
+        clearCheckupHandoff();
+      }
     }
 
   }, [searchParams, router]);
