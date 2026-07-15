@@ -805,6 +805,43 @@ export interface QAOutput {
   category_summaries?: NarrativeCategorySummary[];
 }
 
+export interface CheckupResponse {
+  result: QAOutput;
+}
+
+export async function runCheckup(params: {
+  jdText: string;
+  jobTitle?: string;
+  resumeText?: string;
+  file?: File | null;
+}): Promise<QAOutput> {
+  const form = new FormData();
+  form.append("jd_text", params.jdText.trim());
+  if (params.jobTitle?.trim()) {
+    form.append("job_title", params.jobTitle.trim());
+  }
+  if (params.resumeText?.trim()) {
+    form.append("resume_text", params.resumeText.trim());
+  }
+  if (params.file) {
+    form.append("file", params.file);
+  }
+
+  const res = await fetch(`${BASE}/api/checkup`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const { message, code } = formatApiErrorMessage(body?.detail ?? body, res.status);
+    throw new ApiError(message, res.status, code);
+  }
+
+  const data = (await res.json()) as CheckupResponse;
+  return data.result;
+}
+
 // ── Fit analysis ─────────────────────────────────────────────────────────────
 
 export type FitLabel = "strong" | "good" | "partial" | "weak"
