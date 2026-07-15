@@ -19,7 +19,15 @@ from app.limiter import limiter
 from app.models.job_description import JobDescription
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
+from app.services.autofill import (
+    RECENT_TAILORED_LIMIT,
+    build_autofill_fields,
+    detect_platform,
+    extract_contact,
+    url_host,
+)
 from app.services.flint_handoff import create_jd_handoff_token
+from app.services.session_store import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["job-descriptions"])
@@ -48,6 +56,128 @@ class JobDescriptionResponse(BaseModel):
     source: str
     created_at: str
     session_id: str | None = None
+
+
+class AutofillFieldPayload(BaseModel):
+    key: str
+    selector: str
+    value: str
+    label: str | None = None
+
+
+class AutofillPayloadResponse(BaseModel):
+    jd_id: str
+    platform: str
+    fields: list[AutofillFieldPayload]
+
+
+class RecentTailoredSessionItem(BaseModel):
+    jd_id: str
+    title: str
+    company: str
+    url_host: str
+    tailored_at: str
+
+
+class RecentTailoredSessionsResponse(BaseModel):
+    sessions: list[RecentTailoredSessionItem]
+
+
+@router.get(
+    "/api/job-descriptions/recent-tailored",
+    response_model=RecentTailoredSessionsResponse,
+)
+@limiter.limit("60/minute")
+async def list_recent_tailored_sessions(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RecentTailoredSessionsResponse:
+    """Recent extension JDs with a completed tailored resume for autofill matching."""
+    rows = (
+        await db.execute(
+            select(JobDescription)
+            .where(
+                JobDescription.user_id == user.id,
+                JobDescription.session_id.isnot(None),
+            )
+            .order_by(JobDescription.created_at.desc())
+            .limit(RECENT_TAILORED_LIMIT * 3)
+        )
+    ).scalars().all()
+
+    sessions: list[RecentTailoredSessionItem] = []
+    for row in rows:
+        if not row.session_id:
+            continue
+        session = await get_session(row.session_id)
+        if session is None or session.phase3_output is None:
+            continue
+        sessions.append(
+            RecentTailoredSessionItem(
+                jd_id=str(row.id),
+                title=row.title or "",
+                company=row.company or "",
+                url_host=url_host(row.url),
+                tailored_at=row.created_at.isoformat(),
+            )
+        )
+        if len(sessions) >= RECENT_TAILORED_LIMIT:
+            break
+
+    return RecentTailoredSessionsResponse(sessions=sessions)
+
+
+@router.get(
+    "/api/job-descriptions/{jd_id}/autofill-payload",
+    response_model=AutofillPayloadResponse,
+)
+@limiter.limit("60/minute")
+async def get_autofill_payload(
+    request: Request,
+    jd_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AutofillPayloadResponse:
+    """Return mapped autofill field values for a tailored extension JD."""
+    try:
+        jd_uuid = uuid.UUID(jd_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found") from exc
+
+    row = (
+        await db.execute(
+            select(JobDescription).where(
+                JobDescription.id == jd_uuid,
+                JobDescription.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    if not row.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "resume_not_tailored_yet"},
+        )
+
+    session = await get_session(row.session_id)
+    if session is None or session.phase3_output is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "resume_not_tailored_yet"},
+        )
+
+    platform = detect_platform(row.url)
+    contact = extract_contact(session)
+    fields = build_autofill_fields(contact, platform)
+
+    return AutofillPayloadResponse(
+        jd_id=str(row.id),
+        platform=platform,
+        fields=[AutofillFieldPayload(**field) for field in fields],
+    )
 
 
 @router.get("/api/job-descriptions/{jd_id}", response_model=JobDescriptionResponse)
