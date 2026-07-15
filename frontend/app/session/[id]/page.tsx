@@ -37,6 +37,7 @@ import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
 import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
+import { tryApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
@@ -130,6 +131,20 @@ function SessionContent() {
   const scrollToIssueAnchor = useCallback((anchor: IssueAnchor) => {
     scrollToResumeAnchor(anchor);
   }, []);
+  const applyMechanicalFix = useCallback(
+    (issue: import("@/lib/api").BlockingIssue) => {
+      if (!tailored) return;
+      const updated = tryApplyMechanicalQuickWin(tailored, issue);
+      if (!updated) return;
+      setTailored(updated);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
+      void saveTailoredResume(sessionId, updated).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
+      });
+    },
+    [tailored, sessionId],
+  );
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
@@ -1220,6 +1235,7 @@ function SessionContent() {
                             onStartQueue={startIssueQueue}
                             onSendToChat={openChatForAtsIssues}
                             onScrollToAnchor={scrollToIssueAnchor}
+                            onApplyMechanicalFix={applyMechanicalFix}
                           />
                         ) : (
                           <p className="text-slate-500 text-xs py-4 text-center">
@@ -1296,6 +1312,7 @@ function SessionContent() {
                     goTo("rewrite");
                   }}
                   onScrollToAnchor={scrollToIssueAnchor}
+                  onApplyMechanicalFix={applyMechanicalFix}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

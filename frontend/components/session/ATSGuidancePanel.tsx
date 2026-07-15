@@ -32,6 +32,8 @@ interface Props {
   recalculateDisabled?: boolean;
   /** Scroll the tailored editor to an anchored resume entry. */
   onScrollToAnchor?: (anchor: IssueAnchor) => void;
+  /** Apply a mechanical one-click fix (e.g. insert missing keyword into Skills). */
+  onApplyMechanicalFix?: (issue: BlockingIssue) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -216,11 +218,13 @@ function QuickWinCard({
   addressed = false,
   onSkip,
   onFixWithAI,
+  onApplyMechanical,
 }: {
   issue: BlockingIssue;
   addressed?: boolean;
   onSkip: () => void;
   onFixWithAI?: () => void;
+  onApplyMechanical?: () => void;
 }) {
   return (
     <div
@@ -264,6 +268,16 @@ function QuickWinCard({
       </div>
 
       <div className="flex gap-2 flex-wrap">
+        {onApplyMechanical && !addressed && (
+          <button
+            type="button"
+            onClick={onApplyMechanical}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
+          >
+            <Check className="w-3 h-3" />
+            Apply fix
+          </button>
+        )}
         {onFixWithAI && (
           <button
             type="button"
@@ -475,6 +489,7 @@ export function ATSGuidancePanel({
   onRecalculate,
   recalculateDisabled = false,
   onScrollToAnchor,
+  onApplyMechanicalFix,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -675,6 +690,11 @@ export function ATSGuidancePanel({
                 addressed={addressed}
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
+                onApplyMechanical={
+                  onApplyMechanicalFix && !addressed
+                    ? () => onApplyMechanicalFix(issue)
+                    : undefined
+                }
               />
             );})}
           </div>
