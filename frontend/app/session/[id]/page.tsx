@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSSE, type SSEEvent } from "@/lib/sse";
@@ -36,6 +36,9 @@ import { MetricsGate } from "@/components/session/MetricsGate";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
+import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
+import { tryApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
+import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
 import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
@@ -119,6 +122,29 @@ function SessionContent() {
   const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
   const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
   const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
+  const entryIssueBadges = useMemo(() => {
+    const visible = (qa?.blocking_issues ?? []).filter(
+      (issue) => !skippedAtsKeys.has(issueKey(issue)),
+    );
+    return summarizeEntryIssueBadges(visible);
+  }, [qa?.blocking_issues, skippedAtsKeys]);
+  const scrollToIssueAnchor = useCallback((anchor: IssueAnchor) => {
+    scrollToResumeAnchor(anchor);
+  }, []);
+  const applyMechanicalFix = useCallback(
+    (issue: import("@/lib/api").BlockingIssue) => {
+      if (!tailored) return;
+      const updated = tryApplyMechanicalQuickWin(tailored, issue);
+      if (!updated) return;
+      setTailored(updated);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
+      void saveTailoredResume(sessionId, updated).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
+      });
+    },
+    [tailored, sessionId],
+  );
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
   const phase4RecalcRef = useRef(false);
@@ -1155,6 +1181,7 @@ function SessionContent() {
                       onAcceptAllSuggestions={acceptAllSuggestions}
                       onRejectSuggestion={rejectSuggestion}
                       onDismissSuggestion={dismissSuggestion}
+                      entryIssueBadges={entryIssueBadges}
                     />
                   </>
                 }
@@ -1207,6 +1234,8 @@ function SessionContent() {
                             onSkipIssue={skipAtsIssue}
                             onStartQueue={startIssueQueue}
                             onSendToChat={openChatForAtsIssues}
+                            onScrollToAnchor={scrollToIssueAnchor}
+                            onApplyMechanicalFix={applyMechanicalFix}
                           />
                         ) : (
                           <p className="text-slate-500 text-xs py-4 text-center">
@@ -1282,6 +1311,8 @@ function SessionContent() {
                     openChatForAtsIssues(msg, issues);
                     goTo("rewrite");
                   }}
+                  onScrollToAnchor={scrollToIssueAnchor}
+                  onApplyMechanicalFix={applyMechanicalFix}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

@@ -62,6 +62,8 @@ import {
   SuggestionActionButtons,
   SummaryHighlight,
 } from "./SuggestionHighlight";
+import { EntryIssueBadgePill } from "./EntryIssueBadge";
+import { entryAnchorKey, resumeAnchorDomId, type EntryIssueBadge } from "@/lib/issueAnchors";
 
 interface Props {
   initial: TailoredResumeOutput;
@@ -79,6 +81,7 @@ interface Props {
   onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
+  entryIssueBadges?: Record<string, EntryIssueBadge>;
 }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -497,7 +500,7 @@ function ScopedBulletList({
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion }: Props) {
+export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, entryIssueBadges = {} }: Props) {
   function acceptSug(id: string) { onAcceptSuggestion?.(id); }
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
 
@@ -1505,6 +1508,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               return (
                 <div
                   key={`exp-${expIndex}-${exp.company}`}
+                  id={resumeAnchorDomId({ section: "experience", entry_index: expIndex })}
                   className={`border rounded-xl overflow-hidden ${
                     deleteTone === "pending"
                       ? "border-red-500/50 bg-red-950/20"
@@ -1698,6 +1702,11 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {entryIssueBadges[entryAnchorKey("experience", expIndex)] && (
+                        <EntryIssueBadgePill
+                          badge={entryIssueBadges[entryAnchorKey("experience", expIndex)]!}
+                        />
+                      )}
                       {exp.keywords_injected?.length > 0 && (
                         <span className="text-xs text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
                           {exp.keywords_injected.length} kw injected
@@ -1786,7 +1795,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             Click a row to expand bullets · use the pencil to edit degree, school, or year
           </p>
           <div className="space-y-3">
-            {data.education.map((edu) => {
+            {data.education.map((edu, eduIndex) => {
               const open = expandedEdu === edu.institution;
               const renameSug = institutionRenameSuggestion(
                 suggestions,
@@ -1809,6 +1818,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               return (
                 <div
                   key={edu.institution}
+                  id={resumeAnchorDomId({ section: "education", entry_index: eduIndex })}
                   className={`border rounded-xl overflow-hidden ${
                     eduPending
                       ? "border-amber-500/50 ring-1 ring-amber-500/25"
@@ -2002,6 +2012,11 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {entryIssueBadges[entryAnchorKey("education", eduIndex)] && (
+                        <EntryIssueBadgePill
+                          badge={entryIssueBadges[entryAnchorKey("education", eduIndex)]!}
+                        />
+                      )}
                       {edu.bullets.length > 0 && (
                         <span className="text-xs text-slate-500">
                           {edu.bullets.length} bullet{edu.bullets.length !== 1 ? "s" : ""}
@@ -2172,6 +2187,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               return (
                 <div
                   key={`project-${i}-${projectName}`}
+                  id={resumeAnchorDomId({ section: "projects", entry_index: i })}
                   className={`border rounded-xl px-4 py-3 ${
                     removalTone === "pending"
                       ? "border-red-500/50 bg-red-950/20"
@@ -2293,6 +2309,11 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {entryIssueBadges[entryAnchorKey("projects", i)] && (
+                        <EntryIssueBadgePill
+                          badge={entryIssueBadges[entryAnchorKey("projects", i)]!}
+                        />
+                      )}
                       {!!p.url && (
                         <a
                           href={String(p.url)}

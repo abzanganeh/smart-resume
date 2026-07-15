@@ -28,6 +28,7 @@ from app.routers import (
     extension_auth,
     fit,
     flint_handoff,
+    checkup,
     interview_questions,
     job_descriptions,
     jobs,
@@ -216,6 +217,7 @@ app.include_router(resume.router)
 app.include_router(phases.router)
 app.include_router(cover_letter.router)
 app.include_router(fit.router)
+app.include_router(checkup.router)
 app.include_router(jobs.router)
 app.include_router(dashboard.router)
 app.include_router(tracker.router)
