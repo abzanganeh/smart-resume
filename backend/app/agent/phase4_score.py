@@ -127,10 +127,11 @@ _W_CONTACT = 5
 _W_METRICS = 15
 _W_ACTION_VERBS = 10
 _W_BULLET_LENGTH = 5
-_W_RESUME_LENGTH = 5
+_W_RESUME_LENGTH = 3
 _W_WEAK_PHRASES = 5
 _W_FIRST_PERSON = 5
-_W_BUZZWORDS = 5
+_W_BUZZWORDS = 3
+_W_FIELD_COMPLETENESS = 4
 
 assert (
     _W_KEYWORD_PRESENCE
@@ -144,6 +145,7 @@ assert (
     + _W_WEAK_PHRASES
     + _W_FIRST_PERSON
     + _W_BUZZWORDS
+    + _W_FIELD_COMPLETENESS
 ) == 100, "Axis weights must sum to 100"
 
 
@@ -687,6 +689,63 @@ def _axis_buzzwords(bullets: list[str], summary: str) -> AxisScore:
     )
 
 
+def _axis_field_completeness(tailored) -> AxisScore:
+    """Every project needs a name; every education entry needs an institution.
+
+    This checks the resume's own data model fields directly — it is not a
+    placeholder-text detector. There is no evidence any literal UI
+    placeholder string (e.g. "Start Date...") is ever persisted into
+    tailored output in this codebase (see the Section 11c correction note
+    in ``docs/IMPLEMENTATION_PLAN.md``); a genuinely empty required field on
+    the model is a real, checkable thing, and that's all this axis flags.
+    """
+
+    issues: list[str] = []
+    total = 0
+    complete = 0
+
+    for entry in getattr(tailored, "projects", []) or []:
+        total += 1
+        name = entry.get("name") if isinstance(entry, dict) else getattr(entry, "name", "")
+        if (name or "").strip():
+            complete += 1
+        else:
+            issues.append("A project entry is missing its name.")
+
+    for entry in getattr(tailored, "education", []) or []:
+        total += 1
+        institution = (
+            entry.get("institution")
+            if isinstance(entry, dict)
+            else getattr(entry, "institution", "")
+        )
+        if (institution or "").strip():
+            complete += 1
+        else:
+            issues.append("An education entry is missing its institution name.")
+
+    if total == 0:
+        return AxisScore(
+            key="field_completeness",
+            label="Field completeness",
+            score=_W_FIELD_COMPLETENESS,
+            max_score=_W_FIELD_COMPLETENESS,
+            status="pass",
+            summary="No project or education entries to check.",
+        )
+
+    ratio = complete / total
+    return AxisScore(
+        key="field_completeness",
+        label="Field completeness",
+        score=ratio * _W_FIELD_COMPLETENESS,
+        max_score=_W_FIELD_COMPLETENESS,
+        status=_status_from_ratio(ratio, pass_at=1.0, warn_at=0.75),
+        summary=f"{complete}/{total} project/education entries have their required fields filled in.",
+        issues=issues,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -700,7 +759,7 @@ def compute_ats_score(
 ) -> ResumeQualityResult:
     """Compute a deterministic 0-100 resume quality score.
 
-    The score is the sum of 11 axes whose weights total 100. Each axis is a
+    The score is the sum of 12 axes whose weights total 100. Each axis is a
     pure function of the resume content and the JD must-have list, so an
     identical input always produces an identical score — no LLM noise.
     """
@@ -723,6 +782,7 @@ def compute_ats_score(
         _axis_weak_phrases(bullets),
         _axis_first_person(bullets, summary_text),
         _axis_buzzwords(bullets, summary_text),
+        _axis_field_completeness(tailored),
     ]
 
     raw = sum(axis.score for axis in axes)

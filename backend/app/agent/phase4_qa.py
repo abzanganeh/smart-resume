@@ -223,11 +223,11 @@ async def run(
                     issue = issue.model_copy(update={"suggestion": fixed})
         corrected_issues.append(issue)
     # Inject deterministic findings that the LLM may have missed. The
-    # engine produces 11 axes (keyword presence, dual placement, metrics,
+    # engine produces 12 axes (keyword presence, dual placement, metrics,
     # action verbs, bullet length, resume length, weak phrases, first-person,
-    # buzzwords, sections, contact). Each axis's issues become blocking
-    # issues so the user sees every concrete gap and can ignore the ones
-    # that don't apply.
+    # buzzwords, sections, contact, field completeness). Each axis's issues
+    # become blocking issues so the user sees every concrete gap and can
+    # ignore the ones that don't apply.
     score_result = compute_ats_score(
         tailored, must_have_terms, career_stage=career_stage
     )
