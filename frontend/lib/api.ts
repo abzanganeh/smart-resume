@@ -770,6 +770,16 @@ export interface ScoreAxis {
   issues: string[];
 }
 
+export type RankLabel = "needs_work" | "fair" | "good" | "great" | "excellent";
+
+export interface NarrativeCategorySummary {
+  category_key: string;
+  label: string;
+  severity: "minor" | "urgent" | "critical";
+  issue_count: number;
+  why_it_matters: string;
+}
+
 export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
@@ -783,6 +793,9 @@ export interface QAOutput {
   score_axes?: ScoreAxis[];
   missing_keywords?: string[];
   single_section_keywords?: string[];
+  rank_label?: RankLabel;
+  headline?: string;
+  category_summaries?: NarrativeCategorySummary[];
 }
 
 // ── Fit analysis ─────────────────────────────────────────────────────────────

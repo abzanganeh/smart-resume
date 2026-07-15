@@ -7,6 +7,8 @@ from pathlib import Path
 import structlog
 
 from app.agent.phase3_postprocess import flatten_skill_terms
+from app.agent.phase4_narrative import synthesize_phase4_narrative
+from app.agent.phase4_rank import compute_rank_label
 from app.agent.phase4_score import compute_ats_score
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
@@ -290,6 +292,7 @@ async def run(
         "buzzwords": ("bullet", "medium", "manual_rewrite"),
         "section_completeness": ("section", "high", "user_input"),
         "contact_completeness": ("section", "high", "user_input"),
+        "field_completeness": ("section", "high", "user_input"),
     }
     for axis in score_result.axes:
         if axis.status == "pass":
@@ -326,8 +329,32 @@ async def run(
             "score_axes": [axis.to_dict() for axis in score_result.axes],
             "missing_keywords": score_result.missing_keywords,
             "single_section_keywords": score_result.single_section_keywords,
+            "rank_label": compute_rank_label(score_result.ats_score),
         }
     )
+
+    target_role = ""
+    if user_info and user_info.target_role.strip():
+        target_role = user_info.target_role.strip()
+    elif session.phase1_output and session.phase1_output.role_context.primary_domain:
+        target_role = session.phase1_output.role_context.primary_domain.strip()
+
+    try:
+        narrative = await synthesize_phase4_narrative(
+            llm=llm,
+            score_result=score_result,
+            target_role=target_role,
+            rank_label=output.rank_label,
+        )
+        output = output.model_copy(
+            update={
+                "rank_label": narrative.rank_label,
+                "headline": narrative.headline,
+                "category_summaries": [item.model_dump() for item in narrative.category_summaries],
+            }
+        )
+    except Exception as exc:
+        log.warning("phase4_narrative_failed", error=str(exc))
 
     await event_queue.put({"event": "partial", "phase": 4, "data": json.loads(output.model_dump_json())})
     log.info(

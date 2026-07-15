@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.agent.phase4_rank import RankLabel
+
 _IMPACT_RANK = {"high": 0, "medium": 1, "low": 2}
 _EFFORT_RANK = {"one_click": 0, "user_input": 1, "manual_rewrite": 2}
 
@@ -34,6 +36,14 @@ class ScoreAxis(BaseModel):
     issues: list[str] = Field(default_factory=list)
 
 
+class NarrativeCategorySummary(BaseModel):
+    category_key: str
+    label: str
+    severity: Literal["minor", "urgent", "critical"]
+    issue_count: int = Field(ge=0)
+    why_it_matters: str = ""
+
+
 class QAOutput(BaseModel):
     checklist: list[QAItem] = Field(default_factory=list)
     overall_status: Literal["pass", "warn", "fail"] = "warn"
@@ -47,6 +57,9 @@ class QAOutput(BaseModel):
     score_axes: list[ScoreAxis] = Field(default_factory=list)
     missing_keywords: list[str] = Field(default_factory=list)
     single_section_keywords: list[str] = Field(default_factory=list)
+    rank_label: RankLabel | None = None
+    headline: str = ""
+    category_summaries: list[NarrativeCategorySummary] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

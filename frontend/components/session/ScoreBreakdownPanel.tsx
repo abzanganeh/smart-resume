@@ -45,6 +45,7 @@ const AXIS_GROUPS: { title: string; subtitle: string; keys: string[] }[] = [
       "keyword_dual_placement",
       "section_completeness",
       "contact_completeness",
+      "field_completeness",
     ],
   },
   {
