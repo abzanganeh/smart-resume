@@ -309,6 +309,28 @@ def test_field_completeness_passes_when_all_entries_have_required_fields() -> No
     assert axis.issues == []
 
 
+def test_metrics_axis_includes_entry_anchor() -> None:
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {
+                "title": "Engineer",
+                "company": "Acme",
+                "dates": "2024",
+                "bullets": ["Built dashboards without any numbers"],
+            }
+        ],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "bullet_metrics")
+    assert axis.anchored_issues
+    assert axis.anchored_issues[0].anchor == {
+        "section": "experience",
+        "entry_index": 0,
+        "bullet_index": 0,
+    }
+
+
 def test_score_axes_total_to_one_hundred() -> None:
     resume = _resume(
         summary="Senior engineer.",

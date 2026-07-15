@@ -158,6 +158,12 @@ Status = Literal["pass", "warn", "fail"]
 
 
 @dataclass
+class AxisIssue:
+    text: str
+    anchor: dict[str, int | str] | None = None
+
+
+@dataclass
 class AxisScore:
     """Score for a single resume-quality axis."""
 
@@ -168,6 +174,7 @@ class AxisScore:
     status: Status
     summary: str = ""
     issues: list[str] = field(default_factory=list)
+    anchored_issues: list[AxisIssue] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -178,6 +185,11 @@ class AxisScore:
             "status": self.status,
             "summary": self.summary,
             "issues": list(self.issues),
+            "anchored_issues": [
+                {"text": issue.text, "anchor": issue.anchor}
+                for issue in self.anchored_issues
+                if issue.anchor is not None
+            ],
         }
 
 
@@ -242,15 +254,24 @@ def _section_texts(tailored) -> dict[str, str]:
 
 
 def _all_bullets(tailored) -> list[str]:
-    bullets: list[str] = []
-    for entry in getattr(tailored, "experience", []) or []:
-        bullets.extend(getattr(entry, "bullets", []) or [])
-    for entry in getattr(tailored, "projects", []) or []:
+    return [bullet for bullet, *_rest in _iter_bullets_with_anchor(tailored)]
+
+
+def _iter_bullets_with_anchor(tailored) -> list[tuple[str, str, int, int]]:
+    """Yield (bullet_text, section, entry_index, bullet_index)."""
+    located: list[tuple[str, str, int, int]] = []
+    for entry_index, entry in enumerate(getattr(tailored, "experience", []) or []):
+        for bullet_index, bullet in enumerate(getattr(entry, "bullets", []) or []):
+            if bullet and bullet.strip():
+                located.append((bullet, "experience", entry_index, bullet_index))
+    for entry_index, entry in enumerate(getattr(tailored, "projects", []) or []):
         if isinstance(entry, dict):
-            for v in entry.values():
-                if isinstance(v, list):
-                    bullets.extend(b for b in v if isinstance(b, str))
-    return [b for b in bullets if b and b.strip()]
+            bullets = entry.get("bullets") or []
+            if isinstance(bullets, list):
+                for bullet_index, bullet in enumerate(bullets):
+                    if isinstance(bullet, str) and bullet.strip():
+                        located.append((bullet, "projects", entry_index, bullet_index))
+    return located
 
 
 def _word_count(text: str) -> int:
@@ -376,8 +397,9 @@ def _axis_keyword_dual(
     )
 
 
-def _axis_metrics(bullets: list[str]) -> AxisScore:
-    if not bullets:
+def _axis_metrics(bullets: list[str], tailored) -> AxisScore:
+    located = _iter_bullets_with_anchor(tailored)
+    if not located:
         return AxisScore(
             key="bullet_metrics",
             label="Quantified bullets",
@@ -387,13 +409,24 @@ def _axis_metrics(bullets: list[str]) -> AxisScore:
             summary="No experience or project bullets to score.",
             issues=["Add at least one experience bullet so this axis can score."],
         )
-    with_metric = sum(1 for b in bullets if _DIGIT.search(b))
-    ratio = with_metric / len(bullets)
+    with_metric = sum(1 for bullet, *_rest in located if _DIGIT.search(bullet))
+    ratio = with_metric / len(located)
     score = ratio * _W_METRICS
-    unquantified = [b for b in bullets if not _DIGIT.search(b)]
+    unquantified = [(bullet, section, entry_index, bullet_index) for bullet, section, entry_index, bullet_index in located if not _DIGIT.search(bullet)]
     issues = [
-        f"Add a metric to: {b[:80]}{'…' if len(b) > 80 else ''}"
-        for b in unquantified[:5]
+        f"Add a metric to: {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
+        for bullet, *_rest in unquantified[:5]
+    ]
+    anchored_issues = [
+        AxisIssue(
+            text=f"Add a metric to: {bullet[:80]}{'…' if len(bullet) > 80 else ''}",
+            anchor={
+                "section": section,
+                "entry_index": entry_index,
+                "bullet_index": bullet_index,
+            },
+        )
+        for bullet, section, entry_index, bullet_index in unquantified[:5]
     ]
     return AxisScore(
         key="bullet_metrics",
@@ -401,13 +434,15 @@ def _axis_metrics(bullets: list[str]) -> AxisScore:
         score=score,
         max_score=_W_METRICS,
         status=_status_from_ratio(ratio, pass_at=0.85, warn_at=0.6),
-        summary=f"{with_metric}/{len(bullets)} bullets contain a number or percentage.",
+        summary=f"{with_metric}/{len(located)} bullets contain a number or percentage.",
         issues=issues,
+        anchored_issues=anchored_issues,
     )
 
 
-def _axis_action_verbs(bullets: list[str]) -> AxisScore:
-    if not bullets:
+def _axis_action_verbs(bullets: list[str], tailored) -> AxisScore:
+    located = _iter_bullets_with_anchor(tailored)
+    if not located:
         return AxisScore(
             key="action_verbs",
             label="Strong action verbs",
@@ -418,19 +453,30 @@ def _axis_action_verbs(bullets: list[str]) -> AxisScore:
         )
 
     strong_count = 0
-    weak_examples: list[str] = []
-    for bullet in bullets:
+    weak_examples: list[tuple[str, str, int, int]] = []
+    for bullet, section, entry_index, bullet_index in located:
         first = _first_word(bullet)
         if first in _STRONG_VERBS:
             strong_count += 1
         elif first:
-            weak_examples.append(bullet)
+            weak_examples.append((bullet, section, entry_index, bullet_index))
 
-    ratio = strong_count / len(bullets)
+    ratio = strong_count / len(located)
     score = ratio * _W_ACTION_VERBS
     issues = [
-        f"Open with a stronger verb: {b[:80]}{'…' if len(b) > 80 else ''}"
-        for b in weak_examples[:5]
+        f"Open with a stronger verb: {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
+        for bullet, *_rest in weak_examples[:5]
+    ]
+    anchored_issues = [
+        AxisIssue(
+            text=f"Open with a stronger verb: {bullet[:80]}{'…' if len(bullet) > 80 else ''}",
+            anchor={
+                "section": section,
+                "entry_index": entry_index,
+                "bullet_index": bullet_index,
+            },
+        )
+        for bullet, section, entry_index, bullet_index in weak_examples[:5]
     ]
     return AxisScore(
         key="action_verbs",
@@ -439,10 +485,11 @@ def _axis_action_verbs(bullets: list[str]) -> AxisScore:
         max_score=_W_ACTION_VERBS,
         status=_status_from_ratio(ratio, pass_at=0.85, warn_at=0.6),
         summary=(
-            f"{strong_count}/{len(bullets)} bullets open with a high-impact verb "
+            f"{strong_count}/{len(located)} bullets open with a high-impact verb "
             "(led, built, shipped, reduced, ...)."
         ),
         issues=issues,
+        anchored_issues=anchored_issues,
     )
 
 
@@ -701,18 +748,26 @@ def _axis_field_completeness(tailored) -> AxisScore:
     """
 
     issues: list[str] = []
+    anchored_issues: list[AxisIssue] = []
     total = 0
     complete = 0
 
-    for entry in getattr(tailored, "projects", []) or []:
+    for entry_index, entry in enumerate(getattr(tailored, "projects", []) or []):
         total += 1
         name = entry.get("name") if isinstance(entry, dict) else getattr(entry, "name", "")
         if (name or "").strip():
             complete += 1
         else:
-            issues.append("A project entry is missing its name.")
+            text = "A project entry is missing its name."
+            issues.append(text)
+            anchored_issues.append(
+                AxisIssue(
+                    text=text,
+                    anchor={"section": "projects", "entry_index": entry_index},
+                )
+            )
 
-    for entry in getattr(tailored, "education", []) or []:
+    for entry_index, entry in enumerate(getattr(tailored, "education", []) or []):
         total += 1
         institution = (
             entry.get("institution")
@@ -722,7 +777,14 @@ def _axis_field_completeness(tailored) -> AxisScore:
         if (institution or "").strip():
             complete += 1
         else:
-            issues.append("An education entry is missing its institution name.")
+            text = "An education entry is missing its institution name."
+            issues.append(text)
+            anchored_issues.append(
+                AxisIssue(
+                    text=text,
+                    anchor={"section": "education", "entry_index": entry_index},
+                )
+            )
 
     if total == 0:
         return AxisScore(
@@ -743,6 +805,7 @@ def _axis_field_completeness(tailored) -> AxisScore:
         status=_status_from_ratio(ratio, pass_at=1.0, warn_at=0.75),
         summary=f"{complete}/{total} project/education entries have their required fields filled in.",
         issues=issues,
+        anchored_issues=anchored_issues,
     )
 
 
@@ -775,8 +838,8 @@ def compute_ats_score(
         _axis_keyword_dual(keywords, section_map, single),
         _axis_section_completeness(tailored),
         _axis_contact(tailored),
-        _axis_metrics(bullets),
-        _axis_action_verbs(bullets),
+        _axis_metrics(bullets, tailored),
+        _axis_action_verbs(bullets, tailored),
         _axis_bullet_length(bullets),
         _axis_resume_length(tailored, career_stage),
         _axis_weak_phrases(bullets),

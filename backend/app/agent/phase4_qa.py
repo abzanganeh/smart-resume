@@ -12,7 +12,7 @@ from app.agent.phase4_rank import compute_rank_label
 from app.agent.phase4_score import compute_ats_score
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
-from app.models.qa import BlockingIssue, QAOutput
+from app.models.qa import BlockingIssue, IssueAnchor, QAOutput
 from app.models.session import Session
 
 log = structlog.get_logger()
@@ -91,6 +91,21 @@ def _collect_resume_text(tailored) -> str:
         elif isinstance(entry, dict):
             parts.extend(str(v) for v in entry.values() if isinstance(v, (str, int)))
     return " \n ".join(p for p in parts if p)
+
+
+def _issue_anchor_from_dict(anchor: dict[str, int | str] | None) -> IssueAnchor | None:
+    if not anchor:
+        return None
+    section = anchor.get("section")
+    entry_index = anchor.get("entry_index")
+    if section not in ("experience", "projects", "education") or entry_index is None:
+        return None
+    bullet_index = anchor.get("bullet_index")
+    return IssueAnchor(
+        section=section,  # type: ignore[arg-type]
+        entry_index=int(entry_index),
+        bullet_index=int(bullet_index) if bullet_index is not None else None,
+    )
 
 
 async def run(
@@ -301,6 +316,19 @@ async def run(
         if mapping is None:
             continue
         category, impact, fix_effort = mapping
+        if axis.anchored_issues:
+            for anchored in axis.anchored_issues:
+                corrected_issues.append(
+                    BlockingIssue(
+                        category=category,
+                        description=axis.label,
+                        suggestion=anchored.text,
+                        impact=impact,
+                        fix_effort=fix_effort,
+                        anchor=_issue_anchor_from_dict(anchored.anchor),
+                    )
+                )
+            continue
         for issue_text in axis.issues:
             corrected_issues.append(
                 BlockingIssue(

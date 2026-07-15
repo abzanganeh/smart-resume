@@ -16,12 +16,19 @@ class QAItem(BaseModel):
     note: str = ""
 
 
+class IssueAnchor(BaseModel):
+    section: Literal["experience", "projects", "education"]
+    entry_index: int = Field(ge=0)
+    bullet_index: int | None = Field(default=None, ge=0)
+
+
 class BlockingIssue(BaseModel):
     category: Literal["keyword", "bullet", "metric", "format", "length", "section"]
     description: str
     suggestion: str
     impact: Literal["high", "medium", "low"]
     fix_effort: Literal["one_click", "user_input", "manual_rewrite"]
+    anchor: IssueAnchor | None = None
 
 
 class ScoreAxis(BaseModel):

@@ -752,12 +752,19 @@ export interface QAItem {
   note: string;
 }
 
+export interface IssueAnchor {
+  section: "experience" | "projects" | "education";
+  entry_index: number;
+  bullet_index?: number;
+}
+
 export interface BlockingIssue {
   category: "keyword" | "bullet" | "metric" | "format" | "length" | "section";
   description: string;
   suggestion: string;
   impact: "high" | "medium" | "low";
   fix_effort: "one_click" | "user_input" | "manual_rewrite";
+  anchor?: IssueAnchor | null;
 }
 
 export interface ScoreAxis {
