@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
-import { type BlockingIssue, type QAOutput } from "@/lib/api";
+import { type BlockingIssue, type IssueAnchor, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
 
@@ -30,6 +30,8 @@ interface Props {
   onRecalculate?: () => void;
   /** Disables the recalc button while a phase is already in flight. */
   recalculateDisabled?: boolean;
+  /** Scroll the tailored editor to an anchored resume entry. */
+  onScrollToAnchor?: (anchor: IssueAnchor) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -298,6 +300,7 @@ function BlockingIssueRow({
   addressed = false,
   onSendToChat,
   onStartQueue,
+  onScrollToAnchor,
   selected,
   onToggleSelect,
 }: {
@@ -306,6 +309,7 @@ function BlockingIssueRow({
   addressed?: boolean;
   onSendToChat?: () => void;
   onStartQueue?: () => void;
+  onScrollToAnchor?: (anchor: IssueAnchor) => void;
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
@@ -387,6 +391,15 @@ function BlockingIssueRow({
           <p className="text-[10px] text-slate-600">
             Fix effort: {issue.fix_effort.replace(/_/g, " ")}
           </p>
+          {issue.anchor && onScrollToAnchor && (
+            <button
+              type="button"
+              onClick={() => onScrollToAnchor(issue.anchor!)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+            >
+              Jump to entry →
+            </button>
+          )}
           {/* Primary variant: queue-based flow */}
           {onStartQueue && (
             <button
@@ -461,6 +474,7 @@ export function ATSGuidancePanel({
   staleSince = null,
   onRecalculate,
   recalculateDisabled = false,
+  onScrollToAnchor,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -770,6 +784,7 @@ export function ATSGuidancePanel({
                       onStartQueue([issue, ...others]);
                     }
                   : undefined}
+                onScrollToAnchor={onScrollToAnchor}
               />
             );})}
           </div>
