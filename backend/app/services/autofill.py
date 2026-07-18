@@ -53,8 +53,10 @@ def extract_contact(session: Session) -> dict[str, str]:
 
 
 def build_autofill_fields(contact: dict[str, str], platform: str) -> list[dict[str, str]]:
-    if platform != "greenhouse":
-        return []
+    # Only Greenhouse has known DOM selectors today; other platforms (linkedin,
+    # unknown) still get concept-keyed fields so the extension can resolve
+    # inputs via heuristics client-side.
+    selectors = GREENHOUSE_FIELD_SELECTORS if platform == "greenhouse" else None
 
     first_name, last_name = split_name(str(contact.get("name") or ""))
     values: list[tuple[str, str]] = [
@@ -73,7 +75,7 @@ def build_autofill_fields(contact: dict[str, str], platform: str) -> list[dict[s
         fields.append(
             {
                 "key": key,
-                "selector": GREENHOUSE_FIELD_SELECTORS[key],
+                "selector": selectors[key] if selectors else "",
                 "value": cleaned,
             }
         )
@@ -82,7 +84,7 @@ def build_autofill_fields(contact: dict[str, str], platform: str) -> list[dict[s
     fields.append(
         {
             "key": "resume",
-            "selector": GREENHOUSE_FIELD_SELECTORS["resume"],
+            "selector": selectors["resume"] if selectors else "",
             "value": "",
         }
     )
