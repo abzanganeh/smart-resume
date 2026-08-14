@@ -621,7 +621,6 @@ async def create_resume_from_story(
         db,
         user=user,
         whisper_path=body.whisper_path,
-        byok_active=byok_active,
     )
 
     # ── Step 1: narrative → resume draft text ─────────────────────────────────
@@ -746,7 +745,7 @@ async def story_coach_endpoint(
 
     # Charge 1 credit on the first coached segment of a story build session.
     if not body.history:
-        if not byok_active and not body.session_id:
+        if not body.session_id:
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -758,7 +757,6 @@ async def story_coach_endpoint(
             await check_quota_for_story_coach(
                 session,
                 user=user,
-                byok_active=byok_active,
                 session_id=body.session_id,
             )
         except AccountSuspendedError:
@@ -843,7 +841,6 @@ async def story_interview_next(
             await check_quota_for_story_interview(
                 session,
                 user=user,
-                byok_active=byok_active,
                 session_id=body.session_id,
             )
         except AccountSuspendedError:

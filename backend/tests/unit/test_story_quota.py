@@ -5,25 +5,13 @@ from app.services.billing.quota import check_quota_for_story, QuotaAction
 
 
 @pytest.mark.asyncio
-async def test_story_byok_is_free():
-    """BYOK users pay 0 credits regardless of browser path."""
-    mock_db = AsyncMock()
-    mock_user = MagicMock(is_suspended=False)
-    result = await check_quota_for_story(
-        mock_db, user=mock_user, whisper_path=True, byok_active=True
-    )
-    assert result.charged_to == "byok"
-    assert result.action == QuotaAction.story_build
-
-
-@pytest.mark.asyncio
 async def test_story_web_speech_is_free():
     """Web Speech path costs 0 credits for free users (no subscription)."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False)
     with patch("app.services.billing.quota._active_subscription_for", return_value=None):
         result = await check_quota_for_story(
-            mock_db, user=mock_user, whisper_path=False, byok_active=False
+            mock_db, user=mock_user, whisper_path=False
         )
     assert result.charged_to == "free_web_speech"
     assert result.action == QuotaAction.story_build
@@ -38,10 +26,9 @@ async def test_story_whisper_costs_two_credits():
     with patch("app.services.billing.quota._active_subscription_for", return_value=None), \
          patch("app.services.billing.quota.consume_credit", return_value=mock_transaction) as mock_consume:
         result = await check_quota_for_story(
-            mock_db, user=mock_user, whisper_path=True, byok_active=False
+            mock_db, user=mock_user, whisper_path=True
         )
     assert result.charged_to == "free_credit"
-    # consume_credit called twice (2 credits)
     assert mock_consume.call_count == 2
 
 
@@ -49,7 +36,6 @@ async def test_story_whisper_costs_two_credits():
 async def test_story_subscriber_is_free():
     """Active subscribers pay 0 credits for story builds."""
     from datetime import datetime, timezone, timedelta
-    from unittest.mock import MagicMock
     from app.models.billing import SubscriptionStatus
 
     mock_db = AsyncMock()
@@ -64,7 +50,7 @@ async def test_story_subscriber_is_free():
 
     with patch("app.services.billing.quota._active_subscription_for", return_value=mock_sub):
         result = await check_quota_for_story(
-            mock_db, user=mock_user, whisper_path=True, byok_active=False
+            mock_db, user=mock_user, whisper_path=True
         )
     assert result.charged_to == "subscription"
     assert result.action == QuotaAction.story_build
@@ -79,11 +65,7 @@ def test_story_build_in_free_credit_actions():
 @pytest.mark.asyncio
 async def test_story_coach_second_segment_same_session_is_free():
     """One credit per story build session — second coach call reuses the charge."""
-    from unittest.mock import patch
-    from app.services.billing.quota import (
-        _story_coach_build_already_charged,
-        check_quota_for_story_coach,
-    )
+    from app.services.billing.quota import check_quota_for_story_coach
 
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id="user-1")
@@ -98,7 +80,6 @@ async def test_story_coach_second_segment_same_session_is_free():
         result = await check_quota_for_story_coach(
             mock_db,
             user=mock_user,
-            byok_active=False,
             session_id="story-build-abc",
         )
 
@@ -126,7 +107,6 @@ async def test_story_coach_first_segment_charges_one_credit():
         result = await check_quota_for_story_coach(
             mock_db,
             user=mock_user,
-            byok_active=False,
             session_id="story-build-abc",
         )
 

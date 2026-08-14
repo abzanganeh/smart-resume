@@ -41,6 +41,7 @@ from app.models.user import (
     UserTier,
 )
 from app.services.billing.credits import get_balance
+from app.services.billing.tier_limits_lookup import registration_grant_credits
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.dependencies import CLOSURE_HEADER, get_current_user
@@ -92,7 +93,7 @@ log = structlog.get_logger("auth.router")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-REGISTRATION_GRANT_CREDITS = 6  # §18.3 "Every new account receives 6 credits"
+REGISTRATION_GRANT_CREDITS = registration_grant_credits()
 REFRESH_COOKIE_NAME = "sr_refresh"
 
 
