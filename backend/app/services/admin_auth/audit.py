@@ -27,7 +27,7 @@ _REDACT_KEYS = {
     "password_hash",
     "totp_secret",
     "totp_recovery_codes",
-    "byok_api_key",
+    "totp_secret",
     "stripe_secret_key",
     "stripe_webhook_secret",
 }

@@ -40,7 +40,7 @@ export interface BackendUser {
   closure_requested_at: string | null
   suspended_at: string | null
   onboarding_completed_at: string | null
-  onboarding_ai_choice: "platform" | "byok" | null
+  onboarding_ai_choice: "platform" | null
 }
 
 export interface AuthSuccess {
@@ -123,7 +123,7 @@ export async function fetchMe(accessToken: string): Promise<BackendUser> {
 }
 
 export interface OnboardingPatchPayload {
-  ai_choice?: "platform" | "byok"
+  ai_choice?: "platform"
   complete?: boolean
 }
 

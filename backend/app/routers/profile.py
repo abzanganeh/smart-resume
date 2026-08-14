@@ -170,7 +170,6 @@ async def _extract_resume_text(
 async def _structure_with_llm(
     raw_text: str,
     *,
-    api_key: str | None,
     provider: str | None,
     model: str | None,
 ) -> dict[str, Any]:
@@ -181,7 +180,7 @@ async def _structure_with_llm(
     raw-text fallback path that still produces useful chunks.
     """
     try:
-        llm = get_llm_client(provider, model, api_key=api_key)
+        llm = get_llm_client(provider, model)
     except Exception as exc:
         log.warning("profile.llm.unavailable", error=str(exc))
         return {}
@@ -281,13 +280,11 @@ async def transcribe_resume_audio(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     audio: UploadFile = File(...),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
 ):
     """Transcribe spoken resume audio to text using OpenAI Whisper.
 
     Accepts any audio format supported by Whisper (webm, ogg, mp4, mp3, wav).
-    Uses the caller's BYOK OpenAI key (``X-Api-Key`` header); falls back to the
-    platform ``OPENAI_API_KEY`` when no BYOK key is provided.
+    Uses the platform ``OPENAI_API_KEY``.
 
     Returns ``{"text": "<transcript>"}`` on success.
     """
@@ -295,13 +292,12 @@ async def transcribe_resume_audio(
 
     import openai
 
-    api_key = (x_api_key or settings.OPENAI_API_KEY or "").strip()
+    api_key = (settings.OPENAI_API_KEY or "").strip()
     if not api_key:
         raise HTTPException(
             status_code=422,
             detail=(
-                "An OpenAI API key is required for voice transcription. "
-                "Configure your key via the BYOK dialog in any session first."
+                "Voice transcription is not available — platform OpenAI key is not configured."
             ),
         )
 
@@ -355,7 +351,6 @@ async def create_or_replace_resume(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
 ):
@@ -374,7 +369,7 @@ async def create_or_replace_resume(
 
     raw = await _extract_resume_text(file=file, text_payload=text)
     parsed_sections = await _structure_with_llm(
-        raw, api_key=x_api_key, provider=x_provider, model=x_model
+        raw, provider=x_provider, model=x_model
     )
     resume, chunks = await master_crud.replace_all_chunks(
         db,
@@ -409,7 +404,6 @@ async def replace_resume(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
 ):
@@ -420,7 +414,6 @@ async def replace_resume(
         db=db,
         file=file,
         text=text,
-        x_api_key=x_api_key,
         x_provider=x_provider,
         x_model=x_model,
     )
@@ -605,16 +598,10 @@ async def create_resume_from_story(
     Credit rules: see check_quota_for_story() in quota.py.
     """
     # ── Resolve LLM client ────────────────────────────────────────────────────
-    byok_key = request.headers.get("X-Api-Key", "").strip()
-    provider  = request.headers.get("X-Provider", "").strip()
-    model     = request.headers.get("X-Model", "").strip()
-    byok_active = bool(byok_key and provider and model)
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
 
-    llm_client = get_llm_client(
-        provider or None,
-        model or None,
-        api_key=byok_key or None,
-    )
+    llm_client = get_llm_client(provider or None, model or None)
 
     # ── Credit check ──────────────────────────────────────────────────────────
     await check_quota_for_story(
@@ -637,7 +624,7 @@ async def create_resume_from_story(
 
     # ── Step 2: draft text → ParsedResume + chunks + embeddings ──────────────
     parsed_sections = await _structure_with_llm(
-        draft_text, api_key=byok_key or None, provider=provider or None, model=model or None
+        draft_text, provider=provider or None, model=model or None
     )
     try:
         resume, chunks = await master_crud.replace_all_chunks(
@@ -687,15 +674,10 @@ async def polish_resume_draft(
 
     Returns: { "text": "<updated resume text>" }
     """
-    byok_key = request.headers.get("X-Api-Key", "").strip()
-    provider  = request.headers.get("X-Provider", "").strip()
-    model     = request.headers.get("X-Model", "").strip()
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
 
-    llm_client = get_llm_client(
-        provider or None,
-        model or None,
-        api_key=byok_key or None,
-    )
+    llm_client = get_llm_client(provider or None, model or None)
 
     try:
         updated = await polish_resume(body.text, body.instruction, llm_client)
@@ -719,7 +701,7 @@ async def story_coach_endpoint(
 ) -> StreamingResponse:
     """Stream one follow-up question from the interview coach (§22).
 
-    - BYOK / subscribers: 0 credits.
+    - Subscribers: 0 credits.
     - Free users: 1 credit per story build session (deducted on the first
       coached segment when history is empty).  Further segments in the same
       session_id reuse that credit.  Requires session_id for free platform users.
@@ -738,10 +720,8 @@ async def story_coach_endpoint(
             },
         )
 
-    byok_key = request.headers.get("X-Api-Key", "").strip()
-    provider  = request.headers.get("X-Provider", "").strip()
-    model     = request.headers.get("X-Model", "").strip()
-    byok_active = bool(byok_key)
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
 
     # Charge 1 credit on the first coached segment of a story build session.
     if not body.history:
@@ -771,11 +751,7 @@ async def story_coach_endpoint(
             )
         await session.commit()
 
-    llm_client = get_llm_client(
-        provider or None,
-        model or None,
-        api_key=byok_key or None,
-    )
+    llm_client = get_llm_client(provider or None, model or None)
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -812,7 +788,7 @@ async def story_interview_next(
 ) -> StreamingResponse:
     """Stream the next interview question (Coached Interview Mode, §23).
 
-    - BYOK / subscribers: 0 credits.
+    - Subscribers: 0 credits.
     - Free users: 1 credit charged on the very first question (empty history).
     - Server-side cap: MAX_QUESTIONS per session.
 
@@ -830,10 +806,8 @@ async def story_interview_next(
             },
         )
 
-    byok_key = request.headers.get("X-Api-Key", "").strip()
-    provider  = request.headers.get("X-Provider", "").strip()
-    model     = request.headers.get("X-Model", "").strip()
-    byok_active = bool(byok_key)
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
 
     # Charge 1 credit on the very first question (history is empty)
     if not body.history:
@@ -855,11 +829,7 @@ async def story_interview_next(
             )
         await session.commit()
 
-    llm_client = get_llm_client(
-        provider or None,
-        model or None,
-        api_key=byok_key or None,
-    )
+    llm_client = get_llm_client(provider or None, model or None)
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -899,9 +869,8 @@ async def story_interview_submit(
 
     Returns the same shape as POST /resume/from-story.
     """
-    byok_key = request.headers.get("X-Api-Key", "").strip()
-    provider  = request.headers.get("X-Provider", "").strip()
-    model     = request.headers.get("X-Model", "").strip()
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
     narrative = compile_answers_to_narrative(history_dicts)
@@ -913,11 +882,7 @@ async def story_interview_submit(
         exchange_count=len(body.history),
     )
 
-    llm_client = get_llm_client(
-        provider or None,
-        model or None,
-        api_key=byok_key or None,
-    )
+    llm_client = get_llm_client(provider or None, model or None)
 
     try:
         draft_text = await story_to_resume(narrative, llm_client)

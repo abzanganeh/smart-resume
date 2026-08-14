@@ -43,8 +43,7 @@ async def _resolve_phase3_llm(
     - On Best soft-cap hit (>=100 upgraded resumes) emits a
       ``best_soft_cap_hit`` SSE event and downgrades to Standard.
     - Builds a fresh LLM client targeting the resolved
-      (provider, model_string) — never hardcoded — using the same
-      BYOK key as the upstream client when present.
+      (provider, model_string) — never hardcoded — using platform keys.
 
     Returns ``(llm, decision)``.  ``decision`` is None for anonymous
     demo sessions (no ``user_id``) so the legacy single-LLM path keeps
@@ -58,17 +57,6 @@ async def _resolve_phase3_llm(
         return fallback_llm, None
 
     requested = session.phase3_llm_tier or "standard"
-
-    # BYOK respect: if the user supplied their own API key for the session
-    # AND they did NOT explicitly upgrade to a premium tier, use their BYOK
-    # provider/model. The tier system (Standard=platform Gemini, Better=…,
-    # Best=Claude) is for users on platform-paid credits; BYOK users
-    # already pay their LLM bill directly. Without this guard, an OpenAI
-    # BYOK user on the default "standard" tier would silently route to
-    # the platform's Gemini key (which may not even be configured).
-    byok_key = (getattr(session, "byok_api_key", None) or "").strip()
-    if requested == "standard" and byok_key and session.provider and session.model:
-        return fallback_llm, None
 
     upgraded_llm: LLMClient | None = None
     async with async_session_factory() as db:
@@ -89,7 +77,6 @@ async def _resolve_phase3_llm(
                 upgraded_llm = get_llm_client(
                     provider=decision.provider,
                     model=decision.model_string,
-                    api_key=getattr(session, "byok_api_key", None),
                 )
             await db.commit()
         except InsufficientCreditsError:
@@ -187,7 +174,7 @@ def _user_facing_error(exc: BaseException) -> str:
         ),
         "llm_auth": (
             "The AI model rejected the API key (authentication error). "
-            "If you supplied your own key, please check it in Settings → BYOK."
+            "Please retry or contact support if the issue persists."
         ),
         "llm_context_length": (
             "Your resume or job description is too long for this model's context window. "

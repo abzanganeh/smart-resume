@@ -204,12 +204,11 @@ async def chat_with_resume(session_id: str, body: ChatRequest) -> ChatResponse:
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    # Use the session's provider/model/BYOK key so chat works the same LLM
+    # Use the session's provider/model so chat works the same LLM
     # the user already configured for their phase runs.
     llm = get_llm_client(
         provider=session.provider or None,
         model=session.model or None,
-        api_key=getattr(session, "byok_api_key", None),
     )
     return await chat_agent.run(session, body, llm)
 

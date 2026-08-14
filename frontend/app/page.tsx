@@ -178,12 +178,6 @@ export default function LandingPage() {
               desc: "Semantic similarity between your master resume and any job description — before you spend a credit tailoring.",
               badge: null,
             },
-            {
-              icon: <Zap className="w-5 h-5 text-amber-400" />,
-              title: "BYOK Support",
-              desc: "Bring your own OpenAI, Anthropic, Gemini, or OpenRouter key. Your key never leaves your browser session.",
-              badge: null,
-            },
           ].map((feature) => (
             <div
               key={feature.title}
@@ -211,9 +205,7 @@ export default function LandingPage() {
           {[
             { name: "Google Gemini", emoji: "✨", badge: "Platform default", badgeColor: "bg-indigo-900/50 text-indigo-300 border-indigo-700" },
             { name: "Claude (Anthropic)", emoji: "🧠", badge: "Best quality", badgeColor: "bg-purple-900/50 text-purple-300 border-purple-700" },
-            { name: "OpenAI", emoji: "⚡", badge: "BYOK", badgeColor: "bg-slate-800 text-slate-400 border-slate-700" },
-            { name: "OpenRouter", emoji: "🔀", badge: "BYOK · Free models", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
-            { name: "Ollama", emoji: "🦙", badge: "BYOK · Local · Free", badgeColor: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
+            { name: "OpenAI", emoji: "⚡", badge: "Platform tier", badgeColor: "bg-slate-800 text-slate-400 border-slate-700" },
           ].map((p) => (
             <div key={p.name} className="flex items-center gap-2 bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2.5">
               <span className="text-lg">{p.emoji}</span>

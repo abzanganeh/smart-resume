@@ -173,7 +173,7 @@ class MeResponse(BaseModel):
 
 
 class OnboardingPatchRequest(BaseModel):
-    ai_choice: Literal["platform", "byok"] | None = None
+    ai_choice: Literal["platform"] | None = None
     complete: bool = False
 
 
@@ -817,12 +817,12 @@ async def patch_onboarding(
 
     if body.complete:
         choice = body.ai_choice or user.onboarding_ai_choice
-        if choice not in ("platform", "byok"):
+        if choice != "platform":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"code": "ai_choice_required"},
             )
-        user.onboarding_ai_choice = choice
+        user.onboarding_ai_choice = "platform"
         user.onboarding_completed_at = datetime.now(timezone.utc)
 
     await db.commit()

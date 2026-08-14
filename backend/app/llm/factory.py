@@ -37,19 +37,15 @@ def _get_default_key(provider: str) -> str:
 def get_llm_client(
     provider: str | None = None,
     model: str | None = None,
-    api_key: str | None = None,   # ← from request header (BYOK)
 ) -> LLMClient:
     """
     Resolve and return the configured LLM provider adapter.
 
-    Key resolution order:
-      1. api_key argument (from X-Api-Key request header — user-supplied)
-      2. .env value for the active provider
+    Uses platform API keys from environment / Secrets Manager for the active provider.
     """
     p = provider or settings.LLM_PROVIDER
     m = model or settings.LLM_MODEL
-    # User-supplied key wins; fall back to .env
-    key = api_key if (api_key and _is_real_api_key(api_key)) else _get_default_key(p)
+    key = _get_default_key(p)
 
     match p:
         case "openai":
@@ -74,7 +70,7 @@ def get_llm_client(
 def get_all_providers() -> list[dict]:
     """
     Return ALL supported providers with their model lists.
-    Used by the BYOK UI so users can pick a provider even without a .env key.
+    Used by admin tooling and diagnostics.
     """
     all_provider_ids = [
         ("openai", "OpenAI"),
