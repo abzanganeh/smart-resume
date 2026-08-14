@@ -122,7 +122,9 @@ function OnboardingPageContent() {
   const [hydrated, setHydrated] = useState(false)
   const navigatingToProfileRef = useRef(false)
   const updateRef = useRef(update)
-  updateRef.current = update
+  useEffect(() => {
+    updateRef.current = update
+  }, [update])
 
   const token = session?.backendAccessToken
   const urlStepParam = searchParams.get("step")
