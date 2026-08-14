@@ -53,6 +53,7 @@ from app.services.auth.exceptions import (
     AccountLockedError,
     OAuthError,
     RefreshTokenReuseError,
+    SessionReplacedError,
     TokenExpiredError,
     TokenInvalidError,
     WeakPasswordError,
@@ -76,6 +77,7 @@ from app.services.auth.tokens import (
     decode_access_token,
     find_refresh_token,
     make_device_fingerprint,
+    new_auth_session_id,
     revoke_all_user_tokens,
     revoke_token,
     rotate_refresh_token,
@@ -271,7 +273,19 @@ async def _issue_session(
     device_fp: str,
 ) -> AuthSuccessResponse:
     """Mint access + refresh tokens and bind the refresh token in Redis."""
-    access = create_access_token(user.id, ttl=settings.ACCESS_TOKEN_TTL_SECONDS)
+    auth_session_id = new_auth_session_id()
+    await revoke_all_user_tokens(db, user_id=user.id)
+    await redis_session.revoke_all_user_tokens(user.id)
+    await redis_session.set_active_auth_session(
+        user.id,
+        auth_session_id,
+        ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+    )
+    access = create_access_token(
+        user.id,
+        ttl=settings.ACCESS_TOKEN_TTL_SECONDS,
+        session_id=auth_session_id,
+    )
     issued = await create_refresh_token(
         db,
         user_id=user.id,
@@ -283,6 +297,7 @@ async def _issue_session(
         user.id,
         device_fp,
         ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+        auth_session_id=auth_session_id,
     )
     await _set_refresh_cookie(response, issued.token, settings.REFRESH_TOKEN_TTL_SECONDS)
     user.last_login_at = datetime.now(timezone.utc)
@@ -345,6 +360,21 @@ def _attach_closure_header(request: Request, response: Response) -> None:
     pending = getattr(request.state, "closure_pending_at", None)
     if pending:
         response.headers[CLOSURE_HEADER] = pending
+
+
+async def _auth_session_id_for_refresh_token(
+    db: AsyncSession,
+    refresh_token: str,
+) -> str | None:
+    """Resolve the stable auth session id bound to a refresh token."""
+    row = await find_refresh_token(db, token=refresh_token)
+    if row is None:
+        return None
+    meta = await redis_session.get_refresh_token_metadata(row.id)
+    if meta and meta.get("auth_session_id"):
+        return str(meta["auth_session_id"])
+    active = await redis_session.get_active_auth_session_id(row.user_id)
+    return str(active) if active else None
 
 
 # ===========================================================================
@@ -675,6 +705,7 @@ async def logout(
         if row and row.user_id == user.id:
             await revoke_token(db, row=row)
             await redis_session.revoke_redis_token(row.id)
+    await redis_session.clear_active_auth_session(user.id)
     await record_auth_event(
         db,
         user_id=user.id,
@@ -699,6 +730,7 @@ async def logout_all(
 ) -> dict[str, Any]:
     revoked = await revoke_all_user_tokens(db, user_id=user.id)
     await redis_session.revoke_all_user_tokens(user.id)
+    await redis_session.clear_active_auth_session(user.id)
     await record_auth_event(
         db,
         user_id=user.id,
@@ -724,6 +756,7 @@ async def refresh(
     if not refresh_token:
         raise HTTPException(status_code=401, detail={"code": "missing_refresh_token"})
     device_fp = _fingerprint(request)
+    auth_session_id = await _auth_session_id_for_refresh_token(db, refresh_token)
     try:
         issued = await rotate_refresh_token(
             db,
@@ -731,6 +764,12 @@ async def refresh(
             device_fingerprint=device_fp,
             ttl_seconds=settings.REFRESH_TOKEN_TTL_SECONDS,
         )
+    except SessionReplacedError:
+        _clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "session_replaced"},
+        ) from None
     except RefreshTokenReuseError as exc:
         # ``rotate_refresh_token`` already called revoke_all_user_tokens
         # on the DB session; we must commit it before the HTTPException
@@ -779,10 +818,18 @@ async def refresh(
         raise HTTPException(status_code=403, detail={"code": "account_suspended"})
 
     await redis_session.bind_refresh_token_to_redis(
-        issued.token_id, user.id, device_fp, ttl=settings.REFRESH_TOKEN_TTL_SECONDS
+        issued.token_id,
+        user.id,
+        device_fp,
+        ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+        auth_session_id=auth_session_id,
     )
     await _set_refresh_cookie(response, issued.token, settings.REFRESH_TOKEN_TTL_SECONDS)
-    access = create_access_token(user.id, ttl=settings.ACCESS_TOKEN_TTL_SECONDS)
+    access = create_access_token(
+        user.id,
+        ttl=settings.ACCESS_TOKEN_TTL_SECONDS,
+        session_id=auth_session_id,
+    )
     return AuthSuccessResponse(
         access_token=access,
         expires_in=settings.ACCESS_TOKEN_TTL_SECONDS,

@@ -40,6 +40,7 @@ from app.config import settings
 from app.models.user import RefreshToken
 from app.services.auth.exceptions import (
     RefreshTokenReuseError,
+    SessionReplacedError,
     TokenExpiredError,
     TokenInvalidError,
 )
@@ -68,18 +69,32 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def new_auth_session_id() -> uuid.UUID:
+    """Opaque auth session id — stable across refresh rotations within one login."""
+    return uuid.uuid4()
+
+
 def create_access_token(
     user_id: str | uuid.UUID,
     *,
     ttl: int = 900,
+    session_id: uuid.UUID | str | None = None,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
     """Sign a 15-minute access JWT for ``user_id``.
 
     ``ttl`` overrides the default 900 s window — used by 2FA / verify /
     reset tokens via :func:`create_purpose_token`.
+
+    When ``session_id`` is supplied it is embedded as the ``sid`` claim so
+    concurrent-session enforcement can reject superseded logins.
     """
-    return _sign(user_id, typ="access", ttl=ttl, extra_claims=extra_claims)
+    claims: dict[str, Any] = {}
+    if session_id is not None:
+        claims["sid"] = str(session_id)
+    if extra_claims:
+        claims.update(extra_claims)
+    return _sign(user_id, typ="access", ttl=ttl, extra_claims=claims or None)
 
 
 def create_purpose_token(
@@ -117,6 +132,20 @@ def _sign(
         for k, v in extra_claims.items():
             payload.setdefault(k, v)
     return jwt.encode(payload, _require_secret(), algorithm=JWT_ALG)
+
+
+async def _classify_revoked_refresh_token(row: RefreshToken) -> None:
+    """Raise ``SessionReplacedError`` or ``RefreshTokenReuseError`` for revoked rows."""
+    from app.services.auth import session as redis_session
+
+    active_sid = await redis_session.get_active_auth_session_id(row.user_id)
+    meta = await redis_session.get_refresh_token_metadata(row.id)
+    token_sid = meta.get("auth_session_id") if meta else None
+
+    if active_sid and (token_sid is None or token_sid != active_sid):
+        raise SessionReplacedError(user_id=str(row.user_id))
+
+    raise RefreshTokenReuseError(user_id=str(row.user_id))
 
 
 def decode_access_token(token: str, *, expected_type: TokenType = "access") -> dict[str, Any]:
@@ -279,9 +308,11 @@ async def rotate_refresh_token(
         raise TokenInvalidError("refresh token not recognised")
 
     if row.revoked_at is not None:
-        # Reuse — revoke entire chain.
-        await revoke_all_user_tokens(session, user_id=row.user_id)
-        raise RefreshTokenReuseError(user_id=str(row.user_id))
+        try:
+            await _classify_revoked_refresh_token(row)
+        except RefreshTokenReuseError as exc:
+            await revoke_all_user_tokens(session, user_id=row.user_id)
+            raise exc
 
     if row.expires_at <= _utcnow():
         raise TokenExpiredError("refresh token expired")
@@ -316,6 +347,7 @@ __all__ = [
     "find_refresh_token",
     "hash_refresh_token",
     "make_device_fingerprint",
+    "new_auth_session_id",
     "revoke_all_user_tokens",
     "revoke_token",
     "rotate_refresh_token",

@@ -25,6 +25,7 @@ from app.services.auth.exceptions import (
     TokenExpiredError,
     TokenInvalidError,
 )
+from app.services.auth import session as redis_session
 from app.services.auth.tokens import decode_access_token
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
@@ -62,6 +63,16 @@ async def get_current_user(
         user_id = uuid.UUID(claims["sub"])
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="Token missing subject") from exc
+
+    sid = claims.get("sid")
+    if sid:
+        active_sid = await redis_session.get_active_auth_session_id(user_id)
+        if active_sid and sid != active_sid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "session_replaced"},
+                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+            )
 
     user = (
         await db.execute(select(User).where(User.id == user_id))
