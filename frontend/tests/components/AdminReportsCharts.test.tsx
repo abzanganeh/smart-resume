@@ -37,9 +37,9 @@ const funnel = [
 ]
 
 const revenue = [
-  { plan: "daily", revenue_usd: 120 },
+  { plan: "monthly_pro", revenue_usd: 2400 },
   { plan: "weekly", revenue_usd: 480 },
-  { plan: "monthly", revenue_usd: 2400 },
+  { plan: "monthly_plus", revenue_usd: 900 },
 ]
 
 function assert(condition: boolean, message: string) {
