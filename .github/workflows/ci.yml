@@ -37,6 +37,7 @@ jobs:
           APP_ENV: ci
           AUTH_DISABLE: "false"
           AUTH_SECRET: ci-test-auth-secret-not-for-production
+          BYOK_ENCRYPTION_KEY: ci-test-byok-encryption-key-32chars!!
           DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
           REDIS_URL: redis://localhost:6379
 
@@ -94,8 +95,11 @@ jobs:
           APP_ENV: ci
           AUTH_DISABLE: "false"
           AUTH_SECRET: ci-test-auth-secret-not-for-production
+          BYOK_ENCRYPTION_KEY: ci-test-byok-encryption-key-32chars!!
           DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
           REDIS_URL: redis://localhost:6379
+          GEMINI_API_KEY: ci-test-gemini-key
+          OPENAI_API_KEY: ci-test-openai-key
 
   migration-safety:
     name: Migration safety

@@ -285,6 +285,9 @@ async def test_migrate_sync_stripe_calls_modify(db_session: AsyncSession) -> Non
     ), patch(
         "app.services.billing.subscriber_migration._stripe_subscription_retrieve",
         new=mock_retrieve,
+    ), patch(
+        "app.services.billing.subscriber_migration.settings.STRIPE_SECRET_KEY",
+        "sk_test_ci",
     ):
         stats = await run_subscriber_migration(
             db_session, dry_run=False, sync_stripe=True

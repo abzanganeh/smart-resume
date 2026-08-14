@@ -17,7 +17,7 @@ from app.services.dashboard.resume_record import (
 )
 from app.services.session_store import create_session
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
