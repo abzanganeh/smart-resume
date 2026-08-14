@@ -45,42 +45,48 @@ export interface AdminSessionInfo {
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
+export type PlanConfigInterval = "day" | "week" | "month" | "year" | "one_time"
+
+/** Mirrors backend ``PlanConfigOut`` (2026-08 pricing restructure). */
 export interface PlanConfig {
   id: string
-  plan: "daily" | "weekly" | "monthly"
-  billing_cycle: "recurring" | "yearly"
-  price_usd: number
-  resume_limit: number
-  search_limit: number
+  code: string
   stripe_price_id: string
-  trial_days: number
+  stripe_product_id: string | null
+  eligibility: string
+  amount_cents: number
+  currency: string
+  interval: PlanConfigInterval
+  is_active: boolean
   effective_from: string
-  apply_to_existing: boolean
-  superseded_by: string | null
-  created_by: string
+  effective_to: string | null
+  created_by_admin_id: string | null
   created_at: string
 }
 
-export interface LLMAddonPricing {
-  better_pack_usd: number
-  better_monthly_usd: number
-  better_yearly_usd: number
-  best_per_resume_usd: number
-  best_monthly_usd: number
-  best_yearly_usd: number
-  free_credit_grant: number
+export interface PlanCreatePayload {
+  code: string
+  stripe_price_id: string
+  stripe_product_id?: string | null
+  eligibility?: string
+  amount_cents: number
+  currency?: string
+  interval: PlanConfigInterval
 }
 
-export interface PlanCreatePayload {
-  plan: "daily" | "weekly" | "monthly"
-  billing_cycle: "recurring" | "yearly"
-  price_usd: number
-  resume_limit: number
-  search_limit: number
-  stripe_price_id: string
-  trial_days: number
-  effective_from: string
-  apply_to_existing: boolean
+export interface PlanUpdatePayload {
+  stripe_price_id?: string
+  stripe_product_id?: string | null
+  eligibility?: string
+  amount_cents?: number
+  currency?: string
+  interval?: PlanConfigInterval
+  is_active?: boolean
+}
+
+export interface PlanAuditedResponse {
+  plan: PlanConfig
+  audit_log_id: string
 }
 
 // ── LLM Config ────────────────────────────────────────────────────────────────

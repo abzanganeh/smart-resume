@@ -35,9 +35,9 @@ export const FUNNEL_FIXTURE: FunnelMetrics = {
 }
 
 export const REVENUE_FIXTURE: RevenueByPlan[] = [
-  { plan: "daily", revenue_usd: 120.0, subscribers: 60 },
   { plan: "weekly", revenue_usd: 480.0, subscribers: 120 },
-  { plan: "monthly", revenue_usd: 2400.0, subscribers: 200 },
+  { plan: "monthly_pro", revenue_usd: 2400.0, subscribers: 200 },
+  { plan: "monthly_plus", revenue_usd: 900.0, subscribers: 45 },
 ]
 
 export const LLM_COST_FIXTURE: LLMCostMargin[] = [
@@ -135,8 +135,8 @@ export function runTests() {
   {
     const total = totalRevenue(REVENUE_FIXTURE)
     assert(
-      Math.abs(total - 3000) < 0.01,
-      `total revenue == $3000 (got $${total})`,
+      Math.abs(total - 3780) < 0.01,
+      `total revenue == $3780 (got $${total})`,
     )
     assert(
       REVENUE_FIXTURE.every((r) => r.revenue_usd >= 0),
