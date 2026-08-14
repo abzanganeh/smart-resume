@@ -192,8 +192,8 @@ async def test_run_closure_tick_hard_deletes_user_idempotent(
     await db_session.flush()
 
     with patch("app.services.export.closure.delete_attachment"):
-        with patch("app.services.export.storage.delete_export_object"):
-            with patch("app.services.export.storage.delete_user_export_prefix"):
+        with patch("app.services.export.closure.delete_user_export_prefix"):
+            with patch("app.services.export.storage.delete_export_object"):
                 with patch(
                     "app.services.auth.email.send_account_deleted_email",
                     new=AsyncMock(return_value={"sent": False}),
