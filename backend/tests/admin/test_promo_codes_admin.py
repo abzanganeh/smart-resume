@@ -1,0 +1,153 @@
+"""Admin promo code CRUD tests."""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.admin import AdminRole
+from tests.admin.conftest import issue_admin_session, make_admin
+
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_list_requires_auth(app_client: AsyncClient) -> None:
+    resp = await app_client.get("/api/admin/promo-codes")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_create_and_list(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email="promo-admin@example.com",
+        role=AdminRole.super_admin,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    create_resp = await app_client.post(
+        "/api/admin/promo-codes",
+        json={
+            "code": "launch2026",
+            "grant_type": "extra_credits",
+            "payload": {"amount": 7, "credit_kind": "free"},
+            "max_redemptions": 100,
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    body = create_resp.json()
+    assert body["promo_code"]["code"] == "LAUNCH2026"
+    assert body["promo_code"]["redemption_count"] == 0
+    assert body["audit_log_id"]
+
+    list_resp = await app_client.get("/api/admin/promo-codes", headers=headers)
+    assert list_resp.status_code == 200
+    rows = list_resp.json()
+    assert len(rows) == 1
+    assert rows[0]["grant_type"] == "extra_credits"
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_update_deactivate(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email="promo-patch@example.com",
+        role=AdminRole.admin,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    create_resp = await app_client.post(
+        "/api/admin/promo-codes",
+        json={
+            "code": "PATCHME",
+            "grant_type": "feature_unlock",
+            "payload": {"feature": "career_watch"},
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 201
+    promo_id = create_resp.json()["promo_code"]["id"]
+
+    patch_resp = await app_client.patch(
+        f"/api/admin/promo-codes/{promo_id}",
+        json={"is_active": False, "max_redemptions": 50},
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+    patched = patch_resp.json()["promo_code"]
+    assert patched["is_active"] is False
+    assert patched["max_redemptions"] == 50
+    assert patch_resp.json()["audit_log_id"]
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_create_denied_for_support_agent(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email="support-promo@example.com",
+        role=AdminRole.support_agent,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    resp = await app_client.post(
+        "/api/admin/promo-codes",
+        json={
+            "code": "NOPE",
+            "grant_type": "extra_credits",
+            "payload": {"amount": 1, "credit_kind": "free"},
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_create_rejects_duplicate(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email=f"dup-{uuid.uuid4().hex[:6]}@example.com",
+        role=AdminRole.super_admin,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    payload = {
+        "code": "DUPLICATE",
+        "grant_type": "extra_credits",
+        "payload": {"amount": 2, "credit_kind": "free"},
+    }
+    first = await app_client.post(
+        "/api/admin/promo-codes",
+        json=payload,
+        headers=headers,
+    )
+    assert first.status_code == 201
+
+    second = await app_client.post(
+        "/api/admin/promo-codes",
+        json=payload,
+        headers=headers,
+    )
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "promo_code_exists"
