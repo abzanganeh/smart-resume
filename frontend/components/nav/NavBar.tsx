@@ -70,6 +70,7 @@ export function NavBar() {
             <NavLink href="/fit">Job fit</NavLink>
             <NavLink href="/dashboard">Dashboard</NavLink>
             <NavLink href="/tracker">Tracker</NavLink>
+            <NavLink href="/career-watch">Career Watch</NavLink>
             <JobsNavItem />
           </div>
         )}
