@@ -536,8 +536,10 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
     "experience" | "projects" | "certifications"
   >("experience");
 
-  const initialRef = useRef(initial);
-  initialRef.current = initial;
+  const initialRef = useRef(initial)
+  useEffect(() => {
+    initialRef.current = initial
+  }, [initial])
 
   useEffect(() => {
     reset(initialRef.current);

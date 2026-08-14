@@ -265,7 +265,6 @@ async def analyze_fit(
     llm = get_llm_client(
         job_fit_agent.FIT_LLM_PROVIDER,
         job_fit_agent.FIT_LLM_MODEL,
-        api_key=None,
     )
 
     async def event_generator():

@@ -29,10 +29,9 @@ from app.models.session import PhaseStatus
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
 from app.services.billing.credits import get_balance
-from app.services.billing.quota import (
-    PLAN_RESUMES_PER_PERIOD,
-    PLAN_SEARCHES_PER_PERIOD,
-)
+from app.services.billing.tier_limits_lookup import get_active_tier_limits
+from app.services.billing.plan_code import resolve_plan_code_for_subscription
+from app.services.billing.price_resolver import reverse_lookup_code
 from app.services.dashboard.activity import build_recent_activity
 from app.services.export_service import export_attachment_filename, render_docx, render_pdf, render_txt
 from app.services.session_store import create_session, get_session, update_session
@@ -251,8 +250,13 @@ async def dashboard_summary(
 
     if sub is not None:
         tier = sub.plan.value
-        resumes_limit = PLAN_RESUMES_PER_PERIOD.get(sub.plan, 0)
-        searches_limit = PLAN_SEARCHES_PER_PERIOD.get(sub.plan, 0)
+        plan_config_code = await reverse_lookup_code(db, sub.stripe_price_id)
+        plan_code = resolve_plan_code_for_subscription(
+            sub, plan_config_code=plan_config_code
+        )
+        limits = await get_active_tier_limits(db, plan_code)
+        resumes_limit = limits.resumes_per_period
+        searches_limit = limits.searches_per_period
         next_billing = sub.period_end.isoformat()
         subscription_payload = {
             "id": str(sub.id),

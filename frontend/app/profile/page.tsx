@@ -103,9 +103,8 @@ function ProfilePageContent() {
           return
         }
         if (onboardingIncomplete) {
-          const choice = session?.backendUser?.onboarding_ai_choice ?? "platform"
           const user = await patchOnboarding(token, {
-            ai_choice: choice === "byok" ? "byok" : "platform",
+            ai_choice: "platform",
             complete: true,
           })
           await updateSession({ backendUser: user })

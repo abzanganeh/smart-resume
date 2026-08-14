@@ -76,7 +76,7 @@ async def run_checkup(
         raise HTTPException(status_code=422, detail="Job description exceeds character limit.")
 
     raw_resume = await _extract_resume_text(resume_text=resume_text, file=file)
-    llm = get_llm_client(settings.LLM_PROVIDER, settings.LLM_MODEL, api_key=None)
+    llm = get_llm_client(settings.LLM_PROVIDER, settings.LLM_MODEL)
     parsed = await _structure_resume(raw_resume, llm)
     result = await run_checkup_analysis(
         parsed=parsed,

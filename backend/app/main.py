@@ -22,6 +22,7 @@ from app.routers import (
     admin,
     auth,
     billing,
+    career_watch,
     cover_letter,
     dashboard,
     export,
@@ -37,6 +38,7 @@ from app.routers import (
     notifications,
     phases,
     profile,
+    promo,
     public_config,
     resume,
     sessions,
@@ -211,6 +213,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(extension_auth.router)
 app.include_router(billing.router)
+app.include_router(promo.router)
+app.include_router(career_watch.router)
 app.include_router(profile.router)
 app.include_router(sessions.router)
 app.include_router(resume.router)

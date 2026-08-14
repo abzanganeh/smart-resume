@@ -60,6 +60,14 @@ class RefreshTokenReuseError(TokenError):
         self.user_id = user_id
 
 
+class SessionReplacedError(TokenError):
+    """A superseded auth session was presented after a newer login elsewhere."""
+
+    def __init__(self, user_id: str | None = None) -> None:
+        super().__init__("auth session replaced by a newer login")
+        self.user_id = user_id
+
+
 class TfaRequiredError(AuthError):
     """Login succeeded but TOTP step is required — return a 2fa_challenge token."""
 
@@ -93,6 +101,7 @@ __all__ = [
     "InvalidCredentialsError",
     "OAuthError",
     "RefreshTokenReuseError",
+    "SessionReplacedError",
     "TfaAlreadyEnrolledError",
     "TfaInvalidError",
     "TfaNotEnrolledError",

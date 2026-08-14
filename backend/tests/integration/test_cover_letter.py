@@ -15,7 +15,7 @@ from app.models.cover_letter import CoverLetterOutput
 from app.models.rewrite import TailoredExperienceEntry, TailoredResumeOutput
 from app.models.session import PhaseStatus
 from app.models.user import User
-from app.services.billing.credits import consume_credit
+from app.services.billing.credits import consume_credit, get_balance
 from app.services.session_store import create_session, update_session
 from tests.integration.test_auth import REGISTER_PAYLOAD
 
@@ -132,15 +132,18 @@ async def test_free_user_zero_credits_returns_402(
 
     user = await db_session.get(User, uuid.UUID(user_id))
     assert user is not None
-    balance = 6
-    while balance > 0:
+    while True:
+        balance = await get_balance(
+            db_session, user_id=user.id, credit_kind=CreditKind.free
+        )
+        if balance <= 0:
+            break
         await consume_credit(
             db_session,
             user_id=user.id,
             credit_kind=CreditKind.free,
             reason="resume_build",
         )
-        balance -= 1
     await db_session.commit()
 
     async def fake_run(session, llm, event_queue, *, tone="balanced", custom_hook=None):

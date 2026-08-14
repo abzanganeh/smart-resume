@@ -77,8 +77,6 @@ class Session(BaseModel):
     jd_raw: str | None = None
     provider: str | None = None
     model: str | None = None
-    # Ephemeral — user-supplied API key (BYOK). Never logged. Cleared on session expiry.
-    byok_api_key: str | None = None
 
     # Company intelligence extracted from the JD after Phase 1 completes.
     # Injected into the Phase 3 prompt when present and non-empty.

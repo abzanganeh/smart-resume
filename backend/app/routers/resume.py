@@ -70,7 +70,6 @@ async def _structure_resume(raw_text: str, llm) -> ParsedResume:
 async def upload_resume(
     session_id: str,
     file: UploadFile = File(...),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
 ):
@@ -99,10 +98,9 @@ async def upload_resume(
             detail=f"Resume exceeds {settings.MAX_RESUME_CHARS:,} characters. Trim older or irrelevant experience.",
         )
 
-    # BYOK: header key > session provider > .env default
     provider = x_provider or session.provider
     model = x_model or session.model
-    llm = get_llm_client(provider, model, api_key=x_api_key)
+    llm = get_llm_client(provider, model)
     parsed = await _structure_resume(raw_text, llm)
 
     session.resume_raw = raw_text
@@ -122,7 +120,6 @@ async def upload_resume(
 async def paste_resume(
     session_id: str,
     body: ResumeTextRequest,
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
 ):
@@ -138,7 +135,7 @@ async def paste_resume(
 
     provider = x_provider or session.provider
     model = x_model or session.model
-    llm = get_llm_client(provider, model, api_key=x_api_key)
+    llm = get_llm_client(provider, model)
     parsed = await _structure_resume(body.text, llm)
 
     session.resume_raw = body.text
@@ -209,7 +206,6 @@ class SuggestBulletFixesResponse(BaseModel):
 async def suggest_audit_bullet_fixes(
     session_id: str,
     body: SuggestBulletFixesRequest,
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
 ) -> SuggestBulletFixesResponse:
@@ -225,7 +221,7 @@ async def suggest_audit_bullet_fixes(
 
     provider = x_provider or session.provider
     model = x_model or session.model
-    llm = get_llm_client(provider, model, api_key=x_api_key)
+    llm = get_llm_client(provider, model)
     fixes = await suggest_bullet_fixes(
         llm,
         session=session,

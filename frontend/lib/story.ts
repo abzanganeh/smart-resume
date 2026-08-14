@@ -8,19 +8,13 @@ export async function polishResume(
   text: string,
   instruction: string,
   token: string,
-  options: { byokApiKey?: string; byokProvider?: string; byokModel?: string } = {},
 ): Promise<PolishResumeResponse> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
-  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
-  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
-
   const res = await fetch(`${BASE}/api/profile/resume/polish`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ text, instruction }),
   });
 
@@ -46,24 +40,14 @@ export interface StoryToResumeResponse {
 export async function submitStory(
   segments: string[],
   token: string,
-  options: {
-    byokApiKey?: string;
-    byokProvider?: string;
-    byokModel?: string;
-    whisperPath?: boolean;
-  } = {},
+  options: { whisperPath?: boolean } = {},
 ): Promise<StoryToResumeResponse> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (options.byokApiKey)   headers["X-Api-Key"]   = options.byokApiKey;
-  if (options.byokProvider) headers["X-Provider"]  = options.byokProvider;
-  if (options.byokModel)    headers["X-Model"]     = options.byokModel;
-
   const res = await fetch(`${BASE}/api/profile/resume/from-story`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       segments,
       whisper_path: options.whisperPath ?? false,
@@ -112,8 +96,8 @@ function consumeSseDataLine(
   if (evt.error) {
     throw new Error(
       label === "Coach"
-        ? "The coach could not respond. Check that AI is configured, or add your API key."
-        : "The interview could not start. Check that AI is configured, or add your API key.",
+        ? "The coach could not respond. Please retry in a moment."
+        : "The interview could not start. Please retry in a moment.",
     );
   }
   if (evt.delta) onDelta(evt.delta);
@@ -152,40 +136,19 @@ async function readSseStream(
   return { complete: isComplete };
 }
 
-/**
- * Stream one coaching question from the backend.
- *
- * Yields string deltas; resolves with { complete: boolean } on completion.
- *
- * @param segmentText   Transcript of the segment being coached
- * @param history       Prior coach/user exchanges in this session
- * @param token         Auth JWT
- * @param onDelta       Called with each streamed text fragment
- * @param options       BYOK / model overrides
- */
 export async function streamCoach(
   segmentText: string,
   history: CoachMessage[],
   token: string,
   onDelta: (delta: string) => void,
-  options: {
-    byokApiKey?: string;
-    byokProvider?: string;
-    byokModel?: string;
-    sessionId?: string;
-  } = {},
+  options: { sessionId?: string } = {},
 ): Promise<{ complete: boolean }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
-  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
-  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
-
   const res = await fetch(`${BASE}/api/profile/story/coach`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       segment_text: segmentText,
       history,
@@ -220,40 +183,18 @@ export interface InterviewMessage {
   text: string;
 }
 
-/**
- * Stream the next interview question from the backend.
- *
- * Calls POST /api/profile/story/interview/next.
- * Charges 1 credit on the very first question (empty history) for free users.
- *
- * @param history   Full conversation so far
- * @param token     Auth JWT
- * @param onDelta   Called with each streamed text fragment
- * @param options   BYOK / model overrides
- * @returns         { complete: boolean } — true when the interview is finished
- */
 export async function streamInterviewQuestion(
   history: InterviewMessage[],
   token: string,
   onDelta: (delta: string) => void,
-  options: {
-    byokApiKey?: string;
-    byokProvider?: string;
-    byokModel?: string;
-    sessionId?: string;
-  } = {},
+  options: { sessionId?: string } = {},
 ): Promise<{ complete: boolean }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
-  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
-  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
-
   const res = await fetch(`${BASE}/api/profile/story/interview/next`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       history,
       session_id: options.sessionId ?? null,
@@ -278,33 +219,17 @@ export async function streamInterviewQuestion(
   return readSseStream(reader, onDelta, "Interview");
 }
 
-/**
- * Submit completed interview Q&A to generate a resume.
- *
- * Calls POST /api/profile/story/interview/submit.
- * No additional credit charged (already paid for the session via /next).
- */
 export async function submitInterview(
   history: InterviewMessage[],
   token: string,
-  options: {
-    byokApiKey?: string;
-    byokProvider?: string;
-    byokModel?: string;
-    whisperPath?: boolean;
-  } = {},
+  options: { whisperPath?: boolean } = {},
 ): Promise<StoryToResumeResponse> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (options.byokApiKey)   headers["X-Api-Key"]  = options.byokApiKey;
-  if (options.byokProvider) headers["X-Provider"] = options.byokProvider;
-  if (options.byokModel)    headers["X-Model"]    = options.byokModel;
-
   const res = await fetch(`${BASE}/api/profile/story/interview/submit`, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       history,
       whisper_path: options.whisperPath ?? false,

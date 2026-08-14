@@ -1,16 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Key, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  getAiMode,
-  getStoredKey,
-  setAiMode,
-  subscribeByokChanges,
-  type AiMode,
-} from "@/lib/keyStore";
-import ProviderSetup from "@/components/wizard/ProviderSetup";
+import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import {
   LLMTierSelector,
 } from "@/components/session/LLMTierSelector";
@@ -37,24 +27,7 @@ export function SessionAiControls({
   onLlmTierChange,
   onRequestPurchase,
 }: Props) {
-  const [mode, setMode] = useState<AiMode>("platform");
-  const [byokEntry, setByokEntry] = useState<ReturnType<typeof getStoredKey>>(null);
-
-  useEffect(() => {
-    function refresh() {
-      setMode(getAiMode());
-      setByokEntry(getStoredKey());
-    }
-    refresh();
-    return subscribeByokChanges(refresh);
-  }, []);
-
-  const summary =
-    mode === "platform"
-      ? `Platform AI · ${llmTier.charAt(0).toUpperCase()}${llmTier.slice(1)} tier`
-      : byokEntry?.apiKey
-        ? `Your key · ${byokEntry.provider}${byokEntry.model ? ` / ${byokEntry.model}` : ""}`
-        : "Your API key · not configured";
+  const summary = `Platform AI · ${llmTier.charAt(0).toUpperCase()}${llmTier.slice(1)} tier`;
 
   return (
     <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden">
@@ -78,38 +51,10 @@ export function SessionAiControls({
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-700 space-y-4">
           <p className="text-xs text-slate-500">
-            Change provider or switch to Platform AI without starting a new session. Applies to the next step you run.
+            Smart Resume runs the AI for you using your subscription tier and credits.
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAiMode("platform")}
-              className={cn(
-                "px-3 py-2 rounded-lg text-xs font-semibold border transition-colors",
-                mode === "platform"
-                  ? "bg-amber-400/15 border-amber-400/50 text-amber-300"
-                  : "border-slate-600 text-slate-400 hover:border-slate-500",
-              )}
-            >
-              Platform AI (credits)
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiMode("byok")}
-              className={cn(
-                "px-3 py-2 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5",
-                mode === "byok"
-                  ? "bg-violet-500/15 border-violet-500/50 text-violet-300"
-                  : "border-slate-600 text-slate-400 hover:border-slate-500",
-              )}
-            >
-              <Key className="w-3.5 h-3.5" />
-              My API key (BYOK)
-            </button>
-          </div>
-
-          {mode === "platform" && showTierSelector && (
+          {showTierSelector && (
             <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
               <p className="text-xs text-slate-400 mb-3">
                 Uses Smart Resume credits. Standard is included; Better and Best use upgrade packs.
@@ -124,20 +69,10 @@ export function SessionAiControls({
             </div>
           )}
 
-          {mode === "platform" && !showTierSelector && (
+          {!showTierSelector && (
             <p className="text-xs text-slate-500 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2">
               Sign in to use Platform AI tiers. Anonymous sessions use the server default model.
             </p>
-          )}
-
-          {mode === "byok" && (
-            <ProviderSetup
-              inline
-              onComplete={() => {
-                setByokEntry(getStoredKey());
-                setMode("byok");
-              }}
-            />
           )}
         </div>
       )}

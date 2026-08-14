@@ -329,9 +329,6 @@ function UserDetailDrawer({
                 <InfoRow label="Credits" value={<span className="font-mono text-white">{user.credit_balance}</span>} />
                 <InfoRow label="Plan" value={user.subscription_status ?? "—"} />
                 <InfoRow label="Resumes" value={String(user.resume_count)} />
-                {user.byok_key_fingerprint && (
-                  <InfoRow label="BYOK" value={<code className="text-xs text-amber-300">{user.byok_key_fingerprint.slice(0, 16)}…</code>} />
-                )}
                 {user.stripe_customer_id && (
                   <InfoRow label="Stripe ID" value={<code className="text-xs text-slate-400">{user.stripe_customer_id}</code>} />
                 )}

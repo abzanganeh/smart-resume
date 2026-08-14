@@ -30,9 +30,6 @@ interface Props {
   isFreeUser: boolean;
   onAddAsSegment: (text: string) => void;
   onClose: () => void;
-  byokApiKey?: string;
-  byokProvider?: string;
-  byokModel?: string;
 }
 
 export function StoryCoach({
@@ -44,9 +41,6 @@ export function StoryCoach({
   isFreeUser,
   onAddAsSegment,
   onClose,
-  byokApiKey,
-  byokProvider,
-  byokModel,
 }: Props) {
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [streamingText, setStreamingText] = useState("");
@@ -112,9 +106,6 @@ export function StoryCoach({
             scrollBottom();
           },
           {
-            byokApiKey,
-            byokProvider,
-            byokModel,
             sessionId: storyBuildSessionId,
           },
         );
@@ -144,7 +135,7 @@ export function StoryCoach({
         inputRef.current?.focus();
       }
     },
-    [segmentText, token, byokApiKey, byokProvider, byokModel, scrollBottom, storyBuildSessionId, isFreeUser, coachSessionUnlocked, onCoachSessionUnlocked],
+    [segmentText, token, scrollBottom, storyBuildSessionId, isFreeUser, coachSessionUnlocked, onCoachSessionUnlocked],
   );
 
   // Fire first question on mount (once credit accepted)

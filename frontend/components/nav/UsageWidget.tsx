@@ -16,7 +16,9 @@ const POLL_MS = 60_000
 export function UsageWidget() {
   const { data: session, status, update } = useSession()
   const updateRef = useRef(update)
-  updateRef.current = update
+  useEffect(() => {
+    updateRef.current = update
+  }, [update])
 
   const tokenExpired = session?.error === "TokenExpired"
   const token = tokenExpired ? undefined : session?.backendAccessToken

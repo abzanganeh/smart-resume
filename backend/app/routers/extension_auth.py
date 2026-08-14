@@ -48,12 +48,18 @@ from app.models.user import (
 # This is a deliberate coupling — keep both routers in sync if the
 # response shape changes. Renaming or moving ``_me`` will break this
 # import silently at runtime.
-from app.routers.auth import REGISTRATION_GRANT_CREDITS, MeResponse, _me
+from app.routers.auth import (
+    REGISTRATION_GRANT_CREDITS,
+    MeResponse,
+    _auth_session_id_for_refresh_token,
+    _me,
+)
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.exceptions import (
     OAuthError,
     RefreshTokenReuseError,
+    SessionReplacedError,
     TokenExpiredError,
     TokenInvalidError,
 )
@@ -63,6 +69,8 @@ from app.services.auth.tokens import (
     create_access_token,
     create_refresh_token,
     make_device_fingerprint,
+    new_auth_session_id,
+    revoke_all_user_tokens,
     rotate_refresh_token,
 )
 
@@ -154,7 +162,19 @@ async def _issue_extension_session(
     request: Request,
     user: User,
 ) -> ExtensionAuthResponse:
-    access = create_access_token(user.id, ttl=settings.ACCESS_TOKEN_TTL_SECONDS)
+    auth_session_id = new_auth_session_id()
+    await revoke_all_user_tokens(db, user_id=user.id)
+    await redis_session.revoke_all_user_tokens(user.id)
+    await redis_session.set_active_auth_session(
+        user.id,
+        auth_session_id,
+        ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+    )
+    access = create_access_token(
+        user.id,
+        ttl=settings.ACCESS_TOKEN_TTL_SECONDS,
+        session_id=auth_session_id,
+    )
     device_fp = _fingerprint(request)
     issued = await create_refresh_token(
         db,
@@ -167,6 +187,7 @@ async def _issue_extension_session(
         user.id,
         device_fp,
         ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+        auth_session_id=auth_session_id,
     )
     user.last_login_at = datetime.now(timezone.utc)
     # flush() pushes the last_login_at update + refresh token row to the
@@ -309,6 +330,9 @@ async def extension_refresh(
     _require_enabled()
 
     device_fp = _fingerprint(request)
+    auth_session_id = await _auth_session_id_for_refresh_token(
+        db, payload.refresh_token
+    )
     try:
         issued = await rotate_refresh_token(
             db,
@@ -316,6 +340,11 @@ async def extension_refresh(
             device_fingerprint=device_fp,
             ttl_seconds=settings.REFRESH_TOKEN_TTL_SECONDS,
         )
+    except SessionReplacedError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "session_replaced"},
+        ) from None
     except RefreshTokenReuseError as exc:
         if exc.user_id:
             try:
@@ -362,8 +391,13 @@ async def extension_refresh(
         user.id,
         device_fp,
         ttl=settings.REFRESH_TOKEN_TTL_SECONDS,
+        auth_session_id=auth_session_id,
     )
-    access = create_access_token(user.id, ttl=settings.ACCESS_TOKEN_TTL_SECONDS)
+    access = create_access_token(
+        user.id,
+        ttl=settings.ACCESS_TOKEN_TTL_SECONDS,
+        session_id=auth_session_id,
+    )
     return ExtensionAuthResponse(
         access_token=access,
         refresh_token=issued.token,

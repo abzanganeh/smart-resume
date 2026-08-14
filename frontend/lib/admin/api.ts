@@ -602,7 +602,6 @@ function mapBackendUser(row: BackendUserSummary): AdminUser {
     credit_balance: 0,
     subscription_status: null,
     stripe_customer_id: null,
-    byok_key_fingerprint: null,
     suspended_at: row.suspended_at ?? null,
     closure_requested_at: row.closure_requested_at ?? null,
     email_verified_at: null,

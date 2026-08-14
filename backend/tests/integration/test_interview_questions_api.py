@@ -23,7 +23,7 @@ async def test_interview_questions_universal_only(app_client: AsyncClient) -> No
 async def test_interview_questions_domain_merge(app_client: AsyncClient) -> None:
     r = await app_client.get(
         "/api/interview-questions",
-        params={"domain": "software_engineering", "limit": 40},
+        params={"domain": "software_engineering", "limit": 50},
     )
     assert r.status_code == 200, r.text
     body = r.json()

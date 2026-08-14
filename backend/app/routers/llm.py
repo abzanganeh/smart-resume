@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.llm.base import LLMMessage
@@ -12,7 +12,6 @@ router = APIRouter(prefix="/api/llm", tags=["llm"])
 class VerifyRequest(BaseModel):
     provider: str
     model: str
-    api_key: str | None = None
 
 
 def _friendly_error(exc: Exception) -> str:
@@ -36,26 +35,13 @@ def _friendly_error(exc: Exception) -> str:
 
 
 @router.post("/verify")
-async def verify_llm_key(
-    body: VerifyRequest,
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
-):
+async def verify_llm_key(body: VerifyRequest):
     """
-    Make a tiny LLM call to verify provider + model + key.
+    Make a tiny LLM call to verify provider + model using platform keys.
     Always returns 200 with { valid: bool, message: str } — never throws for bad keys.
     """
-    api_key = (body.api_key or x_api_key or "").strip() or None
-
-    if body.provider != "ollama" and not api_key:
-        return {
-            "valid": False,
-            "message": "Paste your API key first, then click Test connection.",
-            "provider": body.provider,
-            "model": body.model,
-        }
-
     try:
-        llm = get_llm_client(body.provider, body.model, api_key=api_key)
+        llm = get_llm_client(body.provider, body.model)
         await llm.complete(
             [LLMMessage(role="user", content='Reply with exactly: OK')],
             max_tokens=5,
@@ -63,7 +49,7 @@ async def verify_llm_key(
         )
         return {
             "valid": True,
-            "message": "Connection successful — key and model work.",
+            "message": "Connection successful — platform key and model work.",
             "provider": body.provider,
             "model": body.model,
         }

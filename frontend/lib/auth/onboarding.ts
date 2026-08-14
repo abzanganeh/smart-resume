@@ -68,7 +68,7 @@ export function resolveOnboardingStepIndex(
 
   const url = options?.urlStepIndex
   const hasMaster = Boolean(options?.hasMasterResume)
-  const hasAiChoice = user.onboarding_ai_choice === "platform" || user.onboarding_ai_choice === "byok"
+  const hasAiChoice = user.onboarding_ai_choice === "platform"
 
   if (url != null && url >= 0 && url < ONBOARDING_STEP_COUNT) {
     if (url >= 3 && hasAiChoice && hasMaster) return 3

@@ -51,7 +51,7 @@ const MODES: ModeCard[] = [
       "Answer by typing or speaking (voice supported)",
       "Resume generated from your complete answers",
     ],
-    cost: "1 credit per session (subscribers & BYOK: free)",
+    cost: "1 credit per session (subscribers: free)",
     costColor: "text-amber-400",
   },
 ];

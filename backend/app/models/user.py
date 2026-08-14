@@ -147,15 +147,6 @@ class User(Base):
     credit_balance: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    byok_api_key: Mapped[Optional[bytes]] = mapped_column(
-        LargeBinary, nullable=True
-    )
-    byok_provider: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
-    byok_key_fingerprint: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True
-    )
     totp_secret: Mapped[Optional[bytes]] = mapped_column(
         LargeBinary, nullable=True
     )

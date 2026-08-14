@@ -133,16 +133,17 @@ class Settings(BaseSettings):
     # Webhook signing secret used by stripe.Webhook.construct_event.
     STRIPE_WEBHOOK_SECRET: str = ""
 
-    # Bootstrap / disaster-recovery price IDs per the canonical 10 codes
-    # in IMPLEMENTATION_PLAN §7.1.  PlanConfig DB rows take precedence at
-    # runtime; these env values are only consulted if no active PlanConfig
-    # row exists for the code (see BillingService.resolve_price_id).
-    STRIPE_PRICE_DAILY: str = ""
+    # Bootstrap / disaster-recovery price IDs for canonical PlanConfig codes.
+    # PlanConfig DB rows take precedence at runtime; env vars are fallback only.
     STRIPE_PRICE_WEEKLY: str = ""
-    STRIPE_PRICE_MONTHLY: str = ""
-    STRIPE_PRICE_MONTHLY_YEARLY: str = ""  # yearly billing-cycle for monthly plan
+    STRIPE_PRICE_MONTHLY_PRO: str = ""
+    STRIPE_PRICE_YEARLY_PRO: str = ""
+    STRIPE_PRICE_MONTHLY_PLUS: str = ""
+    STRIPE_PRICE_YEARLY_PLUS: str = ""
+    STRIPE_PRICE_MONTHLY_PREMIUM: str = ""
+    STRIPE_PRICE_YEARLY_PREMIUM: str = ""
 
-    STRIPE_PRICE_BETTER_PACK: str = ""        # better_5pack
+    STRIPE_PRICE_BETTER_PACK: str = ""        # better_5pack (legacy add-on)
     STRIPE_PRICE_BETTER_MONTHLY: str = ""
     STRIPE_PRICE_BETTER_YEARLY: str = ""
 

@@ -147,10 +147,8 @@ async def trigger_phase(
     phase: int,
     body: RunPhaseRequest = RunPhaseRequest(),
     authorization: str | None = Header(default=None, alias="Authorization"),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
-    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
@@ -259,8 +257,6 @@ async def trigger_phase(
 
     apply_llm_request_headers(
         session,
-        x_use_platform=x_use_platform,
-        x_api_key=x_api_key,
         x_provider=x_provider,
         x_model=x_model,
     )
@@ -315,9 +311,7 @@ async def phase_events(session_id: str, phase: int):
         await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
-    llm = get_llm_client(
-        session.provider, session.model, api_key=getattr(session, "byok_api_key", None)
-    )
+    llm = get_llm_client(session.provider, session.model)
 
     task = asyncio.create_task(run_phase(session_id, phase, llm, event_queue))
 

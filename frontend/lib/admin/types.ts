@@ -169,7 +169,6 @@ export interface AdminUser {
   credit_balance: number
   subscription_status: string | null
   stripe_customer_id: string | null
-  byok_key_fingerprint: string | null
   suspended_at: string | null
   closure_requested_at: string | null
   email_verified_at: string | null

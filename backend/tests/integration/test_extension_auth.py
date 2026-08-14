@@ -176,7 +176,8 @@ async def test_extension_login_rejects_totp_user(
     # only inspects user.has_totp.
     db_user = await db_session.get(User, user_id)
     assert db_user is not None
-    db_user.has_totp = True
+    db_user.totp_secret = b"encrypted-placeholder"
+    db_user.totp_recovery_codes = ["$2b$12$placeholder.hash.for.test"]
     await db_session.commit()
 
     r = await app_client.post(

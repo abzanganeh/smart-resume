@@ -28,10 +28,12 @@ from app.services import session_store
 
 _TOKEN_KEY_FMT = "refresh:{token_id}"
 _USER_INDEX_KEY_FMT = "refresh_user:{user_id}"
+_ACTIVE_SESSION_KEY_FMT = "active_session:{user_id}"
 
 # In-memory fallback for local dev / unit tests --------------------------------
 _memory_tokens: dict[str, dict[str, Any]] = {}
 _memory_user_index: dict[str, set[str]] = {}
+_memory_active_sessions: dict[str, dict[str, Any]] = {}
 
 
 def _redis() -> aioredis.Redis | None:
@@ -47,6 +49,10 @@ def _user_key(user_id: uuid.UUID | str) -> str:
     return _USER_INDEX_KEY_FMT.format(user_id=str(user_id))
 
 
+def _active_session_key(user_id: uuid.UUID | str) -> str:
+    return _ACTIVE_SESSION_KEY_FMT.format(user_id=str(user_id))
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -57,16 +63,19 @@ async def bind_refresh_token_to_redis(
     user_id: uuid.UUID | str,
     device_fp: str,
     ttl: int | None = None,
+    *,
+    auth_session_id: uuid.UUID | str | None = None,
 ) -> None:
     """Persist a refresh token id with its metadata + TTL."""
     ttl_seconds = ttl if ttl is not None else settings.REFRESH_TOKEN_TTL_SECONDS
-    payload = json.dumps(
-        {
-            "user_id": str(user_id),
-            "device_fingerprint": device_fp,
-            "issued_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+    payload_data: dict[str, Any] = {
+        "user_id": str(user_id),
+        "device_fingerprint": device_fp,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if auth_session_id is not None:
+        payload_data["auth_session_id"] = str(auth_session_id)
+    payload = json.dumps(payload_data)
     r = _redis()
     if r is not None:
         async with r.pipeline(transaction=False) as pipe:
@@ -156,16 +165,68 @@ async def list_user_token_ids(user_id: uuid.UUID | str) -> list[str]:
     return sorted(_memory_user_index.get(_user_key(user_id), set()))
 
 
+async def set_active_auth_session(
+    user_id: uuid.UUID | str,
+    session_id: uuid.UUID | str,
+    *,
+    ttl: int | None = None,
+) -> None:
+    """Record the sole active auth session id for ``user_id``."""
+    ttl_seconds = ttl if ttl is not None else settings.REFRESH_TOKEN_TTL_SECONDS
+    key = _active_session_key(user_id)
+    value = str(session_id)
+    r = _redis()
+    if r is not None:
+        await r.setex(key, ttl_seconds, value)
+        return
+
+    _memory_active_sessions[key] = {
+        "session_id": value,
+        "expires_at": datetime.now(timezone.utc).timestamp() + ttl_seconds,
+    }
+
+
+async def get_active_auth_session_id(user_id: uuid.UUID | str) -> str | None:
+    """Return the current active auth session id or ``None``."""
+    key = _active_session_key(user_id)
+    r = _redis()
+    if r is not None:
+        raw = await r.get(key)
+        return raw.decode("utf-8") if isinstance(raw, bytes) else raw
+
+    entry = _memory_active_sessions.get(key)
+    if entry is None:
+        return None
+    if entry["expires_at"] <= datetime.now(timezone.utc).timestamp():
+        _memory_active_sessions.pop(key, None)
+        return None
+    return entry["session_id"]
+
+
+async def clear_active_auth_session(user_id: uuid.UUID | str) -> None:
+    """Drop the active auth session marker for ``user_id`` (logout)."""
+    key = _active_session_key(user_id)
+    r = _redis()
+    if r is not None:
+        await r.delete(key)
+        return
+    _memory_active_sessions.pop(key, None)
+
+
 def _reset_for_tests() -> None:
     """Clear the in-memory store between unit tests."""
     _memory_tokens.clear()
     _memory_user_index.clear()
+    _memory_active_sessions.clear()
 
 
 __all__ = [
     "bind_refresh_token_to_redis",
+    "clear_active_auth_session",
+    "get_active_auth_session_id",
     "get_refresh_token_metadata",
     "list_user_token_ids",
     "revoke_all_user_tokens",
     "revoke_redis_token",
+    "set_active_auth_session",
 ]

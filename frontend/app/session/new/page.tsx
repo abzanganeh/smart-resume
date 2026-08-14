@@ -16,7 +16,6 @@ import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
 import { UserInfoForm } from "@/components/wizard/UserInfoForm";
 import { JDInput } from "@/components/wizard/JDInput";
-import ProviderSetup from "@/components/wizard/ProviderSetup";
 import {
   createSession,
   saveUserInfo,
@@ -27,14 +26,12 @@ import {
   type ParsedResume,
   type UserInfoPayload,
 } from "@/lib/api";
-import { getStoredKey } from "@/lib/keyStore";
 
-// New order: AI → Resume → Job Description → Your Info
-const STEPS = ["ai", "resume", "jd", "info"] as const;
+// Resume → Job Description → Your Info (platform AI — no BYOK step)
+const STEPS = ["resume", "jd", "info"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
-  ai:     "Choose AI",
   resume: "Upload Resume",
   jd:     "Job Description",
   info:   "Your Info",
@@ -45,7 +42,7 @@ function NewSessionContent() {
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>((searchParams.get("step") as Step) ?? "ai");
+  const [step, setStep] = useState<Step>((searchParams.get("step") as Step) ?? "resume");
 
   // Carry forward between steps
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
@@ -56,9 +53,6 @@ function NewSessionContent() {
 
   const [loading, setLoading] = useState(false);
   const jdLoadedRef = useRef(false);
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("gpt-4o");
-  const [aiReady, setAiReady] = useState(false);
   const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
 
   // Restore extension handoff if OAuth stripped jd_id from the URL.
@@ -111,13 +105,6 @@ function NewSessionContent() {
 
     initSession();
 
-    const stored = getStoredKey();
-    if (stored) {
-      setProvider(stored.provider);
-      setModel(stored.model);
-      setAiReady(true);
-    }
-
     const jdFromQuery = searchParams.get("jd");
     if (jdFromQuery) {
       try {
@@ -146,7 +133,6 @@ function NewSessionContent() {
         clearCheckupHandoff();
       }
     }
-
   }, [searchParams, router]);
 
   // Separate effect: load JD from extension or jobs API once the backend token
@@ -280,8 +266,8 @@ function NewSessionContent() {
       // loads and push ?step=jd into the URL. Resetting here would race.
       if (searchParams.get("jd_id")) return;
       // No valid step param → fresh navigation; clear in-memory wizard state.
-      if (step !== "ai") {
-        setStep("ai");
+      if (step !== "resume") {
+        setStep("resume");
         setParsedResume(null);
         setJdText("");
         setSessionId(null);
@@ -346,13 +332,6 @@ function NewSessionContent() {
     };
   }, [step, sessionId, router]);
 
-  const handleAiComplete = (p: string, m: string) => {
-    setProvider(p);
-    setModel(m);
-    setAiReady(true);
-    goTo("resume");
-  };
-
   const handleResumeParsed = (parsed: ParsedResume) => {
     setParsedResume(parsed);
     // If JD is already filled (extension flow: JD → Resume → Info), advance to info.
@@ -370,7 +349,7 @@ function NewSessionContent() {
     setLoading(true);
     setJdText(payload.jd_text);
     try {
-      await submitJD(sessionId, { ...payload, provider, model });
+      await submitJD(sessionId, payload);
 
       let resumeData: ParsedResume | null = parsedResume;
 
@@ -458,15 +437,13 @@ function NewSessionContent() {
               <button
                 type="button"
                 onClick={() => {
-                  if (i < stepIndex || s === "ai") goTo(s);
+                  if (i < stepIndex) goTo(s);
                 }}
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
                   i < stepIndex
                     ? "bg-amber-400 text-slate-900 hover:bg-amber-300 cursor-pointer"
                     : i === stepIndex
-                    ? s === "ai"
-                      ? "bg-violet-600 text-white ring-2 ring-violet-500/40"
-                      : "bg-amber-400 text-slate-900 ring-2 ring-amber-400/30"
+                    ? "bg-amber-400 text-slate-900 ring-2 ring-amber-400/30"
                     : "bg-slate-800 text-slate-500 cursor-default"
                 }`}
               >
@@ -495,22 +472,7 @@ function NewSessionContent() {
         {/* Step content */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8">
 
-          {/* ── Step 1: Choose AI ───────────────────────────────────────── */}
-          {step === "ai" && (
-            <div>
-              <div className="mb-6">
-                <h1 className="text-xl font-bold mb-1">Choose your AI provider</h1>
-                <p className="text-slate-400 text-sm">
-                  This app uses{" "}
-                  <strong className="text-slate-200">your own API key</strong> — we never
-                  pay for or store your AI calls. Pick a free option if you don't have a key yet.
-                </p>
-              </div>
-              <ProviderSetup onComplete={handleAiComplete} />
-            </div>
-          )}
-
-          {/* ── Step 2: Upload Resume ───────────────────────────────────── */}
+          {/* ── Step 1: Upload Resume ───────────────────────────────────── */}
           {step === "resume" && sessionId && (
             <div>
               <h1 className="text-xl font-bold mb-1">Upload your resume</h1>
@@ -531,27 +493,12 @@ function NewSessionContent() {
           {step === "jd" && (
             <div>
               <h1 className="text-xl font-bold mb-1">Job description</h1>
-              <p className="text-slate-400 text-sm mb-1">
-                Paste the full job posting. We'll extract every ATS keyword and
-                then pre-fill your info from what's already in your resume.
+              <p className="text-slate-400 text-sm mb-6">
+                Paste the full job posting. Smart Resume uses platform AI to extract ATS keywords
+                and pre-fill your info from your resume.
               </p>
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-xs text-slate-500">Using:</span>
-                <span className="text-xs font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded px-2 py-0.5">
-                  {provider} / {model}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => goTo("ai")}
-                  className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
-                >
-                  change
-                </button>
-              </div>
               <JDInput
                 onSubmit={handleJD}
-                selectedProvider={provider}
-                selectedModel={model}
                 loading={loading}
                 initialJdText={jdText}
                 jdId={searchParams.get("jd_id") ?? undefined}

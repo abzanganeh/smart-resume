@@ -50,7 +50,7 @@ export interface BackendUser {
   closure_requested_at: string | null
   suspended_at: string | null
   onboarding_completed_at: string | null
-  onboarding_ai_choice: "platform" | "byok" | null
+  onboarding_ai_choice: "platform" | null
 }
 
 interface BackendAuthUser extends User {
