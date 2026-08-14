@@ -70,6 +70,17 @@ class PlanLimitReachedError(BillingError):
         self.limit = limit
 
 
+class WhisperNotAllowedError(BillingError):
+    """Whisper transcription is not included on the user's tier.
+
+    Translated to HTTP 402 ``whisper_not_available``.
+    """
+
+    def __init__(self, *, plan_code: str) -> None:
+        super().__init__(f"whisper not available for plan={plan_code!r}")
+        self.plan_code = plan_code
+
+
 class BillingCycleMismatchError(BillingError):
     """Yearly LLM add-on requires a yearly base subscription.
 

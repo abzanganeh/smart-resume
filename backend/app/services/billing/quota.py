@@ -275,11 +275,15 @@ async def check_quota_for_story(
 ) -> QuotaDecision:
     """Quota for story-mode resume generation.
 
-    BYOK removed — platform LLM only.  Whisper path costs 2 credits for
-    free users; Web Speech is free.  Subscribers are unlimited.
+    Web Speech is free.  Whisper path requires tier entitlement (slice 6).
     """
     if user.is_suspended:
         raise AccountSuspendedError("account_suspended")
+
+    if whisper_path:
+        from app.services.billing.whisper_gate import check_and_increment_whisper_use
+
+        await check_and_increment_whisper_use(session, user=user)
 
     sub = await _active_subscription_for(session, user_id=user.id)
     now = datetime.now(timezone.utc)
@@ -296,24 +300,22 @@ async def check_quota_for_story(
             charged_to="free_web_speech",
         )
 
-    whisper_cost = 2
-    last_row = None
-    for _ in range(whisper_cost):
-        try:
-            last_row = await consume_credit(
-                session,
-                user_id=user.id,
-                credit_kind=CreditKind.free,
-                reason=QuotaAction.story_build.value,
-                session_id=session_id,
-            )
-        except InsufficientCreditsError:
-            raise
+    # Whisper on free tier is blocked by whisper_gate above; story credit for legacy path.
+    try:
+        row = await consume_credit(
+            session,
+            user_id=user.id,
+            credit_kind=CreditKind.free,
+            reason=QuotaAction.story_build.value,
+            session_id=session_id,
+        )
+    except InsufficientCreditsError:
+        raise
 
     return QuotaDecision(
         action=QuotaAction.story_build,
         charged_to="free_credit",
-        credit_transaction_id=last_row.id if last_row else None,
+        credit_transaction_id=row.id,
     )
 
 

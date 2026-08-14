@@ -18,18 +18,39 @@ async def test_story_web_speech_is_free():
 
 
 @pytest.mark.asyncio
-async def test_story_whisper_costs_two_credits():
-    """Whisper path costs 2 credits for free users."""
+async def test_story_whisper_blocked_for_free_tier() -> None:
+    """Free tier cannot use Whisper path."""
+    from app.services.billing.exceptions import WhisperNotAllowedError
+    from app.services.billing.whisper_gate import check_and_increment_whisper_use
+
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id="user-1")
-    mock_transaction = MagicMock(id="txn-1")
-    with patch("app.services.billing.quota._active_subscription_for", return_value=None), \
-         patch("app.services.billing.quota.consume_credit", return_value=mock_transaction) as mock_consume:
-        result = await check_quota_for_story(
-            mock_db, user=mock_user, whisper_path=True
-        )
-    assert result.charged_to == "free_credit"
-    assert mock_consume.call_count == 2
+
+    with patch(
+        "app.services.billing.whisper_gate._resolve_limits_for_user",
+        new_callable=AsyncMock,
+        return_value=(
+            __import__(
+                "app.services.billing.tier_limits_lookup", fromlist=["TierLimits"]
+            ).TierLimits(
+                plan_code="free",
+                resumes_per_period=3,
+                cover_letters_per_period=3,
+                searches_per_period=5,
+                fit_analyses_per_period=3,
+                checkups_per_period=3,
+                story_sessions=1,
+                coached_sessions=1,
+                whisper_enabled=False,
+                whisper_uses_per_period=0,
+                soft_cap_message=None,
+            ),
+            None,
+            0,
+        ),
+    ):
+        with pytest.raises(WhisperNotAllowedError):
+            await check_and_increment_whisper_use(mock_db, user=mock_user)
 
 
 @pytest.mark.asyncio
@@ -50,7 +71,7 @@ async def test_story_subscriber_is_free():
 
     with patch("app.services.billing.quota._active_subscription_for", return_value=mock_sub):
         result = await check_quota_for_story(
-            mock_db, user=mock_user, whisper_path=True
+            mock_db, user=mock_user, whisper_path=False
         )
     assert result.charged_to == "subscription"
     assert result.action == QuotaAction.story_build

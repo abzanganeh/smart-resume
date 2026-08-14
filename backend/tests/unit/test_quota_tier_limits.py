@@ -114,27 +114,30 @@ async def test_subscriber_search_limit_from_tier_limits() -> None:
 
 
 @pytest.mark.asyncio
-async def test_story_byok_path_removed_whisper_costs_credits() -> None:
-    """BYOK removed — whisper path charges credits for free users."""
+async def test_story_byok_path_removed_whisper_gated() -> None:
+    """Whisper path invokes tier gate before story quota."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id=uuid4())
-    mock_transaction = MagicMock(id=uuid4())
+    mock_txn = MagicMock(id=uuid4())
 
     with patch(
+        "app.services.billing.whisper_gate.check_and_increment_whisper_use",
+        new_callable=AsyncMock,
+    ) as mock_whisper, patch(
         "app.services.billing.quota._active_subscription_for",
         return_value=None,
     ), patch(
         "app.services.billing.quota.consume_credit",
-        return_value=mock_transaction,
-    ) as mock_consume:
+        return_value=mock_txn,
+    ):
         result = await check_quota_for_story(
             mock_db,
             user=mock_user,
             whisper_path=True,
         )
 
+    mock_whisper.assert_awaited_once()
     assert result.charged_to == "free_credit"
-    assert mock_consume.call_count == 2
 
 
 @pytest.mark.asyncio

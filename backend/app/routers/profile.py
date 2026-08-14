@@ -279,18 +279,46 @@ async def get_resume(
 async def transcribe_resume_audio(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     audio: UploadFile = File(...),
 ):
     """Transcribe spoken resume audio to text using OpenAI Whisper.
 
-    Accepts any audio format supported by Whisper (webm, ogg, mp4, mp3, wav).
-    Uses the platform ``OPENAI_API_KEY``.
-
-    Returns ``{"text": "<transcript>"}`` on success.
+    Gated by tier ``whisper_enabled`` / ``whisper_uses_per_period`` limits.
     """
     import io
 
     import openai
+
+    from app.services.billing.exceptions import (
+        AccountSuspendedError,
+        PlanLimitReachedError,
+        WhisperNotAllowedError,
+    )
+    from app.services.billing.whisper_gate import check_and_increment_whisper_use
+
+    try:
+        await check_and_increment_whisper_use(db, user=user)
+    except AccountSuspendedError:
+        raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+    except WhisperNotAllowedError:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "whisper_not_available",
+                "message": "Whisper transcription requires a paid plan. Use Chrome/Edge live transcription or upgrade.",
+            },
+        )
+    except PlanLimitReachedError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "plan_limit_reached",
+                "action": exc.action,
+                "used": exc.used,
+                "limit": exc.limit,
+            },
+        )
 
     api_key = (settings.OPENAI_API_KEY or "").strip()
     if not api_key:

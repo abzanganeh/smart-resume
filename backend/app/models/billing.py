@@ -229,6 +229,9 @@ class Subscription(Base):
     fit_analyses_used: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    whisper_uses_used: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     upgraded_resumes_used: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
