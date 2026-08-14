@@ -25,8 +25,7 @@ from app.services.billing.exceptions import (
     PlanLimitReachedError,
     SubscriptionRequiredError,
 )
-from app.services.billing.plan_code import resolve_plan_code_for_subscription
-from app.services.billing.price_resolver import reverse_lookup_code
+from app.services.billing.plan_code_resolver import resolve_plan_code_for_user
 from app.services.billing.tier_limits_lookup import TierLimits, get_active_tier_limits
 
 log = structlog.get_logger("billing.quota")
@@ -101,13 +100,10 @@ def _within_period(sub: Subscription, *, now: datetime) -> bool:
     return sub.period_start <= now <= sub.period_end
 
 
-async def _tier_limits_for_subscription(
-    session: AsyncSession, sub: Subscription
+async def _tier_limits_for_user(
+    session: AsyncSession, user: User
 ) -> TierLimits:
-    plan_config_code = await reverse_lookup_code(session, sub.stripe_price_id)
-    plan_code = resolve_plan_code_for_subscription(
-        sub, plan_config_code=plan_config_code
-    )
+    plan_code = await resolve_plan_code_for_user(session, user)
     return await get_active_tier_limits(session, plan_code)
 
 
@@ -129,7 +125,7 @@ async def check_and_increment_quota(
             sub = None
 
     if sub is not None and _within_period(sub, now=now):
-        limits = await _tier_limits_for_subscription(session, sub)
+        limits = await _tier_limits_for_user(session, user)
 
         if action in RESUME_COUNTER_ACTIONS:
             limit = limits.resumes_per_period

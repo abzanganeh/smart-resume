@@ -28,8 +28,10 @@ def validate_grant_payload(
                 "extra_credits payload requires positive integer amount"
             )
         credit_kind = payload.get("credit_kind", "free")
-        if credit_kind not in {kind.value for kind in CreditKind}:
-            raise InvalidGrantPayloadError("invalid credit_kind in extra_credits payload")
+        if credit_kind != CreditKind.free.value:
+            raise InvalidGrantPayloadError(
+                "extra_credits grants only support credit_kind='free'"
+            )
         return
 
     if grant_type == AdminGrantType.tier_override:

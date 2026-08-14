@@ -10,9 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tier_limits import TierLimitsConfig
 from app.models.user import User
 from app.models.career_watch import UserWatchedCompany
-from app.services.billing.plan_code import resolve_plan_code_for_subscription
-from app.services.billing.price_resolver import reverse_lookup_code
-from app.services.billing.quota import _active_subscription_for
+from app.services.billing.plan_code_resolver import resolve_plan_code_for_user
 from app.services.billing.tier_limits import seed_row_for_plan
 
 
@@ -24,11 +22,7 @@ class CareerWatchLimitError(Exception):
 
 
 async def _plan_code_for_user(session: AsyncSession, user: User) -> str:
-    sub = await _active_subscription_for(session, user_id=user.id)
-    if sub is None:
-        return "free"
-    plan_config_code = await reverse_lookup_code(session, sub.stripe_price_id)
-    return resolve_plan_code_for_subscription(sub, plan_config_code=plan_config_code)
+    return await resolve_plan_code_for_user(session, user)
 
 
 async def get_career_watch_limits(

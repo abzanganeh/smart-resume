@@ -45,11 +45,12 @@ def _greenhouse_jobs(board_token: str) -> list[dict[str, Any]]:
 
 def _poll_company(conn: Any, company: tuple[Any, ...]) -> int:
     company_id, ats_type, board_token, careers_url = company
+    if ats_type != "greenhouse" or not board_token:
+        # Non-Greenhouse companies are polled by the ECS backend service.
+        return 0
+
     jobs: list[dict[str, Any]] = []
-    if ats_type == "greenhouse" and board_token:
-        jobs = _greenhouse_jobs(board_token)
-    # Other ATS types are handled by the async backend poller in ECS; Lambda
-    # focuses on Greenhouse JSON boards for reliability in the minimal runtime.
+    jobs = _greenhouse_jobs(board_token)
 
     upserted = 0
     now = datetime.now(timezone.utc)
@@ -133,6 +134,9 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 SELECT id, ats_type::text, ats_board_token, careers_page_url
                 FROM watched_companies
                 WHERE is_active = true
+                  AND ats_type = 'greenhouse'
+                  AND ats_board_token IS NOT NULL
+                  AND ats_board_token <> ''
                   AND (
                     last_polled_at IS NULL
                     OR last_polled_at <= NOW() - (%s || ' minutes')::interval

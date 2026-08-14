@@ -67,6 +67,12 @@ _CODE_TO_PLAN_CYCLE: dict[
     "weekly": (SubscriptionPlan.weekly, SubscriptionBillingCycle.recurring),
     "monthly": (SubscriptionPlan.monthly, SubscriptionBillingCycle.recurring),
     "monthly_yearly": (SubscriptionPlan.monthly, SubscriptionBillingCycle.yearly),
+    "monthly_pro": (SubscriptionPlan.monthly, SubscriptionBillingCycle.recurring),
+    "yearly_pro": (SubscriptionPlan.monthly, SubscriptionBillingCycle.yearly),
+    "monthly_plus": (SubscriptionPlan.monthly, SubscriptionBillingCycle.recurring),
+    "yearly_plus": (SubscriptionPlan.monthly, SubscriptionBillingCycle.yearly),
+    "monthly_premium": (SubscriptionPlan.monthly, SubscriptionBillingCycle.recurring),
+    "yearly_premium": (SubscriptionPlan.monthly, SubscriptionBillingCycle.yearly),
 }
 
 

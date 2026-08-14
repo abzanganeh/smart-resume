@@ -14,12 +14,8 @@ from app.services.billing.exceptions import (
     PlanLimitReachedError,
     WhisperNotAllowedError,
 )
-from app.services.billing.quota import (
-    QuotaAction,
-    QuotaDecision,
-    _active_subscription_for,
-    _tier_limits_for_subscription,
-)
+from app.services.billing.plan_code_resolver import resolve_plan_code_for_user
+from app.services.billing.quota import QuotaAction, QuotaDecision, _active_subscription_for
 from app.services.billing.tier_limits_lookup import TierLimits, get_active_tier_limits
 
 
@@ -37,11 +33,13 @@ async def _resolve_limits_for_user(
 ) -> tuple[TierLimits, Subscription | None, int]:
     sub = await _active_subscription_for(session, user_id=user.id)
     now = datetime.now(timezone.utc)
+    limits = await get_active_tier_limits(
+        session, await resolve_plan_code_for_user(session, user, now=now)
+    )
     if sub is not None and sub.period_start <= now <= sub.period_end:
         if sub.status != SubscriptionStatus.paused:
-            limits = await _tier_limits_for_subscription(session, sub)
             return limits, sub, sub.whisper_uses_used
-    return await get_active_tier_limits(session, "free"), None, 0
+    return limits, None, 0
 
 
 async def whisper_entitlement_for_user(
