@@ -97,10 +97,8 @@ async def generate_cover_letter(
     session_id: str,
     body: CoverLetterGenerateRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
     x_model: str | None = Header(default=None, alias="X-Model"),
-    x_use_platform: str | None = Header(default=None, alias="X-Use-Platform"),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a cover letter and stream progress via SSE."""
@@ -122,16 +120,12 @@ async def generate_cover_letter(
 
     apply_llm_request_headers(
         session,
-        x_use_platform=x_use_platform,
-        x_api_key=x_api_key,
         x_provider=x_provider,
         x_model=x_model,
     )
     await update_session(session)
 
-    llm = get_llm_client(
-        session.provider, session.model, api_key=getattr(session, "byok_api_key", None)
-    )
+    llm = get_llm_client(session.provider, session.model)
 
     async def event_generator():
         _cover_letter_locks.add(session_id)

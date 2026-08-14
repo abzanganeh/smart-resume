@@ -2,7 +2,6 @@
 
 import { Mic, MicOff } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
-import { getStoredKey } from "@/lib/keyStore";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -40,8 +39,6 @@ export function VoiceTab({
         form.append("audio", blob, `recording.${ext}`);
         const headers: Record<string, string> = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        const byokKey = getStoredKey()?.apiKey;
-        if (byokKey) headers["X-Api-Key"] = byokKey;
         const res = await fetch(`${BASE}/api/profile/resume/transcribe`, {
           method: "POST", headers, body: form,
         });

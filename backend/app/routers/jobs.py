@@ -504,7 +504,6 @@ async def fit_job(
     llm = get_llm_client(
         job_fit_agent.FIT_LLM_PROVIDER,
         job_fit_agent.FIT_LLM_MODEL,
-        api_key=None,
     )
     import asyncio
 

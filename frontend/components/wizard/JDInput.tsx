@@ -7,8 +7,8 @@ import { uncertainJdHostLabel } from "@/lib/jdCompleteness";
 
 interface Props {
   onSubmit: (payload: JDPayload) => void;
-  selectedProvider: string;
-  selectedModel: string;
+  selectedProvider?: string;
+  selectedModel?: string;
   loading?: boolean;
   initialJdText?: string;
   jdId?: string;
@@ -55,7 +55,13 @@ export function JDInput({
       setError(`Job description exceeds ${MAX_JD.toLocaleString()} characters. Paste only the requirements section.`);
       return;
     }
-    onSubmit({ jd_text: jdText, jd_url: jdUrl || undefined, provider: selectedProvider, model: selectedModel, jd_id: jdId });
+    onSubmit({
+      jd_text: jdText,
+      jd_url: jdUrl || undefined,
+      provider: selectedProvider,
+      model: selectedModel,
+      jd_id: jdId,
+    });
   };
 
   const hostLabel = uncertainJdHostLabel(sourceUrl ?? jdUrl);

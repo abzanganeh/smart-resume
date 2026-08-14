@@ -58,6 +58,18 @@ variable "lambda_notification_scheduler_zip" {
   default     = "build/notification_scheduler.zip"
 }
 
+variable "lambda_career_page_poller_zip" {
+  description = "Path to the career_page_poller deployment package (.zip)."
+  type        = string
+  default     = "build/career_page_poller.zip"
+}
+
+variable "lambda_career_matcher_zip" {
+  description = "Path to the career_matcher deployment package (.zip)."
+  type        = string
+  default     = "build/career_matcher.zip"
+}
+
 variable "stripe_secret_key" {
   description = "Stripe secret key consumed by the price-sync drift detector."
   type        = string

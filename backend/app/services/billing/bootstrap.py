@@ -30,10 +30,13 @@ log = structlog.get_logger("billing.bootstrap")
 
 
 _INTERVAL_BY_CODE: dict[str, PlanConfigInterval] = {
-    "daily": PlanConfigInterval.day,
     "weekly": PlanConfigInterval.week,
-    "monthly": PlanConfigInterval.month,
-    "monthly_yearly": PlanConfigInterval.year,
+    "monthly_pro": PlanConfigInterval.month,
+    "yearly_pro": PlanConfigInterval.year,
+    "monthly_plus": PlanConfigInterval.month,
+    "yearly_plus": PlanConfigInterval.year,
+    "monthly_premium": PlanConfigInterval.month,
+    "yearly_premium": PlanConfigInterval.year,
     "better_pack": PlanConfigInterval.one_time,
     "better_monthly": PlanConfigInterval.month,
     "better_yearly": PlanConfigInterval.year,
@@ -43,10 +46,13 @@ _INTERVAL_BY_CODE: dict[str, PlanConfigInterval] = {
 }
 
 _ELIGIBILITY_BY_CODE: dict[str, str] = {
-    "daily": "base_plan",
     "weekly": "base_plan",
-    "monthly": "base_plan",
-    "monthly_yearly": "base_plan",
+    "monthly_pro": "base_plan",
+    "yearly_pro": "base_plan",
+    "monthly_plus": "base_plan",
+    "yearly_plus": "base_plan",
+    "monthly_premium": "base_plan",
+    "yearly_premium": "base_plan",
     "better_pack": "credit_pack",
     "better_monthly": "addon_subscription",
     "better_yearly": "addon_subscription",

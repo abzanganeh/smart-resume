@@ -27,7 +27,6 @@ import {
 import { cn } from "@/lib/utils";
 import { type InterviewMessage, streamInterviewQuestion, submitInterview } from "@/lib/story";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
-import { getStoredKey } from "@/lib/keyStore";
 
 const MAX_QUESTIONS = 15;
 
@@ -54,11 +53,6 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const interviewStartRef = useRef(false);
-
-  const storedKey = getStoredKey();
-  const byokApiKey  = storedKey?.apiKey;
-  const byokProvider = storedKey?.provider;
-  const byokModel    = storedKey?.model;
 
   const questionCount = history.filter((m) => m.role === "interviewer").length;
   const atLimit = questionCount >= MAX_QUESTIONS;
@@ -99,13 +93,12 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
             setStreamingText(accumulated);
             scrollBottom();
           },
-          { byokApiKey, byokProvider, byokModel },
         );
 
         const questionText = accumulated.trim();
         if (!questionText) {
           throw new Error(
-            "The AI returned an empty response. Try again, or add your own API key under Settings → API key.",
+            "The AI returned an empty response. Please try again in a moment.",
           );
         }
 
@@ -134,7 +127,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         inputRef.current?.focus();
       }
     },
-    [token, byokApiKey, byokProvider, byokModel, atLimit, scrollBottom],
+    [token, atLimit, scrollBottom],
   );
 
   // Start the interview on mount (or after credit accepted)
@@ -174,11 +167,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
     setPhase("generating");
     setError(null);
     try {
-      const result = await submitInterview(history, token, {
-        byokApiKey,
-        byokProvider,
-        byokModel,
-      });
+      const result = await submitInterview(history, token);
       setReviewText(result.resume_text ?? null);
       setPhase("done");
     } catch (err: unknown) {
@@ -186,7 +175,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
       setError(e.message ?? "Resume generation failed. Please try again.");
       setPhase("complete");
     }
-  }, [history, token, byokApiKey, byokProvider, byokModel]);
+  }, [history, token]);
 
   // ── Phases ─────────────────────────────────────────────────────────────────
 
@@ -203,8 +192,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         </p>
         <p className="text-slate-300">
           This session costs{" "}
-          <span className="text-amber-400 font-semibold">1 credit</span>. Subscribers and BYOK
-          users pay nothing.
+          <span className="text-amber-400 font-semibold">1 credit</span>. Subscribers pay nothing.
         </p>
         {error && (
           <p className="text-red-400 text-xs bg-red-950/20 border border-red-500/20 rounded-lg px-3 py-2">

@@ -15,20 +15,22 @@ export function NavBar() {
   const { data: session, status } = useSession()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const hadUserMenuRef = useRef(false)
+  const [hadUserMenu, setHadUserMenu] = useState(false)
 
   const accessToken =
     session?.error === "TokenExpired" ? undefined : session?.backendAccessToken
 
-  // Keep the user menu mounted while NextAuth refreshes the JWT (status === "loading").
   const showUserMenu = Boolean(session?.user ?? session?.backendAccessToken)
-  if (showUserMenu) {
-    hadUserMenuRef.current = true
-  } else if (status === "unauthenticated") {
-    hadUserMenuRef.current = false
-  }
+  useEffect(() => {
+    if (showUserMenu) {
+      setHadUserMenu(true)
+    } else if (status === "unauthenticated") {
+      setHadUserMenu(false)
+    }
+  }, [showUserMenu, status])
+
   const renderUserMenu =
-    showUserMenu || (status === "loading" && hadUserMenuRef.current)
+    showUserMenu || (status === "loading" && hadUserMenu)
 
   // Close dropdown on outside click — only while open.
   useEffect(() => {
@@ -70,6 +72,7 @@ export function NavBar() {
             <NavLink href="/fit">Job fit</NavLink>
             <NavLink href="/dashboard">Dashboard</NavLink>
             <NavLink href="/tracker">Tracker</NavLink>
+            <NavLink href="/career-watch">Career Watch</NavLink>
             <JobsNavItem />
           </div>
         )}

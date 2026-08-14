@@ -52,15 +52,14 @@ async function runTests() {
     assert(result.chunk_count === 5, "returns response chunk_count")
     assert(result.embedding_warning === null, "returns embedding_warning")
 
-    // Test 2: BYOK headers
+    // Test 2: no BYOK headers
     await submitStory(
       ["Some career story text here."],
       "test-token",
-      { byokApiKey: "sk-key", byokProvider: "openai", byokModel: "gpt-4o" },
     )
-    assert(capturedHeaders["X-Api-Key"] === "sk-key", "sends BYOK API key header")
-    assert(capturedHeaders["X-Provider"] === "openai", "sends BYOK provider header")
-    assert(capturedHeaders["X-Model"] === "gpt-4o", "sends BYOK model header")
+    assert(capturedHeaders["X-Api-Key"] === undefined, "does not send BYOK API key header")
+    assert(capturedHeaders["X-Provider"] === undefined, "does not send BYOK provider header")
+    assert(capturedHeaders["X-Model"] === undefined, "does not send BYOK model header")
 
     // Test 3: whisperPath flag
     await submitStory(["Some career story."], "test-token", { whisperPath: true })

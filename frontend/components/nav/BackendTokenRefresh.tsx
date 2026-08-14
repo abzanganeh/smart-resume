@@ -15,7 +15,9 @@ const REFRESH_BUFFER_MS = 60 * 60 * 1000
 export function BackendTokenRefresh() {
   const { data: session, status, update } = useSession()
   const updateRef = useRef(update)
-  updateRef.current = update
+  useEffect(() => {
+    updateRef.current = update
+  }, [update])
 
   const expiredRecoveryRef = useRef(false)
 

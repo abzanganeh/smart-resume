@@ -12,7 +12,6 @@ import {
   ArrowRight,
   CheckCircle2,
   FileText,
-  Key,
   Loader2,
   Mic,
   Sparkles,
@@ -30,7 +29,7 @@ import {
 import { getProfileChunks, liveChunkCount } from "@/lib/profile"
 import { clsx } from "clsx"
 
-type AiChoice = "platform" | "byok"
+type AiChoice = "platform"
 
 const CREDIT_COSTS = [
   { action: "Tailor resume to a job", cost: "1 credit" },
@@ -41,109 +40,41 @@ const CREDIT_COSTS = [
   { action: "Cover letter generation", cost: "1 credit" },
 ]
 
-const BYOK_PROVIDERS = [
-  "OpenAI (GPT-4o, etc.)",
-  "Anthropic Claude",
-  "Google Gemini",
-  "OpenRouter (incl. free models)",
-  "Ollama (self-hosted — your machine or server)",
-]
-
-function OnboardingAiStep({
-  choice,
-  onChange,
-}: {
-  choice: AiChoice
-  onChange: (c: AiChoice) => void
-}) {
+function OnboardingAiStep() {
   return (
     <div className="space-y-5 text-left max-w-md mx-auto">
       <p className="text-slate-400 text-sm text-center leading-relaxed">
-        Choose how AI features are powered. You can change this any time when starting a session.
+        Smart Resume runs the AI for you using your subscription tier and credits.
       </p>
 
-      <button
-        type="button"
-        onClick={() => onChange("platform")}
-        className={clsx(
-          "w-full rounded-xl border p-4 text-left transition-all",
-          choice === "platform"
-            ? "border-amber-400/60 bg-amber-400/5 ring-1 ring-amber-400/30"
-            : "border-slate-700 bg-slate-800/40 hover:border-slate-600",
-        )}
-      >
+      <div className="rounded-xl border border-amber-400/60 bg-amber-400/5 ring-1 ring-amber-400/30 p-4">
         <div className="flex items-center gap-2 mb-2">
           <Zap className="w-4 h-4 text-amber-400" />
-          <span className="font-semibold text-slate-100 text-sm">Use Smart Resume AI</span>
+          <span className="font-semibold text-slate-100 text-sm">Smart Resume AI</span>
           <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700">
-            Recommended
+            Included
           </span>
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">
-          We run the AI for you. Your account includes <strong className="text-slate-200">6 free credits</strong> to
+          Your account includes <strong className="text-slate-200">free credits</strong> to
           get started — no API key needed.
         </p>
-      </button>
+      </div>
 
-      {choice === "platform" && (
-        <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 space-y-2">
-          <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">What credits buy</p>
-          <ul className="space-y-1.5">
-            {CREDIT_COSTS.map((row) => (
-              <li key={row.action} className="flex justify-between gap-3 text-xs">
-                <span className="text-slate-400">{row.action}</span>
-                <span className="text-slate-200 font-medium shrink-0">{row.cost}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="text-[11px] text-slate-500 pt-1">
-            Subscribers get unlimited resume builds. Upgrade anytime from Billing.
-          </p>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => onChange("byok")}
-        className={clsx(
-          "w-full rounded-xl border p-4 text-left transition-all",
-          choice === "byok"
-            ? "border-indigo-400/60 bg-indigo-400/5 ring-1 ring-indigo-400/30"
-            : "border-slate-700 bg-slate-800/40 hover:border-slate-600",
-        )}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <Key className="w-4 h-4 text-indigo-400" />
-          <span className="font-semibold text-slate-100 text-sm">Bring your own API key (BYOK)</span>
-        </div>
-        <p className="text-xs text-slate-400 leading-relaxed">
-          Use your own LLM account. You pay the provider directly; Smart Resume orchestrates the pipeline.
+      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 space-y-2">
+        <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">What credits buy</p>
+        <ul className="space-y-1.5">
+          {CREDIT_COSTS.map((row) => (
+            <li key={row.action} className="flex justify-between gap-3 text-xs">
+              <span className="text-slate-400">{row.action}</span>
+              <span className="text-slate-200 font-medium shrink-0">{row.cost}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-[11px] text-slate-500 pt-1">
+          Subscribers get unlimited resume builds. Upgrade anytime from Billing.
         </p>
-      </button>
-
-      {choice === "byok" && (
-        <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Supported providers</p>
-          <ul className="space-y-1">
-            {BYOK_PROVIDERS.map((p) => (
-              <li key={p} className="flex items-center gap-2 text-xs text-slate-400">
-                <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
-                {p}
-              </li>
-            ))}
-          </ul>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Add your key when you start your first tailoring session (step 3 of the session wizard).
-            Your key stays in your browser only — we never store it on our servers.
-          </p>
-          <Link
-            href="/session/new?step=ai"
-            className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-          >
-            Set up API key now <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -191,7 +122,9 @@ function OnboardingPageContent() {
   const [hydrated, setHydrated] = useState(false)
   const navigatingToProfileRef = useRef(false)
   const updateRef = useRef(update)
-  updateRef.current = update
+  useEffect(() => {
+    updateRef.current = update
+  }, [update])
 
   const token = session?.backendAccessToken
   const urlStepParam = searchParams.get("step")
@@ -229,8 +162,8 @@ function OnboardingPageContent() {
           hasMasterResume: hasMaster,
         })
 
-        if (user.onboarding_ai_choice === "platform" || user.onboarding_ai_choice === "byok") {
-          setAiChoice(user.onboarding_ai_choice)
+        if (user.onboarding_ai_choice === "platform") {
+          setAiChoice("platform")
         }
         setStep(Math.max(0, stepIndex))
         navigatingToProfileRef.current = false
@@ -348,7 +281,7 @@ function OnboardingPageContent() {
           </>
         )
       case "ai":
-        return <OnboardingAiStep choice={aiChoice} onChange={setAiChoice} />
+        return <OnboardingAiStep />
       case "master":
         return (
           <div className="space-y-4 text-left max-w-md mx-auto">

@@ -20,7 +20,6 @@ import { StoryInterview } from "./StoryInterview";
 import { type StoryMode, StoryModeSelector } from "./StoryModeSelector";
 import { StorySegment } from "./StorySegment";
 import { polishResume, submitStory } from "@/lib/story";
-import { getStoredKey } from "@/lib/keyStore";
 import { cn } from "@/lib/utils";
 
 const MAX_SEGMENTS = 30;
@@ -101,8 +100,6 @@ export function StoryRecorder({ token, onSaved }: Props) {
       const form = new FormData();
       form.append("audio", blob, `recording.${ext}`);
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const key = getStoredKey();
-      if (key?.apiKey) headers["X-Api-Key"] = key.apiKey;
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/profile/resume/transcribe`, {
         method: "POST", headers, body: form,
       });
@@ -195,11 +192,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const key = getStoredKey();
       const result = await submitStory(segments, token, {
-        byokApiKey: key?.apiKey,
-        byokProvider: key?.provider,
-        byokModel: key?.model,
         whisperPath: !supportsWebSpeech,
       });
       setReviewText(result.resume_text ?? "");
@@ -216,12 +209,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
     setPolishError(null);
     setPrevText(reviewText);
     try {
-      const key = getStoredKey();
-      const result = await polishResume(reviewText, polishInstruction.trim(), token, {
-        byokApiKey: key?.apiKey,
-        byokProvider: key?.provider,
-        byokModel: key?.model,
-      });
+      const result = await polishResume(reviewText, polishInstruction.trim(), token);
       setReviewText(result.text);
       setPolishInstruction("");
     } catch (e) {
@@ -386,11 +374,9 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
   // ── Mode selector (shown before anything else) ─────────────────────────────
   if (!storyMode) {
-    const storedKeyForMode = getStoredKey();
-    const isFreeUserForMode = !storedKeyForMode?.apiKey;
     return (
       <StoryModeSelector
-        isFreeUser={isFreeUserForMode}
+        isFreeUser
         onSelect={(mode) => {
           if (mode === "interview") {
             setStoryMode("interview");
@@ -404,12 +390,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
   // ── Coached Interview Mode ──────────────────────────────────────────────────
   if (storyMode === "interview") {
-    const storedKeyForInterview = getStoredKey();
-    const isFreeUserForInterview = !storedKeyForInterview?.apiKey;
     return (
       <StoryInterview
         token={token}
-        isFreeUser={isFreeUserForInterview}
+        isFreeUser
         onSaved={onSaved}
         onBack={() => setStoryMode(null)}
       />
@@ -528,9 +512,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
       {/* Segment list */}
       <div className="space-y-3">
-        {segments.map((text, i) => {
-          const storedKey = getStoredKey();
-          return (
+        {segments.map((text, i) => (
             <div key={i} className="space-y-2">
               <StorySegment
                 index={i}
@@ -550,10 +532,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                   storyBuildSessionId={storyBuildSessionId}
                   coachSessionUnlocked={coachSessionUnlocked}
                   onCoachSessionUnlocked={markCoachSessionUnlocked}
-                  isFreeUser={!storedKey?.apiKey}
-                  byokApiKey={storedKey?.apiKey}
-                  byokProvider={storedKey?.provider}
-                  byokModel={storedKey?.model}
+                  isFreeUser
                   onAddAsSegment={(answerText) => {
                     setSegments((prev) => [...prev, answerText]);
                     setOpenCoachIndex(null);
@@ -562,8 +541,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                 />
               )}
             </div>
-          );
-        })}
+        ))}
       </div>
 
       {/* Current recording indicator (new segment) */}

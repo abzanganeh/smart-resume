@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$ROOT/build"
 mkdir -p "$BUILD"
 
-for fn in apify_cache_worker job_cache_writer alert_dispatcher notification_scheduler; do
+for fn in apify_cache_worker job_cache_writer alert_dispatcher notification_scheduler career_page_poller career_matcher; do
   zip -j "$BUILD/${fn}.zip" "$ROOT/../${fn}/handler.py"
   echo "built $BUILD/${fn}.zip"
 done

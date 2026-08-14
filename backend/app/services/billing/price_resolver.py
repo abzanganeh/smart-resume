@@ -30,13 +30,16 @@ from app.services.billing.exceptions import PriceUnresolvedError
 log = structlog.get_logger("billing.price_resolver")
 
 
-# IMPLEMENTATION_PLAN §7.1 — canonical 10 codes the application addresses.
-# Boot-time assertion (see ``app/main.py``) verifies all of them resolve.
+# Pricing restructure (2026-08): weekly + Pro / Pro+ / Premium tiers.
+# Legacy LLM add-on codes remain until quota-rewrite / byok-removal slices.
 CANONICAL_CODES: tuple[str, ...] = (
-    "daily",
     "weekly",
-    "monthly",
-    "monthly_yearly",
+    "monthly_pro",
+    "yearly_pro",
+    "monthly_plus",
+    "yearly_plus",
+    "monthly_premium",
+    "yearly_premium",
     "better_pack",
     "better_monthly",
     "better_yearly",
@@ -46,14 +49,14 @@ CANONICAL_CODES: tuple[str, ...] = (
 )
 
 
-# Human-readable code → env-var key.  ``code.upper()`` would also work
-# but the explicit map prevents silent typos and lets ``monthly_yearly``
-# map to ``STRIPE_PRICE_MONTHLY_YEARLY`` etc.
 ENV_VAR_BY_CODE: dict[str, str] = {
-    "daily": "STRIPE_PRICE_DAILY",
     "weekly": "STRIPE_PRICE_WEEKLY",
-    "monthly": "STRIPE_PRICE_MONTHLY",
-    "monthly_yearly": "STRIPE_PRICE_MONTHLY_YEARLY",
+    "monthly_pro": "STRIPE_PRICE_MONTHLY_PRO",
+    "yearly_pro": "STRIPE_PRICE_YEARLY_PRO",
+    "monthly_plus": "STRIPE_PRICE_MONTHLY_PLUS",
+    "yearly_plus": "STRIPE_PRICE_YEARLY_PLUS",
+    "monthly_premium": "STRIPE_PRICE_MONTHLY_PREMIUM",
+    "yearly_premium": "STRIPE_PRICE_YEARLY_PREMIUM",
     "better_pack": "STRIPE_PRICE_BETTER_PACK",
     "better_monthly": "STRIPE_PRICE_BETTER_MONTHLY",
     "better_yearly": "STRIPE_PRICE_BETTER_YEARLY",

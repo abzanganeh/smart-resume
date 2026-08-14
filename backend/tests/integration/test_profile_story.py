@@ -21,9 +21,13 @@ REGISTER_PAYLOAD = {
 
 VALID_SEGMENTS = [
     "I worked at SecureAuth from 2022 to 2025 as a Senior Software Engineer "
-    "building anomaly detection systems and ML pipelines for identity security.",
+    "building anomaly detection systems and ML pipelines for identity security "
+    "across millions of daily authentications.",
     "Before that I was at Acceptto from 2016 to 2022 building behavioral "
-    "authentication systems using Python and Kubernetes.",
+    "authentication systems using Python, Kubernetes, and PostgreSQL for "
+    "enterprise customers in financial services and healthcare.",
+    "Earlier I led backend platform work focused on API design, observability, "
+    "and mentoring engineers through design reviews and production incident response.",
 ]
 
 
@@ -99,13 +103,7 @@ async def test_story_endpoint_llm_failure(app_client: AsyncClient):
     with patch("app.routers.profile.story_to_resume", side_effect=RuntimeError("LLM failed")):
         response = await app_client.post(
             "/api/profile/resume/from-story",
-            json={
-                "segments": [
-                    "I worked at SecureAuth for three years building ML infrastructure "
-                    "and anomaly detection systems for identity security."
-                ],
-                "whisper_path": False,
-            },
+            json={"segments": VALID_SEGMENTS, "whisper_path": False},
             headers={"Authorization": f"Bearer {token}"},
         )
     assert response.status_code == 502

@@ -348,3 +348,123 @@ resource "aws_lambda_permission" "billing_price_sync" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.billing_price_sync.arn
 }
+
+# ---------------------------------------------------------------------------
+# Career Watch — page poller + matcher (pricing milestone slices 16–17)
+# ---------------------------------------------------------------------------
+
+resource "aws_sqs_queue" "career_watch_dlq" {
+  name                      = "${local.name_prefix}-career-watch-dlq"
+  message_retention_seconds = 1209600
+  tags                      = local.common_tags
+}
+
+resource "aws_sqs_queue" "career_watch" {
+  name                       = "${local.name_prefix}-career-watch"
+  visibility_timeout_seconds = var.lambda_timeout_seconds * 2
+  receive_wait_time_seconds  = 10
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.career_watch_dlq.arn
+    maxReceiveCount     = 3
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "job_lambda_career_watch_sqs" {
+  name = "${local.name_prefix}-career-watch-sqs"
+  role = aws_iam_role.job_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
+      Resource = [aws_sqs_queue.career_watch.arn]
+    }]
+  })
+}
+
+resource "aws_lambda_function" "career_page_poller" {
+  function_name    = "${local.name_prefix}-career-page-poller"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_career_page_poller_zip
+  source_code_hash = filebase64sha256(var.lambda_career_page_poller_zip)
+
+  environment {
+    variables = {
+      DATABASE_URL                         = var.postgres_url
+      CAREER_WATCH_POLL_INTERVAL_MINUTES = "15"
+      CAREER_WATCH_POLL_BATCH              = "25"
+      CAREER_WATCH_SQS_URL                 = aws_sqs_queue.career_watch.url
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "career_matcher" {
+  function_name    = "${local.name_prefix}-career-matcher"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_career_matcher_zip
+  source_code_hash = filebase64sha256(var.lambda_career_matcher_zip)
+
+  environment {
+    variables = {
+      DATABASE_URL              = var.postgres_url
+      CAREER_WATCH_MIN_SCORE    = "0.25"
+      CAREER_WATCH_MATCH_BATCH  = "200"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_event_rule" "career_page_poller" {
+  name                = "${local.name_prefix}-career-page-poller"
+  description         = "Poll watched company career pages"
+  schedule_expression = "rate(15 minutes)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "career_page_poller" {
+  rule      = aws_cloudwatch_event_rule.career_page_poller.name
+  target_id = "career-page-poller"
+  arn       = aws_lambda_function.career_page_poller.arn
+}
+
+resource "aws_lambda_permission" "career_page_poller" {
+  statement_id  = "AllowEventBridgeCareerPagePoller"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.career_page_poller.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.career_page_poller.arn
+}
+
+resource "aws_cloudwatch_event_rule" "career_matcher" {
+  name                = "${local.name_prefix}-career-matcher"
+  description         = "Match career watch jobs to user keywords"
+  schedule_expression = "rate(15 minutes)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "career_matcher" {
+  rule      = aws_cloudwatch_event_rule.career_matcher.name
+  target_id = "career-matcher"
+  arn       = aws_lambda_function.career_matcher.arn
+}
+
+resource "aws_lambda_permission" "career_matcher" {
+  statement_id  = "AllowEventBridgeCareerMatcher"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.career_matcher.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.career_matcher.arn
+}
