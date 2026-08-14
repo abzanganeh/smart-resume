@@ -49,7 +49,8 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.llm_config import LLMConfig, LLMProvider
-from app.services.billing.credits import consume_credit, get_balance
+from app.services.billing.credits import get_balance
+from app.services.billing.tier_llm import resolve_phase3_model_for_user
 
 log = structlog.get_logger("billing.llm_upgrade")
 
@@ -357,130 +358,20 @@ async def apply_phase3_tier(
     related_resume_record_id: uuid.UUID | None = None,
     session_id: str | None = None,
 ) -> Phase3RouteDecision:
-    """Resolve the effective tier for one Phase 3 run and apply the
-    corresponding accounting side-effects atomically.
+    """Resolve Phase 3 model from the user's effective tier limits row.
 
-    - ``standard``: no entitlement check, no consumption.
-    - ``better``:   serializes on the Better balance projection via
-                    ``consume_credit`` (raises
-                    :class:`InsufficientCreditsError` when the balance
-                    is zero — caller surfaces 402).  Counter for the
-                    Better add-on subscription is *not* incremented;
-                    Better access is credit-based per §7.5.
-                    For an entitled Better-subscription user we still
-                    consume one credit row from the ``better`` ledger
-                    so usage tracking is uniform — runs that want
-                    "subscription mirrors free quota" semantics should
-                    instead grant Better credits at period rollover.
-    - ``best``:     locks the Best add-on subscription row with
-                    ``SELECT … FOR UPDATE`` and increments
-                    ``upgraded_resumes_used`` if below the soft cap.
-                    On cap hit we return a downgrade decision; the
-                    orchestrator emits ``best_soft_cap_hit`` SSE.
-
-    The caller is responsible for committing the surrounding
-    transaction.  When this function raises everything is rolled back
-    atomically so the credit / counter is never lost.
+    LLM quality is baked into the subscription tier (2026-08 pricing
+    restructure). Legacy better/best add-on entitlements are ignored for
+    routing; ``requested_tier`` is retained for API compatibility only.
     """
-    requested = _normalize_tier(requested_tier)
-    if requested == "standard":
-        provider, model = await resolve_phase3_model(session, "standard")
-        return Phase3RouteDecision(
-            effective_tier="standard",
-            provider=provider,
-            model_string=model,
-        )
-
-    now = datetime.now(timezone.utc)
-    subs = await _entitled_subscriptions(
-        session, user_id=user_id, for_update=True
+    _ = (requested_tier, related_resume_record_id, session_id)
+    provider, model = await resolve_phase3_model_for_user(
+        session, user_id=user_id
     )
-    better_sub = _find_better_subscription(subs, now=now)
-    best_sub = _find_best_subscription(subs, now=now)
-    better_balance = await get_balance(
-        session, user_id=user_id, credit_kind=CreditKind.better, for_share=False
-    )
-
-    if requested == "best":
-        if best_sub is None:
-            log.info(
-                "billing.llm_upgrade.best_not_entitled",
-                user_id=str(user_id),
-            )
-            # Downgrade to Better when available (entitlement precedence:
-            # best -> better -> standard). This prevents routing leaks where
-            # a user asks for Best but is only entitled to Better.
-            if better_sub is not None or better_balance > 0:
-                requested = "better"
-            else:
-                return await _fallback_to_standard(
-                    session, reason=Phase3TierError.not_entitled_best
-                )
-        if best_sub is not None:
-            if best_sub.upgraded_resumes_used >= BEST_SUBSCRIPTION_SOFT_CAP:
-                log.info(
-                    "billing.llm_upgrade.best_soft_cap_hit",
-                    user_id=str(user_id),
-                    used=best_sub.upgraded_resumes_used,
-                    cap=BEST_SUBSCRIPTION_SOFT_CAP,
-                )
-                return await _fallback_to_standard(
-                    session,
-                    reason=Phase3TierError.best_soft_cap_hit,
-                    soft_cap_hit=True,
-                )
-            best_sub.upgraded_resumes_used += 1
-            await session.flush()
-            provider, model = await resolve_phase3_model(session, "best")
-            return Phase3RouteDecision(
-                effective_tier="best",
-                provider=provider,
-                model_string=model,
-                incremented_subscription_id=best_sub.id,
-            )
-
-    # requested == "better"
-    if better_sub is None and better_balance <= 0:
-        log.info(
-            "billing.llm_upgrade.better_not_entitled",
-            user_id=str(user_id),
-        )
-        return await _fallback_to_standard(
-            session, reason=Phase3TierError.not_entitled_better
-        )
-
-    # Better path: consume one credit (or grant + consume implicit
-    # subscription credit by maintaining a single Better balance source
-    # of truth).  When the user holds a Better subscription but no
-    # ledger balance the run should still proceed; we add a +1 / -1
-    # pair so the ledger row history records the subscription debit
-    # without exposing inflated balances.
-    if better_balance <= 0 and better_sub is not None:
-        from app.services.billing.credits import grant_credit
-
-        await grant_credit(
-            session,
-            user_id=user_id,
-            credit_kind=CreditKind.better,
-            delta=1,
-            reason="better_subscription_period_run",
-            related_subscription_id=better_sub.id,
-        )
-
-    consumed = await consume_credit(
-        session,
-        user_id=user_id,
-        credit_kind=CreditKind.better,
-        reason="phase3_run_better",
-        session_id=session_id,
-        related_resume_record_id=related_resume_record_id,
-    )
-    provider, model = await resolve_phase3_model(session, "better")
     return Phase3RouteDecision(
-        effective_tier="better",
+        effective_tier="standard",
         provider=provider,
         model_string=model,
-        consumed_credit_id=consumed.id,
     )
 
 

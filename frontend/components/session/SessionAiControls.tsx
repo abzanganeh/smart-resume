@@ -1,33 +1,23 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
-import {
-  LLMTierSelector,
-} from "@/components/session/LLMTierSelector";
-import type { LLMTier, LLMUpgradeStatus } from "@/lib/api";
 
 interface Props {
-  llmTier: LLMTier;
-  llmStatus: LLMUpgradeStatus | null;
   phaseRunning: boolean;
-  showTierSelector: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onLlmTierChange: (tier: LLMTier) => void;
-  onRequestPurchase: (tier: Exclude<LLMTier, "standard">) => void;
+  modelLabel?: string | null;
 }
 
 export function SessionAiControls({
-  llmTier,
-  llmStatus,
   phaseRunning,
-  showTierSelector,
   open,
   onOpenChange,
-  onLlmTierChange,
-  onRequestPurchase,
+  modelLabel,
 }: Props) {
-  const summary = `Platform AI · ${llmTier.charAt(0).toUpperCase()}${llmTier.slice(1)} tier`;
+  const summary = modelLabel
+    ? `Platform AI · ${modelLabel}`
+    : "Platform AI · included with your plan";
 
   return (
     <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden">
@@ -51,28 +41,14 @@ export function SessionAiControls({
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-700 space-y-4">
           <p className="text-xs text-slate-500">
-            Smart Resume runs the AI for you using your subscription tier and credits.
+            Phase 3 model quality is determined by your subscription tier. Upgrade your plan on{" "}
+            <a href="/billing" className="text-amber-400 hover:underline">
+              Billing
+            </a>{" "}
+            for higher-quality AI.
           </p>
-
-          {showTierSelector && (
-            <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-              <p className="text-xs text-slate-400 mb-3">
-                Uses Smart Resume credits. Standard is included; Better and Best use upgrade packs.
-              </p>
-              <LLMTierSelector
-                value={llmTier}
-                status={llmStatus}
-                disabled={phaseRunning}
-                onChange={onLlmTierChange}
-                onRequestPurchase={onRequestPurchase}
-              />
-            </div>
-          )}
-
-          {!showTierSelector && (
-            <p className="text-xs text-slate-500 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2">
-              Sign in to use Platform AI tiers. Anonymous sessions use the server default model.
-            </p>
+          {phaseRunning && (
+            <p className="text-xs text-amber-400/90">AI is running — settings are locked until the phase completes.</p>
           )}
         </div>
       )}

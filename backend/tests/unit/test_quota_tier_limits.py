@@ -103,7 +103,7 @@ async def test_subscriber_search_limit_from_tier_limits() -> None:
         "app.services.billing.quota._active_subscription_for",
         return_value=mock_sub,
     ), patch(
-        "app.services.billing.quota._tier_limits_for_subscription",
+        "app.services.billing.quota._tier_limits_for_user",
         new_callable=AsyncMock,
         return_value=limits,
     ):

@@ -671,59 +671,13 @@ async def subscriptions_llm_upgrade_checkout(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> CheckoutResponse:
-    """LLM upgrade checkout — Step 19 enforces yearly-cycle alignment.
-
-    Accepts the §7.1 canonical codes (``better_5pack``, ``better_monthly``,
-    ``better_yearly``, ``best_per_resume``, ``best_monthly``,
-    ``best_yearly``) and returns a Stripe Checkout URL.
-
-    Yearly add-ons require a yearly base subscription cycle (§7.7).
-    Monthly users requesting a yearly add-on receive HTTP 409 with
-    ``{"code": "billing_cycle_mismatch"}``.
-    """
-    if payload.code not in VALID_LLM_UPGRADE_CODES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "invalid_llm_upgrade_code", "value": payload.code},
-        )
-
-    base = (
-        await db.execute(
-            select(Subscription)
-            .where(Subscription.user_id == user.id)
-            .where(Subscription.llm_upgrade == LLMUpgradeTier.standard)
-            .where(
-                Subscription.status.in_(
-                    [
-                        SubscriptionStatus.active,
-                        SubscriptionStatus.trialing,
-                        SubscriptionStatus.grace,
-                        SubscriptionStatus.cancel_at_period_end,
-                    ]
-                )
-            )
-            .order_by(desc(Subscription.created_at))
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-
-    internal_code = normalize_llm_upgrade_code(payload.code)
-    try:
-        sub_service.assert_yearly_addon_alignment(
-            addon_code=internal_code, base_subscription=base
-        )
-        result = await sub_service.create_checkout_session(
-            db,
-            user=user,
-            code=internal_code,
-            success_url=payload.success_url,
-            cancel_url=payload.cancel_url,
-        )
-    except BillingError as exc:
-        raise _billing_error_to_http(exc) from exc
-    return CheckoutResponse(
-        url=str(result.get("url", "")),
-        id=str(result.get("id", "")),
+    """LLM add-on checkout removed — quality is included in subscription tier."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "llm_upgrade_removed",
+            "message": "LLM quality is included in your subscription tier. Upgrade your plan on Billing.",
+        },
     )
 
 
