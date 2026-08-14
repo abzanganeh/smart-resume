@@ -36,6 +36,9 @@ jobs:
         env:
           APP_ENV: ci
           AUTH_DISABLE: "false"
+          AUTH_SECRET: ci-test-auth-secret-not-for-production
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
+          REDIS_URL: redis://localhost:6379
 
   backend-integration:
     name: Backend integration tests
@@ -90,6 +93,7 @@ jobs:
         env:
           APP_ENV: ci
           AUTH_DISABLE: "false"
+          AUTH_SECRET: ci-test-auth-secret-not-for-production
           DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
           REDIS_URL: redis://localhost:6379
 
