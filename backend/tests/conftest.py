@@ -70,6 +70,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
                 "promo_redemptions, promo_codes, "
+                "career_alerts, career_job_cache, user_watched_companies, watched_companies, "
                 "credit_transactions, admin_user_grants, subscriptions, plan_configs, tier_limits_config, "
                 "llm_configs, "
                 "auth_audit_log, refresh_tokens, users, admin_users "
