@@ -70,12 +70,9 @@ async def test_weekly_tier_increments_whisper_counter() -> None:
     mock_user = MagicMock(is_suspended=False, id=uuid4())
 
     with patch(
-        "app.services.billing.whisper_gate._active_subscription_for",
-        return_value=mock_sub,
-    ), patch(
-        "app.services.billing.whisper_gate._tier_limits_for_subscription",
+        "app.services.billing.whisper_gate._resolve_limits_for_user",
         new_callable=AsyncMock,
-        return_value=_limits(plan_code="weekly", enabled=True, uses=2),
+        return_value=(_limits(plan_code="weekly", enabled=True, uses=2), mock_sub, 0),
     ):
         decision = await check_and_increment_whisper_use(mock_db, user=mock_user)
 
@@ -97,12 +94,9 @@ async def test_whisper_limit_reached_raises() -> None:
     mock_user = MagicMock(is_suspended=False, id=uuid4())
 
     with patch(
-        "app.services.billing.whisper_gate._active_subscription_for",
-        return_value=mock_sub,
-    ), patch(
-        "app.services.billing.whisper_gate._tier_limits_for_subscription",
+        "app.services.billing.whisper_gate._resolve_limits_for_user",
         new_callable=AsyncMock,
-        return_value=_limits(plan_code="weekly", enabled=True, uses=2),
+        return_value=(_limits(plan_code="weekly", enabled=True, uses=2), mock_sub, 2),
     ):
         with pytest.raises(PlanLimitReachedError):
             await check_and_increment_whisper_use(mock_db, user=mock_user)

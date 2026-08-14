@@ -808,14 +808,10 @@ function SessionContent() {
       )}
     >
       <SessionAiControls
-        llmTier={llmTier}
-        llmStatus={llmStatus}
         phaseRunning={phaseRunning}
-        showTierSelector={Boolean(authSession?.backendAccessToken)}
         open={aiSettingsOpen}
         onOpenChange={setAiSettingsOpen}
-        onLlmTierChange={setLlmTier}
-        onRequestPurchase={handleRequestPurchase}
+        modelLabel="Included with your subscription tier"
       />
     </div>
   );

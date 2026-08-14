@@ -27,7 +27,7 @@ import {
   type BillingPricesResponse,
   type SubscriptionCurrentResponse,
 } from "@/lib/api"
-import { isSubscriptionActive, yearlyDiscountedAmount, yearlySavingsAmount } from "@/lib/billing"
+import { isSubscriptionActive } from "@/lib/billing"
 import { clsx } from "clsx"
 
 // ── Feature display labels ─────────────────────────────────────────────────
@@ -43,8 +43,15 @@ const FEATURE_LABELS: Record<string, string> = {
 
 // ── Plan display config ────────────────────────────────────────────────────
 
-const PLAN_ORDER = ["daily", "weekly", "monthly"]
-const PLAN_HIGHLIGHT = "monthly"
+const PLAN_ORDER = ["weekly", "monthly_pro", "monthly_plus", "monthly_premium"]
+const YEARLY_PLAN_ORDER = ["weekly", "yearly_pro", "yearly_plus", "yearly_premium"]
+const PLAN_HIGHLIGHT = "monthly_pro"
+
+const LEGACY_PLAN_CODE_MAP: Record<string, string> = {
+  daily: "weekly",
+  monthly: "monthly_pro",
+  weekly: "weekly",
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -83,9 +90,10 @@ function PlanCard({
   isBusy,
   onSubscribe,
 }: PlanCardProps) {
-  const isMonthly = plan.cycle === "monthly"
-  const showYearly = isMonthly && yearlyToggle
-  const displayAmount = showYearly ? yearlyDiscountedAmount(plan.amount_cents) : plan.amount_cents
+  const isMonthlyTier = plan.code.startsWith("monthly_")
+  const isYearlyTier = plan.code.startsWith("yearly_")
+  const showYearly = isYearlyTier || (isMonthlyTier && yearlyToggle)
+  const displayAmount = plan.amount_cents
   const isHighlighted = plan.code === PLAN_HIGHLIGHT
 
   return (
@@ -120,12 +128,16 @@ function PlanCard({
             {formatCents(displayAmount, currency)}
           </span>
           <span className="text-slate-400 text-sm mb-1">
-            {showYearly ? "/ year" : `/ ${plan.cycle}`}
+            {plan.code === "weekly"
+              ? "/ week"
+              : showYearly
+                ? "/ year"
+                : "/ month"}
           </span>
         </div>
-        {showYearly && (
+        {showYearly && isYearlyTier && (
           <p className="text-emerald-400 text-xs mt-1 font-medium">
-            Save 20% — {formatCents(yearlySavingsAmount(plan.amount_cents), currency)} off
+            Billed annually
           </p>
         )}
       </div>
@@ -347,11 +359,27 @@ export default function BillingPage() {
   const sub = current?.subscription
   const isSubscribed = !!sub && isSubscriptionActive(sub.status)
   const isAnyActionBusy = busyAction !== null
-  const orderedPlans = prices
-    ? [...prices.plans].sort(
-        (a, b) => PLAN_ORDER.indexOf(a.cycle) - PLAN_ORDER.indexOf(b.cycle),
-      )
+
+  const currentPlanCode = sub
+    ? sub.plan === "weekly"
+      ? "weekly"
+      : sub.billing_cycle === "yearly"
+        ? "yearly_pro"
+        : LEGACY_PLAN_CODE_MAP[sub.plan] ?? sub.plan
+    : null
+
+  const visiblePlans = prices
+    ? prices.plans.filter((plan) => {
+        if (plan.code === "weekly") return true
+        if (yearlyToggle) return plan.code.startsWith("yearly_")
+        return plan.code.startsWith("monthly_")
+      })
     : []
+
+  const order = yearlyToggle ? YEARLY_PLAN_ORDER : PLAN_ORDER
+  const orderedPlans = [...visiblePlans].sort(
+    (a, b) => order.indexOf(a.code) - order.indexOf(b.code),
+  )
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10 space-y-10">
@@ -513,7 +541,7 @@ export default function BillingPage() {
           </h2>
 
           {/* Yearly toggle */}
-          {orderedPlans.some((p) => p.cycle === "monthly") && (
+          {orderedPlans.some((p) => p.code.startsWith("monthly_")) && (
             <button
               onClick={() => setYearlyToggle((v) => !v)}
               className={clsx(
@@ -558,7 +586,7 @@ export default function BillingPage() {
                 plan={plan}
                 currency={prices?.currency ?? "USD"}
                 yearlyToggle={yearlyToggle}
-                isCurrentPlan={isSubscribed && sub?.plan === plan.code}
+                isCurrentPlan={isSubscribed && currentPlanCode === plan.code}
                 isBusy={isAnyActionBusy}
                 onSubscribe={handleSubscribe}
               />

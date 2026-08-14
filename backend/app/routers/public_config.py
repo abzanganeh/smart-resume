@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.models.admin import (
@@ -34,6 +35,7 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.user import User
+from app.services.billing.public_prices import build_public_billing_prices
 
 router = APIRouter(tags=["public-config"])
 
@@ -212,6 +214,19 @@ async def public_announcements(
         "version": f"ann-{latest.isoformat()}",
         "items": items,
     }
+
+
+@router.get("/api/billing/prices")
+@limiter.limit("120/minute")
+async def public_billing_prices(
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Canonical public price list (base plans only; LLM add-ons removed)."""
+    payload = await build_public_billing_prices(db)
+    response.headers["Cache-Control"] = _FLAG_CACHE_HEADER[1]
+    return payload
 
 
 __all__ = ["router"]
