@@ -25,7 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -143,6 +143,10 @@ class UserWatchedCompany(Base):
         nullable=False,
         default=_utcnow,
         server_default=text("now()"),
+    )
+
+    watched_company: Mapped["WatchedCompany"] = relationship(
+        "WatchedCompany", lazy="raise"
     )
 
     __table_args__ = (
