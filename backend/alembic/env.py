@@ -55,6 +55,7 @@ from app.models import job_description as _job_description_models  # noqa: F401,
 from app.models import company_profile as _company_profile_models  # noqa: F401, E402
 from app.models import user_corpus as _user_corpus_models  # noqa: F401, E402
 from app.models import tier_limits as _tier_limits_models  # noqa: F401, E402
+from app.models import admin_grant as _admin_grant_models  # noqa: F401, E402
 
 target_metadata = Base.metadata
 

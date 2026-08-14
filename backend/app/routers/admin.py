@@ -2495,6 +2495,8 @@ async def admin_auth_log_list(
 
 __all__ = ["router"]
 
+from app.routers import admin_grants  # noqa: E402
 from app.routers import admin_tier_limits  # noqa: E402
 
 router.include_router(admin_tier_limits.router)
+router.include_router(admin_grants.router)

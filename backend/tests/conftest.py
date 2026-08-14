@@ -69,7 +69,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "announcements, feature_flags, admin_invites, "
                 "admin_audit_log, notifications, "
                 "stripe_webhook_events, refund_records, "
-                "credit_transactions, subscriptions, plan_configs, tier_limits_config, "
+                "credit_transactions, admin_user_grants, subscriptions, plan_configs, tier_limits_config, "
                 "llm_configs, "
                 "auth_audit_log, refresh_tokens, users, admin_users "
                 "RESTART IDENTITY CASCADE"
