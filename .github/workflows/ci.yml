@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-unit:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit -v --tb=short
+        env:
+          APP_ENV: ci
+          AUTH_DISABLE: "false"
+
+  backend-integration:
+    name: Backend integration tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: smart_resume_test
+          POSTGRES_USER: smart_resume
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smart_resume -d smart_resume_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run migrations
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -m integration -v --tb=short
+        env:
+          APP_ENV: ci
+          AUTH_DISABLE: "false"
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
+          REDIS_URL: redis://localhost:6379
+
+  migration-safety:
+    name: Migration safety
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: smart_resume_migrate
+          POSTGRES_USER: smart_resume
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smart_resume -d smart_resume_migrate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Assert single Alembic head
+        run: |
+          heads=$(uv run alembic heads | wc -l)
+          if [ "$heads" -ne 1 ]; then
+            echo "Expected exactly one Alembic head, found $heads"
+            uv run alembic heads
+            exit 1
+          fi
+
+      - name: Upgrade empty database
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_migrate
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: CI gate (lint + build)
+        run: pnpm run test:ci
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXTAUTH_SECRET: ci-test-secret-not-for-production
+          NEXTAUTH_URL: http://localhost:3000
