@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Check, X, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Pencil, Loader2, ChevronDown, ChevronUp, X } from "lucide-react"
 import { clsx } from "clsx"
 import { useAdminSession, useAuditToast } from "@/app/admin/layout"
 import {
@@ -10,11 +10,39 @@ import {
   createAdminPlan,
   patchAdminPlan,
   getAdminPlansHistory,
-  updateAdminAddonPricing,
 } from "@/lib/admin/api"
-import type { PlanConfig, PlanCreatePayload, LLMAddonPricing } from "@/lib/admin/types"
+import type {
+  PlanConfig,
+  PlanConfigInterval,
+  PlanCreatePayload,
+  PlanUpdatePayload,
+} from "@/lib/admin/types"
 
-// ── Plans Page ────────────────────────────────────────────────────────────────
+const PLAN_CODES = [
+  "weekly",
+  "monthly_pro",
+  "yearly_pro",
+  "monthly_plus",
+  "yearly_plus",
+  "monthly_premium",
+  "yearly_premium",
+] as const
+
+const INTERVALS: PlanConfigInterval[] = ["day", "week", "month", "year", "one_time"]
+
+function defaultIntervalForCode(code: string): PlanConfigInterval {
+  if (code === "weekly") return "week"
+  if (code.startsWith("yearly_")) return "year"
+  if (code.startsWith("monthly_")) return "month"
+  return "month"
+}
+
+function formatAmount(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+  }).format(cents / 100)
+}
 
 export default function AdminPlansPage() {
   const router = useRouter()
@@ -22,18 +50,16 @@ export default function AdminPlansPage() {
   const { showAuditToast } = useAuditToast()
 
   const [plans, setPlans] = useState<PlanConfig[]>([])
-  const [addon, setAddon] = useState<LLMAddonPricing | null>(null)
   const [history, setHistory] = useState<PlanConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingPlan, setEditingPlan] = useState<PlanConfig | null>(null)
-  const [editingAddon, setEditingAddon] = useState(false)
 
   useEffect(() => {
     if (!token) return
-    loadData()
+    void loadData()
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
@@ -44,9 +70,8 @@ export default function AdminPlansPage() {
         getAdminPlans(token!),
         getAdminPlansHistory(token!),
       ])
-      setPlans(planData.plans ?? [])
-      setAddon(planData.addon_pricing ?? null)
-      setHistory(Array.isArray(hist) ? hist : [])
+      setPlans(planData)
+      setHistory(hist)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load plans"
       if (msg === "admin_setup_incomplete") {
@@ -78,20 +103,17 @@ export default function AdminPlansPage() {
         }
       />
 
-      {/* ── Active plans table ───────────────────────────────────────── */}
-      <Section title="Current Plan Configs">
+      <Section title="Active Plan Configs">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-400 border-b border-slate-800">
-                <Th>Plan</Th>
-                <Th>Cycle</Th>
-                <Th>Price (USD)</Th>
-                <Th>Resumes</Th>
-                <Th>Searches</Th>
-                <Th>Trial days</Th>
+                <Th>Code</Th>
+                <Th>Interval</Th>
+                <Th>Price</Th>
+                <Th>Stripe price ID</Th>
+                <Th>Active</Th>
                 <Th>Effective from</Th>
-                <Th>Apply to existing</Th>
                 <Th>&nbsp;</Th>
               </tr>
             </thead>
@@ -99,33 +121,25 @@ export default function AdminPlansPage() {
               {plans.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
                   <Td>
-                    <span className="capitalize font-medium text-white">{p.plan}</span>
+                    <span className="font-medium text-white">{p.code}</span>
                   </Td>
                   <Td>
-                    <CycleBadge cycle={p.billing_cycle} />
+                    <IntervalBadge interval={p.interval} />
                   </Td>
-                  <Td>${p.price_usd.toFixed(2)}</Td>
-                  <Td>{p.resume_limit}</Td>
-                  <Td>{p.search_limit}</Td>
+                  <Td>{formatAmount(p.amount_cents, p.currency)}</Td>
+                  <Td className="text-xs text-slate-400 font-mono">{p.stripe_price_id}</Td>
                   <Td>
-                    {p.trial_days > 0 ? (
-                      <span className="text-emerald-400">{p.trial_days}d</span>
+                    {p.is_active ? (
+                      <span className="text-emerald-400 text-xs">Active</span>
                     ) : (
-                      <span className="text-slate-500">—</span>
+                      <span className="text-slate-500 text-xs">Inactive</span>
                     )}
                   </Td>
                   <Td className="text-slate-400 text-xs">
                     {new Date(p.effective_from).toLocaleDateString()}
                   </Td>
                   <Td>
-                    {p.apply_to_existing ? (
-                      <span className="text-amber-400 text-xs">All at renewal</span>
-                    ) : (
-                      <span className="text-slate-400 text-xs">New only</span>
-                    )}
-                  </Td>
-                  <Td>
-                    {!p.superseded_by && (
+                    {p.is_active && (
                       <button
                         onClick={() => setEditingPlan(p)}
                         className="text-slate-400 hover:text-white transition-colors"
@@ -139,7 +153,7 @@ export default function AdminPlansPage() {
               ))}
               {plans.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center text-slate-500 py-8">
+                  <td colSpan={7} className="text-center text-slate-500 py-8">
                     No plan configs yet.
                   </td>
                 </tr>
@@ -149,43 +163,6 @@ export default function AdminPlansPage() {
         </div>
       </Section>
 
-      {/* ── LLM add-on pricing ───────────────────────────────────────── */}
-      {addon && (
-        <Section
-          title="LLM Add-on Pricing"
-          action={
-            <button
-              onClick={() => setEditingAddon(true)}
-              className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition-colors"
-            >
-              <Pencil className="w-3 h-3" />
-              Edit
-            </button>
-          }
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[
-              { label: "Better 5-pack", value: addon.better_pack_usd },
-              { label: "Better monthly", value: addon.better_monthly_usd },
-              { label: "Better yearly", value: addon.better_yearly_usd },
-              { label: "Best per-resume", value: addon.best_per_resume_usd },
-              { label: "Best monthly", value: addon.best_monthly_usd },
-              { label: "Best yearly", value: addon.best_yearly_usd },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-slate-800/50 rounded-lg p-3">
-                <p className="text-xs text-slate-400 mb-1">{label}</p>
-                <p className="text-lg font-semibold text-white">${value.toFixed(2)}</p>
-              </div>
-            ))}
-            <div className="bg-slate-800/50 rounded-lg p-3">
-              <p className="text-xs text-slate-400 mb-1">Free credit grant</p>
-              <p className="text-lg font-semibold text-white">{addon.free_credit_grant}</p>
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {/* ── Change history ───────────────────────────────────────────── */}
       <Section
         title={`Change History (${history.length})`}
         action={
@@ -203,8 +180,8 @@ export default function AdminPlansPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-slate-800">
-                  <Th>Plan</Th>
-                  <Th>Cycle</Th>
+                  <Th>Code</Th>
+                  <Th>Interval</Th>
                   <Th>Price</Th>
                   <Th>Created</Th>
                   <Th>Status</Th>
@@ -213,15 +190,19 @@ export default function AdminPlansPage() {
               <tbody className="divide-y divide-slate-800">
                 {history.map((p) => (
                   <tr key={p.id} className="text-slate-400">
-                    <Td className="capitalize">{p.plan}</Td>
-                    <Td><CycleBadge cycle={p.billing_cycle} /></Td>
-                    <Td>${p.price_usd.toFixed(2)}</Td>
+                    <Td>{p.code}</Td>
+                    <Td>
+                      <IntervalBadge interval={p.interval} />
+                    </Td>
+                    <Td>{formatAmount(p.amount_cents, p.currency)}</Td>
                     <Td className="text-xs">{new Date(p.created_at).toLocaleString()}</Td>
                     <Td>
-                      {p.superseded_by ? (
+                      {p.effective_to ? (
                         <span className="text-slate-600 text-xs">Superseded</span>
-                      ) : (
+                      ) : p.is_active ? (
                         <span className="text-emerald-400 text-xs">Active</span>
+                      ) : (
+                        <span className="text-slate-500 text-xs">Inactive</span>
                       )}
                     </Td>
                   </tr>
@@ -232,11 +213,8 @@ export default function AdminPlansPage() {
         )}
       </Section>
 
-      {/* ── Create form modal ────────────────────────────────────────── */}
       {showCreateForm && (
-        <PlanFormModal
-          title="New Plan Version"
-          token={token}
+        <PlanCreateModal
           onSave={async (payload) => {
             const res = await createAdminPlan(token, payload)
             showAuditToast(res.audit_log_id)
@@ -247,12 +225,9 @@ export default function AdminPlansPage() {
         />
       )}
 
-      {/* ── Edit form modal ──────────────────────────────────────────── */}
       {editingPlan && (
-        <PlanFormModal
-          title="Edit Plan Config"
+        <PlanEditModal
           initial={editingPlan}
-          token={token}
           onSave={async (payload) => {
             const res = await patchAdminPlan(token, editingPlan.id, payload)
             showAuditToast(res.audit_log_id)
@@ -262,54 +237,31 @@ export default function AdminPlansPage() {
           onClose={() => setEditingPlan(null)}
         />
       )}
-
-      {/* ── Edit add-on pricing modal ─────────────────────────────── */}
-      {editingAddon && addon && (
-        <AddonPricingModal
-          initial={addon}
-          token={token}
-          onSave={async (payload) => {
-            const res = await updateAdminAddonPricing(token, payload)
-            showAuditToast(res.audit_log_id)
-            setAddon((prev) => (prev ? { ...prev, ...payload } : prev))
-            setEditingAddon(false)
-          }}
-          onClose={() => setEditingAddon(false)}
-        />
-      )}
     </div>
   )
 }
 
-// ── Plan Form Modal ───────────────────────────────────────────────────────────
-
-function PlanFormModal({
-  title,
-  initial,
-  token: _token,
+function PlanCreateModal({
   onSave,
   onClose,
 }: {
-  title: string
-  initial?: PlanConfig
-  token: string
   onSave: (payload: PlanCreatePayload) => Promise<void>
   onClose: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
+  const [code, setCode] = useState<string>(PLAN_CODES[1])
+  const [interval, setInterval] = useState<PlanConfigInterval>(defaultIntervalForCode(PLAN_CODES[1]))
+  const [amountCents, setAmountCents] = useState("")
+  const [currency, setCurrency] = useState("USD")
+  const [stripePriceId, setStripePriceId] = useState("")
+  const [stripeProductId, setStripeProductId] = useState("")
+  const [eligibility, setEligibility] = useState("")
 
-  const [plan, setPlan] = useState<"daily" | "weekly" | "monthly">(initial?.plan ?? "monthly")
-  const [cycle, setCycle] = useState<"recurring" | "yearly">(initial?.billing_cycle ?? "recurring")
-  const [price, setPrice] = useState(String(initial?.price_usd ?? ""))
-  const [resumeLimit, setResumeLimit] = useState(String(initial?.resume_limit ?? ""))
-  const [searchLimit, setSearchLimit] = useState(String(initial?.search_limit ?? ""))
-  const [stripePriceId, setStripePriceId] = useState(initial?.stripe_price_id ?? "")
-  const [trialDays, setTrialDays] = useState(String(initial?.trial_days ?? "0"))
-  const [effectiveFrom, setEffectiveFrom] = useState(
-    initial?.effective_from ? initial.effective_from.slice(0, 16) : new Date().toISOString().slice(0, 16),
-  )
-  const [applyToExisting, setApplyToExisting] = useState(initial?.apply_to_existing ?? false)
+  function handleCodeChange(next: string) {
+    setCode(next)
+    setInterval(defaultIntervalForCode(next))
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -317,15 +269,13 @@ function PlanFormModal({
     startTransition(async () => {
       try {
         await onSave({
-          plan,
-          billing_cycle: cycle,
-          price_usd: parseFloat(price),
-          resume_limit: parseInt(resumeLimit),
-          search_limit: parseInt(searchLimit),
+          code,
           stripe_price_id: stripePriceId,
-          trial_days: parseInt(trialDays),
-          effective_from: new Date(effectiveFrom).toISOString(),
-          apply_to_existing: applyToExisting,
+          stripe_product_id: stripeProductId || null,
+          eligibility: eligibility || undefined,
+          amount_cents: parseInt(amountCents, 10),
+          currency,
+          interval,
         })
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Save failed")
@@ -334,117 +284,114 @@ function PlanFormModal({
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title="New Plan Version" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {err && <ErrorBanner msg={err} />}
-
+        <FormField label="Plan code">
+          <select value={code} onChange={(e) => handleCodeChange(e.target.value)} className={inputCls}>
+            {PLAN_CODES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </FormField>
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Plan">
-            <select value={plan} onChange={(e) => setPlan(e.target.value as typeof plan)} className={inputCls}>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+          <FormField label="Interval">
+            <select
+              value={interval}
+              onChange={(e) => setInterval(e.target.value as PlanConfigInterval)}
+              className={inputCls}
+            >
+              {INTERVALS.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
             </select>
           </FormField>
-
-          <FormField label="Billing cycle">
-            <select value={cycle} onChange={(e) => setCycle(e.target.value as typeof cycle)} className={inputCls}>
-              <option value="recurring">Recurring</option>
-              <option value="yearly">Yearly</option>
-            </select>
+          <FormField label="Currency">
+            <input value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls} />
           </FormField>
         </div>
-
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Price (USD)">
-            <input type="number" step="0.01" min="0" required value={price} onChange={(e) => setPrice(e.target.value)} className={inputCls} placeholder="9.99" />
+          <FormField label="Amount (cents)">
+            <input
+              type="number"
+              min="0"
+              required
+              value={amountCents}
+              onChange={(e) => setAmountCents(e.target.value)}
+              className={inputCls}
+              placeholder="1999"
+            />
           </FormField>
           <FormField label="Stripe price ID">
-            <input type="text" required value={stripePriceId} onChange={(e) => setStripePriceId(e.target.value)} className={inputCls} placeholder="price_..." />
+            <input
+              type="text"
+              required
+              value={stripePriceId}
+              onChange={(e) => setStripePriceId(e.target.value)}
+              className={inputCls}
+              placeholder="price_..."
+            />
           </FormField>
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Resume limit">
-            <input type="number" min="1" required value={resumeLimit} onChange={(e) => setResumeLimit(e.target.value)} className={inputCls} />
-          </FormField>
-          <FormField label="Search limit">
-            <input type="number" min="0" required value={searchLimit} onChange={(e) => setSearchLimit(e.target.value)} className={inputCls} />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Trial days (0 = none)">
-            <input type="number" min="0" required value={trialDays} onChange={(e) => setTrialDays(e.target.value)} className={inputCls} />
-          </FormField>
-          <FormField label="Effective from">
-            <input type="datetime-local" required value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} className={inputCls} />
-          </FormField>
-        </div>
-
-        <div>
-          <p className="text-sm text-slate-300 mb-2">Apply to:</p>
-          <div className="flex gap-4">
-            <RadioOpt label="New subscribers only" checked={!applyToExisting} onChange={() => setApplyToExisting(false)} />
-            <RadioOpt label="All at next renewal" checked={applyToExisting} onChange={() => setApplyToExisting(true)} />
-          </div>
-        </div>
-
-        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save plan" />
+        <FormField label="Stripe product ID (optional)">
+          <input
+            type="text"
+            value={stripeProductId}
+            onChange={(e) => setStripeProductId(e.target.value)}
+            className={inputCls}
+            placeholder="prod_..."
+          />
+        </FormField>
+        <FormField label="Eligibility note (optional)">
+          <input
+            type="text"
+            value={eligibility}
+            onChange={(e) => setEligibility(e.target.value)}
+            className={inputCls}
+          />
+        </FormField>
+        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Create plan" />
       </form>
     </Modal>
   )
 }
 
-// ── Add-on pricing modal ──────────────────────────────────────────────────────
-
-function AddonPricingModal({
+function PlanEditModal({
   initial,
-  token: _token,
   onSave,
   onClose,
 }: {
-  initial: LLMAddonPricing
-  token: string
-  onSave: (payload: Partial<LLMAddonPricing>) => Promise<void>
+  initial: PlanConfig
+  onSave: (payload: PlanUpdatePayload) => Promise<void>
   onClose: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
-  const [values, setValues] = useState({
-    better_pack_usd: String(initial.better_pack_usd),
-    better_monthly_usd: String(initial.better_monthly_usd),
-    better_yearly_usd: String(initial.better_yearly_usd),
-    best_per_resume_usd: String(initial.best_per_resume_usd),
-    best_monthly_usd: String(initial.best_monthly_usd),
-    best_yearly_usd: String(initial.best_yearly_usd),
-    free_credit_grant: String(initial.free_credit_grant),
-  })
-
-  const fields: Array<{ key: keyof typeof values; label: string }> = [
-    { key: "better_pack_usd", label: "Better 5-pack (USD)" },
-    { key: "better_monthly_usd", label: "Better monthly (USD)" },
-    { key: "better_yearly_usd", label: "Better yearly (USD)" },
-    { key: "best_per_resume_usd", label: "Best per-resume (USD)" },
-    { key: "best_monthly_usd", label: "Best monthly (USD)" },
-    { key: "best_yearly_usd", label: "Best yearly (USD)" },
-    { key: "free_credit_grant", label: "Free credit grant" },
-  ]
+  const [interval, setInterval] = useState<PlanConfigInterval>(initial.interval)
+  const [amountCents, setAmountCents] = useState(String(initial.amount_cents))
+  const [currency, setCurrency] = useState(initial.currency)
+  const [stripePriceId, setStripePriceId] = useState(initial.stripe_price_id)
+  const [stripeProductId, setStripeProductId] = useState(initial.stripe_product_id ?? "")
+  const [eligibility, setEligibility] = useState(initial.eligibility)
+  const [isActive, setIsActive] = useState(initial.is_active)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
       try {
-        const payload: Partial<LLMAddonPricing> = {
-          better_pack_usd: parseFloat(values.better_pack_usd),
-          better_monthly_usd: parseFloat(values.better_monthly_usd),
-          better_yearly_usd: parseFloat(values.better_yearly_usd),
-          best_per_resume_usd: parseFloat(values.best_per_resume_usd),
-          best_monthly_usd: parseFloat(values.best_monthly_usd),
-          best_yearly_usd: parseFloat(values.best_yearly_usd),
-          free_credit_grant: parseInt(values.free_credit_grant),
-        }
-        await onSave(payload)
+        await onSave({
+          stripe_price_id: stripePriceId,
+          stripe_product_id: stripeProductId || null,
+          eligibility,
+          amount_cents: parseInt(amountCents, 10),
+          currency,
+          interval,
+          is_active: isActive,
+        })
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Save failed")
       }
@@ -452,31 +399,76 @@ function AddonPricingModal({
   }
 
   return (
-    <Modal title="Edit LLM Add-on Pricing" onClose={onClose}>
+    <Modal title={`Edit ${initial.code}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {err && <ErrorBanner msg={err} />}
+        <p className="text-xs text-slate-500">
+          Plan code <span className="text-slate-300">{initial.code}</span> cannot be changed — create a new version instead.
+        </p>
         <div className="grid grid-cols-2 gap-4">
-          {fields.map(({ key, label }) => (
-            <FormField key={key} label={label}>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={values[key]}
-                onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-                className={inputCls}
-              />
-            </FormField>
-          ))}
+          <FormField label="Interval">
+            <select
+              value={interval}
+              onChange={(e) => setInterval(e.target.value as PlanConfigInterval)}
+              className={inputCls}
+            >
+              {INTERVALS.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Currency">
+            <input value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls} />
+          </FormField>
         </div>
-        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save pricing" />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Amount (cents)">
+            <input
+              type="number"
+              min="0"
+              required
+              value={amountCents}
+              onChange={(e) => setAmountCents(e.target.value)}
+              className={inputCls}
+            />
+          </FormField>
+          <FormField label="Stripe price ID">
+            <input
+              type="text"
+              required
+              value={stripePriceId}
+              onChange={(e) => setStripePriceId(e.target.value)}
+              className={inputCls}
+            />
+          </FormField>
+        </div>
+        <FormField label="Stripe product ID">
+          <input
+            type="text"
+            value={stripeProductId}
+            onChange={(e) => setStripeProductId(e.target.value)}
+            className={inputCls}
+          />
+        </FormField>
+        <FormField label="Eligibility">
+          <input value={eligibility} onChange={(e) => setEligibility(e.target.value)} className={inputCls} />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="accent-amber-500"
+          />
+          Active
+        </label>
+        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save changes" />
       </form>
     </Modal>
   )
 }
-
-// ── Shared UI atoms ───────────────────────────────────────────────────────────
 
 const inputCls =
   "w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
@@ -513,22 +505,14 @@ function Section({
 function Th({ children }: { children: React.ReactNode }) {
   return <th className="pb-2 pr-4 font-medium text-xs">{children}</th>
 }
+
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={clsx("py-2.5 pr-4 text-slate-300", className)}>{children}</td>
 }
 
-function CycleBadge({ cycle }: { cycle: string }) {
+function IntervalBadge({ interval }: { interval: string }) {
   return (
-    <span
-      className={clsx(
-        "text-xs px-2 py-0.5 rounded-full",
-        cycle === "yearly"
-          ? "bg-emerald-900/50 text-emerald-300"
-          : "bg-slate-700 text-slate-300",
-      )}
-    >
-      {cycle}
-    </span>
+    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{interval}</span>
   )
 }
 
@@ -562,28 +546,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
       <label className="block text-xs text-slate-400 mb-1.5">{label}</label>
       {children}
     </div>
-  )
-}
-
-function RadioOpt({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: () => void
-}) {
-  return (
-    <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-300">
-      <input
-        type="radio"
-        checked={checked}
-        onChange={onChange}
-        className="accent-amber-500"
-      />
-      {label}
-    </label>
   )
 }
 

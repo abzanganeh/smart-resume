@@ -13,6 +13,8 @@ import type {
   AuditedResponse,
   PlanConfig,
   PlanCreatePayload,
+  PlanUpdatePayload,
+  PlanAuditedResponse,
   LLMConfig,
   LLMConfigPayload,
   FeatureFlag,
@@ -33,7 +35,6 @@ import type {
   ChurnMetrics,
   SystemHealth,
   AuditLogResponse,
-  LLMAddonPricing,
 } from "./types"
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
@@ -269,74 +270,25 @@ export async function adminLogout(token: string): Promise<void> {
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
-interface BackendPlanConfigOut {
-  id: string
-  code: string
-  stripe_price_id: string
-  amount_cents: number
-  currency: string
-  interval: string
-  is_active: boolean
-  effective_from: string
-  effective_to?: string | null
-  created_by_admin_id?: string | null
-  created_at: string
-}
-
-function mapBackendPlan(row: BackendPlanConfigOut): PlanConfig {
-  const knownPlans = ["daily", "weekly", "monthly"] as const
-  let plan: PlanConfig["plan"] = "monthly"
-  let billing_cycle: PlanConfig["billing_cycle"] = "recurring"
-
-  if (row.code.endsWith("_yearly")) {
-    const base = row.code.replace(/_yearly$/, "")
-    if ((knownPlans as readonly string[]).includes(base)) {
-      plan = base as PlanConfig["plan"]
-      billing_cycle = "yearly"
-    }
-  } else if ((knownPlans as readonly string[]).includes(row.code)) {
-    plan = row.code as PlanConfig["plan"]
-    billing_cycle = row.interval === "year" ? "yearly" : "recurring"
-  }
-
+function normalizePlanConfig(row: PlanConfig): PlanConfig {
   return {
+    ...row,
     id: String(row.id),
-    plan,
-    billing_cycle,
-    price_usd: row.amount_cents / 100,
-    resume_limit: 0,
-    search_limit: 0,
-    stripe_price_id: row.stripe_price_id,
-    trial_days: 0,
-    effective_from: row.effective_from,
-    apply_to_existing: false,
-    superseded_by: row.effective_to ? String(row.effective_to) : null,
-    created_by: row.created_by_admin_id ? String(row.created_by_admin_id) : "",
-    created_at: row.created_at,
+    stripe_product_id: row.stripe_product_id ?? null,
+    effective_to: row.effective_to ?? null,
+    created_by_admin_id: row.created_by_admin_id ?? null,
   }
 }
 
-export async function getAdminPlans(
-  token: string,
-): Promise<{ plans: PlanConfig[]; addon_pricing: LLMAddonPricing | null }> {
-  const raw = await req<
-    BackendPlanConfigOut[] | { plans: PlanConfig[]; addon_pricing?: LLMAddonPricing }
-  >(`/api/admin/plans`, token)
-
-  if (Array.isArray(raw)) {
-    return { plans: raw.map(mapBackendPlan), addon_pricing: null }
-  }
-
-  return {
-    plans: raw.plans ?? [],
-    addon_pricing: raw.addon_pricing ?? null,
-  }
+export async function getAdminPlans(token: string): Promise<PlanConfig[]> {
+  const raw = await req<PlanConfig[]>(`/api/admin/plans`, token)
+  return Array.isArray(raw) ? raw.map(normalizePlanConfig) : []
 }
 
 export async function createAdminPlan(
   token: string,
   payload: PlanCreatePayload,
-): Promise<AuditedResponse<PlanConfig>> {
+): Promise<PlanAuditedResponse> {
   return req(`/api/admin/plans`, token, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -346,29 +298,17 @@ export async function createAdminPlan(
 export async function patchAdminPlan(
   token: string,
   id: string,
-  payload: Partial<PlanCreatePayload>,
-): Promise<AuditedResponse<PlanConfig>> {
+  payload: PlanUpdatePayload,
+): Promise<PlanAuditedResponse> {
   return req(`/api/admin/plans/${id}`, token, {
     method: "PATCH",
     body: JSON.stringify(payload),
   })
 }
 
-export async function getAdminPlansHistory(
-  token: string,
-): Promise<PlanConfig[]> {
-  const raw = await req<BackendPlanConfigOut[]>(`/api/admin/plans/history`, token)
-  return Array.isArray(raw) ? raw.map(mapBackendPlan) : []
-}
-
-export async function updateAdminAddonPricing(
-  token: string,
-  payload: Partial<LLMAddonPricing>,
-): Promise<AuditedResponse<LLMAddonPricing>> {
-  return req(`/api/admin/plans/addon-pricing`, token, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  })
+export async function getAdminPlansHistory(token: string): Promise<PlanConfig[]> {
+  const raw = await req<PlanConfig[]>(`/api/admin/plans/history`, token)
+  return Array.isArray(raw) ? raw.map(normalizePlanConfig) : []
 }
 
 // ── LLM Config ────────────────────────────────────────────────────────────────
