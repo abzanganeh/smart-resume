@@ -176,7 +176,7 @@ async def test_subscriber_scoped_regen_does_not_increment_resumes_used(
 
     user = User(
         id=uuid.uuid4(),
-        email="sub@example.com",
+        email=f"sub-{uuid.uuid4().hex[:8]}@example.com",
         display_name="sub",
         auth_provider=AuthProvider.email,
         password_hash="x",

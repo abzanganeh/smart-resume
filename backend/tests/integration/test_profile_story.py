@@ -21,9 +21,13 @@ REGISTER_PAYLOAD = {
 
 VALID_SEGMENTS = [
     "I worked at SecureAuth from 2022 to 2025 as a Senior Software Engineer "
-    "building anomaly detection systems and ML pipelines for identity security.",
+    "building anomaly detection systems and ML pipelines for identity security "
+    "across millions of daily authentications.",
     "Before that I was at Acceptto from 2016 to 2022 building behavioral "
-    "authentication systems using Python and Kubernetes.",
+    "authentication systems using Python, Kubernetes, and PostgreSQL for "
+    "enterprise customers in financial services and healthcare.",
+    "Earlier I led backend platform work focused on API design, observability, "
+    "and mentoring engineers through design reviews and production incident response.",
 ]
 
 
