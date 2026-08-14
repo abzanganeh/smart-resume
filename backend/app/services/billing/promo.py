@@ -17,8 +17,6 @@ from app.models.user import CreditTransaction
 from app.services.admin.grants import InvalidGrantPayloadError, validate_grant_payload
 from app.services.billing.credits import grant_credit
 
-_CODE_NOT_FOUND_SENTINEL = "PROMO_CODE_NOT_FOUND_SENTINEL"
-
 
 class PromoRedeemError(Exception):
     """Base error for promo redemption failures."""
@@ -66,6 +64,8 @@ def normalize_promo_code(code: str) -> str:
 
 
 def codes_match(stored: str, provided: str) -> bool:
+    if len(stored) != len(provided):
+        return False
     return hmac.compare_digest(stored, provided)
 
 
@@ -79,8 +79,10 @@ async def _lookup_promo_for_compare(
             select(PromoCode).where(PromoCode.code == normalized_code)
         )
     ).scalar_one_or_none()
-    stored = row.code if row is not None else _CODE_NOT_FOUND_SENTINEL
-    if not codes_match(stored, normalized_code):
+    if row is None:
+        hmac.compare_digest(normalized_code, normalized_code)
+        return None
+    if not codes_match(row.code, normalized_code):
         return None
     return row
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,7 +20,7 @@ from app.services.billing.promo import (
     PromoCodeExpiredError,
     PromoCodeInactiveError,
     PromoCodeInvalidError,
-    PromoRedeemError,
+    PromoRedeemResult,
     redeem_promo_code,
 )
 
@@ -32,11 +33,25 @@ class PromoRedeemRequest(BaseModel):
 
 class PromoRedeemResponse(BaseModel):
     ok: bool = True
+    idempotent: bool
+    promo_code_id: uuid.UUID
     grant_type: AdminGrantType
     payload: dict[str, Any]
-    idempotent: bool
-    credit_transaction_id: str | None = None
-    admin_user_grant_id: str | None = None
+    redemption_id: uuid.UUID
+    credit_transaction_id: uuid.UUID | None = None
+    admin_user_grant_id: uuid.UUID | None = None
+
+
+def _serialize_result(result: PromoRedeemResult) -> PromoRedeemResponse:
+    return PromoRedeemResponse(
+        idempotent=result.idempotent,
+        promo_code_id=result.promo_code_id,
+        grant_type=result.grant_type,
+        payload=result.payload,
+        redemption_id=result.redemption_id,
+        credit_transaction_id=result.credit_transaction_id,
+        admin_user_grant_id=result.admin_user_grant_id,
+    )
 
 
 @router.post("/redeem", response_model=PromoRedeemResponse)
@@ -48,51 +63,39 @@ async def promo_redeem(
     user: Annotated[User, Depends(get_current_user)],
 ) -> PromoRedeemResponse:
     try:
-        result = await redeem_promo_code(db, user_id=user.id, code=body.code)
-    except PromoCodeInvalidError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "promo_code_invalid"},
+        result = await redeem_promo_code(
+            db,
+            user_id=user.id,
+            code=body.code,
         )
-    except PromoCodeInactiveError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "promo_code_inactive"},
-        )
-    except PromoCodeExpiredError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "promo_code_expired"},
-        )
-    except PromoCodeExhaustedError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "promo_code_exhausted"},
-        )
-    except InvalidGrantPayloadError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "invalid_grant_payload", "message": str(exc)},
-        ) from exc
-    except PromoRedeemError as exc:
+    except PromoCodeInvalidError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": exc.code},
         ) from exc
+    except PromoCodeInactiveError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": exc.code},
+        ) from exc
+    except PromoCodeExpiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={"code": exc.code},
+        ) from exc
+    except PromoCodeExhaustedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code},
+        ) from exc
+    except InvalidGrantPayloadError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "promo_misconfigured", "message": str(exc)},
+        ) from exc
 
     await db.commit()
-    return PromoRedeemResponse(
-        grant_type=result.grant_type,
-        payload=result.payload,
-        idempotent=result.idempotent,
-        credit_transaction_id=(
-            str(result.credit_transaction_id)
-            if result.credit_transaction_id is not None
-            else None
-        ),
-        admin_user_grant_id=(
-            str(result.admin_user_grant_id)
-            if result.admin_user_grant_id is not None
-            else None
-        ),
-    )
+    return _serialize_result(result)
+
+
+__all__ = ["router"]
