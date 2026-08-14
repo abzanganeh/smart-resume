@@ -185,6 +185,7 @@ async def test_subscriber_scoped_regen_does_not_increment_resumes_used(
         accepted_tos_version="2026-06",
     )
     db_session.add(user)
+    await db_session.flush()
     now = datetime.now(timezone.utc)
     sub = Subscription(
         id=uuid.uuid4(),

@@ -103,13 +103,7 @@ async def test_story_endpoint_llm_failure(app_client: AsyncClient):
     with patch("app.routers.profile.story_to_resume", side_effect=RuntimeError("LLM failed")):
         response = await app_client.post(
             "/api/profile/resume/from-story",
-            json={
-                "segments": [
-                    "I worked at SecureAuth for three years building ML infrastructure "
-                    "and anomaly detection systems for identity security."
-                ],
-                "whisper_path": False,
-            },
+            json={"segments": VALID_SEGMENTS, "whisper_path": False},
             headers={"Authorization": f"Bearer {token}"},
         )
     assert response.status_code == 502

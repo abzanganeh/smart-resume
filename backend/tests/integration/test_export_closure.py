@@ -7,7 +7,7 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -196,7 +196,7 @@ async def test_run_closure_tick_hard_deletes_user_idempotent(
             with patch("app.services.export.storage.delete_user_export_prefix"):
                 with patch(
                     "app.services.auth.email.send_account_deleted_email",
-                    return_value={"sent": False},
+                    new=AsyncMock(return_value={"sent": False}),
                 ):
                     result = await run_closure_tick(db_session, now=datetime.now(timezone.utc))
                     await db_session.flush()
