@@ -67,10 +67,13 @@ async def test_price_sync_no_drift_writes_no_audit(
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_x")
     # Seed every canonical code so the comparator sees no drift.
     canonical = {
-        "daily": ("price_daily", 199),
         "weekly": ("price_weekly", 599),
-        "monthly": ("price_monthly", 1999),
-        "monthly_yearly": ("price_monthly_yearly", 18999),
+        "monthly_pro": ("price_monthly_pro", 1500),
+        "yearly_pro": ("price_yearly_pro", 12000),
+        "monthly_plus": ("price_monthly_plus", 3000),
+        "yearly_plus": ("price_yearly_plus", 24000),
+        "monthly_premium": ("price_monthly_premium", 5000),
+        "yearly_premium": ("price_yearly_premium", 40000),
         "better_pack": ("price_better_pack", 999),
         "better_monthly": ("price_better_monthly", 1499),
         "better_yearly": ("price_better_yearly", 13499),
@@ -127,16 +130,16 @@ async def test_price_sync_amount_change_creates_pricing_drift_audit(
     # row.
     await _seed_plan(
         db_session,
-        code="monthly",
-        stripe_price_id="price_monthly",
-        amount_cents=1999,
+        code="monthly_pro",
+        stripe_price_id="price_monthly_pro",
+        amount_cents=1500,
     )
     await db_session.commit()
 
     # Stripe disagrees with the DB amount.
     fake_prices = [
         {
-            "id": "price_monthly",
+            "id": "price_monthly_pro",
             "unit_amount": 2999,  # changed
             "active": True,
             "currency": "usd",
@@ -150,16 +153,16 @@ async def test_price_sync_amount_change_creates_pricing_drift_audit(
 
     await db_session.commit()
 
-    drift_kinds = {d.kind for d in result.drifts if d.code == "monthly"}
+    drift_kinds = {d.kind for d in result.drifts if d.code == "monthly_pro"}
     assert "amount_changed" in drift_kinds
 
     # PlanConfig was NOT mutated — admin must reconcile via the UI.
     plan = (
         await db_session.execute(
-            select(PlanConfig).where(PlanConfig.code == "monthly")
+            select(PlanConfig).where(PlanConfig.code == "monthly_pro")
         )
     ).scalar_one()
-    assert plan.amount_cents == 1999
+    assert plan.amount_cents == 1500
 
     audit_rows = list(
         (
@@ -184,16 +187,16 @@ async def test_price_sync_archived_stripe_price_creates_drift(
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_x")
     await _seed_plan(
         db_session,
-        code="monthly",
-        stripe_price_id="price_monthly",
-        amount_cents=1999,
+        code="monthly_pro",
+        stripe_price_id="price_monthly_pro",
+        amount_cents=1500,
     )
     await db_session.commit()
 
     fake_prices = [
         {
-            "id": "price_monthly",
-            "unit_amount": 1999,
+            "id": "price_monthly_pro",
+            "unit_amount": 1500,
             "active": False,  # archived
             "currency": "usd",
         }
@@ -205,5 +208,5 @@ async def test_price_sync_archived_stripe_price_creates_drift(
         result = await run_stripe_price_sync(db_session)
     await db_session.commit()
 
-    drifts_for_monthly = [d for d in result.drifts if d.code == "monthly"]
+    drifts_for_monthly = [d for d in result.drifts if d.code == "monthly_pro"]
     assert any(d.kind == "archived" for d in drifts_for_monthly)
