@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import httpx
 import structlog
@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.career_watch import CareerJobCache, WatchedCompany
+from app.services.career_watch.poll_schedule import fetch_due_companies
 from app.services.career_watch.registry import fetch_company_jobs
 
 log = structlog.get_logger("career_watch.poller")
@@ -114,24 +115,12 @@ async def poll_company(
 async def poll_due_companies(
     session: AsyncSession,
     *,
-    interval_minutes: int = 15,
     limit: int = 50,
     now: datetime | None = None,
 ) -> PollStats:
-    """Poll companies whose ``last_polled_at`` is older than ``interval_minutes``."""
+    """Poll companies due per watcher tier limits (min interval across watchers)."""
     now = now or datetime.now(timezone.utc)
-    cutoff = now - timedelta(minutes=interval_minutes)
-    stmt = (
-        select(WatchedCompany)
-        .where(WatchedCompany.is_active.is_(True))
-        .where(
-            (WatchedCompany.last_polled_at.is_(None))
-            | (WatchedCompany.last_polled_at <= cutoff)
-        )
-        .order_by(WatchedCompany.last_polled_at.asc().nullsfirst())
-        .limit(limit)
-    )
-    companies = list((await session.execute(stmt)).scalars())
+    companies = await fetch_due_companies(session, limit=limit, now=now)
     stats = PollStats()
     async with httpx.AsyncClient() as client:
         for company in companies:

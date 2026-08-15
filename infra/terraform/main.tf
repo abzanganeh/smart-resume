@@ -396,10 +396,9 @@ resource "aws_lambda_function" "career_page_poller" {
 
   environment {
     variables = {
-      DATABASE_URL                         = var.postgres_url
-      CAREER_WATCH_POLL_INTERVAL_MINUTES = "15"
-      CAREER_WATCH_POLL_BATCH              = "25"
-      CAREER_WATCH_SQS_URL                 = aws_sqs_queue.career_watch.url
+      DATABASE_URL            = var.postgres_url
+      CAREER_WATCH_POLL_BATCH = "25"
+      CAREER_WATCH_SQS_URL    = aws_sqs_queue.career_watch.url
     }
   }
 
@@ -429,8 +428,8 @@ resource "aws_lambda_function" "career_matcher" {
 
 resource "aws_cloudwatch_event_rule" "career_page_poller" {
   name                = "${local.name_prefix}-career-page-poller"
-  description         = "Poll watched company career pages"
-  schedule_expression = "rate(15 minutes)"
+  description         = "Poll watched company career pages (5 min floor for Plus/Premium watchers)"
+  schedule_expression = "rate(5 minutes)"
   tags                = local.common_tags
 }
 
