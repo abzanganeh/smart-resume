@@ -557,7 +557,8 @@ async def run(
         if session.phase1_output
         else None
     )
-    output = postprocess_tailored_output(output, must_have)
+    tone_profile = session.phase1_output.tone_profile if session.phase1_output else None
+    output = postprocess_tailored_output(output, must_have, tone_profile=tone_profile)
 
     account_email = await resolve_account_email(session.user_id)
     output = apply_authoritative_contact(
