@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.agent.tone_profile import JDToneProfile
+
 
 class Keyword(BaseModel):
     term: str
@@ -27,6 +29,10 @@ class KeywordExtractionOutput(BaseModel):
     seniority_signals: list[str] = []
     boolean_search_terms: list[str] = []
     role_context: RoleContext = RoleContext(career_level="mid")
+    # Deterministic tonal fingerprint of the JD; feeds Phase 3 wording
+    # guidance and Phase 4's tone-alignment axis.  Defaults to a neutral
+    # profile so existing sessions and fixtures remain compatible.
+    tone_profile: JDToneProfile = JDToneProfile()
 
 
 class KeywordStringsOutput(BaseModel):
