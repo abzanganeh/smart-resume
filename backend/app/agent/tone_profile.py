@@ -368,9 +368,61 @@ def extract_tone_profile(jd_text: str) -> JDToneProfile:
     )
 
 
+def _dedup_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        key = item.lower().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
+def render_tone_profile_block(profile: JDToneProfile) -> str:
+    """Serialize a tone profile into a minimal Phase 3 prompt block.
+
+    Returns ``""`` for the default/empty profile so callers can concatenate
+    unconditionally.  Never emits raw JSON — the LLM should see natural
+    guidance, not a schema dump.
+    """
+    if profile.formality == Formality.neutral and not profile.dominant_verbs and not profile.distinctive_phrases:
+        return ""
+
+    verbs = _dedup_preserve_order(profile.dominant_verbs)[:_MAX_DOMINANT_VERBS]
+    phrases = _dedup_preserve_order(profile.distinctive_phrases)[:_MAX_DISTINCTIVE_PHRASES]
+
+    lines: list[str] = ["TONE PROFILE (mirror this voice where the candidate's real experience supports it):"]
+    lines.append(f"- Register: {profile.formality.value} / {profile.reading_level.value}")
+    if profile.industry_register:
+        lines.append(f"- Industry vocabulary: {profile.industry_register}")
+    if verbs:
+        lines.append(
+            "- Prefer these JD action verbs (verbatim) when they fit the "
+            f"candidate's real work: {', '.join(verbs)}"
+        )
+    if phrases:
+        lines.append(
+            "- Weave these JD phrases (verbatim, only where truthful): "
+            f"{', '.join(phrases)}"
+        )
+    lines.append(
+        "- Match the JD's register — do NOT downshift an executive JD into "
+        "casual language, and do NOT inflate a casual JD into stiff corporate prose."
+    )
+    lines.append(
+        "- Tone matching is a wording constraint, NOT an excuse to fabricate "
+        "experience. If a preferred verb has no truthful support in the "
+        "candidate's history, omit it."
+    )
+    return "\n".join(lines)
+
+
 __all__ = [
     "Formality",
     "JDToneProfile",
     "ReadingLevel",
     "extract_tone_profile",
+    "render_tone_profile_block",
 ]

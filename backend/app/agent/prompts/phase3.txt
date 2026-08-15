@@ -35,6 +35,16 @@ Adding a keyword ONLY to Skills is NOT enough — Phase 4 will flag it as a bloc
 For every must-have keyword: verify it appears in Skills AND weave it into at least one Experience bullet OR the Summary.
 If you cannot fit a keyword into an Experience bullet without fabricating, add it to the Summary.
 
+━━━ TONE MATCHING — wording, not fabrication ━━━
+When a TONE PROFILE block is provided in the user message, treat it as a wording
+constraint on top of everything else. Prefer the JD's dominant verbs verbatim
+when the candidate's real experience supports the action; use the industry
+register in phrasing (e.g. "regulated" / "compliance" in financial services);
+match the register level (never downshift an executive JD into casual English
+and never inflate a casual startup JD into stiff corporate prose). If a preferred
+verb has no truthful anchor in the candidate's history, drop it — tone matching
+never justifies inventing scope or accomplishments.
+
 ━━━ EXPERIENCE ━━━
 - For each role, rewrite bullets to (a) start with a strong action verb, (b) include a quantified metric ONLY if it appears in the APPROVED METRICS list provided below — do NOT carry forward any number from the original resume unless it is explicitly listed there, (c) integrate missing must-have keywords using EXACT JD phrasing.
 - If no approved metric exists for a role or project, write the strongest possible bullet without a number and add it to metrics_needed. Never inherit or re-use a number from the original resume that is not in the approved list.
