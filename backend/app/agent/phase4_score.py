@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
 from app.agent.phase3_postprocess import flatten_skill_terms
+from app.agent.tone_profile import Formality, JDToneProfile
 
 # ---------------------------------------------------------------------------
 # Tunables
@@ -120,7 +121,8 @@ _BULLET_LENGTH_SWEET_HIGH = 25
 _PAGE_CHAR_BUDGET = 3500  # rough char budget for one US-letter page in Calibri 11
 
 # Axis weights — must sum to exactly 100. Grouped for narrative.
-_W_KEYWORD_PRESENCE = 30
+_W_KEYWORD_PRESENCE = 25
+_W_TONE_ALIGNMENT = 5
 _W_KEYWORD_DUAL = 10
 _W_SECTION_COMPLETENESS = 5
 _W_CONTACT = 5
@@ -135,6 +137,7 @@ _W_FIELD_COMPLETENESS = 4
 
 assert (
     _W_KEYWORD_PRESENCE
+    + _W_TONE_ALIGNMENT
     + _W_KEYWORD_DUAL
     + _W_SECTION_COMPLETENESS
     + _W_CONTACT
@@ -809,6 +812,101 @@ def _axis_field_completeness(tailored) -> AxisScore:
     )
 
 
+def _resume_prose(tailored) -> str:
+    """Lowercased resume text used for tone-vocabulary matching."""
+    parts: list[str] = [getattr(tailored, "summary", "") or ""]
+    parts.extend(flatten_skill_terms(getattr(tailored, "skills", []) or []))
+    for entry in getattr(tailored, "experience", []) or []:
+        parts.extend(getattr(entry, "bullets", []) or [])
+    for entry in getattr(tailored, "projects", []) or []:
+        if isinstance(entry, dict):
+            bullets = entry.get("bullets") or []
+            if isinstance(bullets, list):
+                parts.extend(b for b in bullets if isinstance(b, str))
+    return "\n".join(p for p in parts if p).lower()
+
+
+def _jd_tone_vocabulary(tone_profile: JDToneProfile) -> list[str]:
+    items: list[str] = []
+    seen: set[str] = set()
+    for verb in tone_profile.dominant_verbs:
+        key = verb.lower().strip()
+        if key and key not in seen:
+            items.append(key)
+            seen.add(key)
+    for phrase in tone_profile.distinctive_phrases:
+        key = phrase.lower().strip()
+        if key and key not in seen:
+            items.append(key)
+            seen.add(key)
+    return items
+
+
+def _tone_vocabulary_hits(vocabulary: list[str], prose: str) -> tuple[int, list[str]]:
+    if not vocabulary:
+        return 0, []
+    hits: list[str] = []
+    for item in vocabulary:
+        if item in prose:
+            hits.append(item)
+            continue
+        # Verb stems: "architect" should match "architected".
+        if " " not in item and re.search(rf"\b{re.escape(item)}\w*\b", prose):
+            hits.append(item)
+    return len(hits), hits
+
+
+def _axis_tone_alignment(tailored, tone_profile: JDToneProfile | None) -> AxisScore:
+    """Score how well the resume mirrors the JD's dominant verbs and phrases."""
+    if tone_profile is None or (
+        tone_profile.formality == Formality.neutral
+        and not tone_profile.dominant_verbs
+        and not tone_profile.distinctive_phrases
+    ):
+        return AxisScore(
+            key="tone_alignment",
+            label="JD tone alignment",
+            score=_W_TONE_ALIGNMENT,
+            max_score=_W_TONE_ALIGNMENT,
+            status="pass",
+            summary="No JD tone profile available — axis skipped.",
+        )
+
+    vocabulary = _jd_tone_vocabulary(tone_profile)
+    if not vocabulary:
+        return AxisScore(
+            key="tone_alignment",
+            label="JD tone alignment",
+            score=_W_TONE_ALIGNMENT,
+            max_score=_W_TONE_ALIGNMENT,
+            status="pass",
+            summary="JD tone profile has no vocabulary signals.",
+        )
+
+    prose = _resume_prose(tailored)
+    hit_count, hits = _tone_vocabulary_hits(vocabulary, prose)
+    ratio = hit_count / len(vocabulary)
+    score = ratio * _W_TONE_ALIGNMENT
+    missing = [v for v in vocabulary if v not in hits]
+    issues = [
+        f"Mirror JD vocabulary: '{item}'"
+        for item in missing[:5]
+    ]
+    pct = round(ratio * 100)
+    return AxisScore(
+        key="tone_alignment",
+        label="JD tone alignment",
+        score=score,
+        max_score=_W_TONE_ALIGNMENT,
+        status=_status_from_ratio(ratio, pass_at=0.6, warn_at=0.3),
+        summary=(
+            f"{hit_count}/{len(vocabulary)} JD tone signals present in the resume "
+            f"({pct}% vocabulary overlap)."
+        ),
+        issues=issues,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -819,10 +917,11 @@ def compute_ats_score(
     must_have_keywords: Iterable[str],
     *,
     career_stage: str = "mid",
+    tone_profile: JDToneProfile | None = None,
 ) -> ResumeQualityResult:
     """Compute a deterministic 0-100 resume quality score.
 
-    The score is the sum of 12 axes whose weights total 100. Each axis is a
+    The score is the sum of 13 axes whose weights total 100. Each axis is a
     pure function of the resume content and the JD must-have list, so an
     identical input always produces an identical score — no LLM noise.
     """
@@ -835,6 +934,7 @@ def compute_ats_score(
     axis_presence, missing, single, section_map = _axis_keyword_presence(keywords, sections)
     axes = [
         axis_presence,
+        _axis_tone_alignment(tailored, tone_profile),
         _axis_keyword_dual(keywords, section_map, single),
         _axis_section_completeness(tailored),
         _axis_contact(tailored),

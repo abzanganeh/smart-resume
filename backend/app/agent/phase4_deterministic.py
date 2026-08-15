@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from app.agent.phase4_score import ResumeQualityResult, compute_ats_score
+from app.agent.tone_profile import JDToneProfile
 from app.models.qa import BlockingIssue, IssueAnchor
 
 _AXIS_TO_CATEGORY: dict[str, tuple[str, str, str]] = {
+    "tone_alignment": ("bullet", "medium", "manual_rewrite"),
     "bullet_metrics": ("metric", "high", "user_input"),
     "action_verbs": ("bullet", "medium", "manual_rewrite"),
     "bullet_length": ("bullet", "medium", "manual_rewrite"),
@@ -39,9 +41,15 @@ def compute_score_result(
     must_have_terms: list[str],
     *,
     career_stage: str = "mid",
+    tone_profile: JDToneProfile | None = None,
 ) -> ResumeQualityResult:
     keywords = [k for k in must_have_terms if k and k.strip()]
-    return compute_ats_score(tailored, keywords, career_stage=career_stage)
+    return compute_ats_score(
+        tailored,
+        keywords,
+        career_stage=career_stage,
+        tone_profile=tone_profile,
+    )
 
 
 def build_blocking_issues_from_score(
