@@ -36,6 +36,10 @@ def _format_skills_for_export(skills: list[str]) -> list[str]:
     return [", ".join(skills)]
 
 
+def _visible_bullets(bullets: list[str]) -> list[str]:
+    return [b for b in bullets if b and b.strip()]
+
+
 def _authoritative_contact(
     llm_contact: object,
     user: UserInfo | None,
@@ -95,9 +99,13 @@ def render_docx(session: Session) -> bytes:
     phone = contact.get("phone", "")
     linkedin = contact.get("linkedin", "")
     github = contact.get("github", "")
+    location = contact.get("location", "")
+    website = contact.get("website", "")
 
     doc.add_heading(name, level=0)
-    contact_line_parts = [p for p in [email, phone, linkedin, github] if p]
+    if location:
+        doc.add_paragraph(location)
+    contact_line_parts = [p for p in [email, phone, linkedin, github, website] if p]
     doc.add_paragraph("  |  ".join(contact_line_parts))
 
     # Summary
@@ -118,7 +126,7 @@ def render_docx(session: Session) -> bytes:
             p = doc.add_paragraph()
             p.add_run(f"{entry.title} — {entry.company}").bold = True
             p.add_run(f"  ({entry.dates})")
-            for bullet in entry.bullets:
+            for bullet in _visible_bullets(entry.bullets):
                 doc.add_paragraph(bullet, style="List Bullet")
 
     # Projects
@@ -130,7 +138,7 @@ def render_docx(session: Session) -> bytes:
                 p.add_run(proj.get("name", "")).bold = True
                 if proj.get("url"):
                     p.add_run(f"  {proj['url']}")
-                for bullet in proj.get("bullets", []):
+                for bullet in _visible_bullets([b for b in proj.get("bullets", []) if isinstance(b, str)]):
                     doc.add_paragraph(bullet, style="List Bullet")
 
     # Education
@@ -139,7 +147,7 @@ def render_docx(session: Session) -> bytes:
         for edu in output.education:
             year_str = f" ({edu.year})" if edu.year else ""
             doc.add_paragraph(f"{edu.degree} — {edu.institution}{year_str}")
-            for bullet in edu.bullets:
+            for bullet in _visible_bullets(edu.bullets):
                 doc.add_paragraph(bullet, style="List Bullet")
 
     # Certifications
@@ -165,9 +173,14 @@ def render_txt(session: Session, *, account_email: str | None = None) -> str:
     phone = contact.get("phone", "")
     linkedin = contact.get("linkedin", "")
     github = contact.get("github", "")
+    location = contact.get("location", "")
+    website = contact.get("website", "")
 
-    contact_parts = [p for p in [email, phone, linkedin, github] if p]
-    lines += [name.upper(), " | ".join(contact_parts), ""]
+    contact_parts = [p for p in [email, phone, linkedin, github, website] if p]
+    lines += [name.upper()]
+    if location:
+        lines.append(location)
+    lines += [" | ".join(contact_parts), ""]
 
     if output.summary:
         lines += ["SUMMARY", "-------", output.summary, ""]
@@ -179,7 +192,7 @@ def render_txt(session: Session, *, account_email: str | None = None) -> str:
         lines += ["EXPERIENCE", "----------"]
         for entry in output.experience:
             lines += [f"{entry.title} | {entry.company} | {entry.dates}"]
-            for bullet in entry.bullets:
+            for bullet in _visible_bullets(entry.bullets):
                 lines.append(f"  • {bullet}")
             lines.append("")
 
@@ -188,7 +201,7 @@ def render_txt(session: Session, *, account_email: str | None = None) -> str:
         for proj in output.projects:
             if isinstance(proj, dict):
                 lines.append(proj.get("name", ""))
-                for bullet in proj.get("bullets", []):
+                for bullet in _visible_bullets([b for b in proj.get("bullets", []) if isinstance(b, str)]):
                     lines.append(f"  • {bullet}")
                 lines.append("")
 
@@ -197,7 +210,7 @@ def render_txt(session: Session, *, account_email: str | None = None) -> str:
         for edu in output.education:
             year_str = f" ({edu.year})" if edu.year else ""
             lines.append(f"{edu.degree} — {edu.institution}{year_str}")
-            for bullet in edu.bullets:
+            for bullet in _visible_bullets(edu.bullets):
                 lines.append(f"  • {bullet}")
         lines.append("")
 

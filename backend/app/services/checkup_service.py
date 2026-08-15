@@ -58,7 +58,12 @@ async def run_checkup_analysis(
     phase1 = await _fallback_keyword_extraction(llm, jd_text, resume_text)
     must_have_terms = [k.term for k in phase1.must_have_keywords if k.term.strip()]
 
-    score_result = compute_score_result(tailored, must_have_terms, career_stage=career_stage)
+    score_result = compute_score_result(
+        tailored,
+        must_have_terms,
+        career_stage=career_stage,
+        tone_profile=phase1.tone_profile,
+    )
     blocking_issues = build_blocking_issues_from_score(score_result)
     quick_wins = [i for i in blocking_issues if i.impact == "high" and i.fix_effort == "one_click"]
     rank_label = compute_rank_label(score_result.ats_score)

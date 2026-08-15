@@ -239,7 +239,12 @@ async def run(
     # become blocking issues so the user sees every concrete gap and can
     # ignore the ones that don't apply.
     score_result = compute_score_result(
-        tailored, must_have_terms, career_stage=career_stage
+        tailored,
+        must_have_terms,
+        career_stage=career_stage,
+        tone_profile=(
+            session.phase1_output.tone_profile if session.phase1_output else None
+        ),
     )
 
     flagged_terms = {

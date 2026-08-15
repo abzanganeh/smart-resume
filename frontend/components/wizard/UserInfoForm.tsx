@@ -54,11 +54,14 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
     phone: contact?.phone ?? "",
     linkedin: contact?.linkedin ?? "",
     github: contact?.github ?? "",
+    location: contact?.location ?? "",
+    website: contact?.website ?? "",
     career_stage: "mid",
     target_role: "",
     certifications: resumeCerts,
     is_career_transition: false,
   });
+  const [stageConfirmed, setStageConfirmed] = useState(false);
 
   const [certsInput, setCertsInput] = useState(resumeCerts.join(", "));
 
@@ -73,6 +76,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
       phone:    f.phone    || c.phone    || "",
       linkedin: f.linkedin || c.linkedin || "",
       github:   f.github   || c.github   || "",
+      location: f.location || c.location || "",
+      website:  f.website  || c.website  || "",
       certifications: f.certifications.length ? f.certifications : parsedResume.certifications,
     }));
     if (!certsInput) setCertsInput(parsedResume.certifications.join(", "));
@@ -182,15 +187,36 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
 
         <div>
           <label className={labelCls}>
-            GitHub / Portfolio URL
+            GitHub
             {preFilled.github && <FilledBadge />}
           </label>
           <input
             value={form.github ?? ""}
             onChange={(e) => set("github", e.target.value)}
-            placeholder="github.com/… or yourportfolio.com"
+            placeholder="github.com/…"
             className={inputCls}
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Location</label>
+            <input
+              value={form.location ?? ""}
+              onChange={(e) => set("location", e.target.value)}
+              placeholder="City, State"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Website / Portfolio</label>
+            <input
+              value={form.website ?? ""}
+              onChange={(e) => set("website", e.target.value)}
+              placeholder="yourportfolio.com"
+              className={inputCls}
+            />
+          </div>
         </div>
       </div>
 
@@ -221,9 +247,12 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
               <button
                 key={value}
                 type="button"
-                onClick={() => set("career_stage", value)}
+                onClick={() => {
+                  set("career_stage", value);
+                  setStageConfirmed(true);
+                }}
                 className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
-                  form.career_stage === value
+                  form.career_stage === value && stageConfirmed
                     ? "border-amber-400 bg-amber-400/10 text-amber-300"
                     : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500"
                 }`}
@@ -281,7 +310,7 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
 
       <button
         type="submit"
-        disabled={loading || !form.target_role.trim()}
+        disabled={loading || !form.target_role.trim() || !stageConfirmed}
         className="w-full py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 disabled:opacity-40 transition-colors"
       >
         {loading ? "Saving…" : "Continue →"}

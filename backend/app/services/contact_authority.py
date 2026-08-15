@@ -76,6 +76,10 @@ def authoritative_contact(
             result["linkedin"] = user_info.linkedin
         if not result.get("github") and user_info.github:
             result["github"] = user_info.github
+        if not result.get("location") and user_info.location:
+            result["location"] = user_info.location
+        if not result.get("website") and user_info.website:
+            result["website"] = user_info.website
 
     return result
 

@@ -25,6 +25,15 @@ TAILORING RULES:
 - Professional contact details required: email must use full name, no nicknames.
 - NEVER fabricate experience, metrics, or skills the user did not provide.
   If a metric is missing, flag it with a metrics_needed entry — never invent a number.
+- DEFAULT TO CAPABILITY, NOT ACCOMPLISHMENT: for any must-have/nice-to-have keyword
+  that does NOT appear anywhere in the ORIGINAL RESUME text or in USER-DECLARED
+  SKILLS/KEYWORDS, you may list it in Skills as a competency term, but you MUST NOT
+  claim it as something the candidate has "led", "built", "owned", or has "experience"
+  doing in the Summary or Experience bullets. Use readiness framing instead
+  (e.g. "positioned to lead X", "building toward X") or omit it from prose entirely.
+- The summary [Title] MUST be a role-neutral descriptor derived from the candidate's
+  most recent held title or domain — NEVER the JD's job title or seniority level,
+  unless the candidate's own most recent title is an exact or near-exact match.
 
 LENGTH RULES:
 - Early / Mid career: 1 page maximum.
