@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test"
 
+const nextBin = "node node_modules/next/dist/bin/next"
+const webServerCommand = process.env.CI
+  ? `${nextBin} start -p 3000`
+  : `${nextBin} dev -p 3000`
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
@@ -15,12 +20,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // Start Next.js dev server before running tests if PLAYWRIGHT_LIVE is not set
   webServer: {
-    command: "pnpm dev",
+    command: webServerCommand,
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: process.env.CI ? 120_000 : 60_000,
     env: {
       NEXTAUTH_SECRET: "playwright-local-secret",
       NEXTAUTH_URL: "http://localhost:3000",
