@@ -154,6 +154,33 @@ async def test_admin_grants_create_denied_for_read_only(
 
 
 @pytest.mark.asyncio
+async def test_admin_grants_feature_unlock_invalid_payload(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user = await _make_user(db_session, email="feature-invalid@example.com")
+    admin, _ = await make_admin(
+        db_session,
+        email="support3@example.com",
+        role=AdminRole.support_agent,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    resp = await app_client.post(
+        "/api/admin/grants",
+        json={
+            "user_id": str(user.id),
+            "grant_type": "feature_unlock",
+            "payload": {"feature": "not_a_real_feature"},
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "invalid_grant_payload"
+
+
+@pytest.mark.asyncio
 async def test_admin_grants_extra_credits_invalid_payload(
     app_client: AsyncClient,
     db_session: AsyncSession,

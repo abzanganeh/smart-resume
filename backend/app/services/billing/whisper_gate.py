@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import Subscription, SubscriptionStatus
 from app.models.user import User
+from app.services.admin.feature_unlocks import user_has_feature_unlock
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     PlanLimitReachedError,
@@ -46,15 +47,21 @@ async def whisper_entitlement_for_user(
     session: AsyncSession, *, user: User
 ) -> WhisperEntitlement:
     limits, _sub, used = await _resolve_limits_for_user(session, user)
+    unlocked = await user_has_feature_unlock(
+        session, user_id=user.id, feature="whisper"
+    )
+    enabled = limits.whisper_enabled or unlocked
     limit = limits.whisper_uses_per_period
-    if not limits.whisper_enabled:
+    if unlocked and not limits.whisper_enabled:
+        limit = None
+    if not enabled:
         remaining = 0
     elif limit is None:
         remaining = None
     else:
         remaining = max(0, limit - used)
     return WhisperEntitlement(
-        enabled=limits.whisper_enabled,
+        enabled=enabled,
         limit=limit,
         used=used,
         remaining=remaining,
@@ -71,10 +78,19 @@ async def check_and_increment_whisper_use(
         raise AccountSuspendedError("account_suspended")
 
     limits, sub, used = await _resolve_limits_for_user(session, user)
-    if not limits.whisper_enabled:
+    unlocked = await user_has_feature_unlock(
+        session, user_id=user.id, feature="whisper"
+    )
+    if not limits.whisper_enabled and not unlocked:
         raise WhisperNotAllowedError(plan_code=limits.plan_code)
 
     limit = limits.whisper_uses_per_period
+    if unlocked and not limits.whisper_enabled:
+        return QuotaDecision(
+            action=QuotaAction.story_build,
+            charged_to="feature_unlock_whisper",
+        )
+
     if limit is not None and used >= limit:
         raise PlanLimitReachedError("whisper_transcription", used, limit)
 

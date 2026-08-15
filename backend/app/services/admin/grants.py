@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.admin_grant import AdminGrantType, AdminUserGrant
 from app.models.billing import CreditKind
 from app.models.user import CreditTransaction
+from app.services.admin.feature_unlocks import is_supported_feature_unlock, normalize_feature_name
 from app.services.billing.credits import grant_credit
 
 
@@ -47,6 +48,10 @@ def validate_grant_payload(
         if not isinstance(feature, str) or not feature.strip():
             raise InvalidGrantPayloadError(
                 "feature_unlock payload requires non-empty feature"
+            )
+        if not is_supported_feature_unlock(feature):
+            raise InvalidGrantPayloadError(
+                f"unsupported feature_unlock feature: {normalize_feature_name(feature)}"
             )
         return
 

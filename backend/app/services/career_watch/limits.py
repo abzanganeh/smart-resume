@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tier_limits import TierLimitsConfig
 from app.models.user import User
 from app.models.career_watch import UserWatchedCompany
+from app.services.admin.feature_unlocks import user_has_feature_unlock
 from app.services.billing.plan_code_resolver import resolve_plan_code_for_user
 from app.services.billing.tier_limits import seed_row_for_plan
 
@@ -39,10 +40,21 @@ async def get_career_watch_limits(
     )
     row = (await session.execute(stmt)).scalar_one_or_none()
     if row is not None:
-        return row.career_watch_companies, row.career_watch_interval_minutes
-    seed = seed_row_for_plan(plan_code) or seed_row_for_plan("free")
-    assert seed is not None
-    return seed["career_watch_companies"], seed["career_watch_interval_minutes"]
+        max_companies = row.career_watch_companies
+        interval = row.career_watch_interval_minutes
+    else:
+        seed = seed_row_for_plan(plan_code) or seed_row_for_plan("free")
+        assert seed is not None
+        max_companies = seed["career_watch_companies"]
+        interval = seed["career_watch_interval_minutes"]
+
+    if await user_has_feature_unlock(session, user_id=user.id, feature="career_watch"):
+        pro = seed_row_for_plan("monthly_pro")
+        assert pro is not None
+        max_companies = max(max_companies, pro["career_watch_companies"])
+        interval = min(interval, pro["career_watch_interval_minutes"])
+
+    return max_companies, interval
 
 
 async def count_active_watches(session: AsyncSession, *, user_id: uuid.UUID) -> int:
