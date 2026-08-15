@@ -11,6 +11,8 @@ class UserInfo(BaseModel):
     phone: str | None = None
     linkedin: str | None = None
     github: str | None = None
+    location: str | None = None
+    website: str | None = None
 
     # How far along the candidate is — drives page-length rules
     career_stage: Literal["student", "entry", "mid", "senior", "staff", "executive"] = "mid"

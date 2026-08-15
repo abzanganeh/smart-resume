@@ -1,7 +1,7 @@
 """Deterministic ATS scoring engine tests.
 
 These tests pin the score curve to specific resume shapes so a regression
-in the weights or detection logic shows up immediately. The engine has 12
+in the weights or detection logic shows up immediately. The engine has 13
 axes whose weights total 100; any change to those weights must update both
 the engine and these tests in lockstep.
 """
@@ -112,8 +112,8 @@ def test_missing_keywords_lowers_score_and_lists_them() -> None:
     # Only 1 of 4 keywords present (Python).
     assert set(result.missing_keywords) == {"Kubernetes", "Terraform", "AWS"}
     presence = _axis(result, "keyword_presence")
-    # 1/4 keywords present => 7.5 of 30 points.
-    assert presence.score == pytest.approx(7.5)
+    # 1/4 keywords present => 6.25 of 25 points.
+    assert presence.score == pytest.approx(6.25)
     assert presence.status == "fail"
 
 
@@ -134,7 +134,7 @@ def test_single_section_keyword_does_not_earn_dual_placement_points() -> None:
     assert "Python" in result.single_section_keywords
     presence = _axis(result, "keyword_presence")
     dual = _axis(result, "keyword_dual_placement")
-    assert presence.score == pytest.approx(30.0)  # full credit for presence
+    assert presence.score == pytest.approx(25.0)  # full credit for presence
     assert dual.score == pytest.approx(0.0)
 
 

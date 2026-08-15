@@ -8,6 +8,7 @@ from pathlib import Path
 import structlog
 from pydantic import BaseModel
 
+from app.agent.tone_profile import extract_tone_profile
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.context import truncate_to_fit
 from app.llm.structured import complete_structured
@@ -293,6 +294,17 @@ async def run(
         if _string_present(kw.term):
             kw.present_in_resume = True
 
+    # Deterministic tone profile (§Track A). LLM output cannot override this —
+    # the profile is a stylistic fingerprint used by Phase 3 wording guidance
+    # and Phase 4's tone-alignment axis.
+    output.tone_profile = extract_tone_profile(jd_text)
+
     await event_queue.put({"event": "partial", "phase": 1, "data": json.loads(output.model_dump_json())})
-    log.info("phase1_done", must_have=len(output.must_have_keywords), nice_to_have=len(output.nice_to_have_keywords))
+    log.info(
+        "phase1_done",
+        must_have=len(output.must_have_keywords),
+        nice_to_have=len(output.nice_to_have_keywords),
+        tone_formality=output.tone_profile.formality.value,
+        tone_register=output.tone_profile.industry_register,
+    )
     return output

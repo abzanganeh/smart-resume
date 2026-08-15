@@ -17,6 +17,8 @@ from app.agent.phase3_postprocess import (
     flatten_skill_terms,
     postprocess_tailored_output,
 )
+from app.agent.phase3_truthfulness import TruthfulnessContext
+from app.agent.tone_profile import render_tone_profile_block
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
 from app.services.contact_authority import apply_authoritative_contact, resolve_account_email
@@ -482,12 +484,19 @@ async def run(
             source=session.company_intel.source,
         )
 
+    tone_block = ""
+    if session.phase1_output is not None:
+        rendered = render_tone_profile_block(session.phase1_output.tone_profile)
+        if rendered:
+            tone_block = "\n" + rendered + "\n"
+
     user_content = (
         f"CAREER STAGE: {career_stage}\n"
         f"TARGET ROLE: {target_role}\n"
         f"CAREER TRANSITION: {is_career_transition}\n"
         f"{company_intel_block}"
         f"{additions_section}"
+        f"{tone_block}"
         f"{chunks_prompt_block}\n"
         f"JOB DESCRIPTION:\n{jd_text}\n\n"
         f"EXTRACTED KEYWORDS (Phase 1 — compact):\n{_compact_phase1_block(session.phase1_output)}\n\n"
@@ -549,7 +558,24 @@ async def run(
         if session.phase1_output
         else None
     )
-    output = postprocess_tailored_output(output, must_have)
+    tone_profile = session.phase1_output.tone_profile if session.phase1_output else None
+    truth_ctx = TruthfulnessContext(
+        approved_metrics=list(session.approved_metrics or []),
+        resume_parsed=session.resume_parsed,
+        resume_raw=session.resume_raw or "",
+        prior_output=session.phase3_output,
+        user_extra_notes=session.user_extra_notes,
+        user_claimed_keywords=list(session.user_claimed_keywords or []),
+        bullet_fixes=list(session.bullet_fixes or []),
+        jd_job_title=(session.user_info.target_role if session.user_info else ""),
+        must_have_keywords=must_have or [],
+    )
+    output = postprocess_tailored_output(
+        output,
+        must_have,
+        tone_profile=tone_profile,
+        truthfulness=truth_ctx,
+    )
 
     account_email = await resolve_account_email(session.user_id)
     output = apply_authoritative_contact(

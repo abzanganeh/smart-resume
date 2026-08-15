@@ -68,10 +68,12 @@
 {% set c = contact if contact is mapping else {} %}
 <div class="name">{{ c.get('name', user.name if user else '') }}</div>
 <div class="contact">
+  {% if c.get('location') %}{{ c.get('location') }}<br>{% endif %}
   {{ c.get('email', user.email if user else '') }}
   {% if c.get('phone') %} &nbsp;|&nbsp; {{ c.get('phone') }}{% endif %}
   {% if c.get('linkedin') %} &nbsp;|&nbsp; <a href="{{ c.get('linkedin') }}">LinkedIn</a>{% endif %}
   {% if c.get('github') %} &nbsp;|&nbsp; <a href="{{ c.get('github') }}">GitHub</a>{% endif %}
+  {% if c.get('website') %} &nbsp;|&nbsp; <a href="{{ c.get('website') }}">Website</a>{% endif %}
 </div>
 
 <hr>
@@ -105,7 +107,7 @@
   </div>
   {% if exp.bullets %}
   <ul>
-    {% for bullet in exp.bullets %}
+    {% for bullet in exp.bullets if bullet and bullet.strip() %}
     <li>{{ bullet }}</li>
     {% endfor %}
   </ul>
@@ -125,7 +127,7 @@
   </div>
   {% if p.get('bullets') %}
   <ul>
-    {% for bullet in p.get('bullets', []) %}
+    {% for bullet in p.get('bullets', []) if bullet and bullet.strip() %}
     <li>{{ bullet }}</li>
     {% endfor %}
   </ul>
@@ -142,7 +144,7 @@
   {% if edu.year %} ({{ edu.year }}){% endif %}
   {% if edu.bullets %}
   <ul>
-    {% for bullet in edu.bullets %}
+    {% for bullet in edu.bullets if bullet and bullet.strip() %}
     <li>{{ bullet }}</li>
     {% endfor %}
   </ul>

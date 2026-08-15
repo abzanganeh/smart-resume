@@ -53,6 +53,7 @@ function NewSessionContent() {
 
   const [loading, setLoading] = useState(false);
   const jdLoadedRef = useRef(false);
+  const checkupResumeAppliedRef = useRef(false);
   const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
 
   // Restore extension handoff if OAuth stripped jd_id from the URL.
@@ -134,6 +135,23 @@ function NewSessionContent() {
       }
     }
   }, [searchParams, router]);
+
+  // Checkup funnel: auto-apply resume text saved before auth redirect.
+  useEffect(() => {
+    if (!sessionId || checkupResumeAppliedRef.current) return;
+    const resumeText = sessionStorage.getItem("sr_checkup_resume_text");
+    if (!resumeText?.trim()) return;
+    checkupResumeAppliedRef.current = true;
+    void (async () => {
+      try {
+        const result = await pasteResumeText(sessionId, resumeText);
+        setParsedResume(result.parsed);
+        sessionStorage.removeItem("sr_checkup_resume_text");
+      } catch {
+        // User can still upload manually on the resume step.
+      }
+    })();
+  }, [sessionId]);
 
   // Separate effect: load JD from extension or jobs API once the backend token
   // is available. Runs when token arrives (may be after the init effect above).
@@ -473,6 +491,12 @@ function NewSessionContent() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8">
 
           {/* ── Step 1: Upload Resume ───────────────────────────────────── */}
+          {step === "resume" && !sessionId && (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <p className="text-slate-500 text-sm mt-4">Starting your session…</p>
+            </div>
+          )}
           {step === "resume" && sessionId && (
             <div>
               <h1 className="text-xl font-bold mb-1">Upload your resume</h1>
