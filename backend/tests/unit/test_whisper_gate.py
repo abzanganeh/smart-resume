@@ -42,6 +42,14 @@ def _limits(
     )
 
 
+def _patch_whisper_unlock(*, unlocked: bool = False):
+    return patch(
+        "app.services.billing.whisper_gate.user_has_feature_unlock",
+        new_callable=AsyncMock,
+        return_value=unlocked,
+    )
+
+
 @pytest.mark.asyncio
 async def test_free_tier_whisper_not_allowed() -> None:
     mock_db = AsyncMock()
@@ -51,7 +59,7 @@ async def test_free_tier_whisper_not_allowed() -> None:
         "app.services.billing.whisper_gate._resolve_limits_for_user",
         new_callable=AsyncMock,
         return_value=(_limits(enabled=False), None, 0),
-    ):
+    ), _patch_whisper_unlock():
         with pytest.raises(WhisperNotAllowedError):
             await check_and_increment_whisper_use(mock_db, user=mock_user)
 
@@ -73,7 +81,7 @@ async def test_weekly_tier_increments_whisper_counter() -> None:
         "app.services.billing.whisper_gate._resolve_limits_for_user",
         new_callable=AsyncMock,
         return_value=(_limits(plan_code="weekly", enabled=True, uses=2), mock_sub, 0),
-    ):
+    ), _patch_whisper_unlock():
         decision = await check_and_increment_whisper_use(mock_db, user=mock_user)
 
     assert decision.charged_to == "subscription_whisper"
@@ -97,9 +105,41 @@ async def test_whisper_limit_reached_raises() -> None:
         "app.services.billing.whisper_gate._resolve_limits_for_user",
         new_callable=AsyncMock,
         return_value=(_limits(plan_code="weekly", enabled=True, uses=2), mock_sub, 2),
-    ):
+    ), _patch_whisper_unlock():
         with pytest.raises(PlanLimitReachedError):
             await check_and_increment_whisper_use(mock_db, user=mock_user)
+
+
+@pytest.mark.asyncio
+async def test_whisper_unlock_bypasses_free_tier_gate() -> None:
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id=uuid4())
+
+    with patch(
+        "app.services.billing.whisper_gate._resolve_limits_for_user",
+        new_callable=AsyncMock,
+        return_value=(_limits(enabled=False), None, 0),
+    ), _patch_whisper_unlock(unlocked=True):
+        decision = await check_and_increment_whisper_use(mock_db, user=mock_user)
+
+    assert decision.charged_to == "feature_unlock_whisper"
+
+
+@pytest.mark.asyncio
+async def test_entitlement_enabled_when_whisper_unlocked() -> None:
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id=uuid4())
+
+    with patch(
+        "app.services.billing.whisper_gate._resolve_limits_for_user",
+        new_callable=AsyncMock,
+        return_value=(_limits(enabled=False), None, 0),
+    ), _patch_whisper_unlock(unlocked=True):
+        ent = await whisper_entitlement_for_user(mock_db, user=mock_user)
+
+    assert ent.enabled is True
+    assert ent.limit is None
+    assert ent.remaining is None
 
 
 @pytest.mark.asyncio
@@ -122,7 +162,7 @@ async def test_entitlement_reports_remaining_uses() -> None:
             mock_sub,
             2,
         ),
-    ):
+    ), _patch_whisper_unlock():
         ent = await whisper_entitlement_for_user(mock_db, user=mock_user)
 
     assert ent.enabled is True

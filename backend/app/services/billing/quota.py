@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import CreditKind, Subscription, SubscriptionStatus
 from app.models.user import User, CreditTransaction
+from app.services.admin.feature_unlocks import user_has_feature_unlock
 from app.services.billing.credits import consume_credit
 from app.services.billing.exceptions import (
     AccountSuspendedError,
@@ -166,6 +167,20 @@ async def check_and_increment_quota(
             )
 
     if action not in FREE_CREDIT_ACTIONS:
+        if action == QuotaAction.job_search and await user_has_feature_unlock(
+            session, user_id=user.id, feature="job_search", now=now
+        ):
+            return QuotaDecision(
+                action=action,
+                charged_to="feature_unlock_job_search",
+            )
+        if action == QuotaAction.fit_analysis and await user_has_feature_unlock(
+            session, user_id=user.id, feature="fit_analysis", now=now
+        ):
+            return QuotaDecision(
+                action=action,
+                charged_to="feature_unlock_fit_analysis",
+            )
         raise SubscriptionRequiredError(action.value)
 
     try:
