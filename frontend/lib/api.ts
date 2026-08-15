@@ -575,6 +575,8 @@ export interface UserInfoPayload {
   phone?: string;
   linkedin?: string;
   github?: string;
+  location?: string;
+  website?: string;
   career_stage: "student" | "entry" | "mid" | "senior" | "staff" | "executive";
   target_role: string;
   certifications: string[];
@@ -613,7 +615,15 @@ export interface ResumeVersionMeta {
 }
 
 export interface ParsedResume {
-  contact: { name: string; email: string; phone?: string; linkedin?: string; github?: string };
+  contact: {
+    name: string;
+    email: string;
+    phone?: string;
+    linkedin?: string;
+    github?: string;
+    location?: string;
+    website?: string;
+  };
   summary?: string;
   skills: string[];
   experience: { title: string; company: string; dates: string; bullets: string[] }[];

@@ -1253,6 +1253,22 @@ function SessionContent() {
                   </button>
                 </div>
               )}
+              {qa && (
+                <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap gap-3">
+                  <Link
+                    href="/dashboard"
+                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+                  >
+                    Return to dashboard
+                  </Link>
+                  <Link
+                    href="/session/new"
+                    className="px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300"
+                  >
+                    Start new tailor
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </div>
