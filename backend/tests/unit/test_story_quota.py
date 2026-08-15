@@ -48,6 +48,10 @@ async def test_story_whisper_blocked_for_free_tier() -> None:
             None,
             0,
         ),
+    ), patch(
+        "app.services.billing.whisper_gate.user_has_feature_unlock",
+        new_callable=AsyncMock,
+        return_value=False,
     ):
         with pytest.raises(WhisperNotAllowedError):
             await check_and_increment_whisper_use(mock_db, user=mock_user)
