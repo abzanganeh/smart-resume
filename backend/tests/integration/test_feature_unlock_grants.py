@@ -51,29 +51,29 @@ async def _grant_feature(
 
 @pytest.mark.asyncio
 async def test_active_feature_unlocks_for_user(db_session: AsyncSession) -> None:
-    user_id = uuid.uuid4()
+    user = await _seed_free_user(db_session, email="unlock-lookup@example.com")
     now = datetime.now(timezone.utc)
     db_session.add_all(
         [
             AdminUserGrant(
-                user_id=user_id,
+                user_id=user.id,
                 grant_type=AdminGrantType.feature_unlock,
                 payload={"feature": "job_search"},
             ),
             AdminUserGrant(
-                user_id=user_id,
+                user_id=user.id,
                 grant_type=AdminGrantType.feature_unlock,
                 payload={"feature": "whisper"},
                 revoked_at=now - timedelta(hours=1),
             ),
             AdminUserGrant(
-                user_id=user_id,
+                user_id=user.id,
                 grant_type=AdminGrantType.feature_unlock,
                 payload={"feature": "fit_analysis"},
                 expires_at=now - timedelta(minutes=1),
             ),
             AdminUserGrant(
-                user_id=user_id,
+                user_id=user.id,
                 grant_type=AdminGrantType.feature_unlock,
                 payload={"feature": "unsupported"},
             ),
@@ -82,17 +82,17 @@ async def test_active_feature_unlocks_for_user(db_session: AsyncSession) -> None
     await db_session.commit()
 
     unlocked = await active_feature_unlocks_for_user(
-        db_session, user_id=user_id, now=now
+        db_session, user_id=user.id, now=now
     )
     assert unlocked == {"job_search"}
 
 
 @pytest.mark.asyncio
 async def test_user_has_feature_unlock(db_session: AsyncSession) -> None:
-    user_id = uuid.uuid4()
+    user = await _seed_free_user(db_session, email="unlock-check@example.com")
     db_session.add(
         AdminUserGrant(
-            user_id=user_id,
+            user_id=user.id,
             grant_type=AdminGrantType.feature_unlock,
             payload={"feature": "Career_Watch"},
         )
@@ -100,10 +100,10 @@ async def test_user_has_feature_unlock(db_session: AsyncSession) -> None:
     await db_session.commit()
 
     assert await user_has_feature_unlock(
-        db_session, user_id=user_id, feature="career_watch"
+        db_session, user_id=user.id, feature="career_watch"
     )
     assert not await user_has_feature_unlock(
-        db_session, user_id=user_id, feature="whisper"
+        db_session, user_id=user.id, feature="whisper"
     )
 
 
