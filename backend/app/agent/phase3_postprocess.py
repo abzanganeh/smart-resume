@@ -12,6 +12,7 @@ from collections import defaultdict
 
 from app.agent.tone_lint import annotate_tone_alignment
 from app.agent.tone_profile import JDToneProfile
+from app.agent.phase3_truthfulness import TruthfulnessContext, apply_truthfulness_guards
 from app.models.rewrite import TailoredExperienceEntry, TailoredResumeOutput
 
 _CATEGORY_LINE_RE = re.compile(r"^([^:]+):\s*(.+)$")
@@ -255,6 +256,7 @@ def postprocess_tailored_output(
     output: TailoredResumeOutput,
     must_have_keywords: list[str] | None = None,
     tone_profile: JDToneProfile | None = None,
+    truthfulness: TruthfulnessContext | None = None,
 ) -> TailoredResumeOutput:
     """Apply deterministic structure rules after LLM generation.
 
@@ -285,6 +287,9 @@ def postprocess_tailored_output(
 
     if tone_profile is not None:
         interim = annotate_tone_alignment(interim, tone_profile)
+
+    if truthfulness is not None:
+        interim = apply_truthfulness_guards(interim, truthfulness)
 
     return interim
 

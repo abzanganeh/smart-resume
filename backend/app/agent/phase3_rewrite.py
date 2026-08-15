@@ -17,6 +17,7 @@ from app.agent.phase3_postprocess import (
     flatten_skill_terms,
     postprocess_tailored_output,
 )
+from app.agent.phase3_truthfulness import TruthfulnessContext
 from app.agent.tone_profile import render_tone_profile_block
 from app.models.rewrite import TailoredResumeOutput
 from app.models.session import PhaseRunScope, Session
@@ -558,7 +559,23 @@ async def run(
         else None
     )
     tone_profile = session.phase1_output.tone_profile if session.phase1_output else None
-    output = postprocess_tailored_output(output, must_have, tone_profile=tone_profile)
+    truth_ctx = TruthfulnessContext(
+        approved_metrics=list(session.approved_metrics or []),
+        resume_parsed=session.resume_parsed,
+        resume_raw=session.resume_raw or "",
+        prior_output=session.phase3_output,
+        user_extra_notes=session.user_extra_notes,
+        user_claimed_keywords=list(session.user_claimed_keywords or []),
+        bullet_fixes=list(session.bullet_fixes or []),
+        jd_job_title=(session.user_info.target_role if session.user_info else ""),
+        must_have_keywords=must_have or [],
+    )
+    output = postprocess_tailored_output(
+        output,
+        must_have,
+        tone_profile=tone_profile,
+        truthfulness=truth_ctx,
+    )
 
     account_email = await resolve_account_email(session.user_id)
     output = apply_authoritative_contact(

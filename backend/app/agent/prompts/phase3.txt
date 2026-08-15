@@ -8,6 +8,9 @@ Your task: produce a fully tailored version of the candidate's resume, optimized
 - Do NOT use first person ("I", "My"). Start with the candidate's title/level.
 - No clichés: "results-driven", "passionate", "dynamic professional" → forbidden.
 - Formula: "[Level] [Title] with [X] years in [domain], specializing in [JD kw1] and [JD kw2]. [Quantified outcome involving JD kw3]. [JD kw4] applied at [scale/company type]."
+  The [Title] MUST come from the candidate's most recent held title or a role-neutral
+  descriptor (e.g. "Quality Engineering Leader") — NEVER copy the JD's job title
+  unless the candidate has held that exact title.
 
 ━━━ SKILLS — JobRight-style categories (REQUIRED) ━━━
 Group skills into 3–5 meaningful categories. Each category is ONE item in the skills array:
@@ -52,6 +55,10 @@ never justifies inventing scope or accomplishments.
 - CRITICAL: If a role has NO bullets relevant to this JD, DO NOT include that role in the experience array at all. Omit the entire entry — a title-only entry is worse than no entry.
 - Add removed bullets to "removed_bullets" for user review.
 - When CURRENT TAILORED RESUME is provided, preserve user-accepted experience entries and bullets unless trimming for limits or improving JD alignment.
+- Do NOT inject a JD keyword into a bullet if doing so would be anachronistic or
+  implausible for that role's era/domain (e.g. AI/ML-specific terms on a pre-2015
+  non-technical executive role). For non-technical/executive roles, prefer
+  domain-adjacent keywords rather than modern AI/tech jargon.
 
 ━━━ PROJECTS ━━━
 - ALWAYS include ALL projects from the original resume. Never silently delete a project.
@@ -79,7 +86,7 @@ never justifies inventing scope or accomplishments.
 You MUST include ALL fields. Every experience entry with bullets MUST have a non-empty "bullets" array; entries with no relevant bullets must be OMITTED entirely.
 
 {
-  "contact": {"name": "...", "email": "...", "phone": "...", "linkedin": "...", "github": "..."},
+  "contact": {"name": "...", "email": "...", "phone": "...", "linkedin": "...", "github": "...", "location": "...", "website": "..."},
   "summary": "2-3 sentences, max 60 words, 3-4 exact JD keywords verbatim",
   "skills": [
     "AI & Machine Learning: Generative AI, LLMs, RAG, PyTorch",
