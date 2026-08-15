@@ -44,10 +44,16 @@ test.describe("/auth page", () => {
     await expect(page.getByRole("button", { name: "Register" })).toBeVisible()
   })
 
-  test("shows SSO buttons", async ({ page }) => {
+  test("email sign-in fields are always visible", async ({ page }) => {
     await page.goto(`${BASE}/auth`)
-    await expect(page.getByRole("button", { name: /Google/ })).toBeVisible()
-    await expect(page.getByRole("button", { name: /GitHub/ })).toBeVisible()
+    await expect(page.getByPlaceholder("you@example.com")).toBeVisible()
+    await expect(page.getByPlaceholder("••••••••••")).toBeVisible()
+  })
+
+  test("hides SSO buttons when OAuth uses placeholder credentials", async ({ page }) => {
+    await page.goto(`${BASE}/auth`)
+    await expect(page.getByRole("button", { name: /Google/ })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: /GitHub/ })).toHaveCount(0)
   })
 
   test("switching to Register shows consent checkboxes", async ({ page }) => {
