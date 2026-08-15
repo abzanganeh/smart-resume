@@ -118,10 +118,83 @@ def _poll_company(conn: Any, company: tuple[Any, ...]) -> int:
     return upserted
 
 
+def _due_greenhouse_companies_sql() -> str:
+    """SQL selecting Greenhouse companies due for polling by watcher tier intervals."""
+    return """
+        WITH active_tier_limits AS (
+            SELECT DISTINCT ON (plan_code)
+                plan_code,
+                career_watch_interval_minutes
+            FROM tier_limits_config
+            WHERE is_active = true
+            ORDER BY plan_code, created_at DESC
+        ),
+        user_overrides AS (
+            SELECT DISTINCT ON (user_id)
+                user_id,
+                payload->>'plan_code' AS plan_code
+            FROM admin_user_grants
+            WHERE grant_type = 'tier_override'
+              AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
+            ORDER BY user_id, created_at DESC
+        ),
+        user_subscriptions AS (
+            SELECT DISTINCT ON (s.user_id)
+                s.user_id,
+                pc.code AS plan_code
+            FROM subscriptions s
+            LEFT JOIN plan_configs pc
+              ON pc.stripe_price_id = s.stripe_price_id
+             AND pc.is_active = true
+            WHERE s.status IN ('trialing', 'active', 'grace', 'cancel_at_period_end')
+              AND s.period_start <= NOW()
+              AND s.period_end >= NOW()
+            ORDER BY s.user_id, s.created_at DESC
+        ),
+        watcher_plans AS (
+            SELECT
+                uwc.watched_company_id,
+                COALESCE(uo.plan_code, us.plan_code, 'free') AS plan_code
+            FROM user_watched_companies uwc
+            LEFT JOIN user_overrides uo ON uo.user_id = uwc.user_id
+            LEFT JOIN user_subscriptions us ON us.user_id = uwc.user_id
+            WHERE uwc.is_active = true
+        ),
+        company_intervals AS (
+            SELECT
+                wp.watched_company_id,
+                MIN(
+                    COALESCE(
+                        tl.career_watch_interval_minutes,
+                        (SELECT career_watch_interval_minutes
+                         FROM active_tier_limits WHERE plan_code = 'free'),
+                        30
+                    )
+                ) AS min_interval
+            FROM watcher_plans wp
+            LEFT JOIN active_tier_limits tl ON tl.plan_code = wp.plan_code
+            GROUP BY wp.watched_company_id
+        )
+        SELECT wc.id, wc.ats_type::text, wc.ats_board_token, wc.careers_page_url
+        FROM watched_companies wc
+        JOIN company_intervals ci ON ci.watched_company_id = wc.id
+        WHERE wc.is_active = true
+          AND wc.ats_type = 'greenhouse'
+          AND wc.ats_board_token IS NOT NULL
+          AND wc.ats_board_token <> ''
+          AND (
+            wc.last_polled_at IS NULL
+            OR wc.last_polled_at <= NOW() - (ci.min_interval || ' minutes')::interval
+          )
+        ORDER BY wc.last_polled_at NULLS FIRST
+        LIMIT %s
+        """
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     import psycopg2
 
-    interval = int(os.environ.get("CAREER_WATCH_POLL_INTERVAL_MINUTES", "15"))
     limit = int(os.environ.get("CAREER_WATCH_POLL_BATCH", "25"))
     conn = psycopg2.connect(_postgres_url())
     polled = 0
@@ -129,23 +202,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     failures = 0
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, ats_type::text, ats_board_token, careers_page_url
-                FROM watched_companies
-                WHERE is_active = true
-                  AND ats_type = 'greenhouse'
-                  AND ats_board_token IS NOT NULL
-                  AND ats_board_token <> ''
-                  AND (
-                    last_polled_at IS NULL
-                    OR last_polled_at <= NOW() - (%s || ' minutes')::interval
-                  )
-                ORDER BY last_polled_at NULLS FIRST
-                LIMIT %s
-                """,
-                (interval, limit),
-            )
+            cur.execute(_due_greenhouse_companies_sql(), (limit,))
             companies = cur.fetchall()
         for company in companies:
             try:
