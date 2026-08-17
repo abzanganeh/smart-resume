@@ -271,6 +271,10 @@ test("search results tailor resume navigates with jd prefilled", async ({ page }
 
   await page.waitForURL(/\/session\/new/, { timeout: 15_000 })
   expect(page.url()).toContain(`jd_id=${MOCK_JOB_ID}`)
+  await page.waitForURL(/step=jd/, { timeout: 15_000 })
+  await expect(page.getByRole("heading", { name: "Job description" })).toBeVisible({
+    timeout: 10_000,
+  })
 
   await expect(
     page.getByPlaceholder("Paste the full job description here…"),
