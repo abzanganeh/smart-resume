@@ -817,8 +817,25 @@ function SessionContent() {
                 <span className="text-red-300">{runError}</span>
                 {runErrorType?.startsWith("llm_") && (
                   <p className="text-xs text-slate-400 mt-2">
-                    Switch to Platform AI or update your API key in the panel below, then retry — no
-                    need to start a new session.
+                    {runErrorType === "llm_insufficient_credits" ? (
+                      <>
+                        Provider credits are exhausted. Switch to Platform AI (Gemini) below or add
+                        credits at your provider, then retry — no need to start a new session.{" "}
+                        <a
+                          href="https://openrouter.ai/settings/credits"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 underline hover:no-underline"
+                        >
+                          OpenRouter credits
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        Switch to Platform AI in the panel below, then retry — no need to start a
+                        new session.
+                      </>
+                    )}
                   </p>
                 )}
               </div>
