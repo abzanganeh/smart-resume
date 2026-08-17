@@ -20,6 +20,8 @@ cp backend/.env.example backend/.env
 docker compose up
 ```
 
+**Staging deploy:** see [STAGING.md](./STAGING.md) for env checklist, OAuth setup, Stripe webhook, and manual smoke gates.
+
 | Service   | URL                          |
 |-----------|------------------------------|
 | App       | http://localhost:3000        |
