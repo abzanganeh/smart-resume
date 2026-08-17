@@ -108,6 +108,14 @@ async function mockSubscription(page: Page) {
 }
 
 async function mockJobsApi(page: Page) {
+  await page.route(`${API}/api/profile/resume`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ chunk_count: 1, chunks: [] }),
+    }),
+  )
+
   await page.route(`${API}/api/jobs/saved`, (route: Route) =>
     route.fulfill({
       status: 200,
