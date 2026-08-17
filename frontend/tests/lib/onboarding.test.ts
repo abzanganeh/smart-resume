@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   mustCompleteOnboarding,
   parseOnboardingStepParam,
   postAuthLandingPath,
   resolveOnboardingStepIndex,
-} from "@/lib/auth/onboarding"
-import type { BackendUser } from "@/auth"
+} from "@/lib/auth/onboarding";
+import type { BackendUser } from "@/auth";
 
 const baseUser: BackendUser = {
   id: "u1",
@@ -20,78 +21,83 @@ const baseUser: BackendUser = {
   suspended_at: null,
   onboarding_completed_at: null,
   onboarding_ai_choice: null,
-}
+};
 
 describe("mustCompleteOnboarding", () => {
   it("treats missing backendUser as incomplete", () => {
-    expect(mustCompleteOnboarding({})).toBe(true)
-    expect(mustCompleteOnboarding(null)).toBe(false)
-  })
+    assert.equal(mustCompleteOnboarding({}), true);
+    assert.equal(mustCompleteOnboarding(null), false);
+  });
 
   it("honors onboarding_completed_at on the profile", () => {
-    expect(mustCompleteOnboarding({ backendUser: baseUser })).toBe(true)
-    expect(
+    assert.equal(mustCompleteOnboarding({ backendUser: baseUser }), true);
+    assert.equal(
       mustCompleteOnboarding({
         backendUser: { ...baseUser, onboarding_completed_at: "2026-01-01T00:00:00Z" },
       }),
-    ).toBe(false)
-  })
-})
+      false,
+    );
+  });
+});
 
 describe("postAuthLandingPath", () => {
   it("sends incomplete users to onboarding", () => {
-    expect(postAuthLandingPath({ backendUser: baseUser })).toBe("/onboarding")
-    expect(postAuthLandingPath({})).toBe("/onboarding")
-  })
+    assert.equal(postAuthLandingPath({ backendUser: baseUser }), "/onboarding");
+    assert.equal(postAuthLandingPath({}), "/onboarding");
+  });
 
   it("sends completed users to dashboard", () => {
-    expect(
+    assert.equal(
       postAuthLandingPath({
         backendUser: { ...baseUser, onboarding_completed_at: "2026-01-01T00:00:00Z" },
       }),
-    ).toBe("/dashboard")
-  })
-})
+      "/dashboard",
+    );
+  });
+});
 
 describe("parseOnboardingStepParam", () => {
   it("parses 1-based step query values", () => {
-    expect(parseOnboardingStepParam("4")).toBe(3)
-    expect(parseOnboardingStepParam("1")).toBe(0)
-  })
+    assert.equal(parseOnboardingStepParam("4"), 3);
+    assert.equal(parseOnboardingStepParam("1"), 0);
+  });
 
   it("rejects invalid values", () => {
-    expect(parseOnboardingStepParam(null)).toBeNull()
-    expect(parseOnboardingStepParam("0")).toBeNull()
-    expect(parseOnboardingStepParam("9")).toBeNull()
-  })
-})
+    assert.equal(parseOnboardingStepParam(null), null);
+    assert.equal(parseOnboardingStepParam("0"), null);
+    assert.equal(parseOnboardingStepParam("9"), null);
+  });
+});
 
 describe("resolveOnboardingStepIndex", () => {
   it("starts at welcome when nothing is saved", () => {
-    expect(resolveOnboardingStepIndex(baseUser)).toBe(0)
-  })
+    assert.equal(resolveOnboardingStepIndex(baseUser), 0);
+  });
 
   it("jumps to master resume after ai choice", () => {
-    expect(
+    assert.equal(
       resolveOnboardingStepIndex({
         ...baseUser,
         onboarding_ai_choice: "platform",
       }),
-    ).toBe(2)
-  })
+      2,
+    );
+  });
 
   it("honors step=4 after master resume exists", () => {
-    expect(
+    assert.equal(
       resolveOnboardingStepIndex(
         { ...baseUser, onboarding_ai_choice: "platform" },
         { urlStepIndex: 3, hasMasterResume: true },
       ),
-    ).toBe(3)
-  })
+      3,
+    );
+  });
 
   it("does not skip ahead without prerequisites", () => {
-    expect(
+    assert.equal(
       resolveOnboardingStepIndex(baseUser, { urlStepIndex: 3, hasMasterResume: false }),
-    ).toBe(0)
-  })
-})
+      0,
+    );
+  });
+});

@@ -65,6 +65,12 @@ SAMPLE_TEXT = (
     "- BS Computer Science, MIT (2017)\n"
 )
 
+SAMPLE_TEXT_V2 = (
+    "Resume v2: Python engineer focused on backend services, APIs, and data pipelines. "
+    "Built REST and async services with FastAPI, PostgreSQL, and Redis. "
+    "Shipped observability, CI/CD, and on-call improvements across two product teams."
+)
+
 
 async def test_upload_list_patch_delete_roundtrip(
     app_client: AsyncClient, db_session: AsyncSession
@@ -165,7 +171,7 @@ async def test_put_replaces_chunks_and_resets_count(
     r = await app_client.put(
         "/api/profile/resume",
         headers=headers,
-        data={"text": "Resume v2: Python engineer focused on backend services."},
+        data={"text": SAMPLE_TEXT_V2},
     )
     assert r.status_code == 200, r.text
     new_count = r.json()["chunk_count"]

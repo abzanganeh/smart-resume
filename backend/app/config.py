@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
 
     # Upload limits
+    MIN_RESUME_CHARS: int = 200
     MAX_RESUME_CHARS: int = 15_000
     MAX_JD_CHARS: int = 10_000
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5 MB

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, BookUser, FileText, Loader2, Mic, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { uploadResumeFile, pasteResumeText, type ParsedResume } from "@/lib/api";
+import { userFacingError } from "@/lib/userFacingError";
 import { uploadProfileResume } from "@/lib/profile";
 import { VoiceTab } from "@/components/shared/VoiceTab";
 
@@ -16,6 +17,13 @@ interface Props {
   hasMasterResume?: boolean;
   /** Called after the first upload is persisted to the master profile. */
   onMasterResumeSaved?: () => void;
+}
+
+const MIN_RESUME_CHARS = 200;
+
+function setUploadError(setError: (msg: string | null) => void, e: unknown) {
+  const { message, helpUrl } = userFacingError(e);
+  setError(helpUrl ? `${message} (${helpUrl})` : message);
 }
 
 type Mode = "upload" | "paste" | "voice" | "saved";
@@ -67,7 +75,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
         await persistToMaster({ file });
         onParsed(result.parsed);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Upload failed.");
+        setUploadError(setError, e);
       } finally {
         setLoading(false);
       }
@@ -77,15 +85,22 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
 
   // ── Paste ──────────────────────────────────────────────────────────────────
   const handlePaste = async () => {
-    if (!pasteText.trim()) return;
+    const trimmed = pasteText.trim();
+    if (!trimmed) return;
+    if (trimmed.length < MIN_RESUME_CHARS) {
+      setError(
+        `Resume is too short (${trimmed.length} characters). Paste at least ${MIN_RESUME_CHARS} characters.`,
+      );
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await pasteResumeText(sessionId, pasteText);
-      await persistToMaster({ text: pasteText });
+      const result = await pasteResumeText(sessionId, trimmed);
+      await persistToMaster({ text: trimmed });
       onParsed(result.parsed);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to process resume text.");
+      setUploadError(setError, e);
     } finally {
       setLoading(false);
     }
@@ -100,7 +115,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
       await persistToMaster({ text });
       onParsed(result.parsed);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to process transcribed resume.");
+      setUploadError(setError, e);
     } finally {
       setLoading(false);
     }

@@ -10,14 +10,9 @@
  *
  * OAuth SSO (Google / GitHub):
  *   NextAuth handles the OAuth code exchange with the provider.
- *   After obtaining the access_token, we call our backend's
- *   POST /api/auth/callback to create/sync the backend user.
- *   NOTE: The backend currently expects the raw OAuth code, but we only
- *   have the already-exchanged access_token at this point. The backend
- *   will need a small update (see TODO below) to accept access_tokens.
- *   Until then, OAuth sign-in creates a NextAuth session but the
- *   backendAccessToken will be absent; protected API calls will fail with
- *   an appropriate error that guides the user to link via email/password.
+ *   After obtaining tokens, we call POST /api/auth/callback with
+ *   id_token or access_token so FastAPI creates/syncs the User row
+ *   and returns backend access + refresh tokens embedded in the session.
  */
 import NextAuth from "next-auth"
 import type { User } from "next-auth"

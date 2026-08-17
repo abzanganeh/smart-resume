@@ -75,6 +75,7 @@ from app.services.billing.quota import (
     check_quota_for_story_interview,
 )
 from app.services.billing.exceptions import AccountSuspendedError, InsufficientCreditsError
+from app.services.resume_validation import validate_resume_text
 from app.services.master_resume import crud as master_crud
 from app.services.master_resume.chunking import Chunk, count_tokens
 from app.services.master_resume.embedding import embed_text
@@ -151,20 +152,7 @@ async def _extract_resume_text(
     else:
         raw = (text_payload or "").strip()
 
-    if not raw:
-        raise HTTPException(
-            status_code=422,
-            detail="Master resume is empty — provide a file or non-empty text.",
-        )
-    if len(raw) > settings.MAX_RESUME_CHARS:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Master resume exceeds {settings.MAX_RESUME_CHARS:,} characters. "
-                "Trim older or irrelevant experience."
-            ),
-        )
-    return raw
+    return validate_resume_text(raw)
 
 
 async def _structure_with_llm(

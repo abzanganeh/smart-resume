@@ -27,7 +27,7 @@ Algorithm summary (§6a "Retrieval algorithm (deterministic)"):
 Empty-result fallback (§6a):
 
 - Re-query each empty section at the relaxed threshold.
-- Still empty + critical section (experience / education) →
+- Still empty + critical section (experience / education / project) →
   take top-N by raw score capped at ``min(cap, 3)``, marked
   ``reason="fallback_used"``.
 - Still empty + non-critical → omit, list in

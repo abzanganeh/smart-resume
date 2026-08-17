@@ -734,14 +734,19 @@ async def restore_version(session_id: str, snapshot_id: str):
     )
     if not match:
         raise HTTPException(status_code=404, detail="Version not found")
+    restored = _append_version_snapshot(
+        session,
+        label=f"Restored from v{match.version}",
+        output=match.output,
+    )
     session.phase3_output = match.output
     now = datetime.now(timezone.utc)
     session.stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
     return {
-        "version": match.version,
-        "snapshot_id": match.snapshot_id,
+        "version": restored.version,
+        "snapshot_id": restored.snapshot_id,
         "tailored_output": match.output.model_dump(),
         "stale": {
             "4": session.phase4_stale_since.isoformat() if session.phase4_stale_since else None,
