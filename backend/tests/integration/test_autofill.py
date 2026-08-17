@@ -188,3 +188,43 @@ async def test_autofill_payload_isolation_between_users(
         headers={"Authorization": f"Bearer {token_b}"},
     )
     assert forbidden.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_autofill_payload_unknown_jd_returns_404(app_client: AsyncClient) -> None:
+    token, _ = await _register(app_client, "404")
+    missing_id = str(uuid.uuid4())
+    r = await app_client.get(
+        f"/api/job-descriptions/{missing_id}/autofill-payload",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_job_description_by_id(app_client: AsyncClient) -> None:
+    token, _ = await _register(app_client, "get-jd")
+
+    save_r = await app_client.post(
+        "/api/job-descriptions",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "url": "https://boards.greenhouse.io/acme/jobs/789",
+            "title": "Backend Engineer",
+            "company": "Acme",
+            "text": "Build APIs with FastAPI and PostgreSQL for our platform engineering team.",
+            "source": "extension",
+        },
+    )
+    assert save_r.status_code == 200
+    jd_id = save_r.json()["jd_id"]
+
+    get_r = await app_client.get(
+        f"/api/job-descriptions/{jd_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_r.status_code == 200, get_r.text
+    body = get_r.json()
+    assert body["id"] == jd_id
+    assert body["title"] == "Backend Engineer"
+    assert body["company"] == "Acme"

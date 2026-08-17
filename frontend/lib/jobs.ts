@@ -184,10 +184,13 @@ export function removeBlockedCompany(companies: string[], name: string): string[
 
 export function staleBannerMessage(
   resultsMayBeStale: boolean,
-  _message?: string | null,
+  message?: string | null,
 ): string | null {
   if (!resultsMayBeStale) return null
-  return "Results may not be fully up to date"
+  const base = "Results may not be fully up to date"
+  const trimmed = message?.trim()
+  if (trimmed) return `${base} (${trimmed})`
+  return base
 }
 
 export async function searchJobs(

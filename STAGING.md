@@ -161,7 +161,7 @@ Review dry-run counts before `--apply`.
 
 ## 5. Manual smoke checklist (Release Phase 2)
 
-Run on staging after deploy. Automated CI already covers unit/integration/e2e smoke on every PR.
+Run on staging after deploy. Automated CI covers unit/integration tests and e2e smoke (`legal`, `auth`, `jobs`, `tracker`) on every PR.
 
 ### Auth
 
@@ -174,11 +174,20 @@ Run on staging after deploy. Automated CI already covers unit/integration/e2e sm
 
 - [ ] Upload resume ≥ 200 chars → parse succeeds
 - [ ] Empty/short resume → clear 422 error (not generic 500)
-- [ ] Paste JD → Phase 1 keywords run
+- [ ] Paste JD → **Analysis** tab: single **Run analysis** chains Phase 1 keywords then Phase 2 audit
+- [ ] Legacy `?step=keywords` / `?step=audit` redirect to `?step=analysis`
 - [ ] Your Info pre-fill from parsed resume (refresh on info step)
 - [ ] Phase 3 rewrite completes; guard banner if metrics/titles auto-corrected
+- [ ] **Track this application** on rewrite tab creates draft in tracker
 - [ ] Version restore creates a **new** snapshot number
 - [ ] Export PDF/DOCX
+
+### Job search & tracker
+
+- [ ] `/jobs` search (subscribed user) → results, stale banner when provider degraded
+- [ ] **Track application** on job card → `/tracker/{id}` draft
+- [ ] **Tailor Resume** → session with JD prefilled
+- [ ] `/tracker` kanban drag updates status; detail page loads
 
 ### Billing (Stripe test mode)
 
@@ -192,10 +201,13 @@ Run on staging after deploy. Automated CI already covers unit/integration/e2e sm
 - [ ] One Inc regression: no fabricated metrics; education/projects present
 - [ ] Checkup → “Tailor this resume” handoff pre-fills resume text
 
-### Optional integrations
+### Extension & autofill (manual)
 
+- [ ] `EXTENSION_AUTH_ENABLED=true`; OAuth callback registered for extension
+- [ ] Capture JD on Greenhouse → tailor in web app → return to apply form
+- [ ] Autofill overlay lists recent tailored session for current host
+- [ ] 409 before tailor shows “Resume not tailored yet” in extension
 - [ ] Flint “Open in Flint” handoff (`Flint/docs/STRATEGY_B_E2E_RUNBOOK.md`)
-- [ ] Chrome extension JD capture (requires `EXTENSION_AUTH_ENABLED=true`)
 
 ---
 
@@ -211,8 +223,8 @@ Run on staging after deploy. Automated CI already covers unit/integration/e2e sm
 
 Not blocking first staging deploy:
 
-- UX flow consolidation (merge wizard steps T1+T2)
-- RP4 Steps 27–38 (dashboard hardening, notifications, admin UI polish, compliance pages)
+- RP4 Steps 27–38 (dashboard hardening, notifications platform, admin UI polish, compliance pages)
 - Full app Terraform / managed CI deploy pipeline
+- Job search “Match my resume” UI (`/api/jobs/match` backend exists)
 
 See `docs/IMPLEMENTATION_PLAN.md` for the full RP2–RP4 step list.

@@ -2,10 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Bookmark,
   BookmarkCheck,
   Building2,
+  ClipboardList,
+  ExternalLink,
   Loader2,
   MapPin,
   Sparkles,
@@ -19,6 +22,8 @@ import {
   shouldBlurJobCard,
   type JobResult,
 } from "@/lib/jobs"
+import { createApplication } from "@/lib/tracker"
+import { userFacingError } from "@/lib/userFacingError"
 import type { FitAnalysisOutput } from "@/lib/api"
 
 interface Props {
@@ -45,10 +50,13 @@ export function JobCard({
   saved,
   onSaveToggle,
 }: Props) {
+  const router = useRouter()
   const [fitResult, setFitResult] = useState<FitAnalysisOutput | null>(null)
   const [fitLoading, setFitLoading] = useState(false)
   const [fitError, setFitError] = useState<string | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
+  const [trackLoading, setTrackLoading] = useState(false)
+  const [trackError, setTrackError] = useState<string | null>(null)
 
   const blurred = shouldBlurJobCard(index, isSubscribed)
   const salary = formatSalaryRange(job)
@@ -61,7 +69,7 @@ export function JobCard({
       const res = await fitJob(accessToken, job.id)
       setFitResult(res.result)
     } catch (e) {
-      setFitError(e instanceof Error ? e.message : "Fit check failed.")
+      setFitError(userFacingError(e).message)
     } finally {
       setFitLoading(false)
     }
@@ -74,6 +82,25 @@ export function JobCard({
       await onSaveToggle(job.id, !saved)
     } finally {
       setSaveLoading(false)
+    }
+  }
+
+  const handleTrackApplication = async () => {
+    if (blurred || trackLoading) return
+    setTrackLoading(true)
+    setTrackError(null)
+    try {
+      const app = await createApplication(accessToken, {
+        jd_title: job.title,
+        jd_company: job.company,
+        job_url: job.apply_url ?? undefined,
+        status: "draft",
+      })
+      router.push(`/tracker/${app.id}`)
+    } catch (e) {
+      setTrackError(userFacingError(e).message)
+    } finally {
+      setTrackLoading(false)
     }
   }
 
@@ -142,6 +169,7 @@ export function JobCard({
         )}
 
         {fitError && <p className="text-xs text-red-400">{fitError}</p>}
+        {trackError && <p className="text-xs text-red-400">{trackError}</p>}
 
         <div className="flex flex-wrap gap-2">
           <button
@@ -171,6 +199,35 @@ export function JobCard({
           </Link>
           <button
             type="button"
+            onClick={handleTrackApplication}
+            disabled={trackLoading || blurred}
+            data-testid={`track-application-${job.id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
+          >
+            {trackLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ClipboardList className="w-4 h-4" />
+            )}
+            Track application
+          </button>
+          {job.apply_url && (
+            <a
+              href={job.apply_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={clsx(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600",
+                blurred && "pointer-events-none opacity-40",
+              )}
+              tabIndex={blurred ? -1 : 0}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Apply
+            </a>
+          )}
+          <button
+            type="button"
             onClick={handleSave}
             disabled={saveLoading || blurred}
             aria-pressed={saved}
@@ -188,7 +245,7 @@ export function JobCard({
             ) : (
               <Bookmark className="w-4 h-4" />
             )}
-            {saved ? "Saved" : "Save"}
+            {saved ? "Bookmarked" : "Bookmark"}
           </button>
         </div>
       </div>

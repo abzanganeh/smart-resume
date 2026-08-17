@@ -223,7 +223,7 @@ function NewSessionContent() {
               try {
                 const snap = await checkSession(saved.session_id);
                 if (snap.has_user_info || snap.phase1_complete) {
-                  router.replace(`/session/${saved.session_id}?step=keywords`);
+                  router.replace(`/session/${saved.session_id}?step=analysis`);
                   return;
                 }
               } catch {
@@ -341,7 +341,7 @@ function NewSessionContent() {
     checkSession(sessionId)
       .then((s) => {
         if (!cancelled && s.phase1_complete) {
-          router.replace(`/session/${sessionId}?step=keywords`);
+          router.replace(`/session/${sessionId}?step=analysis`);
         }
       })
       .catch(() => {});
@@ -420,7 +420,7 @@ function NewSessionContent() {
       const jdId = searchParams.get("jd_id") ?? handoff?.jd_id ?? undefined;
       await saveUserInfo(sessionId, info, jdId);
       sessionStorage.removeItem("smart_resume_session_id");
-      router.replace(`/session/${sessionId}?step=keywords`);
+      router.replace(`/session/${sessionId}?step=analysis`);
     } finally {
       setLoading(false);
     }
