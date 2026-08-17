@@ -17,6 +17,8 @@ const MOCK_USER = {
   credit_balance: 0,
   auth_provider: "email",
   email_verified_at: "2026-05-01T00:00:00Z",
+  onboarding_completed_at: "2026-05-01T00:00:00Z",
+  onboarding_ai_choice: "platform",
   has_totp: false,
   closure_requested_at: null,
   suspended_at: null,

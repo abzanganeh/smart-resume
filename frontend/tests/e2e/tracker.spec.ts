@@ -33,6 +33,8 @@ const MOCK_USER = {
   credit_balance: 5,
   auth_provider: "email",
   email_verified_at: "2026-05-01T00:00:00Z",
+  onboarding_completed_at: "2026-05-01T00:00:00Z",
+  onboarding_ai_choice: "platform",
   has_totp: false,
   closure_requested_at: null,
   suspended_at: null,
@@ -65,6 +67,14 @@ async function login(page: Page) {
 
 async function mockTrackerApis(page: Page) {
   patchedStatus = null
+
+  await page.route(`${API}/api/resumes*`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }),
+    }),
+  )
 
   await page.route(`${API}/api/applications`, (route: Route) => {
     if (route.request().method() === "GET") {
