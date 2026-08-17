@@ -57,15 +57,14 @@ RETRIEVAL_FALLBACK_THRESHOLD: Final[float] = 0.55
 RETRIEVAL_EMBEDDING_MODEL: Final[str] = "text-embedding-3-small"
 
 # Sections that we refuse to ship to Phase 3 with an empty chunk list —
-# losing all experience or education chunks silently would produce
-# nonsense output.  See §6a "Empty-result fallback" step 2.
-CRITICAL_SECTIONS: Final[frozenset[str]] = frozenset({"experience", "education"})
+# losing all experience, education, or project chunks silently would produce
+# incomplete output (phase3.txt requires projects to stay present).
+# See §6a "Empty-result fallback" step 2.
+CRITICAL_SECTIONS: Final[frozenset[str]] = frozenset({"experience", "education", "project"})
 
 # Sections we *can* safely omit from the prompt when retrieval finds
 # nothing relevant (the LLM will simply not emit a section for them).
-NON_CRITICAL_SECTIONS: Final[frozenset[str]] = frozenset(
-    {"project", "skills", "other"}
-)
+NON_CRITICAL_SECTIONS: Final[frozenset[str]] = frozenset({"skills", "other"})
 
 # Maximum chunks pulled per critical section when the fallback path
 # is forced past both thresholds.  ``min(RETRIEVAL_CAPS[section], 3)``
