@@ -42,6 +42,29 @@ const MOCK_JOB = {
 }
 
 async function mockAuth(page: Page) {
+  await page.route(`${API}/api/auth/me`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(MOCK_USER),
+    }),
+  )
+  await page.route(`${API}/api/dashboard/summary`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        display_name: MOCK_USER.display_name,
+        tier: MOCK_USER.tier,
+        credit_balance: MOCK_USER.credit_balance,
+        next_billing_date: null,
+        subscription: null,
+        counts: { resumes: 0, applications: 0, saved_jobs: 0 },
+        recent_activity: [],
+        ats_trend: [],
+      }),
+    }),
+  )
   await page.route(`${API}/api/auth/login`, (route: Route) =>
     route.fulfill({
       status: 200,

@@ -10,6 +10,7 @@ export default defineConfig({
   timeout: 30_000,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
+  globalSetup: "./tests/e2e/global-setup.mjs",
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
