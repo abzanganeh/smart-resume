@@ -25,6 +25,7 @@ from app.services.bullet_fix_suggest import (
     BulletFixSuggestionItem,
     suggest_bullet_fixes,
 )
+from app.services.resume_validation import validate_resume_text
 from app.services.session_store import get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["resume"])
@@ -92,11 +93,7 @@ async def upload_resume(
     else:
         raw_text = extract_text_from_txt(file_bytes)
 
-    if len(raw_text) > settings.MAX_RESUME_CHARS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Resume exceeds {settings.MAX_RESUME_CHARS:,} characters. Trim older or irrelevant experience.",
-        )
+    raw_text = validate_resume_text(raw_text)
 
     provider = x_provider or session.provider
     model = x_model or session.model
@@ -127,18 +124,14 @@ async def paste_resume(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if len(body.text) > settings.MAX_RESUME_CHARS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Resume exceeds {settings.MAX_RESUME_CHARS:,} characters.",
-        )
+    text = validate_resume_text(body.text)
 
     provider = x_provider or session.provider
     model = x_model or session.model
     llm = get_llm_client(provider, model)
-    parsed = await _structure_resume(body.text, llm)
+    parsed = await _structure_resume(text, llm)
 
-    session.resume_raw = body.text
+    session.resume_raw = text
     session.resume_parsed = parsed
     if x_provider:
         session.provider = x_provider
