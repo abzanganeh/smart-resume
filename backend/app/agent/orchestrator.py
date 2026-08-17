@@ -139,6 +139,8 @@ async def _resolve_phase3_llm(
 def _classify_error(exc: BaseException) -> str:
     """Return a short machine-readable error class for the frontend."""
     msg = str(exc).lower()
+    if any(k in msg for k in ("402", "payment required", "not enough credits", "insufficient credit")):
+        return "llm_insufficient_credits"
     if any(k in msg for k in ("rate limit", "ratelimit", "429", "too many requests")):
         return "llm_rate_limit"
     if any(k in msg for k in ("timeout", "timed out", "read timeout", "connect timeout")):
@@ -164,6 +166,10 @@ def _user_facing_error(exc: BaseException) -> str:
     """Return a clean, user-facing error message for display in the UI."""
     kind = _classify_error(exc)
     messages = {
+        "llm_insufficient_credits": (
+            "The AI provider rejected the request because its API credits are exhausted (402). "
+            "Add credits to your provider account or switch to Gemini in AI settings, then retry."
+        ),
         "llm_rate_limit": (
             "The AI model hit its rate limit. Wait a moment and retry — "
             "this is a temporary quota on the LLM provider's side, not a platform issue."

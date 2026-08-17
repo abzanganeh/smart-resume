@@ -500,6 +500,23 @@ function ScopedBulletList({
 
 // ── main component ────────────────────────────────────────────────────────────
 
+const GUARD_NOTE_MARKERS = [
+  "removed unverified",
+  "restored original title",
+  "restored missing",
+  "dropped experience",
+  "belongs to",
+  "jd job title",
+  "unverified metric",
+];
+
+function hasGuardRewriteNotes(notes: string[]): boolean {
+  return notes.some((note) => {
+    const lower = note.toLowerCase();
+    return GUARD_NOTE_MARKERS.some((marker) => lower.includes(marker));
+  });
+}
+
 export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, entryIssueBadges = {} }: Props) {
   function acceptSug(id: string) { onAcceptSuggestion?.(id); }
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
@@ -527,7 +544,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
   const [editingEduField, setEditingEduField] = useState<string | null>(null);
   const [editingEduValue, setEditingEduValue] = useState("");
   const [expandedEdu, setExpandedEdu] = useState<string | null>(null);
-  const [showNotes, setShowNotes] = useState(false);
+  const [showNotes, setShowNotes] = useState(() => hasGuardRewriteNotes(initial.rewrite_notes));
   const [addMode, setAddMode] = useState<"master" | "manual" | null>(null);
   const [manualSectionText, setManualSectionText] = useState("");
   const [manualTitle, setManualTitle] = useState("Experience");
@@ -2454,6 +2471,12 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       )}
 
       {/* ── Rewrite notes ────────────────────────────────────────────────── */}
+      {data.rewrite_notes.length > 0 && hasGuardRewriteNotes(data.rewrite_notes) && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          Smart Resume auto-corrected parts of the AI draft for accuracy (metrics, titles, or
+          missing sections). Review the rewrite notes below.
+        </div>
+      )}
       {data.rewrite_notes.length > 0 && (
         <section>
           <button

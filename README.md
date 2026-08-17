@@ -76,7 +76,7 @@ Select your **AI model tier**:
 | Better   | Gemini 2.5 Flash      | +$0.898 / resume   |
 | Best     | Claude Sonnet 4.6     | +$2.99 / resume    |
 
-Or bring your own API key (BYOK) — held only in `sessionStorage`, never logged.
+Platform AI (Gemini) is the default for all wizard steps. Upgrade tiers bill per resume via Stripe.
 
 ### 4 — Run the four phases
 
@@ -127,7 +127,6 @@ Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
 | **Job Search** | Search matching jobs, set preferences, block companies |
 | **Application Tracker** | Kanban board (Applied → Interview → Offer → Closed); notes and history |
 | **Job Fit Score** | Pre-tailor semantic similarity score |
-| **BYOK** | OpenAI, Anthropic, Gemini, OpenRouter, Ollama — key stays in sessionStorage |
 | **Admin Panel** | User management, billing, feature flags, LLM config, audit log, system health |
 
 ---
@@ -156,7 +155,7 @@ GEMINI_API_KEY=AIza...
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-Users can also supply their own key (BYOK) per session from the model picker in the UI.
+Platform operators configure provider keys in `backend/.env`. End users run on platform AI unless an admin enables alternate routing in a future release.
 
 ### Adding a new LLM provider
 
