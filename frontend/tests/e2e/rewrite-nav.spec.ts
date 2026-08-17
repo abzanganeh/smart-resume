@@ -176,8 +176,8 @@ test("audit edit shows stale banner on rewrite tab; re-run clears it", async ({ 
   await mockSessionBackend(page, () => staleState)
   await login(page)
 
-  await page.goto(`${BASE}/session/${SESSION_ID}?step=audit`)
-  await expect(page.getByRole("heading", { name: "Resume Audit" })).toBeVisible()
+  await page.goto(`${BASE}/session/${SESSION_ID}?step=analysis`)
+  await expect(page.getByRole("heading", { name: "Analysis" })).toBeVisible()
 
   await page.getByRole("button", { name: "Edit" }).click()
   await page.locator("textarea").first().fill("Updated audit summary after manual edit.")
@@ -206,7 +206,7 @@ test("phase tabs are clickable after phase 1 without auto-running rewrite", asyn
     await route.fulfill({ status: 202, body: JSON.stringify({ job_id: "x", stream_url: "/events" }) })
   })
 
-  await page.goto(`${BASE}/session/${SESSION_ID}?step=keywords`)
+  await page.goto(`${BASE}/session/${SESSION_ID}?step=analysis`)
   await page.getByRole("button", { name: "Tailored Rewrite" }).click()
   await expect(page.getByRole("heading", { name: "Tailored Rewrite" })).toBeVisible()
   await expect(page.getByText("Tailored summary.")).toBeVisible()

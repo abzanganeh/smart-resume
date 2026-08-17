@@ -113,7 +113,15 @@ async function authRequest<T>(
   const res = await fetch(`${BASE}${path}`, { ...init, headers })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.detail ?? `HTTP ${res.status}`)
+    const detail = body?.detail
+    const code = typeof detail === "object" && detail !== null ? detail.code : undefined
+    const message =
+      typeof detail === "object" && detail !== null
+        ? detail.message ?? detail.detail
+        : typeof detail === "string"
+          ? detail
+          : undefined
+    throw new Error(message ?? code ?? `HTTP ${res.status}`)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -136,6 +144,7 @@ export async function createApplication(
     resume_record_id?: string
     jd_title?: string
     jd_company?: string
+    job_url?: string
     status?: ApplicationStatus
   },
 ): Promise<ApplicationSummary> {

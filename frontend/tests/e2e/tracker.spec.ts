@@ -33,6 +33,8 @@ const MOCK_USER = {
   credit_balance: 5,
   auth_provider: "email",
   email_verified_at: "2026-05-01T00:00:00Z",
+  onboarding_completed_at: "2026-05-01T00:00:00Z",
+  onboarding_ai_choice: "platform",
   has_totp: false,
   closure_requested_at: null,
   suspended_at: null,
@@ -41,6 +43,29 @@ const MOCK_USER = {
 let patchedStatus: string | null = null
 
 async function mockAuth(page: Page) {
+  await page.route(`${API}/api/auth/me`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(MOCK_USER),
+    }),
+  )
+  await page.route(`${API}/api/dashboard/summary`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        display_name: MOCK_USER.display_name,
+        tier: MOCK_USER.tier,
+        credit_balance: MOCK_USER.credit_balance,
+        next_billing_date: null,
+        subscription: null,
+        counts: { resumes: 0, applications: 0, saved_jobs: 0 },
+        recent_activity: [],
+        ats_trend: [],
+      }),
+    }),
+  )
   await page.route(`${API}/api/auth/login`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -65,6 +90,14 @@ async function login(page: Page) {
 
 async function mockTrackerApis(page: Page) {
   patchedStatus = null
+
+  await page.route(`${API}/api/resumes*`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], total: 0, page: 1, page_size: 100 }),
+    }),
+  )
 
   await page.route(`${API}/api/applications`, (route: Route) => {
     if (route.request().method() === "GET") {

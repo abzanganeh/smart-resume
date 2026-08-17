@@ -108,6 +108,7 @@ export default function TrackerPage() {
         setApps(prev)
         setError(err instanceof Error ? err.message : "Failed to update status")
       } finally {
+        delete pendingStatusRef.current[appId]
         setPendingMoves((curr) => {
           const next = { ...curr }
           delete next[appId]
