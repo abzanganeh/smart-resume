@@ -17,6 +17,8 @@ const MOCK_USER = {
   credit_balance: 0,
   auth_provider: "email",
   email_verified_at: "2026-05-01T00:00:00Z",
+  onboarding_completed_at: "2026-05-01T00:00:00Z",
+  onboarding_ai_choice: "platform",
   has_totp: false,
   closure_requested_at: null,
   suspended_at: null,
@@ -40,6 +42,29 @@ const MOCK_JOB = {
 }
 
 async function mockAuth(page: Page) {
+  await page.route(`${API}/api/auth/me`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(MOCK_USER),
+    }),
+  )
+  await page.route(`${API}/api/dashboard/summary`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        display_name: MOCK_USER.display_name,
+        tier: MOCK_USER.tier,
+        credit_balance: MOCK_USER.credit_balance,
+        next_billing_date: null,
+        subscription: null,
+        counts: { resumes: 0, applications: 0, saved_jobs: 0 },
+        recent_activity: [],
+        ats_trend: [],
+      }),
+    }),
+  )
   await page.route(`${API}/api/auth/login`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -83,6 +108,14 @@ async function mockSubscription(page: Page) {
 }
 
 async function mockJobsApi(page: Page) {
+  await page.route(`${API}/api/profile/resume`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ chunk_count: 1, chunks: [] }),
+    }),
+  )
+
   await page.route(`${API}/api/jobs/saved`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -246,6 +279,10 @@ test("search results tailor resume navigates with jd prefilled", async ({ page }
 
   await page.waitForURL(/\/session\/new/, { timeout: 15_000 })
   expect(page.url()).toContain(`jd_id=${MOCK_JOB_ID}`)
+  await page.waitForURL(/step=jd/, { timeout: 15_000 })
+  await expect(page.getByRole("heading", { name: "Job description" })).toBeVisible({
+    timeout: 10_000,
+  })
 
   await expect(
     page.getByPlaceholder("Paste the full job description here…"),
@@ -263,7 +300,7 @@ test("stale search response renders required stale banner", async ({ page }) => 
   await page.getByTestId("jobs-search-submit").click()
 
   await expect(page.getByTestId("jobs-stale-banner")).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText("Results may not be fully up to date")).toBeVisible()
+  await expect(page.getByText("Results may not be fully up to date (Provider degraded)")).toBeVisible()
 })
 
 test("blocked companies add/remove updates view immediately", async ({ page }) => {
@@ -283,4 +320,83 @@ test("blocked companies add/remove updates view immediately", async ({ page }) =
 
   await page.getByLabel("Remove Acme Labs").click()
   await expect(page.getByText("Acme Labs")).toHaveCount(0)
+})
+
+test("track application creates draft and navigates to tracker detail", async ({ page }) => {
+  const NEW_APP_ID = "22222222-2222-2222-2222-222222222222"
+
+  await mockAuth(page)
+  await mockSubscription(page)
+  await mockJobsApi(page)
+  await login(page)
+
+  await page.route(`${API}/api/applications`, async (route: Route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as {
+        jd_title?: string
+        jd_company?: string
+        job_url?: string
+      }
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: NEW_APP_ID,
+          resume_record_id: null,
+          jd_title: body.jd_title ?? "Senior Python Engineer",
+          jd_company: body.jd_company ?? "Acme Labs",
+          status: "draft",
+          applied_date: null,
+          follow_up_date: null,
+          created_at: "2026-05-28T10:00:00Z",
+          updated_at: "2026-05-28T10:00:00Z",
+        }),
+      })
+    }
+    return route.continue()
+  })
+
+  await page.route(`${API}/api/applications/${NEW_APP_ID}`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: NEW_APP_ID,
+        resume_record_id: null,
+        jd_title: "Senior Python Engineer",
+        jd_company: "Acme Labs",
+        status: "draft",
+        applied_date: null,
+        follow_up_date: null,
+        job_url: "https://example.com/jobs/python",
+        notes: null,
+        contact_name: null,
+        contact_email: null,
+        rejection_reason: null,
+        rejection_notes: null,
+        status_history: [],
+        interview_rounds: [],
+        offer_detail: null,
+        attachments: [],
+        timeline: [],
+        attachment_usage: {
+          count: 0,
+          total_bytes: 0,
+          max_count: 5,
+          max_file_bytes: 5242880,
+          max_total_bytes: 10485760,
+        },
+        created_at: "2026-05-28T10:00:00Z",
+        updated_at: "2026-05-28T10:00:00Z",
+      }),
+    }),
+  )
+
+  await page.goto(`${BASE}/jobs`)
+  await page.getByTestId("jobs-search-role").fill("Python engineer")
+  await page.getByTestId("jobs-search-submit").click()
+  await expect(page.getByText("Senior Python Engineer")).toBeVisible({ timeout: 10_000 })
+
+  await page.getByTestId(`track-application-${MOCK_JOB_ID}`).click()
+  await page.waitForURL(new RegExp(`/tracker/${NEW_APP_ID}`), { timeout: 15_000 })
 })

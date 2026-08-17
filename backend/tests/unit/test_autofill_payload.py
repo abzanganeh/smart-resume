@@ -86,3 +86,18 @@ def test_extract_contact_prefers_phase3_output() -> None:
     contact = extract_contact(session)
     assert contact["email"] == "sam@example.com"
     assert "Tailored summary only." not in contact.values()
+
+
+def test_extract_contact_falls_back_to_resume_parsed() -> None:
+    from app.models.resume import ContactInfo, ParsedResume
+
+    session = Session(
+        session_id="sess-2",
+        resume_parsed=ParsedResume(
+            contact=ContactInfo(name="Jordan Kim", email="jordan@example.com"),
+            summary="Master resume summary.",
+        ),
+    )
+    contact = extract_contact(session)
+    assert contact["email"] == "jordan@example.com"
+    assert contact["name"] == "Jordan Kim"

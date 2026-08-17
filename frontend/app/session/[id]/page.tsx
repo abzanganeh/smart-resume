@@ -48,23 +48,34 @@ import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
+import { createApplication } from "@/lib/tracker";
 
-type Step = "keywords" | "audit" | "rewrite" | "export";
+type Step = "analysis" | "rewrite" | "export";
 
-const PHASE_FOR_STEP: Record<Step, number> = { keywords: 1, audit: 2, rewrite: 3, export: 4 };
-const STEPS: Step[] = ["keywords", "audit", "rewrite", "export"];
+const PHASE_FOR_STEP: Record<Exclude<Step, "analysis">, number> = {
+  rewrite: 3,
+  export: 4,
+};
+const STEPS: Step[] = ["analysis", "rewrite", "export"];
 const STEP_LABELS: Record<Step, string> = {
-  keywords: "JD Keywords",
-  audit: "Resume Audit",
+  analysis: "Analysis",
   rewrite: "Tailored Rewrite",
   export: "QA & Export",
 };
+
+type AnalysisPipeline = { mode: "full" | "audit-only"; phase: 1 | 2 };
+
+function normalizeStep(raw: string | null): Step {
+  if (raw === "keywords" || raw === "audit") return "analysis";
+  if (raw === "rewrite" || raw === "export") return raw;
+  return "analysis";
+}
 
 function SessionContent() {
   const { id: sessionId } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>((searchParams.get("step") as Step) ?? "keywords");
+  const [step, setStep] = useState<Step>(() => normalizeStep(searchParams.get("step")));
 
   const [keywords, setKeywords] = useState<KeywordExtractionOutput | null>(null);
   const [audit, setAudit] = useState<AuditOutput | null>(null);
@@ -107,6 +118,8 @@ function SessionContent() {
   const [namePromptRecord, setNamePromptRecord] = useState<SessionResumeRecord | null>(null);
   const [namePromptValue, setNamePromptValue] = useState("");
   const [namePromptSaving, setNamePromptSaving] = useState(false);
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
   const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
   const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
   const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
@@ -143,6 +156,7 @@ function SessionContent() {
   // (e.g. NextAuth's updateAuthSession) cause it to re-run with the same event.
   const lastPhase3DoneRef = useRef<SSEEvent | null>(null);
   const processedEventCountRef = useRef(0);
+  const analysisPipelineRef = useRef<AnalysisPipeline | null>(null);
 
   const openAiSettings = useCallback(() => {
     setAiSettingsHighlight(true);
@@ -168,10 +182,16 @@ function SessionContent() {
   // Keep React step in sync with browser back/forward (?step= in URL).
   useEffect(() => {
     const raw = searchParams.get("step");
-    if (!raw || !STEPS.includes(raw as Step)) return;
+    if (!raw) return;
+    if (raw === "keywords" || raw === "audit") {
+      router.replace(`/session/${sessionId}?step=analysis`, { scroll: false });
+      if (step !== "analysis") setStep("analysis");
+      return;
+    }
+    if (!STEPS.includes(raw as Step)) return;
     const urlStep = raw as Step;
     if (urlStep !== step) setStep(urlStep);
-  }, [searchParams, step]);
+  }, [searchParams, sessionId, router, step]);
 
   // Remember tailoring location so re-auth returns here (not dashboard).
   useEffect(() => {
@@ -201,23 +221,24 @@ function SessionContent() {
     }
   }, []);
 
-  const applyPhaseOutput = useCallback((s: Step, output: unknown) => {
-    if (s === "audit") {
+  const applyPhaseOutputByNumber = useCallback((phaseNum: number, output: unknown) => {
+    if (phaseNum === 1) {
+      const k = output as KeywordExtractionOutput;
+      if (!k.must_have_keywords?.length && !k.nice_to_have_keywords?.length) return;
+      setKeywords(k);
+      setPhase1Complete(true);
+      return;
+    }
+    if (phaseNum === 2) {
       const o = output as Record<string, unknown>;
       if (!o || typeof o.overall_score !== "number" || !o.keyword_coverage) return;
       setAudit(output as AuditOutput);
       return;
     }
-    if (s === "keywords") {
-      const k = output as KeywordExtractionOutput;
-      if (!k.must_have_keywords?.length && !k.nice_to_have_keywords?.length) return;
-      setKeywords(k);
-      return;
-    }
-    if (s === "rewrite") {
+    if (phaseNum === 3) {
       setTailored(output as TailoredResumeOutput);
     }
-    if (s === "export") {
+    if (phaseNum === 4) {
       const qaOut = output as QAOutput;
       setQa(qaOut);
       recordAtsScore(qaOut);
@@ -231,21 +252,21 @@ function SessionContent() {
     setHasJd(!!s.has_jd);
     setExportCompany(s.export_company ?? null);
 
-    const applyCached = (stepKey: Step, phaseNum: string) => {
+    const applyCached = (phaseNum: string) => {
       const cached = s.phases?.[phaseNum];
       if (cached?.status === "done" && cached.output) {
-        applyPhaseOutput(stepKey, cached.output);
+        applyPhaseOutputByNumber(Number(phaseNum), cached.output);
       }
     };
-    applyCached("keywords", "1");
-    applyCached("audit", "2");
-    applyCached("rewrite", "3");
+    applyCached("1");
+    applyCached("2");
+    applyCached("3");
     // Only restore QA if phase 4 is not stale relative to phase 3 edits.
     // If stale["4"] is set it means the tailored resume was edited after the
     // last QA run — showing the old result would give a false pass/fail.
     const phase4Stale = !!(s.stale?.["4"]);
     if (!phase4Stale) {
-      applyCached("export", "4");
+      applyCached("4");
     }
 
     const phase4 = s.phases?.["4"];
@@ -263,7 +284,7 @@ function SessionContent() {
     if (s.user_extra_notes) setSessionExtraNotes(s.user_extra_notes);
     if (s.bullet_fixes?.length) setSessionBulletFixes(s.bullet_fixes);
     if (s.approved_metrics?.length) setSessionApprovedMetrics(s.approved_metrics);
-  }, [applyPhaseOutput]);
+  }, [applyPhaseOutputByNumber]);
 
   const persistTailoredBeforeExport = useCallback(async () => {
     if (!tailored) return;
@@ -287,27 +308,23 @@ function SessionContent() {
     goTo("export");
   }, [tailored, persistTailoredBeforeExport]);
 
-  const runPhase = useCallback(
-    async (targetStep: Step, options?: { force?: boolean; scope?: PhaseRunScope }) => {
+  const runPhaseByNumber = useCallback(
+    async (phase: number, options?: { force?: boolean; scope?: PhaseRunScope }) => {
       if (runInFlightRef.current) return;
       runInFlightRef.current = true;
 
-      const phase = PHASE_FOR_STEP[targetStep];
       setRunError(null);
       setRunErrorCode(null);
       setRunErrorType(null);
       setPhaseRunning(true);
       if (options?.force) {
-        if (targetStep === "keywords") setKeywords(null);
-        if (targetStep === "audit") setAudit(null);
-        if (targetStep === "rewrite") {
-          // Save the current tailored output so we can restore it if Phase 3 fails.
-          // setTailored is a state setter, so we read the backup from the ref that
-          // mirrors the latest tailored state.
-          tailoredBackupRef.current = tailoredBackupRef.current; // already up-to-date via useEffect
+        if (phase === 1) setKeywords(null);
+        if (phase === 2) setAudit(null);
+        if (phase === 3) {
+          tailoredBackupRef.current = tailoredBackupRef.current;
           setTailored(null);
         }
-        if (targetStep === "export") setQa(null);
+        if (phase === 4) setQa(null);
       }
       setProgressLog([]);
       processedEventCountRef.current = 0;
@@ -322,6 +339,7 @@ function SessionContent() {
       } catch (e: unknown) {
         setPhaseRunning(false);
         runInFlightRef.current = false;
+        analysisPipelineRef.current = null;
         setPhase4RecalcActive(false);
         setAtsRecalcRunning(false);
         const errorCode = e instanceof ApiError ? e.code : undefined;
@@ -333,13 +351,44 @@ function SessionContent() {
         ) {
           void refreshBackendSession(updateAuthSession);
         }
-        // Restore the tailored resume if Phase 3 failed — don't leave the user with a blank rewrite.
-        if (targetStep === "rewrite" && tailoredBackupRef.current) {
+        if (phase === 3 && tailoredBackupRef.current) {
           setTailored(tailoredBackupRef.current);
         }
       }
     },
-    [sessionId, connect, reset, updateAuthSession]
+    [sessionId, connect, reset, updateAuthSession],
+  );
+
+  const runPhase = useCallback(
+    async (targetStep: Exclude<Step, "analysis">, options?: { force?: boolean; scope?: PhaseRunScope }) => {
+      const phase = PHASE_FOR_STEP[targetStep];
+      await runPhaseByNumber(phase, options);
+    },
+    [runPhaseByNumber],
+  );
+
+  const runAnalysis = useCallback(
+    async (options?: { force?: boolean; auditOnly?: boolean }) => {
+      if (runInFlightRef.current) return;
+
+      if (options?.auditOnly) {
+        if (!keywords && !phase1Complete) {
+          setRunError("Run full analysis first to extract JD keywords.");
+          return;
+        }
+        analysisPipelineRef.current = { mode: "audit-only", phase: 2 };
+        await runPhaseByNumber(2, { force: options.force });
+        return;
+      }
+
+      analysisPipelineRef.current = { mode: "full", phase: 1 };
+      if (options?.force) {
+        setKeywords(null);
+        setAudit(null);
+      }
+      await runPhaseByNumber(1, { force: options?.force });
+    },
+    [keywords, phase1Complete, runPhaseByNumber],
   );
 
   function buildIssuePrefill(issue: import("@/lib/api").BlockingIssue): string {
@@ -515,7 +564,10 @@ function SessionContent() {
   }, [runPhase]);
 
   const runCurrentPhase = useCallback(
-    async (options?: { force?: boolean; scope?: PhaseRunScope }) => {
+    async (options?: { force?: boolean; scope?: PhaseRunScope; auditOnly?: boolean }) => {
+      if (step === "analysis") {
+        return runAnalysis(options);
+      }
       if (step === "export" && tailored) {
         try {
           await persistTailoredBeforeExport();
@@ -526,7 +578,7 @@ function SessionContent() {
       }
       return runPhase(step, options);
     },
-    [step, tailored, persistTailoredBeforeExport, runPhase],
+    [step, tailored, persistTailoredBeforeExport, runPhase, runAnalysis],
   );
 
   useEffect(() => {
@@ -551,24 +603,31 @@ function SessionContent() {
     if (events.length <= processedEventCountRef.current) return;
     processedEventCountRef.current = events.length;
 
-    const activePhase = PHASE_FOR_STEP[activeStepRef.current];
+    const pipeline = analysisPipelineRef.current;
+    const activeStep = activeStepRef.current;
     const isPhase4Recalc = phase4RecalcRef.current && lastEvent.phase === 4;
+
+    let expectedPhase: number | undefined;
+    if (activeStep === "analysis" && pipeline) {
+      expectedPhase = pipeline.phase;
+    } else if (activeStep !== "analysis") {
+      expectedPhase = PHASE_FOR_STEP[activeStep];
+    }
 
     if (
       lastEvent.phase !== undefined &&
-      lastEvent.phase !== activePhase &&
+      expectedPhase !== undefined &&
+      lastEvent.phase !== expectedPhase &&
       !isPhase4Recalc
     ) {
       return;
     }
 
-    const outputStep: Step = isPhase4Recalc ? "export" : activeStepRef.current;
-
     if (lastEvent.event === "progress" && lastEvent.message) {
       setProgressLog((prev) => [...prev, lastEvent.message!]);
     }
-    if (lastEvent.event === "partial" && lastEvent.data) {
-      applyPhaseOutput(outputStep, lastEvent.data);
+    if (lastEvent.event === "partial" && lastEvent.data && lastEvent.phase !== undefined) {
+      applyPhaseOutputByNumber(lastEvent.phase, lastEvent.data);
     }
     if (lastEvent.event === "cost_estimate" && lastEvent.cost_formatted) {
       setCostInfo({
@@ -577,10 +636,44 @@ function SessionContent() {
         model: lastEvent.model!,
       });
     }
-    if (lastEvent.event === "done") {
+    if (lastEvent.event === "done" && lastEvent.phase !== undefined) {
+      applyPhaseOutputByNumber(lastEvent.phase, lastEvent.output);
+
+      const chainAudit =
+        pipeline?.mode === "full" && lastEvent.phase === 1 && activeStep === "analysis";
+
+      if (chainAudit) {
+        analysisPipelineRef.current = { mode: "full", phase: 2 };
+        processedEventCountRef.current = 0;
+        reset();
+        void (async () => {
+          try {
+            await triggerPhase(sessionId, 2, {});
+            connect(phaseEventsUrl(sessionId, 2));
+          } catch (e: unknown) {
+            setPhaseRunning(false);
+            runInFlightRef.current = false;
+            analysisPipelineRef.current = null;
+            const errorCode = e instanceof ApiError ? e.code : undefined;
+            setRunErrorCode(errorCode ?? null);
+            setRunError(e instanceof Error ? e.message : "Failed to start audit phase.");
+            if (
+              errorCode === "insufficient_credits" ||
+              (e instanceof ApiError && e.status === 402)
+            ) {
+              void refreshBackendSession(updateAuthSession);
+            }
+          }
+        })();
+        return;
+      }
+
+      if (pipeline && lastEvent.phase === 2) {
+        analysisPipelineRef.current = null;
+      }
+
       setPhaseRunning(false);
       runInFlightRef.current = false;
-      applyPhaseOutput(outputStep, lastEvent.output);
       if (lastEvent.phase === 3) {
         setStale((prev) => ({ ...prev, "3": null, "4": null }));
         if (authSession?.backendAccessToken) {
@@ -610,12 +703,22 @@ function SessionContent() {
     if (lastEvent.event === "error") {
       setPhaseRunning(false);
       runInFlightRef.current = false;
+      analysisPipelineRef.current = null;
       setPhase4RecalcActive(false);
       setAtsRecalcRunning(false);
       setRunErrorType(lastEvent.error_type ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
-  }, [lastEvent, events.length, applyPhaseOutput, authSession?.backendAccessToken, sessionId, updateAuthSession]);
+  }, [
+    lastEvent,
+    events.length,
+    applyPhaseOutputByNumber,
+    authSession?.backendAccessToken,
+    sessionId,
+    updateAuthSession,
+    connect,
+    reset,
+  ]);
 
   // When the SSE stream drops mid-phase the server may still finish, but the
   // browser shows ERR_INCOMPLETE_CHUNKED_ENCODING. Clear the spinner and
@@ -624,6 +727,7 @@ function SessionContent() {
     if (!sseError) return;
     setPhaseRunning(false);
     runInFlightRef.current = false;
+    analysisPipelineRef.current = null;
     setPhase4RecalcActive(false);
     setAtsRecalcRunning(false);
     setRunError(sseError);
@@ -663,6 +767,7 @@ function SessionContent() {
 
   useEffect(() => {
     runInFlightRef.current = false;
+    analysisPipelineRef.current = null;
     setPhaseRunning(false);
     setProgressLog([]);
     setRunError(null);
@@ -678,8 +783,7 @@ function SessionContent() {
   }, []);
 
   const stepHasOutput = {
-    keywords: !!keywords,
-    audit: !!audit,
+    analysis: !!(keywords && audit),
     rewrite: !!tailored,
     export: !!qa,
   };
@@ -697,9 +801,33 @@ function SessionContent() {
     }
   }, [authSession?.backendAccessToken, namePromptRecord, namePromptValue]);
 
+  const handleTrackApplication = useCallback(async () => {
+    if (!authSession?.backendAccessToken) return;
+    setTrackLoading(true);
+    setTrackError(null);
+    try {
+      const record = await getSessionResumeRecord(sessionId);
+      const app = await createApplication(authSession.backendAccessToken, {
+        resume_record_id: record.id,
+        jd_title: record.jd_title,
+        jd_company: record.jd_company,
+        status: "draft",
+      });
+      router.push(`/tracker/${app.id}`);
+    } catch (e) {
+      setTrackError(e instanceof Error ? e.message : "Could not create application.");
+    } finally {
+      setTrackLoading(false);
+    }
+  }, [authSession?.backendAccessToken, router, sessionId]);
+
   const tabsUnlocked = phase1Complete;
   const isStreaming = phaseRunning || (isConnected && !isDone);
   const showProgress = phaseRunning;
+
+  const auditSectionVisible = !!audit || (phaseRunning && !!keywords);
+  const keywordsStreaming = isStreaming && !showProgress && !audit;
+  const auditStreaming = isStreaming && !showProgress && !!keywords && !audit;
 
   const staleMessageForStep = (s: Step): string | null => {
     if (s === "rewrite" && stale["3"]) {
@@ -894,20 +1022,44 @@ function SessionContent() {
             />
           )}
 
-          {step === "keywords" && (
+          {step === "analysis" && (
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div>
-                  <h1 className="text-xl font-bold mb-1">JD Keyword Analysis</h1>
+                  <h1 className="text-xl font-bold mb-1">Analysis</h1>
                   <p className="text-slate-400 text-sm">
-                    Every ATS keyword the recruiter is looking for, extracted and explained.
+                    JD keywords and resume audit — one run extracts keywords then scores your resume.
                   </p>
                 </div>
-                {phase1Complete && (
-                  <Link href="/session/new" className="text-xs text-amber-400 hover:text-amber-300 underline">
-                    New session
-                  </Link>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {phase1Complete && (
+                    <Link href="/session/new" className="text-xs text-amber-400 hover:text-amber-300 underline">
+                      New session
+                    </Link>
+                  )}
+                  {keywords && !phaseRunning && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => runCurrentPhase({ auditOnly: true, force: true })}
+                        disabled={phaseRunning}
+                        className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                      >
+                        Re-run audit only
+                      </button>
+                      {audit && (
+                        <button
+                          type="button"
+                          onClick={() => runCurrentPhase({ force: true })}
+                          disabled={phaseRunning}
+                          className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                        >
+                          Re-run full analysis
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               {showProgress && (
                 <div className="mb-6">
@@ -920,64 +1072,56 @@ function SessionContent() {
                   onClick={() => runCurrentPhase()}
                   className="mb-6 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300"
                 >
-                  Run keyword analysis
+                  Run analysis
                 </button>
               )}
-              <KeywordDashboard
-                output={keywords}
-                streaming={isStreaming && !showProgress}
-                claimedKeywords={sessionClaimedKeywords}
-              />
-              {keywords && !isStreaming && (
-                <button
-                  onClick={() => goTo("audit")}
-                  className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
-                >
-                  Audit my resume →
-                </button>
-              )}
-            </div>
-          )}
-
-          {step === "audit" && (
-            <div>
-              <h1 className="text-xl font-bold mb-1">Resume Audit</h1>
-              <p className="text-slate-400 text-sm mb-4">
-                Every gap, weak bullet, and cliché — flagged before the rewrite.
-              </p>
-              {!audit && !phaseRunning && sessionLoaded && (
+              {keywords && !audit && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
-                  onClick={() => runCurrentPhase()}
+                  onClick={() => runCurrentPhase({ auditOnly: true })}
                   className="mb-6 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300"
                 >
-                  Run resume audit
+                  Run audit (keywords ready)
                 </button>
               )}
-              {showProgress && (
-                <div className="mb-6">
-                  <ProgressLog messages={progressLog} done={false} />
-                </div>
-              )}
-              <AuditPanel
-                output={audit}
-                streaming={isStreaming && !showProgress}
-                sessionId={sessionId}
-                initialClaimedKeywords={sessionClaimedKeywords}
-                initialExtraNotes={sessionExtraNotes}
-                initialBulletFixes={sessionBulletFixes}
-                onAuditEdited={(nextStale) => setStale((prev) => ({ ...prev, ...nextStale }))}
-              />
-              {audit && !isStreaming && (audit.unverified_metrics?.length ?? 0) > 0 && (
-                <div className="mt-6">
-                  <MetricsGate
-                    sessionId={sessionId}
-                    unverifiedMetrics={audit.unverified_metrics!}
-                    initialApprovedMetrics={sessionApprovedMetrics}
-                    onSaved={setSessionApprovedMetrics}
+              <div className="space-y-8">
+                <section>
+                  <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
+                    JD Keywords
+                  </h2>
+                  <KeywordDashboard
+                    output={keywords}
+                    streaming={keywordsStreaming}
+                    claimedKeywords={sessionClaimedKeywords}
                   />
-                </div>
-              )}
+                </section>
+                {auditSectionVisible && (
+                  <section>
+                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
+                      Resume Audit
+                    </h2>
+                    <AuditPanel
+                      output={audit}
+                      streaming={auditStreaming}
+                      sessionId={sessionId}
+                      initialClaimedKeywords={sessionClaimedKeywords}
+                      initialExtraNotes={sessionExtraNotes}
+                      initialBulletFixes={sessionBulletFixes}
+                      onAuditEdited={(nextStale) => setStale((prev) => ({ ...prev, ...nextStale }))}
+                    />
+                    {audit && !isStreaming && (audit.unverified_metrics?.length ?? 0) > 0 && (
+                      <div className="mt-6">
+                        <MetricsGate
+                          sessionId={sessionId}
+                          unverifiedMetrics={audit.unverified_metrics!}
+                          initialApprovedMetrics={sessionApprovedMetrics}
+                          onSaved={setSessionApprovedMetrics}
+                        />
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
               {audit && !isStreaming && (
                 <button
                   onClick={() => goTo("rewrite")}
@@ -1055,6 +1199,20 @@ function SessionContent() {
               {showProgress && (
                 <div className="mb-6">
                   <ProgressLog messages={progressLog} done={false} />
+                </div>
+              )}
+              {tailored && authSession?.backendAccessToken && (
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleTrackApplication()}
+                    disabled={trackLoading || phaseRunning}
+                    data-testid="track-application-from-session"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    {trackLoading ? "Creating…" : "Track this application"}
+                  </button>
+                  {trackError && <p className="text-xs text-red-400">{trackError}</p>}
                 </div>
               )}
               {tailored && (
