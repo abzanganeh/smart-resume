@@ -251,7 +251,7 @@ function NewSessionContent() {
           jdLoadedRef.current = true;
           setJdText(job.description);
           setStep("jd");
-          router.replace(`/session/new?step=jd&jd_id=${jdId}`);
+          router.replace(`/session/new?step=jd&jd_id=${jdId}&source=jobs`);
         }
       } catch {
         // User can paste JD manually if fetch fails

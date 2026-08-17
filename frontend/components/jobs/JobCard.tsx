@@ -186,7 +186,7 @@ export function JobCard({
             Check Fit
           </button>
           <Link
-            href={`/session/new?jd_id=${job.id}`}
+            href={`/session/new?jd_id=${job.id}&source=jobs`}
             data-testid={`tailor-resume-${job.id}`}
             className={clsx(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300",
