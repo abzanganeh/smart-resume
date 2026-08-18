@@ -16,7 +16,7 @@ from app.dependencies.admin_auth import require_admin_role
 from app.limiter import limiter
 from app.models.admin import AdminRole, AdminUser
 from app.models.admin_grant import AdminGrantType
-from app.models.promo_code import PromoCode
+from app.models.promo_code import PromoCode, PromoRedemption
 from app.models.user import User
 from app.services.admin.grants import InvalidGrantPayloadError, validate_grant_payload
 from app.services.admin_auth.audit import write_admin_audit
@@ -74,6 +74,15 @@ class PromoCodeUpdateResponse(BaseModel):
     promo_code: PromoCodeOut
 
 
+class PromoRedemptionOut(BaseModel):
+    id: uuid.UUID
+    promo_code_id: uuid.UUID
+    user_id: uuid.UUID
+    redeemed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 def _serialize(row: PromoCode) -> PromoCodeOut:
     return PromoCodeOut.model_validate(row)
 
@@ -90,6 +99,74 @@ async def admin_promo_codes_list(
     if not include_inactive:
         stmt = stmt.where(PromoCode.is_active.is_(True))
     rows = list((await db.execute(stmt)).scalars().all())
+    return [_serialize(r) for r in rows]
+
+
+async def _load_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "user_not_found"},
+        )
+    return user
+
+
+async def _load_promo_or_404(db: AsyncSession, promo_code_id: uuid.UUID) -> PromoCode:
+    promo = await db.get(PromoCode, promo_code_id)
+    if promo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "promo_code_not_found"},
+        )
+    return promo
+
+
+@router.get(
+    "/promo-codes/{promo_code_id}/redemptions",
+    response_model=list[PromoRedemptionOut],
+)
+@limiter.limit("120/minute")
+async def admin_promo_code_redemptions(
+    request: Request,
+    promo_code_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[AdminUser, Depends(require_admin_role(*_PROMO_READ_ROLES))],
+) -> list[PromoRedemptionOut]:
+    await _load_promo_or_404(db, promo_code_id)
+    rows = list(
+        (
+            await db.execute(
+                select(PromoRedemption)
+                .where(PromoRedemption.promo_code_id == promo_code_id)
+                .order_by(desc(PromoRedemption.redeemed_at))
+            )
+        ).scalars().all()
+    )
+    return [PromoRedemptionOut.model_validate(r) for r in rows]
+
+
+@router.get(
+    "/users/{user_id}/promo-codes",
+    response_model=list[PromoCodeOut],
+)
+@limiter.limit("120/minute")
+async def admin_user_promo_codes(
+    request: Request,
+    user_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[AdminUser, Depends(require_admin_role(*_PROMO_READ_ROLES))],
+) -> list[PromoCodeOut]:
+    await _load_user_or_404(db, user_id)
+    rows = list(
+        (
+            await db.execute(
+                select(PromoCode)
+                .where(PromoCode.restricted_user_id == user_id)
+                .order_by(desc(PromoCode.created_at))
+            )
+        ).scalars().all()
+    )
     return [_serialize(r) for r in rows]
 
 
