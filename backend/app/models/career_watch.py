@@ -91,6 +91,10 @@ class WatchedCompany(Base):
     poll_fail_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    is_global_seed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    poll_priority_tier: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -106,6 +110,12 @@ class WatchedCompany(Base):
 
     __table_args__ = (
         Index("ix_watched_companies_active_poll", "is_active", "last_polled_at"),
+        Index(
+            "ix_watched_companies_global_seed_poll",
+            "is_global_seed",
+            "poll_priority_tier",
+            "last_polled_at",
+        ),
     )
 
 
