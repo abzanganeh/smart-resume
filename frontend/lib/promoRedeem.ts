@@ -19,3 +19,7 @@ export function promoRedeemSuccessMessage(creditsAdded: number): string {
   const label = creditsAdded === 1 ? "credit" : "credits"
   return `Code applied — ${creditsAdded} ${label} added.`
 }
+
+export function promoRedeemIdempotentMessage(): string {
+  return "This code was already applied to your account."
+}

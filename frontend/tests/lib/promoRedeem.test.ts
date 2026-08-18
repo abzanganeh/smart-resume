@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   promoRedeemErrorMessage,
+  promoRedeemIdempotentMessage,
   promoRedeemSuccessMessage,
 } from "@/lib/promoRedeem";
 
@@ -20,5 +21,11 @@ describe("promoRedeem copy", () => {
   it("formats success message", () => {
     expect(promoRedeemSuccessMessage(5)).toBe("Code applied — 5 credits added.");
     expect(promoRedeemSuccessMessage(1)).toBe("Code applied — 1 credit added.");
+  });
+
+  it("formats idempotent message", () => {
+    expect(promoRedeemIdempotentMessage()).toBe(
+      "This code was already applied to your account.",
+    );
   });
 });

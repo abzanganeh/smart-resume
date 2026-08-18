@@ -33,6 +33,7 @@ import {
 import { isSubscriptionActive } from "@/lib/billing"
 import {
   promoRedeemErrorMessage,
+  promoRedeemIdempotentMessage,
   promoRedeemSuccessMessage,
 } from "@/lib/promoRedeem"
 import { clsx } from "clsx"
@@ -367,8 +368,12 @@ export default function BillingPage() {
       const result = await redeemPromoCode(token, promoCode.trim())
       invalidateSubscriptionCache()
       await loadCurrent()
-      const amount = Number((result.payload as { amount?: number }).amount ?? 0)
-      setPromoMessage(promoRedeemSuccessMessage(amount))
+      if (result.idempotent) {
+        setPromoMessage(promoRedeemIdempotentMessage())
+      } else {
+        const amount = Number((result.payload as { amount?: number }).amount ?? 0)
+        setPromoMessage(promoRedeemSuccessMessage(amount))
+      }
       setPromoCode("")
     } catch (e) {
       const code = e instanceof ApiError ? e.code : undefined
