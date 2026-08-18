@@ -181,6 +181,13 @@ class Settings(BaseSettings):
     INTERNAL_SCHEDULER_SECRET: str = ""
     ACCOUNT_CLOSURE_GRACE_DAYS: int = 30
 
+    # Global job corpus poll tiers (minutes)
+    GLOBAL_POLL_INTERVAL_TIER_1_MINUTES: int = 15
+    GLOBAL_POLL_INTERVAL_TIER_2_MINUTES: int = 30
+    GLOBAL_POLL_INTERVAL_TIER_3_MINUTES: int = 45
+    JOB_SEARCH_DB_FIRST: bool = True
+    JOB_SEARCH_DB_MIN_RESULTS: int = 5
+
     # ---------------------------------------------------------------
     # Admin panel (Step 35 - IMPLEMENTATION_PLAN section 8.4)
     # ---------------------------------------------------------------
