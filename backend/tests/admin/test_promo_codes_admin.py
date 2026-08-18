@@ -151,3 +151,70 @@ async def test_admin_promo_codes_create_rejects_duplicate(
     )
     assert second.status_code == 409
     assert second.json()["detail"]["code"] == "promo_code_exists"
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_create_with_restricted_user(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email=f"restricted-admin-{uuid.uuid4().hex[:6]}@example.com",
+        role=AdminRole.super_admin,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    from tests.integration.test_auth import REGISTER_PAYLOAD
+
+    register_payload = {**REGISTER_PAYLOAD, "email": "restricted-target@example.com"}
+    register_resp = await app_client.post("/api/auth/register", json=register_payload)
+    assert register_resp.status_code == 201, register_resp.text
+    user_id = register_resp.json()["user"]["id"]
+
+    create_resp = await app_client.post(
+        "/api/admin/promo-codes",
+        json={
+            "code": "USERONLY",
+            "grant_type": "extra_credits",
+            "payload": {"amount": 4, "credit_kind": "free"},
+            "restricted_user_id": user_id,
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    promo = create_resp.json()["promo_code"]
+    assert promo["restricted_user_id"] == user_id
+    assert promo["max_redemptions"] == 1
+
+    list_resp = await app_client.get("/api/admin/promo-codes", headers=headers)
+    assert list_resp.status_code == 200
+    assert list_resp.json()[0]["restricted_user_id"] == user_id
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_create_rejects_unknown_restricted_user(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _ = await make_admin(
+        db_session,
+        email=f"unknown-user-admin-{uuid.uuid4().hex[:6]}@example.com",
+        role=AdminRole.super_admin,
+    )
+    await db_session.commit()
+    _, headers = await issue_admin_session(admin.id)
+
+    resp = await app_client.post(
+        "/api/admin/promo-codes",
+        json={
+            "code": "ORPHAN",
+            "grant_type": "extra_credits",
+            "payload": {"amount": 1, "credit_kind": "free"},
+            "restricted_user_id": str(uuid.uuid4()),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "user_not_found"

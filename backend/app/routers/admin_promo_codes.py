@@ -17,6 +17,7 @@ from app.limiter import limiter
 from app.models.admin import AdminRole, AdminUser
 from app.models.admin_grant import AdminGrantType
 from app.models.promo_code import PromoCode
+from app.models.user import User
 from app.services.admin.grants import InvalidGrantPayloadError, validate_grant_payload
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.billing.promo import normalize_promo_code
@@ -42,6 +43,7 @@ class PromoCodeOut(BaseModel):
     expires_at: datetime | None = None
     is_active: bool
     created_by_admin_id: uuid.UUID | None = None
+    restricted_user_id: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -53,6 +55,7 @@ class PromoCodeCreateRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     max_redemptions: int | None = Field(None, ge=1)
     expires_at: datetime | None = None
+    restricted_user_id: uuid.UUID | None = None
 
 
 class PromoCodeUpdateRequest(BaseModel):
@@ -125,17 +128,30 @@ async def admin_promo_codes_create(
             detail={"code": "promo_code_exists"},
         )
 
+    if body.restricted_user_id is not None:
+        target_user = await db.get(User, body.restricted_user_id)
+        if target_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "user_not_found"},
+            )
+
+    max_redemptions = body.max_redemptions
+    if body.restricted_user_id is not None and max_redemptions is None:
+        max_redemptions = 1
+
     now = datetime.now(timezone.utc)
     row = PromoCode(
         id=uuid.uuid4(),
         code=normalized,
         grant_type=body.grant_type,
         payload=body.payload,
-        max_redemptions=body.max_redemptions,
+        max_redemptions=max_redemptions,
         redemption_count=0,
         expires_at=body.expires_at,
         is_active=True,
         created_by_admin_id=admin.id,
+        restricted_user_id=body.restricted_user_id,
         created_at=now,
     )
     db.add(row)
@@ -151,6 +167,9 @@ async def admin_promo_codes_create(
             "code": row.code,
             "grant_type": row.grant_type.value,
             "max_redemptions": row.max_redemptions,
+            "restricted_user_id": str(row.restricted_user_id)
+            if row.restricted_user_id
+            else None,
         },
         ip=request.client.host if request.client else "",
         user_agent=request.headers.get("user-agent", ""),
