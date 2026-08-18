@@ -40,8 +40,41 @@ async def test_get_active_tier_limits_falls_back_to_seed() -> None:
     assert limits.searches_per_period == 100
 
 
-def test_registration_grant_matches_free_tier_resumes() -> None:
-    assert registration_grant_credits() == 3
+@pytest.mark.asyncio
+async def test_registration_grant_falls_back_to_seed() -> None:
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+
+    amount = await registration_grant_credits(mock_session)
+    assert amount == 3
+
+
+@pytest.mark.asyncio
+async def test_registration_grant_reads_active_free_tier() -> None:
+    from app.models.tier_limits import TierLimitsConfig
+
+    mock_row = MagicMock(spec=TierLimitsConfig)
+    mock_row.plan_code = "free"
+    mock_row.resumes_per_period = 7
+    mock_row.cover_letters_per_period = 7
+    mock_row.searches_per_period = 0
+    mock_row.fit_analyses_per_period = 0
+    mock_row.checkups_per_period = 1
+    mock_row.story_sessions = 0
+    mock_row.coached_sessions = 0
+    mock_row.whisper_enabled = False
+    mock_row.whisper_uses_per_period = None
+    mock_row.soft_cap_message = None
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_row
+    mock_session.execute.return_value = mock_result
+
+    amount = await registration_grant_credits(mock_session)
+    assert amount == 7
 
 
 def test_resolve_plan_code_legacy_monthly_recurring() -> None:
