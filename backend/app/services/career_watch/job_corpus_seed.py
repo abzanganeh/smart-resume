@@ -161,6 +161,8 @@ async def load_seed_records(
             session.add(_row_to_company(row, existing=None))
             inserted += 1
         else:
+            if not existing.is_global_seed:
+                continue
             _row_to_company(row, existing=existing)
             updated += 1
 

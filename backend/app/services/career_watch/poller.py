@@ -63,7 +63,9 @@ async def _due_companies_global_then_watchlist(
     now: datetime,
 ) -> list[WatchedCompany]:
     """Global seeds first, then user-watch due companies, deduped by id."""
-    global_due = await fetch_due_global_seeds(session, limit=limit, now=now)
+    watch_reserve = max(1, limit // 5)
+    global_limit = max(1, limit - watch_reserve)
+    global_due = await fetch_due_global_seeds(session, limit=global_limit, now=now)
     watch_due = await fetch_due_companies(session, limit=limit, now=now)
     seen: set[uuid.UUID] = set()
     ordered: list[WatchedCompany] = []

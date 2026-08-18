@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -133,6 +133,8 @@ async def search_active_job_cache(
         stmt = stmt.where(JobCache.remote.is_(True))
 
     offset = (page - 1) * page_size
+    count_stmt = stmt.with_only_columns(func.count()).order_by(None)
+    total = int((await session.execute(count_stmt)).scalar_one())
     rows = (
         await session.execute(
             stmt.order_by(
@@ -148,7 +150,7 @@ async def search_active_job_cache(
         [job_cache_to_result(r) for r in rows],
         blocked_companies,
     )
-    return jobs, len(jobs)
+    return jobs, total
 
 
 async def search_cache(
@@ -260,18 +262,6 @@ async def run_keyword_search(
             blocked_companies=blocked_companies,
         )
         if corpus_total >= min_results and not expand:
-            await log_search(
-                session,
-                user_id=user_id,
-                query=normalized,
-                location=location,
-                filters=filters,
-                result_count=corpus_total,
-                source=JobSearchSource.cache,
-            )
-            return corpus_jobs, corpus_total, False, None, False, "corpus"
-
-        if corpus_jobs and not expand:
             await log_search(
                 session,
                 user_id=user_id,
@@ -422,12 +412,17 @@ async def run_keyword_search(
 
     hirebase_jobs = filter_blocked_companies(raw_jobs, blocked_companies)
     if settings.JOB_SEARCH_DB_FIRST and (expand or corpus_total < min_results):
-        seen_ids = {job.id for job in corpus_jobs}
+        seen_keys: set[str] = set()
+        for job in corpus_jobs:
+            key = job.apply_url.rstrip("/").lower() if job.apply_url else str(job.id)
+            seen_keys.add(key)
         merged = list(corpus_jobs)
         for job in hirebase_jobs:
-            if job.id not in seen_ids:
-                merged.append(job)
-                seen_ids.add(job.id)
+            key = job.apply_url.rstrip("/").lower() if job.apply_url else str(job.id)
+            if key in seen_keys:
+                continue
+            merged.append(job)
+            seen_keys.add(key)
         await log_search(
             session,
             user_id=user_id,

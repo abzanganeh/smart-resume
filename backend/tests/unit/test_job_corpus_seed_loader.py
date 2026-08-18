@@ -115,10 +115,33 @@ async def test_load_seed_records_inserts_and_updates() -> None:
     stats = await load_seed_records(session, rows, require_full_corpus=False)
 
     assert stats.inserted == 2
-    assert stats.updated == 1
-    assert existing.is_global_seed is True
-    assert existing.ats_type == CareerAtsType.greenhouse
+    assert stats.updated == 0
+    assert existing.is_global_seed is False
     assert session.add.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_load_seed_records_updates_existing_global_seed() -> None:
+    rows = _sample_rows()[:1]
+    existing = WatchedCompany(
+        name="Old",
+        slug=rows[0]["slug"],
+        careers_page_url="https://example.com",
+        ats_type=CareerAtsType.unknown,
+        is_global_seed=True,
+    )
+
+    session = MagicMock()
+    session.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=existing))
+    )
+    session.add = MagicMock()
+
+    stats = await load_seed_records(session, rows, require_full_corpus=False)
+
+    assert stats.inserted == 0
+    assert stats.updated == 1
+    assert existing.ats_type == CareerAtsType.greenhouse
 
 
 def test_seed_file_on_disk_when_present() -> None:
