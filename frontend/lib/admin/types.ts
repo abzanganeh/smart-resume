@@ -217,6 +217,60 @@ export interface CreditAdjustPayload {
   reason: string
 }
 
+// ── Promo & free grant ────────────────────────────────────────────────────────
+
+export type PromoGrantType = "extra_credits" | "tier_override" | "feature_unlock"
+
+export interface PromoCode {
+  id: string
+  code: string
+  grant_type: PromoGrantType
+  payload: Record<string, unknown>
+  max_redemptions: number | null
+  redemption_count: number
+  expires_at: string | null
+  is_active: boolean
+  created_by_admin_id: string | null
+  restricted_user_id: string | null
+  created_at: string
+}
+
+export interface PromoCodeCreatePayload {
+  code: string
+  grant_type: PromoGrantType
+  payload: Record<string, unknown>
+  max_redemptions?: number | null
+  expires_at?: string | null
+  restricted_user_id?: string | null
+}
+
+export interface PromoCodeUpdatePayload {
+  max_redemptions?: number | null
+  expires_at?: string | null
+  is_active?: boolean
+}
+
+export interface PromoRedemption {
+  id: string
+  promo_code_id: string
+  user_id: string
+  redeemed_at: string
+}
+
+export interface FreeGrant {
+  amount: number
+}
+
+export interface PromoAuditedResponse {
+  audit_log_id: string
+  promo_code: PromoCode
+}
+
+export interface FreeGrantAuditedResponse {
+  audit_log_id: string
+  free_grant: FreeGrant
+}
+
 // ── Refunds ───────────────────────────────────────────────────────────────────
 
 export interface RefundRequest {
