@@ -19,6 +19,7 @@ import {
   fitJob,
   formatPostedDate,
   formatSalaryRange,
+  isJobNew,
   shouldBlurJobCard,
   type JobResult,
 } from "@/lib/jobs"
@@ -60,6 +61,7 @@ export function JobCard({
 
   const blurred = shouldBlurJobCard(index, isSubscribed)
   const salary = formatSalaryRange(job)
+  const showNewBadge = isJobNew(job)
 
   const handleCheckFit = async () => {
     if (blurred || fitLoading) return
@@ -131,6 +133,14 @@ export function JobCard({
               <span>{formatPostedDate(job.posted_date)}</span>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
+              {showNewBadge && (
+                <span
+                  data-testid={`job-new-badge-${job.id}`}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                >
+                  New
+                </span>
+              )}
               {job.remote && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                   Remote
@@ -141,7 +151,13 @@ export function JobCard({
                   key={source}
                   className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700"
                 >
-                  {source === "hirebase" ? "Hirebase" : source === "apify" ? "Apify" : source}
+                  {source === "hirebase"
+                    ? "Hirebase"
+                    : source === "apify"
+                      ? "Apify"
+                      : source === "corpus"
+                        ? "Corpus"
+                        : source}
                 </span>
               ))}
               {job.employment_type && (

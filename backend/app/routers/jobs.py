@@ -157,7 +157,7 @@ async def search_jobs(
 ):
     await _require_active_subscription(db, user_id=user.id)
     filters = _merge_filters(user, body.filters)
-    jobs, total, stale, message, charge = await run_keyword_search(
+    jobs, total, stale, message, charge, source = await run_keyword_search(
         db,
         user_id=user.id,
         query=body.query,
@@ -166,6 +166,7 @@ async def search_jobs(
         page=body.page,
         page_size=body.page_size,
         blocked_companies=_blocked(user),
+        expand=body.expand,
     )
     await _require_subscription_quota(
         db, user=user, action=QuotaAction.job_search, charge=charge
@@ -178,6 +179,7 @@ async def search_jobs(
         page_size=body.page_size,
         results_may_be_stale=stale,
         message=message,
+        source=source,
     )
 
 

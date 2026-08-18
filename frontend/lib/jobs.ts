@@ -58,6 +58,7 @@ export interface JobResult {
   apply_url: string
   sources: string[]
   score: number | null
+  first_seen_at?: string | null
 }
 
 export interface JobSearchResponse {
@@ -67,6 +68,7 @@ export interface JobSearchResponse {
   page_size: number
   results_may_be_stale: boolean
   message: string | null
+  source?: string
 }
 
 export interface JobSearchRequest {
@@ -75,6 +77,7 @@ export interface JobSearchRequest {
   filters?: JobSearchFilters
   page?: number
   page_size?: number
+  expand?: boolean
 }
 
 export interface SavedSearch {
@@ -150,6 +153,15 @@ export function formatPostedDate(iso: string): string {
   } catch {
     return iso
   }
+}
+
+/** True when the corpus first indexed this role within the freshness window. */
+export function isJobNew(job: JobResult, nowMs: number = Date.now()): boolean {
+  if (!job.first_seen_at) return false
+  const seen = new Date(job.first_seen_at).getTime()
+  if (Number.isNaN(seen)) return false
+  const hours = (nowMs - seen) / 3_600_000
+  return hours >= 0 && hours <= 48
 }
 
 export function summarizeSearchQuery(search: SavedSearch): string {

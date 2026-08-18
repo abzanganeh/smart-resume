@@ -8,6 +8,8 @@ import pytest
 
 from app.services.jobs.normalization import (
     compute_dedup_key,
+    compute_dedup_key_v2,
+    normalize_apply_url,
     normalize_location,
     normalize_salary,
 )
@@ -72,3 +74,52 @@ class TestNormalizeLocation:
 
     def test_none_input_returns_none_tuple(self) -> None:
         assert normalize_location(None) == (None, None)
+
+
+class TestNormalizeApplyUrl:
+    def test_strips_tracking_params(self) -> None:
+        raw = "https://Boards.Greenhouse.io/acme/jobs/123?utm_source=linkedin&ref=foo"
+        assert normalize_apply_url(raw) == "https://boards.greenhouse.io/acme/jobs/123"
+
+    def test_trailing_slash_removed(self) -> None:
+        assert (
+            normalize_apply_url("https://jobs.lever.co/acme/abc-def/")
+            == "https://jobs.lever.co/acme/abc-def"
+        )
+
+    def test_empty_returns_none(self) -> None:
+        assert normalize_apply_url("") is None
+        assert normalize_apply_url(None) is None
+
+
+class TestComputeDedupKeyV2:
+    def test_prefers_normalized_apply_url(self) -> None:
+        key = compute_dedup_key_v2(
+            apply_url="https://Example.com/jobs/1?utm_campaign=x",
+            ats_type="greenhouse",
+            external_job_id="1",
+            company="Acme",
+            title="Engineer",
+        )
+        assert key == "url:https://example.com/jobs/1"
+
+    def test_falls_back_to_ats_pair(self) -> None:
+        key = compute_dedup_key_v2(
+            apply_url="",
+            ats_type="Greenhouse",
+            external_job_id=" 42 ",
+            company="Acme",
+            title="Engineer",
+        )
+        assert key == "ats:greenhouse:42"
+
+    def test_falls_back_to_legacy_key(self) -> None:
+        posted = date(2026, 5, 15)
+        legacy = compute_dedup_key("Acme", "Engineer", "Toronto", posted)
+        key = compute_dedup_key_v2(
+            company="Acme",
+            title="Engineer",
+            city="Toronto",
+            posted_date=posted,
+        )
+        assert key == legacy

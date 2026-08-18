@@ -377,9 +377,18 @@ resource "aws_iam_role_policy" "job_lambda_career_watch_sqs" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
-      Resource = [aws_sqs_queue.career_watch.arn]
+      Effect = "Allow"
+      Action = [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:ChangeMessageVisibility",
+      ]
+      Resource = [
+        aws_sqs_queue.career_watch.arn,
+        aws_sqs_queue.career_watch_dlq.arn,
+      ]
     }]
   })
 }
@@ -396,13 +405,45 @@ resource "aws_lambda_function" "career_page_poller" {
 
   environment {
     variables = {
-      DATABASE_URL            = var.postgres_url
-      CAREER_WATCH_POLL_BATCH = "25"
-      CAREER_WATCH_SQS_URL    = aws_sqs_queue.career_watch.url
+      DATABASE_URL                      = var.postgres_url
+      CAREER_WATCH_SCHEDULER_BATCH      = "200"
+      CAREER_WATCH_SQS_URL              = aws_sqs_queue.career_watch.url
+      GLOBAL_POLL_INTERVAL_TIER_1_MINUTES = "15"
+      GLOBAL_POLL_INTERVAL_TIER_2_MINUTES = "30"
+      GLOBAL_POLL_INTERVAL_TIER_3_MINUTES = "45"
+      AWS_REGION                        = var.aws_region
     }
   }
 
   tags = local.common_tags
+}
+
+resource "aws_lambda_function" "career_poll_worker" {
+  function_name                    = "${local.name_prefix}-career-poll-worker"
+  role                             = aws_iam_role.job_lambda.arn
+  handler                          = "handler.handler"
+  runtime                          = var.lambda_runtime
+  timeout                          = 60
+  memory_size                      = var.lambda_memory_mb
+  filename                         = var.lambda_career_poll_worker_zip
+  source_code_hash                 = filebase64sha256(var.lambda_career_poll_worker_zip)
+  reserved_concurrent_executions   = var.career_poll_worker_concurrency
+
+  environment {
+    variables = {
+      DATABASE_URL = var.postgres_url
+      AWS_REGION   = var.aws_region
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_event_source_mapping" "career_poll_worker_sqs" {
+  event_source_arn = aws_sqs_queue.career_watch.arn
+  function_name    = aws_lambda_function.career_poll_worker.arn
+  batch_size       = 1
+  function_response_types = ["ReportBatchItemFailures"]
 }
 
 resource "aws_lambda_function" "career_matcher" {
