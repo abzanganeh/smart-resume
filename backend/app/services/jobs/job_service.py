@@ -56,6 +56,7 @@ def job_cache_to_result(row: JobCache, *, score: float | None = None) -> JobResu
         apply_url=row.apply_url,
         sources=list(row.sources or []),
         score=score,
+        first_seen_at=row.first_seen_at,
     )
 
 
@@ -92,6 +93,62 @@ async def hirebase_results_to_jobs(
             job_cache_to_result(row, score=item.get("score"))
         )
     return results
+
+
+async def search_active_job_cache(
+    session: AsyncSession,
+    *,
+    query: str,
+    location: str | None,
+    filters: dict[str, Any],
+    page: int,
+    page_size: int,
+    blocked_companies: list[str],
+) -> tuple[list[JobResult], int]:
+    """Search active corpus rows in ``job_cache`` (DB-first path)."""
+    now = datetime.now(timezone.utc)
+    terms = [t for t in query.lower().split() if len(t) > 2]
+    stmt = (
+        select(JobCache)
+        .where(JobCache.is_active.is_(True))
+        .where(
+            (JobCache.expires_at > now)
+            | JobCache.sources.contains(["corpus"])
+        )
+    )
+    if terms:
+        clauses = [
+            or_(
+                JobCache.title.ilike(f"%{term}%"),
+                JobCache.company.ilike(f"%{term}%"),
+                JobCache.description.ilike(f"%{term}%"),
+            )
+            for term in terms[:6]
+        ]
+        stmt = stmt.where(or_(*clauses))
+    if location and location.strip():
+        loc = f"%{location.strip()}%"
+        stmt = stmt.where(JobCache.location.ilike(loc))
+    if filters.get("remote"):
+        stmt = stmt.where(JobCache.remote.is_(True))
+
+    offset = (page - 1) * page_size
+    rows = (
+        await session.execute(
+            stmt.order_by(
+                JobCache.first_seen_at.desc().nullslast(),
+                JobCache.posted_date.desc(),
+            )
+            .offset(offset)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    jobs = filter_blocked_companies(
+        [job_cache_to_result(r) for r in rows],
+        blocked_companies,
+    )
+    return jobs, len(jobs)
 
 
 async def search_cache(
@@ -183,13 +240,17 @@ async def run_keyword_search(
     page: int,
     page_size: int,
     blocked_companies: list[str],
-) -> tuple[list[JobResult], int, bool, str | None, bool]:
-    """Execute search; returns (jobs, total, stale, message, charge_quota)."""
+    expand: bool = False,
+) -> tuple[list[JobResult], int, bool, str | None, bool, str]:
+    """Execute search; returns (jobs, total, stale, message, charge_quota, source)."""
     normalized = normalize_query(query)
     circuit = await get_circuit_state()
+    corpus_jobs: list[JobResult] = []
+    corpus_total = 0
+    min_results = settings.JOB_SEARCH_DB_MIN_RESULTS
 
-    if circuit.is_open:
-        jobs, total = await search_cache(
+    if settings.JOB_SEARCH_DB_FIRST:
+        corpus_jobs, corpus_total = await search_active_job_cache(
             session,
             query=normalized,
             location=location,
@@ -198,6 +259,50 @@ async def run_keyword_search(
             page_size=page_size,
             blocked_companies=blocked_companies,
         )
+        if corpus_total >= min_results and not expand:
+            await log_search(
+                session,
+                user_id=user_id,
+                query=normalized,
+                location=location,
+                filters=filters,
+                result_count=corpus_total,
+                source=JobSearchSource.cache,
+            )
+            return corpus_jobs, corpus_total, False, None, False, "corpus"
+
+        if corpus_jobs and not expand:
+            await log_search(
+                session,
+                user_id=user_id,
+                query=normalized,
+                location=location,
+                filters=filters,
+                result_count=corpus_total,
+                source=JobSearchSource.cache,
+            )
+            return corpus_jobs, corpus_total, False, None, False, "corpus"
+
+    if circuit.is_open:
+        jobs, total = await search_active_job_cache(
+            session,
+            query=normalized,
+            location=location,
+            filters=filters,
+            page=page,
+            page_size=page_size,
+            blocked_companies=blocked_companies,
+        )
+        if not jobs:
+            jobs, total = await search_cache(
+                session,
+                query=normalized,
+                location=location,
+                filters=filters,
+                page=page,
+                page_size=page_size,
+                blocked_companies=blocked_companies,
+            )
         if jobs:
             await log_search(
                 session,
@@ -208,7 +313,7 @@ async def run_keyword_search(
                 result_count=len(jobs),
                 source=JobSearchSource.cache,
             )
-            return jobs, total, True, _STALE_MESSAGE, False
+            return jobs, total, True, _STALE_MESSAGE, False, "corpus"
         await log_search(
             session,
             user_id=user_id,
@@ -218,7 +323,7 @@ async def run_keyword_search(
             result_count=0,
             source=JobSearchSource.cache,
         )
-        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
+        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False, "corpus"
 
     try:
         mapped = await hirebase_client.search(
@@ -232,7 +337,7 @@ async def run_keyword_search(
             mapped, session=session, source="hirebase"
         )
     except HirebaseUnavailableError:
-        jobs, total = await search_cache(
+        jobs, total = await search_active_job_cache(
             session,
             query=normalized,
             location=location,
@@ -241,6 +346,16 @@ async def run_keyword_search(
             page_size=page_size,
             blocked_companies=blocked_companies,
         )
+        if not jobs:
+            jobs, total = await search_cache(
+                session,
+                query=normalized,
+                location=location,
+                filters=filters,
+                page=page,
+                page_size=page_size,
+                blocked_companies=blocked_companies,
+            )
         if jobs:
             await log_search(
                 session,
@@ -251,7 +366,7 @@ async def run_keyword_search(
                 result_count=len(jobs),
                 source=JobSearchSource.cache,
             )
-            return jobs, total, True, _STALE_MESSAGE, False
+            return jobs, total, True, _STALE_MESSAGE, False, "corpus"
         await log_search(
             session,
             user_id=user_id,
@@ -261,10 +376,10 @@ async def run_keyword_search(
             result_count=0,
             source=JobSearchSource.cache,
         )
-        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
+        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False, "corpus"
     except hirebase_client.HirebaseClientError as exc:
         log.warning("hirebase.search_failed", error=str(exc))
-        jobs, total = await search_cache(
+        jobs, total = await search_active_job_cache(
             session,
             query=normalized,
             location=location,
@@ -273,6 +388,16 @@ async def run_keyword_search(
             page_size=page_size,
             blocked_companies=blocked_companies,
         )
+        if not jobs:
+            jobs, total = await search_cache(
+                session,
+                query=normalized,
+                location=location,
+                filters=filters,
+                page=page,
+                page_size=page_size,
+                blocked_companies=blocked_companies,
+            )
         if jobs:
             await log_search(
                 session,
@@ -283,7 +408,7 @@ async def run_keyword_search(
                 result_count=len(jobs),
                 source=JobSearchSource.cache,
             )
-            return jobs, total, True, _STALE_MESSAGE, False
+            return jobs, total, True, _STALE_MESSAGE, False, "corpus"
         await log_search(
             session,
             user_id=user_id,
@@ -293,20 +418,38 @@ async def run_keyword_search(
             result_count=0,
             source=JobSearchSource.cache,
         )
-        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False
+        return [], 0, True, _OUTAGE_EMPTY_MESSAGE, False, "corpus"
 
-    # Persist + map (search returns JobResult already when we fix hirebase_client)
-    jobs = filter_blocked_companies(raw_jobs, blocked_companies)
+    hirebase_jobs = filter_blocked_companies(raw_jobs, blocked_companies)
+    if settings.JOB_SEARCH_DB_FIRST and (expand or corpus_total < min_results):
+        seen_ids = {job.id for job in corpus_jobs}
+        merged = list(corpus_jobs)
+        for job in hirebase_jobs:
+            if job.id not in seen_ids:
+                merged.append(job)
+                seen_ids.add(job.id)
+        await log_search(
+            session,
+            user_id=user_id,
+            query=normalized,
+            location=location,
+            filters=filters,
+            result_count=len(merged),
+            source=JobSearchSource.hirebase,
+        )
+        source = "corpus+hirebase" if corpus_jobs else "hirebase"
+        return merged, len(merged), False, None, True, source
+
     await log_search(
         session,
         user_id=user_id,
         query=normalized,
         location=location,
         filters=filters,
-        result_count=len(jobs),
+        result_count=len(hirebase_jobs),
         source=JobSearchSource.hirebase,
     )
-    return jobs, len(jobs), False, None, True
+    return hirebase_jobs, len(hirebase_jobs), False, None, True, "hirebase"
 
 
 async def run_resume_match(
@@ -400,5 +543,6 @@ __all__ = [
     "normalize_query",
     "run_keyword_search",
     "run_resume_match",
+    "search_active_job_cache",
     "search_cache",
 ]

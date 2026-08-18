@@ -25,6 +25,7 @@ class JobResult(BaseModel):
     apply_url: str = ""
     sources: list[str] = Field(default_factory=list)
     score: float | None = None
+    first_seen_at: datetime | None = None
 
 
 class JobSearchResponse(BaseModel):
@@ -34,6 +35,7 @@ class JobSearchResponse(BaseModel):
     page_size: int
     results_may_be_stale: bool = False
     message: str | None = None
+    source: str = "hirebase"
 
 
 class JobSearchRequest(BaseModel):
@@ -42,6 +44,7 @@ class JobSearchRequest(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=50)
+    expand: bool = False
 
 
 class JobMatchRequest(BaseModel):
