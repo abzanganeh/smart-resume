@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,30 @@ _FX_TO_USD: dict[str, float] = {
 }
 
 _US_STATE_RE = re.compile(r"^[A-Z]{2}$")
+
+_TRACKING_QUERY_PREFIXES = ("utm_", "fbclid", "gclid", "mc_eid", "ref", "source")
+
+
+def normalize_apply_url(url: str | None) -> str | None:
+    """Normalize an apply URL for stable dedup (scheme/host lowercased, tracking stripped)."""
+    if not url or not url.strip():
+        return None
+    text = url.strip()
+    parsed = urlparse(text)
+    if not parsed.scheme or not parsed.netloc:
+        return text.rstrip("/").lower()
+
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path.rstrip("/") or "/"
+    query_pairs = [
+        (k, v)
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if not any(k.lower().startswith(p) for p in _TRACKING_QUERY_PREFIXES)
+        and k.lower() not in {"ref", "source", "fbclid", "gclid"}
+    ]
+    query = urlencode(sorted(query_pairs))
+    return urlunparse((scheme, netloc, path, "", query, ""))
 
 
 def compute_dedup_key(
@@ -33,6 +58,27 @@ def compute_dedup_key(
     else:
         day = posted_date.isoformat()
     return f"{company.lower()}{title.lower()}{city_part}{day}"
+
+
+def compute_dedup_key_v2(
+    *,
+    apply_url: str | None = None,
+    ats_type: str | None = None,
+    external_job_id: str | None = None,
+    company: str = "",
+    title: str = "",
+    city: str | None = None,
+    posted_date: datetime | date | None = None,
+) -> str:
+    """Build dedup key preferring normalized apply URL, then ATS id, then legacy key."""
+    normalized_url = normalize_apply_url(apply_url)
+    if normalized_url:
+        return f"url:{normalized_url}"
+    if ats_type and external_job_id:
+        return f"ats:{ats_type.lower()}:{external_job_id.strip()}"
+    if posted_date is None:
+        posted_date = datetime.now().date()
+    return compute_dedup_key(company, title, city, posted_date)
 
 
 def normalize_salary(amount: int | float | None, currency: str | None) -> int | None:

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -86,6 +86,18 @@ class JobCache(Base):
         DateTime(timezone=True), nullable=False
     )
     dedup_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    apply_url_normalized: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    ats_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    external_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (
         Index("ix_job_cache_company_normalized", "company_normalized"),
@@ -95,6 +107,7 @@ class JobCache(Base):
             "expires_at",
             postgresql_where=text("expires_at IS NOT NULL"),
         ),
+        Index("ix_job_cache_active_first_seen", "is_active", "first_seen_at"),
     )
 
 

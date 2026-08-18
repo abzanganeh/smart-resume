@@ -126,7 +126,7 @@ Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
 | **ATS Optimization** | Keyword extraction, gap analysis, evidence-based rewrite, 8-point QA |
 | **AI Chat** | Inline chat for freeform edits and section regeneration |
 | **Cover Letter** | Generated from master resume + JD; editable; PDF export |
-| **Job Search** | Search matching jobs, set preferences, block companies |
+| **Job Search** | DB-first corpus search (500 ATS employers, tiered polling) with Hirebase gap-fill |
 | **Application Tracker** | Kanban board (Applied → Interview → Offer → Closed); notes and history |
 | **Job Fit Score** | Pre-tailor semantic similarity score |
 | **Admin Panel** | User management, billing, feature flags, LLM config, audit log, system health |

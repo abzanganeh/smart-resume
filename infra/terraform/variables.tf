@@ -70,6 +70,18 @@ variable "lambda_career_matcher_zip" {
   default     = "build/career_matcher.zip"
 }
 
+variable "lambda_career_poll_worker_zip" {
+  description = "Path to the career_poll_worker deployment package (.zip)."
+  type        = string
+  default     = "build/career_poll_worker.zip"
+}
+
+variable "career_poll_worker_concurrency" {
+  description = "Reserved concurrent executions for one-company poll workers."
+  type        = number
+  default     = 10
+}
+
 variable "stripe_secret_key" {
   description = "Stripe secret key consumed by the price-sync drift detector."
   type        = string
