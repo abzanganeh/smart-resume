@@ -53,6 +53,12 @@ class PromoCode(Base):
         ForeignKey("admin_users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    restricted_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
