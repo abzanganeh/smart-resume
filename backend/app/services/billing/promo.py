@@ -107,6 +107,12 @@ async def redeem_promo_code(
         )
     ).scalar_one()
 
+    if (
+        promo.restricted_user_id is not None
+        and promo.restricted_user_id != user_id
+    ):
+        raise PromoCodeInvalidError()
+
     existing = (
         await session.execute(
             select(PromoRedemption)
