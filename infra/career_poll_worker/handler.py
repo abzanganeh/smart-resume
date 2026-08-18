@@ -6,15 +6,12 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import Any
-from urllib import error, request
+
+from adapters import USER_AGENT, fetch_jobs_for_company, utcnow
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
-
-USER_AGENT = "TalioCV-CareerWatch/1.0 (+https://taliocv.com)"
-FETCH_TIMEOUT = 10
 
 
 def _postgres_url() -> str:
@@ -24,30 +21,8 @@ def _postgres_url() -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
-def _fetch_json(url: str) -> object:
-    req = request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-        method="GET",
-    )
-    with request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def _greenhouse_jobs(board_token: str) -> list[dict[str, Any]]:
-    payload = _fetch_json(
-        f"https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true"
-    )
-    if not isinstance(payload, dict):
-        return []
-    jobs = payload.get("jobs") or []
-    return [j for j in jobs if isinstance(j, dict)]
-
-
 def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
-    import psycopg2
-
-    now = datetime.now(timezone.utc)
+    now = utcnow()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -62,23 +37,22 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
             return {"jobs_upserted": 0, "skipped": 1}
 
         _cid, name, ats_type, board_token, careers_url = row
-        if ats_type != "greenhouse" or not board_token:
+        if ats_type not in {"greenhouse", "lever", "ashby"} or not board_token:
             return {"jobs_upserted": 0, "skipped": 1}
 
-        jobs = _greenhouse_jobs(board_token)
+        jobs = fetch_jobs_for_company(
+            ats_type=ats_type,
+            board_token=board_token,
+            careers_url=careers_url,
+        )
         seen: set[str] = set()
         upserted = 0
         for item in jobs:
-            external_id = str(item.get("id") or "")
-            if not external_id:
-                continue
+            external_id = item["external_job_id"]
             seen.add(external_id)
-            title = str(item.get("title") or "Untitled")
-            location = ""
-            loc = item.get("location")
-            if isinstance(loc, dict):
-                location = str(loc.get("name") or "")
-            apply_url = str(item.get("absolute_url") or careers_url)
+            title = item["title"]
+            location = item["location"]
+            apply_url = item["apply_url"]
             cur.execute(
                 """
                 INSERT INTO career_job_cache (
@@ -106,7 +80,7 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
                     apply_url,
                     now,
                     now,
-                    json.dumps(item),
+                    json.dumps(item["raw_payload"]),
                 ),
             )
             dedup_key = f"url:{apply_url.rstrip('/').lower()}"
@@ -121,7 +95,7 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
                 )
                 VALUES (
                     gen_random_uuid(), '["corpus"]'::jsonb,
-                    jsonb_build_object('greenhouse', %s),
+                    jsonb_build_object(%s, %s),
                     %s, %s, lower(%s),
                     %s, false, '', %s, '', %s, %s::jsonb,
                     %s, %s + interval '1 day', %s,
@@ -134,6 +108,7 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
                     expires_at = EXCLUDED.expires_at
                 """,
                 (
+                    ats_type,
                     external_id,
                     title,
                     name,
@@ -141,7 +116,7 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
                     location,
                     now,
                     apply_url,
-                    json.dumps(item),
+                    json.dumps(item["raw_payload"]),
                     now,
                     now,
                     dedup_key,
@@ -189,6 +164,7 @@ def _poll_company(conn: Any, company_id: str) -> dict[str, int]:
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     import psycopg2
+    from urllib import error
 
     conn = psycopg2.connect(_postgres_url())
     processed = 0
@@ -210,5 +186,5 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     finally:
         conn.close()
     summary = {"processed": processed, "jobs_upserted": jobs, "failures": failures}
-    log.info("career_poll_worker_complete %s", summary)
+    log.info("career_poll_worker_complete %s user_agent=%s", summary, USER_AGENT)
     return summary
