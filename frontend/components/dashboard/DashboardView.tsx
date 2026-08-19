@@ -8,10 +8,8 @@ import {
   Copy,
   Download,
   ExternalLink,
-  FileText,
   Loader2,
   Pencil,
-  Plus,
   Search,
   Sparkles,
   Trash2,
@@ -45,6 +43,8 @@ import { listExports, type ExportListItem } from "@/lib/account"
 import { isSubscriptionActive } from "@/lib/billing"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { getProfileResume, type ProfileResume } from "@/lib/profile"
+import { getJobPreferences } from "@/lib/jobs"
+import { DashboardCockpitPath } from "@/components/dashboard/DashboardCockpitPath"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -179,6 +179,9 @@ export function DashboardView({ token }: { token: string }) {
   } | null>(null)
   const [exports, setExports] = useState<ExportListItem[]>([])
   const [masterProfile, setMasterProfile] = useState<ProfileResume | null>(null)
+  const [preferredTitles, setPreferredTitles] = useState<string[]>([])
+  const [jobRolesReady, setJobRolesReady] = useState(false)
+  const [jobRolesStale, setJobRolesStale] = useState(false)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
   const masterChunkCount =
@@ -199,6 +202,16 @@ export function DashboardView({ token }: { token: string }) {
       setMasterProfile(profile)
     } catch {
       setMasterProfile(null)
+    }
+    try {
+      const prefs = await getJobPreferences(token)
+      setPreferredTitles(prefs.preferred_titles ?? [])
+      setJobRolesReady(Boolean(prefs.preferred_titles_confirmed))
+      setJobRolesStale(Boolean(prefs.preferred_titles_stale))
+    } catch {
+      setPreferredTitles([])
+      setJobRolesReady(false)
+      setJobRolesStale(false)
     }
   }, [token])
 
@@ -440,70 +453,21 @@ export function DashboardView({ token }: { token: string }) {
         </button>
       </header>
 
-      {!hasMasterResume && masterProfile !== null && (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/5 dark:bg-amber-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1 space-y-1">
-            <p className="text-slate-900 dark:text-white font-semibold text-lg">Ready to build your master resume?</p>
-            <p className="text-slate-600 dark:text-slate-400 text-sm">
-              Upload or paste an existing resume, or speak it — voice with live transcription is
-              free in Chrome and Edge.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 shrink-0">
-            <a
-              href="/profile?mode=story"
-              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors text-sm text-center"
-            >
-              Start your story →
-            </a>
-            <a
-              href="/profile"
-              className="px-5 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm text-center transition-colors"
-            >
-              Upload file instead
-            </a>
-          </div>
-        </div>
-      )}
+      <DashboardCockpitPath
+        hasMasterResume={hasMasterResume}
+        masterChunkCount={masterChunkCount}
+        masterUpdatedAt={masterProfile?.last_embedded_at ?? null}
+        jobRolesReady={jobRolesReady}
+        jobRolesStale={jobRolesStale}
+        preferredTitles={preferredTitles}
+        formatDate={formatDate}
+      />
 
-      {hasMasterResume && (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1 space-y-1">
-            <p className="text-slate-900 dark:text-white font-semibold text-lg">Master resume ready</p>
-            <p className="text-slate-600 dark:text-slate-400 text-sm">
-              {masterChunkCount} indexed section{masterChunkCount === 1 ? "" : "s"}
-              {masterProfile?.last_embedded_at && (
-                <>
-                  {" "}
-                  · last updated {formatDate(masterProfile.last_embedded_at)}
-                </>
-              )}
-              . Tailor it to a job description to create a version tracked below.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-            <Link
-              href="/session/new"
-              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors text-sm text-center"
-            >
-              Tailor for a job →
-            </Link>
-            <Link
-              href="/profile"
-              className="px-5 py-2.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-xl transition-colors text-sm text-center"
-            >
-              View master resume
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
-          { href: "/session/new", label: "New tailored resume", icon: Plus },
-          { href: "/profile", label: "Edit master resume", icon: FileText },
-          { href: "/jobs", label: "Search jobs", icon: Search },
-          { href: "/cover-letter/new", label: "Generate cover letter", icon: Sparkles },
+          { href: "/fit", label: "Job fit analysis", icon: TrendingUp },
+          { href: "/cover-letter/new", label: "Cover letter", icon: Sparkles },
+          { href: "/career-watch", label: "Career Watch", icon: Bell },
         ].map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

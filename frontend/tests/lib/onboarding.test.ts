@@ -58,6 +58,7 @@ describe("postAuthLandingPath", () => {
 
 describe("parseOnboardingStepParam", () => {
   it("parses 1-based step query values", () => {
+    assert.equal(parseOnboardingStepParam("5"), 4);
     assert.equal(parseOnboardingStepParam("4"), 3);
     assert.equal(parseOnboardingStepParam("1"), 0);
   });
@@ -84,13 +85,23 @@ describe("resolveOnboardingStepIndex", () => {
     );
   });
 
-  it("honors step=4 after master resume exists", () => {
+  it("honors step=4 after master resume exists (job titles step)", () => {
     assert.equal(
       resolveOnboardingStepIndex(
         { ...baseUser, onboarding_ai_choice: "platform" },
         { urlStepIndex: 3, hasMasterResume: true },
       ),
       3,
+    );
+  });
+
+  it("lands on done after job titles confirmed", () => {
+    assert.equal(
+      resolveOnboardingStepIndex(
+        { ...baseUser, onboarding_ai_choice: "platform" },
+        { hasMasterResume: true, hasJobTitles: true },
+      ),
+      4,
     );
   });
 

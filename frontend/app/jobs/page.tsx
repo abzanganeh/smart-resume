@@ -10,7 +10,9 @@ import { JobsStaleBanner } from "@/components/jobs/JobsStaleBanner"
 import { JobCard } from "@/components/jobs/JobCard"
 import { JobCardSkeleton } from "@/components/jobs/JobCardSkeleton"
 import {
+  getJobPreferences,
   listSavedJobs,
+  MIN_PREFERRED_JOB_TITLES,
   saveJob,
   searchJobs,
   unsaveJob,
@@ -59,6 +61,19 @@ function JobsPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [preferredTitles, setPreferredTitles] = useState<string[]>([])
+  const [titlesConfirmed, setTitlesConfirmed] = useState(false)
+
+  const loadPreferences = useCallback(async () => {
+    if (!token) return
+    try {
+      const prefs = await getJobPreferences(token)
+      setPreferredTitles(prefs.preferred_titles ?? [])
+      setTitlesConfirmed(Boolean(prefs.preferred_titles_confirmed))
+    } catch {
+      // Non-fatal
+    }
+  }, [token])
 
   const loadSubscription = useCallback(async () => {
     if (!token) return
@@ -85,8 +100,9 @@ function JobsPageContent() {
     if (token) {
       void loadSubscription()
       void loadSavedJobs()
+      void loadPreferences()
     }
-  }, [token, loadSubscription, loadSavedJobs])
+  }, [token, loadSubscription, loadSavedJobs, loadPreferences])
 
   const buildFilters = (): JobSearchFilters => {
     const filters: JobSearchFilters = {}
@@ -98,10 +114,14 @@ function JobsPageContent() {
     return filters
   }
 
-  const runSearch = async (nextPage: number, append: boolean) => {
-    if (!token || !role.trim()) {
+  const runSearch = async (nextPage: number, append: boolean, queryOverride?: string) => {
+    const query = (queryOverride ?? role).trim()
+    if (!token || !query) {
       setError("Enter a role or keyword to search.")
       return
+    }
+    if (queryOverride) {
+      setRole(query)
     }
 
     setError(null)
@@ -114,7 +134,7 @@ function JobsPageContent() {
 
     try {
       const res = await searchJobs(token, {
-        query: role.trim(),
+        query,
         location: location.trim() || null,
         filters: buildFilters(),
         page: nextPage,
@@ -130,7 +150,9 @@ function JobsPageContent() {
       const err = e as Error & { code?: string }
       if (err.code === "subscription_required") {
         setSubscribed(false)
-        setError("Subscription required to search jobs.")
+        setError("Subscription required for expanded job search. Corpus search works after you choose job titles.")
+      } else if (err.code === "job_titles_required" || err.code === "preferred_titles_incomplete") {
+        setError(`Choose at least ${MIN_PREFERRED_JOB_TITLES} job titles before searching.`)
       } else {
         setError(err.message ?? "Search failed.")
       }
@@ -204,6 +226,44 @@ function JobsPageContent() {
             Preferences
           </Link>
         </div>
+
+        {!titlesConfirmed && (
+          <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-slate-700 dark:text-slate-300">
+            <p className="mb-2">
+              Pick job titles from your resume to search our company job corpus (500+ tech employers).
+            </p>
+            <Link
+              href="/jobs/setup?return=/jobs"
+              className="inline-flex text-amber-800 dark:text-amber-300 font-medium hover:underline"
+            >
+              Choose your job titles →
+            </Link>
+          </div>
+        )}
+
+        {preferredTitles.length > 0 && (
+          <div className="mb-6">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Your target roles</p>
+            <div className="flex flex-wrap gap-2">
+              {preferredTitles.map((title) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => void runSearch(1, false, title)}
+                  className="px-3 py-1.5 rounded-full text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-amber-400/60 text-slate-700 dark:text-slate-300"
+                >
+                  {title}
+                </button>
+              ))}
+              <Link
+                href="/jobs/setup?return=/jobs"
+                className="px-3 py-1.5 rounded-full text-sm text-slate-500 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300"
+              >
+                Edit titles
+              </Link>
+            </div>
+          </div>
+        )}
 
         <form
           onSubmit={handleSearch}
@@ -317,6 +377,11 @@ function JobsPageContent() {
             {error.includes("Subscription") && (
               <Link href="/billing" className="ml-auto text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 shrink-0">
                 Upgrade
+              </Link>
+            )}
+            {(error.includes("Choose at least") || error.includes("job titles")) && (
+              <Link href="/jobs/setup?return=/jobs" className="ml-auto text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 shrink-0">
+                Set up titles
               </Link>
             )}
           </div>

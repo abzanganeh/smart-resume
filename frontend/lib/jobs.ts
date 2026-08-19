@@ -102,7 +102,27 @@ export interface SavedSearchCreate {
 export interface JobPreferences {
   blocked_companies: string[]
   default_filters: JobSearchFilters
+  preferred_titles?: string[]
+  preferred_titles_confirmed?: boolean
+  preferred_titles_stale?: boolean
+  min_preferred_titles?: number
 }
+
+export interface JobTitleSuggestionsResponse {
+  suggestions: string[]
+  held_titles: string[]
+  source: string
+  source_hash?: string | null
+}
+
+export interface PreferredTitlesResponse {
+  titles: string[]
+  confirmed: boolean
+  stale?: boolean
+  min_required: number
+}
+
+export const MIN_PREFERRED_JOB_TITLES = 5
 
 export interface JobFitResponse {
   analysis_id: string
@@ -203,6 +223,22 @@ export function staleBannerMessage(
   const trimmed = message?.trim()
   if (trimmed) return `${base} (${trimmed})`
   return base
+}
+
+export async function getJobTitleSuggestions(
+  token: string,
+): Promise<JobTitleSuggestionsResponse> {
+  return jobsRequest("/api/jobs/title-suggestions", token)
+}
+
+export async function savePreferredJobTitles(
+  token: string,
+  titles: string[],
+): Promise<PreferredTitlesResponse> {
+  return jobsRequest("/api/jobs/preferred-titles", token, {
+    method: "PUT",
+    body: JSON.stringify({ titles }),
+  })
 }
 
 export async function searchJobs(
