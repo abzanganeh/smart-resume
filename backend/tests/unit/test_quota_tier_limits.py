@@ -48,7 +48,8 @@ async def test_registration_grant_falls_back_to_seed() -> None:
     mock_session.execute.return_value = mock_result
 
     amount = await registration_grant_credits(mock_session)
-    assert amount == 3
+    # 2026-08-19: free-tier registration grant bumped 3 -> 6.
+    assert amount == 6
 
 
 @pytest.mark.asyncio
@@ -129,6 +130,7 @@ async def test_subscriber_search_limit_from_tier_limits() -> None:
         coached_sessions=None,
         whisper_enabled=True,
         whisper_uses_per_period=5,
+        tracker_active_limit=None,
         soft_cap_message=None,
     )
 

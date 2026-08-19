@@ -88,8 +88,12 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
     return [
         TierLimitsSeedRow(
             plan_code="free",
-            resumes_per_period=3,
-            cover_letters_per_period=3,
+            # 2026-08-19: raised free resumes_per_period 3 -> 6.  This is the
+            # registration grant credit count; free users must still stay
+            # under tracker_active_limit which caps how many rows they can
+            # keep in the tracker at once.
+            resumes_per_period=6,
+            cover_letters_per_period=6,
             searches_per_period=5,
             fit_analyses_per_period=3,
             checkups_per_period=3,
@@ -177,7 +181,11 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             checkups=None,
             career_companies=50,
             career_interval=5,
-            tracker=None,
+            # 2026-08-19: premium is "unlimited" only in marketing copy —
+            # it has always carried a fair-use soft cap.  Anchor the tracker
+            # limit at 250 (roughly 2x pro / plus) so a runaway integration
+            # can't silently rack up thousands of tracker rows.
+            tracker=250,
             whisper_uses=None,
             llm_provider="anthropic",
             llm_model="claude-sonnet-4-6",
@@ -191,7 +199,7 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             checkups=None,
             career_companies=50,
             career_interval=5,
-            tracker=None,
+            tracker=250,
             whisper_uses=None,
             llm_provider="anthropic",
             llm_model="claude-sonnet-4-6",

@@ -23,6 +23,10 @@ class TierLimits:
     coached_sessions: int | None
     whisper_enabled: bool
     whisper_uses_per_period: int | None
+    # Max non-archived rows a user may keep in the application tracker.
+    # ``None`` means no active-slot cap for this plan (still subject to
+    # per-period counters and credits).
+    tracker_active_limit: int | None
     soft_cap_message: str | None
 
 
@@ -41,6 +45,7 @@ def _from_seed(plan_code: str) -> TierLimits:
         coached_sessions=row["coached_sessions"],
         whisper_enabled=row["whisper_enabled"],
         whisper_uses_per_period=row["whisper_uses_per_period"],
+        tracker_active_limit=row["tracker_active_limit"],
         soft_cap_message=row["soft_cap_message"],
     )
 
@@ -57,6 +62,7 @@ def _from_row(row: TierLimitsConfig) -> TierLimits:
         coached_sessions=row.coached_sessions,
         whisper_enabled=row.whisper_enabled,
         whisper_uses_per_period=row.whisper_uses_per_period,
+        tracker_active_limit=row.tracker_active_limit,
         soft_cap_message=row.soft_cap_message,
     )
 
