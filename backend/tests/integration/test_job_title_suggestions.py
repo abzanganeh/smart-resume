@@ -259,10 +259,16 @@ async def test_free_user_corpus_search_after_preferred_titles(
     )
     await db_session.commit()
 
-    with patch(
-        "app.services.jobs.hirebase_client.search",
-        new_callable=AsyncMock,
-    ) as mock_search:
+    with (
+        patch(
+            "app.services.jobs.hirebase_client.search",
+            new_callable=AsyncMock,
+        ) as mock_search,
+        patch(
+            "app.services.jobs.job_service.settings.JOB_SEARCH_DB_MIN_RESULTS",
+            1,
+        ),
+    ):
         r = await app_client.post(
             "/api/jobs/search",
             headers={"Authorization": f"Bearer {token}"},
