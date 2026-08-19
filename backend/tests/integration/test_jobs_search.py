@@ -17,6 +17,7 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.jobs import JobCache
+from app.models.master_resume import MasterResume
 from app.services.jobs import circuit_breaker
 from app.services.jobs.cache_writer import normalize_apify_record, upsert_job_cache
 from app.services.session_store import redis_set
@@ -205,3 +206,58 @@ async def test_five_upstream_500s_open_circuit_and_sixth_uses_cache(
         assert len(body["jobs"]) >= 1
         # Once open, the sixth request should short-circuit before the client call.
         assert mock_search.call_count == 5
+
+
+@pytest.mark.asyncio
+async def test_match_without_master_resume_returns_422(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client)
+    await _seed_subscription(db_session, user_id)
+
+    res = await app_client.post(
+        "/api/jobs/match",
+        json={"page": 1, "page_size": 20},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 422, res.text
+    assert "master resume" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_circuit_open_resume_match_serves_stale_cache(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client)
+    await _seed_subscription(db_session, user_id)
+    db_session.add(
+        MasterResume(
+            id=uuid.uuid4(),
+            user_id=uuid.UUID(user_id),
+            raw_text="Jane Doe\nSenior Python Engineer with FastAPI and PostgreSQL.",
+            hirebase_artifact_id="artifact-test-match",
+        )
+    )
+    await _seed_cache_job(
+        db_session, company="Cached Co", title="Python Developer"
+    )
+    await db_session.commit()
+    await _open_circuit()
+
+    with patch(
+        "app.services.jobs.hirebase_client.match_resume",
+        new_callable=AsyncMock,
+    ) as mock_match:
+        res = await app_client.post(
+            "/api/jobs/match",
+            json={"page": 1, "page_size": 20},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert res.status_code == 200, res.text
+    mock_match.assert_not_called()
+    body = res.json()
+    assert body["results_may_be_stale"] is True
+    assert len(body["jobs"]) >= 1
