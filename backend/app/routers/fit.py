@@ -71,7 +71,7 @@ async def _fetch_jd_from_url(url: str) -> str:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             resp = await client.get(
                 url,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; SmartResume/1.0)"},
+                headers={"User-Agent": "Mozilla/5.0 (compatible; TalioCV/1.0)"},
             )
             resp.raise_for_status()
             return strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)

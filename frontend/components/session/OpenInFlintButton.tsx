@@ -107,43 +107,43 @@ export function OpenInFlintButton({
         {loading ? "Preparing…" : "Open in Flint"}
       </button>
       {status && (
-        <p className="text-sm text-slate-400" role="status" aria-live="polite">
+        <p className="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite">
           {status}
         </p>
       )}
       {error && (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-red-700 dark:text-red-400" role="alert">
           {error}
         </p>
       )}
       {handoffReady && lastDeepLink && (
-        <div className="rounded-lg border border-indigo-500/40 bg-indigo-950/30 p-3 space-y-2">
+        <div className="rounded-lg border border-indigo-500/40 bg-indigo-50 dark:bg-indigo-950/30 p-3 space-y-2">
           {showAutoOpenHint ? (
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               Flint did not open automatically (common on Linux dev builds). Paste the
-              link below into Flint → New Session → Import from Smart Resume link.
+              link below into Flint → New Session → Import from TalioCV link.
             </p>
           ) : (
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               Import link ready. If Flint does not open, paste the link there manually.
             </p>
           )}
           <button
             type="button"
             onClick={() => void copyDeepLink()}
-            className="flex items-center gap-1.5 text-sm font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:text-indigo-200 transition-colors"
           >
             <Copy className="w-3.5 h-3.5" />
             {copied ? "Link copied" : "Copy import link"}
           </button>
-          <p className="text-xs text-slate-500 break-all font-mono">{lastDeepLink}</p>
-          <p className="text-sm text-slate-400">
+          <p className="text-xs text-slate-600 dark:text-slate-400 break-all font-mono">{lastDeepLink}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Don&apos;t have Flint yet?{" "}
             <a
               href={flintDownloadUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 underline"
+              className="text-indigo-700 dark:text-indigo-400 hover:text-indigo-300 underline"
             >
               Download Flint
             </a>

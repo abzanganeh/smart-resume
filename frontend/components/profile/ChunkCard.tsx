@@ -72,12 +72,12 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
       className={cn(
         "rounded-xl border p-4 space-y-3 transition-opacity",
         isDeleted
-          ? "border-slate-800 bg-slate-900/40 opacity-50"
-          : "border-slate-700 bg-slate-900/80",
+          ? "border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 opacity-50"
+          : "border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80",
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
           <span className="tabular-nums">
             {(editing ? previewTokens : chunk.token_count).toLocaleString()} tokens
           </span>
@@ -88,7 +88,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
             </>
           )}
           {isDeleted && (
-            <span className="text-red-400/80 font-medium">Deleted</span>
+            <span className="text-red-700 dark:text-red-400/80 font-medium">Deleted</span>
           )}
         </div>
 
@@ -97,7 +97,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="Edit chunk"
               aria-label="Edit chunk"
             >
@@ -107,7 +107,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
               type="button"
               onClick={() => void remove()}
               disabled={deleting}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors disabled:opacity-40"
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
               title="Remove chunk"
               aria-label="Remove chunk"
             >
@@ -118,7 +118,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
       </div>
 
       {!editing ? (
-        <p className="text-slate-200 text-sm whitespace-pre-wrap">{chunk.content}</p>
+        <p className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{chunk.content}</p>
       ) : (
         <div className="space-y-2">
           <textarea
@@ -126,10 +126,10 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             autoFocus
             rows={4}
-            className="w-full bg-slate-800 border border-amber-400/50 rounded-lg px-3 py-2 text-slate-200 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-amber-400"
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-amber-400/50 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
           {contentChanged && (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               Save preview: {previewTokens} tokens · estimated cost {previewCost}
             </p>
           )}
@@ -146,7 +146,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
             <button
               type="button"
               onClick={cancelEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-md text-xs hover:bg-slate-600"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
             >
               <X className="w-3 h-3" />
               Cancel
@@ -155,7 +155,7 @@ export function ChunkCard({ chunk, token, onSaved, onDeleted }: Props) {
         </div>
       )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-700 dark:text-red-400">{error}</p>}
     </article>
   )
 }

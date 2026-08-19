@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.billing import PlanConfig, PlanConfigInterval
+from app.services.billing.tier_limits import seed_row_for_plan
 
 # Base subscription codes exposed on /billing (legacy LLM add-ons excluded).
 PUBLIC_PLAN_CODES: frozenset[str] = frozenset(
@@ -140,15 +141,14 @@ async def build_public_billing_prices(session: AsyncSession) -> dict[str, Any]:
         plans.append(
             {
                 "code": row.code,
-                "display_name": _DISPLAY_NAMES.get(
-                    row.code, row.code.replace("_", " ").title()
-                ),
+                "display_name": display_name_for_plan_code(row.code),
                 "cycle": _cycle_for_row(row.code, row.interval),
                 "amount_cents": row.amount_cents,
                 "trial_days": 7 if row.code.startswith("monthly_") else None,
                 "stripe_price_id": row.stripe_price_id,
                 "is_active": True,
                 "features": _FEATURES_BY_CODE.get(row.code, ["resume_tailor"]),
+                "limits": _public_limits_for_plan(row.code),
             }
         )
 
@@ -160,4 +160,32 @@ async def build_public_billing_prices(session: AsyncSession) -> dict[str, Any]:
     }
 
 
-__all__ = ["PUBLIC_PLAN_CODES", "build_public_billing_prices"]
+def _public_limits_for_plan(plan_code: str) -> dict[str, int | None] | None:
+    """Per-period allowances advertised on a plan card.
+
+    Sourced from the tier-limits seed so marketing copy cannot drift from the
+    numbers the quota layer actually enforces. ``None`` for a field means the
+    plan has no cap on that action.
+    """
+    row = seed_row_for_plan(plan_code)
+    if row is None:
+        return None
+    return {
+        "resumes_per_period": row["resumes_per_period"],
+        "searches_per_period": row["searches_per_period"],
+        "fit_analyses_per_period": row["fit_analyses_per_period"],
+        "whisper_uses_per_period": row["whisper_uses_per_period"],
+        "career_watch_companies": row["career_watch_companies"],
+    }
+
+
+def display_name_for_plan_code(plan_code: str) -> str:
+    """Marketing label for a canonical plan code (``monthly_pro`` -> ``Pro``)."""
+    return _DISPLAY_NAMES.get(plan_code, plan_code.replace("_", " ").title())
+
+
+__all__ = [
+    "PUBLIC_PLAN_CODES",
+    "build_public_billing_prices",
+    "display_name_for_plan_code",
+]

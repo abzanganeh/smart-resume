@@ -1,10 +1,10 @@
 
 
 <p align="center">
-  <img src="docs/assets/marketing/smart-resume-photo-03.png" alt="Flint Resume — AI tailoring and company intel" width="720" />
+  <img src="docs/assets/marketing/taliocv-hero.png" alt="TalioCV — AI tailoring and company intel" width="720" />
 </p>
 
-# Smart Resume Agent
+# TalioCV
 
 An AI-powered job-search platform. Build your master resume by speaking or uploading, tailor it to any job description in minutes, find matching jobs, write cover letters, and track every application — all in one place.
 
@@ -70,15 +70,17 @@ All three paths produce the same output: a semantic master resume stored as embe
 
 Paste or upload your resume and the job description on the **New Session** page. Optionally provide a JD URL (paste text directly for JavaScript-rendered pages like Greenhouse, Lever, or Jobright).
 
-Select your **AI model tier**:
+Model quality is determined by your plan — there is nothing to select and no per-resume charge:
 
-| Tier     | Model                 | Cost               |
-|----------|-----------------------|--------------------|
-| Standard | Gemini 2.5 Flash-Lite | Included with plan |
-| Better   | Gemini 2.5 Flash      | +$0.898 / resume   |
-| Best     | Claude Sonnet 4.6     | +$2.99 / resume    |
+| Plan    | Phase 3 rewrite model |
+|---------|-----------------------|
+| Free    | Gemini 2.5 Flash-Lite |
+| Weekly  | Gemini 2.5 Flash      |
+| Pro     | Gemini 2.5 Flash      |
+| Pro+    | Gemini 3.5 Flash      |
+| Premium | Claude Sonnet 4.6     |
 
-Platform AI (Gemini) is the default for all wizard steps. Upgrade tiers bill per resume via Stripe.
+Platform AI is included with every plan; no API key is required and none can be supplied.
 
 ### 4 — Run the four phases
 
@@ -111,7 +113,7 @@ Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
 
 - Download **PDF** or **DOCX**
 - Generate a matching **Cover Letter** (one click, edit inline, export PDF)
-- View your **Job Fit Score** — semantic similarity between master resume and JD before spending a credit
+- View your **Job Fit Score** — semantic similarity between master resume and JD (requires a paid plan)
 - Save the job to your **Application Tracker**
 
 ---
@@ -120,7 +122,7 @@ Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
 
 | Feature | Description |
 |---------|-------------|
-| **Story Mode** | Voice recording (Web Speech API — Chrome/Edge free; Whisper fallback 2 credits) with optional per-segment AI coaching |
+| **Story Mode** | Voice recording (Web Speech API — free in Chrome/Edge on every plan; Whisper fallback for other browsers requires a paid plan and counts against that plan's transcription allowance) with optional per-segment AI coaching |
 | **Coached Interview** | AI-driven Q&A session — structured questions with follow-ups; compiles to master resume |
 | **Master Resume** | Persistent semantic store; all tailored resumes draw from it |
 | **ATS Optimization** | Keyword extraction, gap analysis, evidence-based rewrite, 8-point QA |
@@ -130,6 +132,33 @@ Re-running Phase 2 automatically marks Phase 3 and 4 outputs as stale.
 | **Application Tracker** | Kanban board (Applied → Interview → Offer → Closed); notes and history |
 | **Job Fit Score** | Pre-tailor semantic similarity score |
 | **Admin Panel** | User management, billing, feature flags, LLM config, audit log, system health |
+
+---
+
+## Plans & quotas
+
+Two billing models coexist. **Free accounts spend credits** per AI action; **subscribers draw
+on per-period plan allowances** and are never charged credits while under their limit. Every
+number below comes from `backend/app/services/billing/tier_limits.py`, which is the single
+source of truth enforced by the quota layer.
+
+| Plan | Period | Resumes & cover letters | Job searches | Fit analyses | Whisper voice | Career Watch |
+|---------|---------|---:|---:|---:|---:|---:|
+| Free | — | 3 credits at signup | — | — | — | 1 company |
+| Weekly | week | 10 | 20 | 10 | 2 | 3 companies |
+| Pro | month/year | 50 | 100 | 50 | 5 | 10 companies |
+| Pro+ | month/year | 100 | 200 | 100 | 15 | 30 companies |
+| Premium | month/year | 300 | 300 | 300 | fair use | 50 companies |
+
+Notes:
+
+- **Job search** and **fit analysis** are subscription-only; the free plan cannot reach them at all.
+- **Whisper** transcription is subscription-only. Browser-native voice (Chrome/Edge) is free everywhere.
+- Reaching a resume allowance **falls back to credits** rather than blocking the action.
+- Premium has no hard Whisper cap but is subject to a fair-use soft cap.
+
+Prices live in Stripe and are surfaced through `/api/billing/prices`; the billing page derives
+the yearly discount from those live amounts rather than hardcoding a percentage.
 
 ---
 

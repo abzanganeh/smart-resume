@@ -57,17 +57,17 @@ const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
 ]
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-slate-700 text-slate-200",
-  applied: "bg-blue-900/60 text-blue-200",
-  interviewing: "bg-violet-900/60 text-violet-200",
-  offer: "bg-emerald-900/60 text-emerald-200",
-  rejected: "bg-red-900/60 text-red-200",
-  withdrawn: "bg-slate-800 text-slate-400",
+  draft: "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200",
+  applied: "bg-blue-50 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200",
+  interviewing: "bg-violet-50 dark:bg-violet-900/60 text-violet-800 dark:text-violet-200",
+  offer: "bg-emerald-50 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200",
+  rejected: "bg-red-50 dark:bg-red-900/60 text-red-800 dark:text-red-200",
+  withdrawn: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
 }
 
 const TAILORING_COLORS: Record<string, string> = {
-  in_progress: "bg-amber-900/50 text-amber-200 border border-amber-700/40",
-  polished: "bg-emerald-900/50 text-emerald-200 border border-emerald-700/40",
+  in_progress: "bg-amber-50 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700/40",
+  polished: "bg-emerald-50 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700/40",
 }
 
 function resumeTitle(r: ResumeListItem): string {
@@ -99,21 +99,21 @@ function AtsBadge({
 }) {
   if (tailoringStage === "in_progress" && score === 0) {
     return (
-      <span className="text-xs text-slate-500 italic">Not scored yet</span>
+      <span className="text-xs text-slate-600 dark:text-slate-400 italic">Not scored yet</span>
     )
   }
   const deltaLabel =
     delta === 0 ? null : delta > 0 ? `+${delta}` : String(delta)
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-      <span className="bg-amber-400/15 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full tabular-nums">
+      <span className="bg-amber-500/15 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full tabular-nums">
         ATS {score}
       </span>
       {deltaLabel && (
         <span
           className={clsx(
             "tabular-nums",
-            delta > 0 ? "text-emerald-400" : "text-red-400",
+            delta > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400",
           )}
         >
           {deltaLabel}
@@ -135,13 +135,13 @@ function UsageBar({
   const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
   return (
     <div>
-      <div className="flex justify-between text-xs text-slate-400 mb-1">
+      <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
         <span>{label}</span>
         <span className="tabular-nums">
           {used}/{limit}
         </span>
       </div>
-      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div
           className="h-full bg-amber-400 rounded-full transition-all"
           style={{ width: `${pct}%` }}
@@ -390,14 +390,14 @@ export function DashboardView({ token }: { token: string }) {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-12 text-center text-red-400">
+      <div className="max-w-6xl mx-auto px-4 py-12 text-center text-red-700 dark:text-red-400">
         {error}
       </div>
     )
@@ -409,22 +409,22 @@ export function DashboardView({ token }: { token: string }) {
   const totalPages = Math.max(1, Math.ceil(total / 10))
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+    <main className="min-h-[60vh] bg-sr-bg max-w-6xl mx-auto px-4 py-8 space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             Welcome back, {summary?.display_name ?? "there"}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-xs font-semibold uppercase tracking-wide bg-amber-400/15 text-amber-300 border border-amber-400/30 px-2.5 py-1 rounded-full">
+            <span className="text-xs font-semibold uppercase tracking-wide bg-amber-500/15 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30 px-2.5 py-1 rounded-full">
               {summary?.tier ?? "free"}
             </span>
             {isSubscribed && sub ? (
-              <span className="text-sm text-slate-400">
+              <span className="text-sm text-slate-600 dark:text-slate-400">
                 Next billing: {formatDate(sub.period_end)}
               </span>
             ) : (
-              <span className="text-sm text-slate-400">
+              <span className="text-sm text-slate-600 dark:text-slate-400">
                 {summary?.credit_balance ?? 0} credits remaining
               </span>
             )}
@@ -432,7 +432,7 @@ export function DashboardView({ token }: { token: string }) {
         </div>
         <button
           type="button"
-          className="relative p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200"
+          className="relative p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200"
           title="Notifications (coming soon)"
           aria-label="Notifications"
         >
@@ -441,12 +441,12 @@ export function DashboardView({ token }: { token: string }) {
       </header>
 
       {!hasMasterResume && masterProfile !== null && (
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/5 dark:bg-amber-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1 space-y-1">
-            <p className="text-white font-semibold text-lg">Ready to build your master resume?</p>
-            <p className="text-slate-400 text-sm">
-              Skip the formatting. Just tell your story — jobs, skills, and experience out loud.
-              We&apos;ll turn it into a professional profile in 10–15 minutes.
+            <p className="text-slate-900 dark:text-white font-semibold text-lg">Ready to build your master resume?</p>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
+              Upload or paste an existing resume, or speak it — voice with live transcription is
+              free in Chrome and Edge.
             </p>
           </div>
           <div className="flex flex-col gap-2 shrink-0">
@@ -458,7 +458,7 @@ export function DashboardView({ token }: { token: string }) {
             </a>
             <a
               href="/profile"
-              className="px-5 py-2 text-slate-400 hover:text-white text-sm text-center transition-colors"
+              className="px-5 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm text-center transition-colors"
             >
               Upload file instead
             </a>
@@ -469,8 +469,8 @@ export function DashboardView({ token }: { token: string }) {
       {hasMasterResume && (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1 space-y-1">
-            <p className="text-white font-semibold text-lg">Master resume ready</p>
-            <p className="text-slate-400 text-sm">
+            <p className="text-slate-900 dark:text-white font-semibold text-lg">Master resume ready</p>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
               {masterChunkCount} indexed section{masterChunkCount === 1 ? "" : "s"}
               {masterProfile?.last_embedded_at && (
                 <>
@@ -490,7 +490,7 @@ export function DashboardView({ token }: { token: string }) {
             </Link>
             <Link
               href="/profile"
-              className="px-5 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 rounded-xl transition-colors text-sm text-center"
+              className="px-5 py-2.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-xl transition-colors text-sm text-center"
             >
               View master resume
             </Link>
@@ -508,26 +508,26 @@ export function DashboardView({ token }: { token: string }) {
           <Link
             key={href}
             href={href}
-            className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 hover:border-amber-400/40 transition-colors"
+            className="flex items-center gap-2 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:border-amber-400/40 transition-colors"
           >
-            <Icon className="w-4 h-4 text-amber-400 shrink-0" />
+            <Icon className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
             {label}
           </Link>
         ))}
       </section>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <section className="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
+        <section className="lg:col-span-1 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
             Subscription
           </h2>
           {isSubscribed && sub ? (
             <>
-              <p className="text-lg font-semibold text-white capitalize">
+              <p className="text-lg font-semibold text-slate-900 dark:text-white capitalize">
                 {sub.plan} · {sub.billing_cycle}
               </p>
               {sub.trial_ends_at && (
-                <p className="text-xs text-amber-300">
+                <p className="text-xs text-amber-700 dark:text-amber-300">
                   Trial ends {formatDate(sub.trial_ends_at)}
                 </p>
               )}
@@ -542,7 +542,7 @@ export function DashboardView({ token }: { token: string }) {
             </>
           ) : (
             <>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
                 Free tier — {summary?.credit_balance ?? 0} credits left.
               </p>
               <Link
@@ -556,10 +556,10 @@ export function DashboardView({ token }: { token: string }) {
         </section>
 
         <section className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5">
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-4 h-4 text-amber-400" />
-              <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
+              <TrendingUp className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 ATS score trend (30 days)
               </h2>
             </div>
@@ -600,15 +600,15 @@ export function DashboardView({ token }: { token: string }) {
                   <Line type="monotone" dataKey="score" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3, fill: "#fbbf24" }} />
                 </LineChart>
                 {selectedTrendPoint && (
-                  <div className="mt-2 text-xs text-slate-400">
-                    <span className="text-slate-300">
+                  <div className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="text-slate-700 dark:text-slate-300">
                       {formatDate(selectedTrendPoint.date)}:
                     </span>{" "}
                     ATS {selectedTrendPoint.score}
                     {selectedTrendPoint.jd_title && (
                       <>
                         {" "}for{" "}
-                        <span className="text-slate-300">
+                        <span className="text-slate-700 dark:text-slate-300">
                           {selectedTrendPoint.jd_title}
                         </span>
                         {selectedTrendPoint.jd_company
@@ -620,28 +620,28 @@ export function DashboardView({ token }: { token: string }) {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-slate-500 py-8 text-center">
+              <p className="text-sm text-slate-600 dark:text-slate-400 py-8 text-center">
                 Complete Phase 4 to see your ATS trend.
               </p>
             )}
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-4">
               Recent activity
             </h2>
             <ul className="space-y-3">
               {(summary?.recent_activity ?? []).slice(0, 10).map((item, i) => (
                 <li key={`${item.type}-${item.at}-${i}`} className="flex gap-3 text-sm">
-                  <span className="text-slate-500 shrink-0 tabular-nums">{formatDate(item.at)}</span>
+                  <span className="text-slate-600 dark:text-slate-400 shrink-0 tabular-nums">{formatDate(item.at)}</span>
                   <div>
-                    <p className="text-slate-200">{item.title}</p>
-                    {item.subtitle && <p className="text-slate-500 text-xs">{item.subtitle}</p>}
+                    <p className="text-slate-700 dark:text-slate-200">{item.title}</p>
+                    {item.subtitle && <p className="text-slate-600 dark:text-slate-400 text-xs">{item.subtitle}</p>}
                   </div>
                 </li>
               ))}
               {!summary?.recent_activity?.length && (
-                <li className="text-sm text-slate-500">No activity yet.</li>
+                <li className="text-sm text-slate-600 dark:text-slate-400">No activity yet.</li>
               )}
             </ul>
           </div>
@@ -651,24 +651,24 @@ export function DashboardView({ token }: { token: string }) {
       {exports.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Data exports</h2>
-            <Link href="/settings/danger" className="text-xs text-amber-400 hover:text-amber-300">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Data exports</h2>
+            <Link href="/settings/danger" className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300">
               Manage exports
             </Link>
           </div>
-          <ul className="bg-slate-900/80 border border-slate-800 rounded-xl divide-y divide-slate-800">
+          <ul className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-200 dark:divide-slate-800">
             {exports.map((exp) => (
               <li key={exp.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <div>
-                  <span className="text-slate-200 capitalize">{exp.status}</span>
-                  <span className="text-slate-500 ml-2">{formatDate(exp.created_at)}</span>
+                  <span className="text-slate-700 dark:text-slate-200 capitalize">{exp.status}</span>
+                  <span className="text-slate-600 dark:text-slate-400 ml-2">{formatDate(exp.created_at)}</span>
                 </div>
                 {exp.status === "ready" && exp.presigned_url && (
                   <a
                     href={exp.presigned_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300"
+                    className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Download
@@ -682,27 +682,27 @@ export function DashboardView({ token }: { token: string }) {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             Tailored resumes
-            <span className="text-slate-500 font-normal text-sm ml-2">
+            <span className="text-slate-600 dark:text-slate-400 font-normal text-sm ml-2">
               ({summary?.counts.resumes ?? 0} total)
             </span>
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
             Job-specific versions built from your master resume — each gets its own ATS score and history.
           </p>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 dark:text-slate-400" />
               <input
                 type="search"
                 placeholder="Search title, company, tags…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-200"
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-200"
               />
             </div>
             <select
@@ -715,55 +715,55 @@ export function DashboardView({ token }: { token: string }) {
                 setStatusFilters(values.filter(Boolean))
                 setPage(1)
               }}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 min-w-[180px] h-[84px]"
+              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 min-w-[180px] h-[84px]"
               aria-label="Status filters"
             >
               {STATUS_OPTIONS.filter((o) => o.value).map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
-            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" aria-label="From date" />
-            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200" aria-label="To date" />
-            <select value={sort} onChange={(e) => setSort(e.target.value as ResumeSort)} className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200">
+            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200" aria-label="From date" />
+            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200" aria-label="To date" />
+            <select value={sort} onChange={(e) => setSort(e.target.value as ResumeSort)} className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
               <option value="date">Sort: Date</option>
               <option value="ats_score">Sort: ATS score</option>
               <option value="company">Sort: Company</option>
             </select>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
             <label className="flex items-center gap-2">ATS min: {atsMin}
               <input type="range" min={0} max={100} value={atsMin} onChange={(e) => { setAtsMin(Number(e.target.value)); setPage(1) }} className="w-24" />
             </label>
             <label className="flex items-center gap-2">ATS max: {atsMax}
               <input type="range" min={0} max={100} value={atsMax} onChange={(e) => { setAtsMax(Number(e.target.value)); setPage(1) }} className="w-24" />
             </label>
-            <button type="button" onClick={() => void loadResumes()} className="text-amber-400 hover:text-amber-300 text-xs font-medium">Apply filters</button>
+            <button type="button" onClick={() => void loadResumes()} className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 text-xs font-medium">Apply filters</button>
           </div>
         </div>
 
         {selected.size > 0 && (
-          <div className="flex items-center gap-3 bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2 text-sm">
-            <span className="text-slate-300">{selected.size} selected</span>
-            <button type="button" onClick={() => void handleBulkTag()} className="text-amber-400 hover:text-amber-300 flex items-center gap-1">
+          <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 text-sm">
+            <span className="text-slate-700 dark:text-slate-300">{selected.size} selected</span>
+            <button type="button" onClick={() => void handleBulkTag()} className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 flex items-center gap-1">
               Tag
             </button>
-            <button type="button" onClick={() => void handleBulkExport()} className="text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <button type="button" onClick={() => void handleBulkExport()} className="text-blue-700 dark:text-blue-400 hover:text-blue-300 flex items-center gap-1">
               Export
             </button>
-            <button type="button" onClick={() => void handleBulkDelete()} className="text-red-400 hover:text-red-300 flex items-center gap-1">
+            <button type="button" onClick={() => void handleBulkDelete()} className="text-red-700 dark:text-red-400 hover:text-red-300 flex items-center gap-1">
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           </div>
         )}
 
         {listLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-amber-700 dark:text-amber-400" /></div>
         ) : resumes.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-3 px-4">
+          <div className="text-center py-12 text-slate-600 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-3 px-4">
             {hasMasterResume ? (
               <>
                 <p>No tailored resumes yet.</p>
-                <p className="text-sm text-slate-400 max-w-md mx-auto">
+                <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
                   Your master resume is indexed and ready. Create a tailored version by
                   pasting a job description — it will appear here with ATS scores and export links.
                 </p>
@@ -771,14 +771,14 @@ export function DashboardView({ token }: { token: string }) {
             ) : (
               <>
                 <p>No tailored resumes yet.</p>
-                <p className="text-sm text-slate-400 max-w-md mx-auto">
+                <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
                   Upload or build your master resume first, then tailor it to each job you apply for.
                 </p>
               </>
             )}
             <Link
               href="/session/new"
-              className="inline-flex items-center gap-1 text-amber-400 hover:underline font-medium"
+              className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 hover:underline font-medium"
             >
               New tailored resume
             </Link>
@@ -786,16 +786,16 @@ export function DashboardView({ token }: { token: string }) {
         ) : (
           <div className="space-y-3">
             {resumes.map((r) => (
-              <article key={r.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <article key={r.id} className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                 <div className="flex flex-wrap items-start gap-3">
                   <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="mt-1" aria-label={`Select ${resumeTitle(r)}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-slate-100">{resumeTitle(r)}</h3>
+                      <h3 className="font-semibold text-slate-900 dark:text-slate-100">{resumeTitle(r)}</h3>
                       {r.display_name && (
-                        <span className="text-slate-500 text-sm truncate">{r.jd_title}</span>
+                        <span className="text-slate-600 dark:text-slate-400 text-sm truncate">{r.jd_title}</span>
                       )}
-                      <span className="text-slate-500 text-sm">@ {r.jd_company}</span>
+                      <span className="text-slate-600 dark:text-slate-400 text-sm">@ {r.jd_company}</span>
                       <span className={clsx("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full", TAILORING_COLORS[r.tailoring_stage] ?? TAILORING_COLORS.in_progress)}>
                         {r.tailoring_stage === "in_progress" ? "Draft" : "Polished"}
                       </span>
@@ -803,22 +803,22 @@ export function DashboardView({ token }: { token: string }) {
                         <span className={clsx("text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full", STATUS_COLORS[r.status] ?? STATUS_COLORS.draft)}>{r.status}</span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500">
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-600 dark:text-slate-400">
                       <span>Built {formatDate(r.updated_at)}</span>
                       <AtsBadge score={r.current_ats_score} delta={r.ats_score_delta} tailoringStage={r.tailoring_stage} />
-                      {r.tags.map((t) => (<span key={t} className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded">{t}</span>))}
+                      {r.tags.map((t) => (<span key={t} className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded">{t}</span>))}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link href={`/session/${r.session_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>
-                    <button type="button" onClick={() => void handleRename(r)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg" title="Rename"><Pencil className="w-3.5 h-3.5" /> Name</button>
-                    <button type="button" onClick={() => void handleDuplicate(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Copy className="w-3.5 h-3.5" /> Duplicate</button>
-                    <button type="button" onClick={() => void downloadResume(token, r.id, "pdf", `${r.jd_company}_resume.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 bg-slate-800 px-2.5 py-1.5 rounded-lg"><Download className="w-3.5 h-3.5" /> PDF</button>
+                    <Link href={`/session/${r.session_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>
+                    <button type="button" onClick={() => void handleRename(r)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg" title="Rename"><Pencil className="w-3.5 h-3.5" /> Name</button>
+                    <button type="button" onClick={() => void handleDuplicate(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><Copy className="w-3.5 h-3.5" /> Duplicate</button>
+                    <button type="button" onClick={() => void downloadResume(token, r.id, "pdf", `${r.jd_company}_resume.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><Download className="w-3.5 h-3.5" /> PDF</button>
                     <button
                       type="button"
                       disabled={deletingIds.has(r.id)}
                       onClick={() => void handleDelete(r.id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-red-400 bg-slate-800 px-2.5 py-1.5 rounded-lg disabled:opacity-40"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg disabled:opacity-40"
                       aria-label={`Delete ${resumeTitle(r)}`}
                     >
                       {deletingIds.has(r.id) ? (
@@ -830,7 +830,7 @@ export function DashboardView({ token }: { token: string }) {
                   </div>
                 </div>
                 {expandedResumeId === r.id && summary && (
-                  <div className="mt-4 h-24 border-t border-slate-800 pt-4">
+                  <div className="mt-4 h-24 border-t border-slate-200 dark:border-slate-800 pt-4">
                     <div className="overflow-x-auto">
                       <LineChart width={720} height={84} data={summary.ats_trend.filter((p) => p.resume_id === r.id)}>
                         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} />
@@ -840,7 +840,7 @@ export function DashboardView({ token }: { token: string }) {
                     </div>
                   </div>
                 )}
-                <button type="button" onClick={() => setExpandedResumeId((id) => (id === r.id ? null : r.id))} className="mt-2 text-[10px] text-slate-500 hover:text-amber-400">
+                <button type="button" onClick={() => setExpandedResumeId((id) => (id === r.id ? null : r.id))} className="mt-2 text-[10px] text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400">
                   {expandedResumeId === r.id ? "Hide score trend" : "Show score trend"}
                 </button>
               </article>
@@ -850,9 +850,9 @@ export function DashboardView({ token }: { token: string }) {
 
         {totalPages > 1 && (
           <div className="flex justify-center gap-2 pt-2">
-            <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1.5 text-sm rounded-lg bg-slate-800 text-slate-300 disabled:opacity-40">Previous</button>
-            <span className="text-sm text-slate-500 self-center">Page {page} of {totalPages}</span>
-            <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1.5 text-sm rounded-lg bg-slate-800 text-slate-300 disabled:opacity-40">Next</button>
+            <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1.5 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40">Previous</button>
+            <span className="text-sm text-slate-600 dark:text-slate-400 self-center">Page {page} of {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1.5 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40">Next</button>
           </div>
         )}
       </section>

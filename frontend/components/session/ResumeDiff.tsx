@@ -34,18 +34,18 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
     return (
       <div className="space-y-3">
         {costInfo && (
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-slate-300">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300">
             Estimated cost:{" "}
-            <span className="text-amber-400 font-semibold">{costInfo.cost_formatted}</span>
-            <span className="text-slate-500 ml-2">
+            <span className="text-amber-700 dark:text-amber-400 font-semibold">{costInfo.cost_formatted}</span>
+            <span className="text-slate-600 dark:text-slate-400 ml-2">
               ({costInfo.provider} · {costInfo.model})
             </span>
           </div>
         )}
-        <div className="flex flex-col items-center gap-3 py-12 text-slate-400">
+        <div className="flex flex-col items-center gap-3 py-12 text-slate-600 dark:text-slate-400">
           <div className="w-7 h-7 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm">Rewriting resume sections…</p>
-          <p className="text-xs text-slate-600">This takes 20–60 seconds depending on resume length.</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">This takes 20–60 seconds depending on resume length.</p>
         </div>
       </div>
     );
@@ -55,10 +55,10 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
   return (
     <div className="space-y-4">
       {costInfo && (
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-slate-300">
+        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300">
           Rewrite cost:{" "}
-          <span className="text-amber-400 font-semibold">{costInfo.cost_formatted}</span>
-          <span className="text-slate-500 ml-2">
+          <span className="text-amber-700 dark:text-amber-400 font-semibold">{costInfo.cost_formatted}</span>
+          <span className="text-slate-600 dark:text-slate-400 ml-2">
             ({costInfo.provider} · {costInfo.model})
           </span>
         </div>

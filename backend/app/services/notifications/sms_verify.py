@@ -67,7 +67,7 @@ async def send_verification_sms(phone: str, code: str) -> dict:
 
     def _send():
         return client.messages.create(
-            body=f"Your Smart Resume verification code is {code}",
+            body=f"Your TalioCV verification code is {code}",
             from_=settings.TWILIO_FROM_NUMBER,
             to=phone,
         )

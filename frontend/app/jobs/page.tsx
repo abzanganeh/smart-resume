@@ -174,7 +174,7 @@ function JobsPageContent() {
 
   if (status === "loading" || !session || subscribed === null) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Loading…
       </div>
@@ -184,21 +184,21 @@ function JobsPageContent() {
   const canLoadMore = jobs.length < total
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Search className="w-7 h-7 text-amber-400" />
+              <Search className="w-7 h-7 text-amber-700 dark:text-amber-400" />
               Search jobs
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
               Find roles, check fit, and tailor your resume in one flow.
             </p>
           </div>
           <Link
             href="/jobs/preferences"
-            className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 border border-slate-800 rounded-lg px-3 py-2"
+            className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2"
           >
             <Settings2 className="w-4 h-4" />
             Preferences
@@ -207,50 +207,50 @@ function JobsPageContent() {
 
         <form
           onSubmit={handleSearch}
-          className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 mb-8"
+          className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4 mb-8"
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-xs text-slate-500 mb-1 block">Role / keywords</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Role / keywords</span>
               <input
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="e.g. Backend engineer Python"
                 data-testid="jobs-search-role"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </label>
             <label className="block">
-              <span className="text-xs text-slate-500 mb-1 block">Location</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Location</span>
               <input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="City, state, or country"
                 data-testid="jobs-search-location"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </label>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={remote}
                 onChange={(e) => setRemote(e.target.checked)}
                 data-testid="jobs-search-remote"
-                className="rounded border-slate-700 bg-slate-950 text-amber-400 focus:ring-amber-400"
+                className="rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-amber-700 dark:text-amber-400 focus:ring-amber-400"
               />
               Remote only
             </label>
 
             <label className="block">
-              <span className="text-xs text-slate-500 mb-1 block">Date posted</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Date posted</span>
               <select
                 value={datePosted}
                 onChange={(e) => setDatePosted(e.target.value as DatePostedFilter)}
                 data-testid="jobs-search-date-posted"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
                 {DATE_POSTED_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -261,7 +261,7 @@ function JobsPageContent() {
             </label>
 
             <label className="block">
-              <span className="text-xs text-slate-500 mb-1 block">Salary min (USD)</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Salary min (USD)</span>
               <input
                 type="number"
                 min={0}
@@ -269,17 +269,17 @@ function JobsPageContent() {
                 onChange={(e) => setSalaryMin(e.target.value)}
                 placeholder="80000"
                 data-testid="jobs-search-salary-min"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </label>
 
             <label className="block">
-              <span className="text-xs text-slate-500 mb-1 block">Employment type</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Employment type</span>
               <select
                 value={employmentType}
                 onChange={(e) => setEmploymentType(e.target.value)}
                 data-testid="jobs-search-employment-type"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
                 {EMPLOYMENT_TYPES.map((opt) => (
                   <option key={opt.value || "any"} value={opt.value}>
@@ -311,11 +311,11 @@ function JobsPageContent() {
         </form>
 
         {error && (
-          <div className="mb-6 flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+          <div className="mb-6 flex items-start gap-2 text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             {error}
             {error.includes("Subscription") && (
-              <Link href="/billing" className="ml-auto text-amber-400 hover:text-amber-300 shrink-0">
+              <Link href="/billing" className="ml-auto text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 shrink-0">
                 Upgrade
               </Link>
             )}
@@ -333,12 +333,12 @@ function JobsPageContent() {
         )}
 
         {!loading && hasSearched && jobs.length === 0 && !error && (
-          <p className="text-center text-slate-500 py-12">No jobs found. Try different keywords.</p>
+          <p className="text-center text-slate-600 dark:text-slate-400 py-12">No jobs found. Try different keywords.</p>
         )}
 
         {!loading && jobs.length > 0 && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Showing {jobs.length} of {total} result{total !== 1 ? "s" : ""}
             </p>
             {jobs.map((job, index) => (
@@ -360,7 +360,7 @@ function JobsPageContent() {
                   onClick={handleLoadMore}
                   disabled={loadingMore}
                   data-testid="jobs-load-more"
-                  className="px-6 py-2.5 rounded-lg border border-slate-700 text-slate-200 text-sm font-medium hover:border-slate-600 disabled:opacity-40"
+                  className="px-6 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm font-medium hover:border-slate-600 disabled:opacity-40"
                 >
                   {loadingMore ? (
                     <span className="inline-flex items-center gap-2">
@@ -384,7 +384,7 @@ export default function JobsPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading…
         </div>
       }

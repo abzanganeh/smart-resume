@@ -27,7 +27,7 @@ import pyotp
 from app.services.auth.encryption import decrypt_bytes, encrypt_bytes
 from app.services.auth.password import _pwd_context  # reuse bcrypt context
 
-ISSUER = "Smart Resume"
+ISSUER = "TalioCV"
 RECOVERY_CODE_COUNT = 10
 RECOVERY_CODE_LENGTH = 10  # alphanumeric chars (excluding ambiguous ones)
 TOTP_WINDOW = 1  # accept ±1 step (≈ ±30 s)

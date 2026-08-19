@@ -97,6 +97,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
+    AZURE_AD_CLIENT_ID: str = ""
+    AZURE_AD_CLIENT_SECRET: str = ""
+    LINKEDIN_CLIENT_ID: str = ""
+    LINKEDIN_CLIENT_SECRET: str = ""
 
     # Transactional email (Resend)
     RESEND_API_KEY: str = ""

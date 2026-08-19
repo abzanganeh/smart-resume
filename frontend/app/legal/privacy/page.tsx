@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { LegalPageShell } from "@/components/legal/LegalPageShell"
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Smart Resume",
+  title: "Privacy Policy — TalioCV",
   description:
-    "Privacy Policy for Smart Resume Agent.  GDPR lawful bases, data categories, retention periods, and your rights.",
+    "Privacy Policy for TalioCV.  GDPR lawful bases, data categories, retention periods, and your rights.",
 }
 
 const LAST_UPDATED = "2026-05-31"
@@ -13,9 +13,9 @@ export default function PrivacyPage() {
   return (
     <LegalPageShell title="Privacy Policy" lastUpdated={LAST_UPDATED}>
       <p>
-        This Privacy Policy explains how Smart Resume Agent (&quot;we&quot;,
+        This Privacy Policy explains how TalioCV (&quot;we&quot;,
         &quot;us&quot;) collects, uses, shares, and protects your information.
-        Smart Resume is operated by Alireza Barzin Zanganeh.  Our Data Protection
+        TalioCV is operated by Alireza Barzin Zanganeh.  Our Data Protection
         Officer (DPO) can be reached at{" "}
         <a href="mailto:privacy@zanganehai.com">privacy@zanganehai.com</a>.
       </p>
@@ -47,8 +47,8 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>Account &amp; identity</strong>: email, display name,
-          authentication provider (email / Google / GitHub), TOTP secret
-          (encrypted), recovery code hashes.
+          authentication provider (email / Google / GitHub / Microsoft /
+          LinkedIn), TOTP secret (encrypted), recovery code hashes.
         </li>
         <li>
           <strong>Profile &amp; résumé content</strong>: master résumé,
@@ -135,7 +135,7 @@ export default function PrivacyPage() {
 
       <h2>6. Children</h2>
       <p>
-        Smart Resume is not directed at users under 16.  Registration requires
+        TalioCV is not directed at users under 16.  Registration requires
         a self-attestation checkbox.  If you believe a minor has registered,
         contact us and we will close the account.
       </p>
@@ -149,7 +149,10 @@ export default function PrivacyPage() {
 
       <h2>8. Security</h2>
       <ul>
-        <li>BYOK API keys encrypted at rest with AES-256-GCM.</li>
+        <li>
+          Secrets at rest encrypted with AES-256-GCM. We do not accept or store
+          customer-supplied LLM API keys.
+        </li>
         <li>TOTP secrets encrypted; recovery codes stored hashed only.</li>
         <li>Strict CORS allowlist, signed Stripe webhooks, audited admin actions.</li>
         <li>

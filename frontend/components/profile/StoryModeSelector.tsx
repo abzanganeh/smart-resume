@@ -36,8 +36,8 @@ const MODES: ModeCard[] = [
       "Edit, re-record, or delete any segment",
       "Generate resume when you're ready",
     ],
-    cost: "Free (Chrome/Edge) · 2 credits (Firefox/Safari) · coaching: 1 credit / resume build",
-    costColor: "text-emerald-400",
+    cost: "Free in Chrome/Edge · Firefox/Safari use Whisper (paid plans) · coaching: 1 credit / resume build",
+    costColor: "text-emerald-700 dark:text-emerald-400",
   },
   {
     id: "interview",
@@ -52,7 +52,7 @@ const MODES: ModeCard[] = [
       "Resume generated from your complete answers",
     ],
     cost: "1 credit per session (subscribers: free)",
-    costColor: "text-amber-400",
+    costColor: "text-amber-700 dark:text-amber-400",
   },
 ];
 
@@ -65,15 +65,15 @@ export function StoryModeSelector({ isFreeUser, onSelect }: Props) {
   return (
     <div className="space-y-5">
       <div className="text-center space-y-1">
-        <h2 className="text-lg font-semibold text-slate-100">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           How would you like to build your resume?
         </h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Choose a mode — you can always switch by refreshing.
         </p>
       </div>
 
-      <p className="text-xs text-slate-500 text-center -mt-2">
+      <p className="text-xs text-slate-600 dark:text-slate-400 text-center -mt-2">
         Both modes support voice + text and end with comparing your resume to a job description.
       </p>
 
@@ -85,25 +85,25 @@ export function StoryModeSelector({ isFreeUser, onSelect }: Props) {
             onClick={() => onSelect(mode.id)}
             className={cn(
               "group relative text-left rounded-2xl border p-5 space-y-3 transition-all duration-200",
-              "border-slate-700 bg-slate-800/40 hover:border-indigo-500/60 hover:bg-indigo-950/20",
+              "border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 hover:border-indigo-500/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/20",
               "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900",
             )}
           >
             {/* Icon + title */}
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-slate-700/60 text-indigo-400 group-hover:bg-indigo-900/60 transition-colors">
+              <div className="p-2 rounded-xl bg-slate-200/60 dark:bg-slate-700/60 text-indigo-700 dark:text-indigo-400 group-hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors">
                 {mode.icon}
               </div>
               <div>
-                <p className="font-semibold text-slate-100 text-sm">{mode.title}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{mode.tagline}</p>
+                <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{mode.title}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{mode.tagline}</p>
               </div>
             </div>
 
             {/* Bullets */}
             <ul className="space-y-1.5">
               {mode.bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-slate-300">
+                <li key={i} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
                   <span className="mt-0.5 shrink-0 w-1 h-1 rounded-full bg-indigo-400" />
                   {b}
                 </li>
@@ -120,7 +120,7 @@ export function StoryModeSelector({ isFreeUser, onSelect }: Props) {
             </p>
 
             {/* Arrow */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 group-hover:text-indigo-400 transition-colors">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 group-hover:text-indigo-400 transition-colors">
               →
             </div>
           </button>

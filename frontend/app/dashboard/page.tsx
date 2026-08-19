@@ -10,7 +10,7 @@ export default function DashboardPage() {
   if (status === "loading" || !session?.backendAccessToken) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     )
   }

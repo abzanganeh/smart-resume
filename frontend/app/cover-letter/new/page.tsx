@@ -24,7 +24,7 @@ function CoverLetterNewContent() {
 
   if (status === "loading" || !session) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
         Loading…
       </div>
     );
@@ -37,15 +37,15 @@ function CoverLetterNewContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="text-2xl font-bold mb-2">Cover letter</h1>
-        <p className="text-slate-400 text-sm mb-8">
+        <p className="text-slate-600 dark:text-slate-400 text-sm mb-8">
           Pick a recent tailoring session, then generate a JD-aligned cover letter from your tailored resume.
         </p>
 
         {recent.length === 0 ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-slate-400 text-sm">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-slate-600 dark:text-slate-400 text-sm">
             No recent sessions yet. Complete a resume tailoring session first, then return here.
           </div>
         ) : (
@@ -57,12 +57,12 @@ function CoverLetterNewContent() {
                   onClick={() => handleSelect(entry.session_id)}
                   className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
                     sessionId === entry.session_id
-                      ? "border-amber-400/60 bg-amber-400/10"
-                      : "border-slate-800 bg-slate-900 hover:border-slate-700"
+                      ? "border-amber-400/60 bg-amber-500/10 dark:bg-amber-400/10"
+                      : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-700"
                   }`}
                 >
-                  <span className="block text-sm font-medium text-white">{entry.label}</span>
-                  <span className="block text-xs text-slate-500 font-mono mt-0.5">{entry.session_id}</span>
+                  <span className="block text-sm font-medium text-slate-900 dark:text-white">{entry.label}</span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-400 font-mono mt-0.5">{entry.session_id}</span>
                 </button>
               </li>
             ))}
@@ -97,7 +97,7 @@ export default function CoverLetterNewPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading…
         </div>
       }

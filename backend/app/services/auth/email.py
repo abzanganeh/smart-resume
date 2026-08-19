@@ -60,17 +60,17 @@ async def send_verification_email(
     token = make_email_verification_token(user_id)
     link = verification_link(token)
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Verify your Smart Resume email"
+    subject = "Verify your TalioCV email"
     body_text = (
         f"Hi {name},\n\n"
-        "Please confirm your Smart Resume email by clicking the link below "
+        "Please confirm your TalioCV email by clicking the link below "
         "within the next 24 hours:\n\n"
         f"{link}\n\n"
         "If you did not create an account, you can safely ignore this message."
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>Please confirm your Smart Resume email by clicking the button below "
+        "<p>Please confirm your TalioCV email by clicking the button below "
         "within the next 24 hours.</p>"
         f'<p><a href="{link}" '
         'style="display:inline-block;padding:10px 18px;background:#0d9488;'
@@ -89,10 +89,10 @@ async def send_password_reset_email(
     token = make_password_reset_token(user_id)
     link = password_reset_link(token)
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Reset your Smart Resume password"
+    subject = "Reset your TalioCV password"
     body_text = (
         f"Hi {name},\n\n"
-        "We received a request to reset your Smart Resume password. "
+        "We received a request to reset your TalioCV password. "
         "Use the link below within the next hour to choose a new one:\n\n"
         f"{link}\n\n"
         "If you did not request this, you can safely ignore this email — "
@@ -100,7 +100,7 @@ async def send_password_reset_email(
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>We received a request to reset your Smart Resume password. "
+        "<p>We received a request to reset your TalioCV password. "
         "Use the button below within the next hour to choose a new one.</p>"
         f'<p><a href="{link}" '
         'style="display:inline-block;padding:10px 18px;background:#dc2626;'
@@ -116,16 +116,16 @@ async def send_account_deleted_email(
     display_name: str | None = None,
 ) -> dict[str, Any]:
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Your Smart Resume account has been deleted"
+    subject = "Your TalioCV account has been deleted"
     body_text = (
         f"Hi {name},\n\n"
-        "Your Smart Resume account and associated data have been permanently deleted "
+        "Your TalioCV account and associated data have been permanently deleted "
         "as requested.\n\n"
         "If you believe this was a mistake, please contact support."
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>Your Smart Resume account and associated data have been permanently "
+        "<p>Your TalioCV account and associated data have been permanently "
         "deleted as requested.</p>"
         "<p>If you believe this was a mistake, please contact support.</p>"
     )
@@ -143,7 +143,7 @@ def _wrap_html(inner: str) -> str:
         'max-width:560px;margin:0 auto;padding:24px">'
         f"{inner}"
         '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>'
-        '<p style="font-size:11px;color:#9ca3af">Smart Resume — '
+        '<p style="font-size:11px;color:#9ca3af">TalioCV — '
         "automated message, please do not reply.</p>"
         "</div>"
     )

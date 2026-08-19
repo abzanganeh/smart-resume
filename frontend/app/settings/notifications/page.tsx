@@ -112,7 +112,7 @@ export default function NotificationSettingsPage() {
   if (status === "loading" || !token || loading || !prefs) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     );
   }
@@ -121,28 +121,28 @@ export default function NotificationSettingsPage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">
-      <Link href="/notifications" className="text-sm text-slate-500 hover:text-slate-300">
+      <Link href="/notifications" className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300">
         ← Back to inbox
       </Link>
-      <h1 className="text-2xl font-semibold text-white mt-4 mb-2">Notification preferences</h1>
-      <p className="text-sm text-slate-500 mb-8">
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mt-4 mb-2">Notification preferences</h1>
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-8">
         Choose how we reach you for each category. SMS is limited to interview reminders.
       </p>
 
       {error && (
-        <p className="mb-4 text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
+        <p className="mb-4 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg px-3 py-2">
           {error}
         </p>
       )}
 
-      <section className="mb-10 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 bg-slate-900/80 border-b border-slate-800">
-          <h2 className="font-medium text-slate-200">Email & in-app</h2>
+      <section className="mb-10 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="font-medium text-slate-800 dark:text-slate-200">Email & in-app</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-800">
+              <tr className="text-left text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <th className="px-4 py-2">Category</th>
                 <th className="px-4 py-2 text-center">Email</th>
                 <th className="px-4 py-2 text-center">In-app</th>
@@ -150,8 +150,8 @@ export default function NotificationSettingsPage() {
             </thead>
             <tbody>
               {NOTIFICATION_CATEGORIES.map((c) => (
-                <tr key={c.id} className="border-b border-slate-800/60">
-                  <td className="px-4 py-2.5 text-slate-300">{c.label}</td>
+                <tr key={c.id} className="border-b border-slate-200 dark:border-slate-800/60">
+                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300">{c.label}</td>
                   <td className="px-4 py-2.5 text-center">
                     <input
                       type="checkbox"
@@ -160,7 +160,7 @@ export default function NotificationSettingsPage() {
                         toggleCategory("email_enabled_categories", c.id)
                       }
                       disabled={saving}
-                      className="rounded border-slate-600"
+                      className="rounded border-slate-400 dark:border-slate-600"
                     />
                   </td>
                   <td className="px-4 py-2.5 text-center">
@@ -171,7 +171,7 @@ export default function NotificationSettingsPage() {
                         toggleCategory("in_app_enabled_categories", c.id)
                       }
                       disabled={saving}
-                      className="rounded border-slate-600"
+                      className="rounded border-slate-400 dark:border-slate-600"
                     />
                   </td>
                 </tr>
@@ -181,9 +181,9 @@ export default function NotificationSettingsPage() {
         </div>
       </section>
 
-      <section className="mb-10 border border-slate-800 rounded-xl p-4">
-        <h2 className="font-medium text-slate-200 mb-2">Browser notifications</h2>
-        <p className="text-sm text-slate-500 mb-4">
+      <section className="mb-10 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+        <h2 className="font-medium text-slate-800 dark:text-slate-200 mb-2">Browser notifications</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
           Optional web push alerts when you are not on the site.
         </p>
         <button
@@ -193,7 +193,7 @@ export default function NotificationSettingsPage() {
           className={cn(
             "px-4 py-2 rounded-lg text-sm font-medium",
             prefs.web_push_enabled
-              ? "bg-slate-800 text-slate-400 cursor-default"
+              ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-default"
               : "bg-amber-400 text-slate-900 hover:bg-amber-300"
           )}
         >
@@ -205,13 +205,13 @@ export default function NotificationSettingsPage() {
         </button>
       </section>
 
-      <section className="mb-10 border border-slate-800 rounded-xl p-4">
-        <h2 className="font-medium text-slate-200 mb-2">SMS (interview reminders)</h2>
-        <p className="text-sm text-slate-500 mb-4">
+      <section className="mb-10 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+        <h2 className="font-medium text-slate-800 dark:text-slate-200 mb-2">SMS (interview reminders)</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
           Verify your phone to receive interview reminder texts.
         </p>
         {smsVerified ? (
-          <p className="flex items-center gap-2 text-sm text-emerald-400">
+          <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
             <Check className="w-4 h-4" />
             Verified {prefs.sms_phone}
           </p>
@@ -222,13 +222,13 @@ export default function NotificationSettingsPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+15551234567"
-              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 text-sm"
+              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm"
             />
             {smsStep === "idle" ? (
               <button
                 type="button"
                 onClick={sendSms}
-                className="text-sm text-amber-400 hover:text-amber-300"
+                className="text-sm text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
               >
                 Send verification code
               </button>
@@ -239,7 +239,7 @@ export default function NotificationSettingsPage() {
                   value={smsCode}
                   onChange={(e) => setSmsCode(e.target.value)}
                   placeholder="6-digit code"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 text-sm"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm"
                 />
                 <button
                   type="button"
@@ -254,12 +254,12 @@ export default function NotificationSettingsPage() {
         )}
       </section>
 
-      <section className="border border-slate-800 rounded-xl p-4">
-        <h2 className="font-medium text-slate-200 mb-2">Digest mode</h2>
-        <p className="text-sm text-slate-500 mb-4">
+      <section className="border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+        <h2 className="font-medium text-slate-800 dark:text-slate-200 mb-2">Digest mode</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
           Batch non-urgent emails into one daily digest.
         </p>
-        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
           <input
             type="checkbox"
             checked={prefs.digest_mode === "daily"}
@@ -267,7 +267,7 @@ export default function NotificationSettingsPage() {
               save({ digest_mode: e.target.checked ? "daily" : "off" })
             }
             disabled={saving}
-            className="rounded border-slate-600"
+            className="rounded border-slate-400 dark:border-slate-600"
           />
           Daily digest
         </label>

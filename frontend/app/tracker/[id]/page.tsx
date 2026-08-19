@@ -263,7 +263,7 @@ export default function ApplicationDetailPage({
   if (status === "loading" || !token || loading || !app) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     )
   }
@@ -278,35 +278,35 @@ export default function ApplicationDetailPage({
     <div className="max-w-4xl mx-auto px-4 py-8">
       <Link
         href="/tracker"
-        className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-amber-300 mb-4"
+        className="inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-300 mb-4"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to pipeline
       </Link>
 
       <header className="mb-8">
-        <p className="text-xs uppercase tracking-wide text-amber-400/80">{app.status}</p>
-        <h1 className="text-2xl font-semibold text-white">{app.jd_title}</h1>
-        <p className="text-slate-400">{app.jd_company}</p>
+        <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-400/80">{app.status}</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">{app.jd_title}</h1>
+        <p className="text-slate-600 dark:text-slate-400">{app.jd_company}</p>
       </header>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-4">Timeline</h2>
-        <ol className="space-y-4 border-l border-slate-800 ml-2 pl-4">
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">Timeline</h2>
+        <ol className="space-y-4 border-l border-slate-200 dark:border-slate-800 ml-2 pl-4">
           {app.timeline.length === 0 && (
-            <li className="text-sm text-slate-500">No events yet.</li>
+            <li className="text-sm text-slate-600 dark:text-slate-400">No events yet.</li>
           )}
           {app.timeline.map((ev, i) => (
             <li key={`${ev.type}-${ev.at}-${i}`} className="relative">
-              <span className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-amber-400/80" />
-              <p className="text-xs text-slate-500">{new Date(ev.at).toLocaleString()}</p>
-              <p className="text-sm text-slate-200">
+              <span className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-amber-500/80 dark:bg-amber-400/80" />
+              <p className="text-xs text-slate-600 dark:text-slate-400">{new Date(ev.at).toLocaleString()}</p>
+              <p className="text-sm text-slate-800 dark:text-slate-200">
                 {ev.type === "status_change" && `Status → ${String(ev.status)}`}
                 {ev.type === "interview_round" && `Interview: ${String(ev.name)}`}
                 {ev.type === "attachment" && `Uploaded ${String(ev.filename)}`}
@@ -317,8 +317,8 @@ export default function ApplicationDetailPage({
         </ol>
       </section>
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-4">Contact &amp; notes</h2>
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">Contact &amp; notes</h2>
         <form onSubmit={saveContact} className="grid gap-3 sm:grid-cols-2">
           <input
             placeholder="Contact name"
@@ -326,7 +326,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setContactForm((f) => ({ ...f, contact_name: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <input
             placeholder="Contact email"
@@ -335,20 +335,20 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setContactForm((f) => ({ ...f, contact_email: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <input
             placeholder="Job URL"
             value={contactForm.job_url}
             onChange={(e) => setContactForm((f) => ({ ...f, job_url: e.target.value }))}
-            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <textarea
             placeholder="Notes"
             rows={3}
             value={contactForm.notes}
             onChange={(e) => setContactForm((f) => ({ ...f, notes: e.target.value }))}
-            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <button
             type="submit"
@@ -360,19 +360,19 @@ export default function ApplicationDetailPage({
         </form>
       </section>
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-4">Interview rounds</h2>
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">Interview rounds</h2>
         {app.interview_rounds.length > 0 && (
           <ul className="mb-4 space-y-2">
             {app.interview_rounds.map((r) => (
               <li
                 key={r.id}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
               >
-                <span className="text-white font-medium">{r.name}</span>
-                <span className="text-slate-500 ml-2">({r.format})</span>
+                <span className="text-slate-900 dark:text-white font-medium">{r.name}</span>
+                <span className="text-slate-600 dark:text-slate-400 ml-2">({r.format})</span>
                 {r.scheduled_at && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                     {new Date(r.scheduled_at).toLocaleString()}
                   </p>
                 )}
@@ -386,12 +386,12 @@ export default function ApplicationDetailPage({
             placeholder="Round name"
             value={roundForm.name}
             onChange={(e) => setRoundForm((f) => ({ ...f, name: e.target.value }))}
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <select
             value={roundForm.format}
             onChange={(e) => setRoundForm((f) => ({ ...f, format: e.target.value }))}
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           >
             {INTERVIEW_FORMATS.map((f) => (
               <option key={f} value={f}>
@@ -405,7 +405,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setRoundForm((f) => ({ ...f, scheduled_at: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <input
             placeholder="Duration (minutes)"
@@ -413,7 +413,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setRoundForm((f) => ({ ...f, duration_minutes: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <input
             placeholder="Interviewers (comma-separated)"
@@ -421,12 +421,12 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setRoundForm((f) => ({ ...f, interviewers: e.target.value }))
             }
-            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <select
             value={roundForm.outcome}
             onChange={(e) => setRoundForm((f) => ({ ...f, outcome: e.target.value }))}
-            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           >
             <option value="">Outcome (optional)</option>
             {INTERVIEW_OUTCOMES.map((outcome) => (
@@ -446,8 +446,8 @@ export default function ApplicationDetailPage({
       </section>
 
       {(app.status === "offer" || app.offer_detail) && (
-        <section className="mb-8 rounded-xl border border-amber-400/30 bg-amber-400/5 p-5">
-          <h2 className="text-sm font-semibold text-amber-200 mb-4">Offer details</h2>
+        <section className="mb-8 rounded-xl border border-amber-400/30 bg-amber-500/5 dark:bg-amber-400/5 p-5">
+          <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-4">Offer details</h2>
           <form onSubmit={submitOffer} className="grid gap-3 sm:grid-cols-2">
             <input
               placeholder="Base salary (USD)"
@@ -455,7 +455,7 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, base_salary_usd: e.target.value }))
               }
-              className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <input
               placeholder="Bonus (USD)"
@@ -463,7 +463,7 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, bonus_usd: e.target.value }))
               }
-              className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <input
               placeholder="Equity description"
@@ -471,7 +471,7 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, equity_description: e.target.value }))
               }
-              className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <input
               type="date"
@@ -479,7 +479,7 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, start_date: e.target.value }))
               }
-              className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <input
               type="datetime-local"
@@ -487,14 +487,14 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, response_deadline: e.target.value }))
               }
-              className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <select
               value={offerForm.decision}
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, decision: e.target.value }))
               }
-              className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             >
               <option value="pending">Pending</option>
               <option value="accepted">Accepted</option>
@@ -507,7 +507,7 @@ export default function ApplicationDetailPage({
               onChange={(e) =>
                 setOfferForm((f) => ({ ...f, decision_notes: e.target.value }))
               }
-              className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <button
               type="submit"
@@ -520,19 +520,19 @@ export default function ApplicationDetailPage({
         </section>
       )}
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-2">Attachments</h2>
-        <p className="text-xs text-slate-500 mb-3">
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">Attachments</h2>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
           {usage.count}/{usage.max_count} files · {formatBytes(usage.total_bytes)} /{" "}
           {formatBytes(usage.max_total_bytes)}
         </p>
-        <div className="h-2 rounded-full bg-slate-800 mb-4 overflow-hidden">
+        <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 mb-4 overflow-hidden">
           <div
             className="h-full bg-amber-400 transition-all"
             style={{ width: `${usagePct}%` }}
           />
         </div>
-        <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-amber-300 hover:text-amber-200 mb-4">
+        <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 mb-4">
           <Upload className="w-4 h-4" />
           Upload file (max 5 MB)
           <input type="file" className="hidden" onChange={onFileUpload} disabled={saving} />
@@ -541,11 +541,11 @@ export default function ApplicationDetailPage({
           {app.attachments.map((att) => (
             <li
               key={att.id}
-              className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
             >
               <div>
-                <p className="text-slate-200">{att.filename}</p>
-                <p className="text-xs text-slate-500">{formatBytes(att.size_bytes)}</p>
+                <p className="text-slate-800 dark:text-slate-200">{att.filename}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">{formatBytes(att.size_bytes)}</p>
               </div>
               <div className="flex items-center gap-2">
                 {att.download_url && (
@@ -553,7 +553,7 @@ export default function ApplicationDetailPage({
                     href={att.download_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-amber-400 hover:underline"
+                    className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
                   >
                     Download
                   </a>
@@ -561,7 +561,7 @@ export default function ApplicationDetailPage({
                 <button
                   type="button"
                   onClick={() => void onDeleteAttachment(att.id)}
-                  className="text-slate-500 hover:text-red-400"
+                  className="text-slate-600 dark:text-slate-400 hover:text-red-400"
                   aria-label="Delete attachment"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -572,8 +572,8 @@ export default function ApplicationDetailPage({
         </ul>
       </section>
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-4">
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">
           Rejection / withdrawal
         </h2>
         <form onSubmit={submitRejection} className="grid gap-3 sm:grid-cols-2">
@@ -585,7 +585,7 @@ export default function ApplicationDetailPage({
                 status: e.target.value as "rejected" | "withdrawn",
               }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           >
             <option value="rejected">Rejected</option>
             <option value="withdrawn">Withdrawn</option>
@@ -595,7 +595,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setRejectForm((f) => ({ ...f, rejection_reason: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           >
             {REJECTION_REASONS.map((r) => (
               <option key={r.value} value={r.value}>
@@ -610,29 +610,29 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setRejectForm((f) => ({ ...f, rejection_notes: e.target.value }))
             }
-            className="sm:col-span-2 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="sm:col-span-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <button
             type="submit"
             disabled={saving}
-            className="sm:col-span-2 w-fit px-4 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm hover:bg-slate-800 disabled:opacity-50"
+            className="sm:col-span-2 w-fit px-4 py-2 rounded-lg border border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             Update rejection / withdrawal
           </button>
         </form>
       </section>
 
-      <section className="mb-8 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-        <h2 className="text-sm font-semibold text-slate-200 mb-4">Reminders</h2>
+      <section className="mb-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-5">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4">Reminders</h2>
         {reminders.length > 0 && (
           <ul className="mb-4 space-y-2">
             {reminders.map((r) => (
               <li
                 key={r.id}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
               >
-                <p className="text-slate-200">{r.message}</p>
-                <p className="text-xs text-slate-500">
+                <p className="text-slate-800 dark:text-slate-200">{r.message}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
                   {new Date(r.scheduled_at).toLocaleString()} · {r.status}
                 </p>
               </li>
@@ -647,7 +647,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setReminderForm((f) => ({ ...f, scheduled_at: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <input
             required
@@ -656,7 +656,7 @@ export default function ApplicationDetailPage({
             onChange={(e) =>
               setReminderForm((f) => ({ ...f, message: e.target.value }))
             }
-            className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+            className="rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
           />
           <button
             type="submit"
