@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import CreditKind, Subscription, SubscriptionStatus
 from app.models.user import User, CreditTransaction
 from app.services.admin.feature_unlocks import user_has_feature_unlock
-from app.services.billing.credits import consume_credit
+from app.services.billing.credits import consume_credit, record_quota_audit
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     InsufficientCreditsError,
@@ -40,6 +40,8 @@ class QuotaAction(str, enum.Enum):
     job_search = "job_search"
     fit_analysis = "fit_analysis"
     story_build = "story_build"
+    story_build_generate = "story_build_generate"
+    story_build_save = "story_build_save"
     story_coach = "story_coach"
     story_interview = "story_interview"
 
@@ -51,6 +53,8 @@ FREE_CREDIT_ACTIONS: frozenset[QuotaAction] = frozenset(
         QuotaAction.cover_letter,
         QuotaAction.section_regen,
         QuotaAction.story_build,
+        QuotaAction.story_build_generate,
+        QuotaAction.story_build_save,
         QuotaAction.story_coach,
         QuotaAction.story_interview,
     }
@@ -277,16 +281,49 @@ async def check_quota_for_section_regen(
     )
 
 
-async def check_quota_for_story(
+async def _user_has_story_quota_event(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    reason: str,
+) -> bool:
+    row = await session.execute(
+        select(CreditTransaction.id)
+        .where(CreditTransaction.user_id == user_id)
+        .where(CreditTransaction.reason == reason)
+        .limit(1)
+    )
+    return row.scalar_one_or_none() is not None
+
+
+async def _subscriber_story_decision(
+    session: AsyncSession,
+    *,
+    user: User,
+    action: QuotaAction,
+) -> QuotaDecision | None:
+    sub = await _active_subscription_for(session, user_id=user.id)
+    now = datetime.now(timezone.utc)
+    if sub is not None and _within_period(sub, now=now) and sub.status != SubscriptionStatus.paused:
+        return QuotaDecision(
+            action=action,
+            charged_to="subscription",
+            subscription_id=sub.id,
+        )
+    return None
+
+
+async def check_quota_for_story_generate(
     session: AsyncSession,
     *,
     user: User,
     whisper_path: bool,
     session_id: str | None = None,
 ) -> QuotaDecision:
-    """Quota for story-mode resume generation.
+    """Quota for generating a story resume draft (preview, not saved yet).
 
-    Web Speech is free.  Whisper path requires tier entitlement (slice 6).
+    First generate per account is free; each later generate costs 1 credit.
+    Subscribers are always free. Whisper path still uses whisper_gate.
     """
     if user.is_suspended:
         raise AccountSuspendedError("account_suspended")
@@ -296,37 +333,107 @@ async def check_quota_for_story(
 
         await check_and_increment_whisper_use(session, user=user)
 
-    sub = await _active_subscription_for(session, user_id=user.id)
-    now = datetime.now(timezone.utc)
-    if sub is not None and _within_period(sub, now=now) and sub.status != SubscriptionStatus.paused:
+    sub_decision = await _subscriber_story_decision(
+        session, user=user, action=QuotaAction.story_build_generate
+    )
+    if sub_decision is not None:
+        return sub_decision
+
+    reason = QuotaAction.story_build_generate.value
+    if not await _user_has_story_quota_event(session, user_id=user.id, reason=reason):
+        await record_quota_audit(
+            session,
+            user_id=user.id,
+            reason=reason,
+            session_id=session_id,
+        )
         return QuotaDecision(
-            action=QuotaAction.story_build,
-            charged_to="subscription",
-            subscription_id=sub.id,
+            action=QuotaAction.story_build_generate,
+            charged_to="first_story_generate",
         )
 
-    if not whisper_path:
-        return QuotaDecision(
-            action=QuotaAction.story_build,
-            charged_to="free_web_speech",
-        )
-
-    # Whisper on free tier is blocked by whisper_gate above; story credit for legacy path.
     try:
         row = await consume_credit(
             session,
             user_id=user.id,
             credit_kind=CreditKind.free,
-            reason=QuotaAction.story_build.value,
+            reason=reason,
             session_id=session_id,
         )
     except InsufficientCreditsError:
         raise
 
     return QuotaDecision(
-        action=QuotaAction.story_build,
+        action=QuotaAction.story_build_generate,
         charged_to="free_credit",
         credit_transaction_id=row.id,
+    )
+
+
+async def check_quota_for_story_save(
+    session: AsyncSession,
+    *,
+    user: User,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Quota for saving a reviewed story resume to the master profile.
+
+    First save per account is free; each later save costs 1 credit.
+    Subscribers are always free.
+    """
+    if user.is_suspended:
+        raise AccountSuspendedError("account_suspended")
+
+    sub_decision = await _subscriber_story_decision(
+        session, user=user, action=QuotaAction.story_build_save
+    )
+    if sub_decision is not None:
+        return sub_decision
+
+    reason = QuotaAction.story_build_save.value
+    if not await _user_has_story_quota_event(session, user_id=user.id, reason=reason):
+        await record_quota_audit(
+            session,
+            user_id=user.id,
+            reason=reason,
+            session_id=session_id,
+        )
+        return QuotaDecision(
+            action=QuotaAction.story_build_save,
+            charged_to="first_story_save",
+        )
+
+    try:
+        row = await consume_credit(
+            session,
+            user_id=user.id,
+            credit_kind=CreditKind.free,
+            reason=reason,
+            session_id=session_id,
+        )
+    except InsufficientCreditsError:
+        raise
+
+    return QuotaDecision(
+        action=QuotaAction.story_build_save,
+        charged_to="free_credit",
+        credit_transaction_id=row.id,
+    )
+
+
+async def check_quota_for_story(
+    session: AsyncSession,
+    *,
+    user: User,
+    whisper_path: bool,
+    session_id: str | None = None,
+) -> QuotaDecision:
+    """Legacy alias — story preview generation quota."""
+    return await check_quota_for_story_generate(
+        session,
+        user=user,
+        whisper_path=whisper_path,
+        session_id=session_id,
     )
 
 
@@ -440,6 +547,8 @@ __all__ = [
     "check_quota_for_cover_letter",
     "check_quota_for_section_regen",
     "check_quota_for_story",
+    "check_quota_for_story_generate",
+    "check_quota_for_story_save",
     "check_quota_for_story_coach",
     "check_quota_for_story_interview",
 ]

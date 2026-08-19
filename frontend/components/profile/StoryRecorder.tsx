@@ -21,7 +21,21 @@ import { StoryCoach } from "./StoryCoach";
 import { StoryInterview } from "./StoryInterview";
 import { type StoryMode, StoryModeSelector } from "./StoryModeSelector";
 import { StorySegment } from "./StorySegment";
-import { polishResume, submitStory } from "@/lib/story";
+import { StorySaveConfirmDialog } from "./StorySaveConfirmDialog";
+import { StoryVerifyPanel } from "./StoryVerifyPanel";
+import {
+  generateStoryPreview,
+  polishResume,
+  refreshStoryVerify,
+  saveStoryResume,
+  storyGenerateCreditLabel,
+  storySaveCreditLabel,
+} from "@/lib/story";
+import {
+  clearStoryDraft,
+  loadStoryDraft,
+  patchStoryDraft,
+} from "@/lib/storyDraft";
 import { cn } from "@/lib/utils";
 
 const MAX_SEGMENTS = 30;
@@ -62,6 +76,7 @@ type RecordingState = "idle" | "recording" | "re-recording";
 
 export function StoryRecorder({ token, onSaved }: Props) {
   const { isFreeUser } = useEntitlement();
+  const [draftReady, setDraftReady] = useState(false);
   const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
   const [segments, setSegments] = useState<string[]>([]);
   const [recordingState, setRecordingState]     = useState<RecordingState>("idle");
@@ -74,17 +89,71 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [storyBuildSessionId, setStoryBuildSessionId] = useState("");
   const [coachSessionUnlocked, setCoachSessionUnlocked] = useState(false);
   const [reviewText, setReviewText] = useState<string | null>(null);
+  const [verifyItems, setVerifyItems] = useState<VerifyItem[]>([]);
+  const [verifyReviewCount, setVerifyReviewCount] = useState(0);
+  const [attestationChecked, setAttestationChecked] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [lastGenerateBilling, setLastGenerateBilling] = useState<string | undefined>();
+  const [lastSaveBilling, setLastSaveBilling] = useState<string | undefined>();
+  const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
+  const verifyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [prevText, setPrevText] = useState<string | null>(null);
   const [polishInstruction, setPolishInstruction] = useState("");
   const [polishing, setPolishing] = useState(false);
   const [polishError, setPolishError] = useState<string | null>(null);
   const polishInputRef = useRef<HTMLTextAreaElement>(null);
+  const totalMsRef = useRef(0);
+  totalMsRef.current = totalMs;
 
   useEffect(() => {
     const id = readStoryBuildSessionId();
     setStoryBuildSessionId(id);
     setCoachSessionUnlocked(sessionStorage.getItem(coachPaidKey(id)) === "1");
+    const draft = loadStoryDraft();
+    if (draft && (draft.segments.length > 0 || draft.reviewText || draft.storyMode)) {
+      setStoryMode(
+        draft.storyMode ?? (draft.segments.length > 0 || draft.reviewText ? "free" : null),
+      );
+      setSegments(draft.segments);
+      setTotalMs(draft.totalMs);
+      setReviewText(draft.reviewText);
+    }
+    setDraftReady(true);
   }, []);
+
+  const persistSegments = useCallback((next: string[], mode: StoryMode | null = "free") => {
+    patchStoryDraft({
+      storyMode: mode,
+      segments: next,
+      totalMs: totalMsRef.current,
+    });
+    return next;
+  }, []);
+
+  const discardDraft = useCallback(() => {
+    clearStoryDraft();
+    setStoryMode(null);
+    setSegments([]);
+    setTotalMs(0);
+    setReviewText(null);
+    setVerifyItems([]);
+    setVerifyReviewCount(0);
+    setAttestationChecked(false);
+    setSaveDialogOpen(false);
+    setHasGeneratedOnce(false);
+    setPrevText(null);
+    setOpenCoachIndex(null);
+    setError(null);
+    const nextId = resetStoryBuildSessionId();
+    setStoryBuildSessionId(nextId);
+    setCoachSessionUnlocked(false);
+  }, []);
+
+  const finishAndSave = useCallback(() => {
+    clearStoryDraft();
+    onSaved();
+  }, [onSaved]);
 
   const markCoachSessionUnlocked = useCallback(() => {
     if (!storyBuildSessionId) return;
@@ -114,6 +183,21 @@ export function StoryRecorder({ token, onSaved }: Props) {
       setFinalText(data.text);
     },
   });
+
+  const finalTextRef = useRef("");
+  finalTextRef.current = finalText;
+  const recordingStateRef = useRef(recordingState);
+  recordingStateRef.current = recordingState;
+
+  useEffect(() => {
+    return () => {
+      const inProgress = finalTextRef.current.trim();
+      if (!inProgress || recordingStateRef.current === "re-recording") return;
+      const existing = loadStoryDraft()?.segments ?? [];
+      if (existing[existing.length - 1] === inProgress) return;
+      patchStoryDraft({ storyMode: "free", segments: [...existing, inProgress] });
+    };
+  }, []);
 
   // ── Total time tracker ─────────────────────────────────────────────────────
   const startTotalTimer = useCallback(() => {
@@ -164,10 +248,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
     if (!text) return;
 
     if (recordingState === "re-recording" && reRecordingIndex !== null) {
-      setSegments((prev) => prev.map((s, i) => i === reRecordingIndex ? text : s));
+      setSegments((prev) => persistSegments(prev.map((s, i) => i === reRecordingIndex ? text : s), storyMode ?? "free"));
       setReRecordingIndex(null);
     } else {
-      setSegments((prev) => [...prev, text]);
+      setSegments((prev) => persistSegments([...prev, text], storyMode ?? "free"));
     }
     setRecordingState("idle");
     resetVoice();
@@ -186,7 +270,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
   // ── Delete a segment ──────────────────────────────────────────────────────
   const deleteSegment = (index: number) => {
-    setSegments((prev) => prev.filter((_, i) => i !== index));
+    setSegments((prev) => persistSegments(prev.filter((_, i) => i !== index), storyMode ?? "free"));
   };
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -195,14 +279,57 @@ export function StoryRecorder({ token, onSaved }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await submitStory(segments, token, {
+      const result = await generateStoryPreview(segments, token, {
         whisperPath: !supportsWebSpeech,
+        storySessionId: storyBuildSessionId || undefined,
       });
-      setReviewText(result.resume_text ?? "");
+      const text = result.resume_text ?? "";
+      setReviewText(text);
+      setVerifyItems(result.verify_items ?? []);
+      setVerifyReviewCount(result.verify_review_count ?? 0);
+      setLastGenerateBilling(result.billing?.charged_to);
+      setHasGeneratedOnce(true);
+      setAttestationChecked(false);
+      patchStoryDraft({ reviewText: text, storyMode: storyMode ?? "free", segments });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate resume from story.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const scheduleVerifyRefresh = useCallback((nextText: string) => {
+    if (verifyDebounceRef.current) clearTimeout(verifyDebounceRef.current);
+    verifyDebounceRef.current = setTimeout(() => {
+      void refreshStoryVerify(segments, nextText, token)
+        .then((result) => {
+          setVerifyItems(result.verify_items);
+          setVerifyReviewCount(result.verify_review_count);
+        })
+        .catch(() => {
+          // Keep prior hints if refresh fails — user can still save manually.
+        });
+    }, 400);
+  }, [segments, token]);
+
+  const handleConfirmSave = async () => {
+    if (!reviewText || !attestationChecked) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await saveStoryResume(reviewText, token, {
+        segments,
+        whisperPath: !supportsWebSpeech,
+        storySessionId: storyBuildSessionId || undefined,
+        attestationConfirmed: true,
+      });
+      setLastSaveBilling(result.billing?.charged_to);
+      setSaveDialogOpen(false);
+      finishAndSave();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save resume to profile.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -214,6 +341,8 @@ export function StoryRecorder({ token, onSaved }: Props) {
     try {
       const result = await polishResume(reviewText, polishInstruction.trim(), token);
       setReviewText(result.text);
+      patchStoryDraft({ reviewText: result.text });
+      scheduleVerifyRefresh(result.text);
       setPolishInstruction("");
     } catch (e) {
       setPolishError(e instanceof Error ? e.message : "Polish failed. Try again.");
@@ -228,6 +357,15 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const canAddSegment = segments.length < MAX_SEGMENTS && !isRecordingAnything && !submitting;
   const totalMinsLabel = `${Math.floor(totalMs / 60000)}:${String(Math.floor((totalMs % 60000) / 1000)).padStart(2, "0")}`;
   const isWarning = totalMs >= WARN_TOTAL_MS;
+
+  // ── Wait for local draft restore so navigation does not flash an empty start ─
+  if (!draftReady) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 text-slate-500 dark:text-slate-400 animate-spin" />
+      </div>
+    );
+  }
 
   // ── Submitting overlay ─────────────────────────────────────────────────────
   if (submitting) {
@@ -263,13 +401,26 @@ export function StoryRecorder({ token, onSaved }: Props) {
         </div>
 
         <p className="text-slate-600 dark:text-slate-400 text-sm">
-          Review and edit below. Use the AI assistant to refine any section, then save to your profile.
+          Review the draft, fix any names or dates, then save to your profile when you&apos;re ready.
         </p>
+
+        <StoryVerifyPanel
+          items={verifyItems}
+          reviewCount={verifyReviewCount}
+          attestationChecked={attestationChecked}
+          onAttestationChange={setAttestationChecked}
+        />
 
         {/* Editable resume textarea */}
         <textarea
           value={reviewText}
-          onChange={(e) => { setReviewText(e.target.value); setPrevText(null); }}
+          onChange={(e) => {
+            const next = e.target.value;
+            setReviewText(next);
+            setPrevText(null);
+            patchStoryDraft({ reviewText: next });
+            scheduleVerifyRefresh(next);
+          }}
           rows={18}
           className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400/50"
         />
@@ -351,26 +502,62 @@ export function StoryRecorder({ token, onSaved }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-1">
+        <div className="flex flex-wrap gap-3 pt-1">
           <button
             type="button"
-            onClick={() => onSaved()}
-            className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+            onClick={() => setSaveDialogOpen(true)}
+            disabled={!attestationChecked || saving}
+            className="flex-1 min-w-[200px] py-3 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
           >
             <CheckCircle className="w-4 h-4" />
-            Save to Profile &amp; continue
+            Save to profile
+            <span className="text-xs font-normal opacity-80">
+              ({storySaveCreditLabel(lastSaveBilling ?? (hasGeneratedOnce ? "first_story_save" : undefined), isFreeUser)})
+            </span>
           </button>
           <button
             type="button"
-            onClick={() => { setReviewText(null); setPrevText(null); }}
+            onClick={() => void handleSubmit()}
+            className="px-5 py-3 border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-xl transition-colors text-sm"
+          >
+            Regenerate
+            <span className="ml-1 text-xs opacity-80">
+              ({storyGenerateCreditLabel(hasGeneratedOnce ? "free_credit" : lastGenerateBilling, isFreeUser)})
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setReviewText(null);
+              setVerifyItems([]);
+              setVerifyReviewCount(0);
+              setAttestationChecked(false);
+              setPrevText(null);
+              patchStoryDraft({ reviewText: null });
+            }}
             className="px-5 py-3 border border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium rounded-xl transition-colors text-sm"
           >
             Back
           </button>
         </div>
+        {error && (
+          <p className="text-red-700 dark:text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
         <p className="text-slate-600 dark:text-slate-400 text-xs">
-          Your resume is already saved — this view lets you refine it before continuing to the JD flow.
+          Nothing is saved to your profile until you confirm. First complete journey: generate + save are free.
         </p>
+
+        <StorySaveConfirmDialog
+          open={saveDialogOpen}
+          saveCreditLabel={storySaveCreditLabel(lastSaveBilling ?? "first_story_save", isFreeUser)}
+          reviewCount={verifyReviewCount}
+          saving={saving}
+          attestationChecked={attestationChecked}
+          onClose={() => setSaveDialogOpen(false)}
+          onConfirm={() => void handleConfirmSave()}
+        />
       </div>
     );
   }
@@ -378,16 +565,29 @@ export function StoryRecorder({ token, onSaved }: Props) {
   // ── Mode selector (shown before anything else) ─────────────────────────────
   if (!storyMode) {
     return (
-      <StoryModeSelector
-        isFreeUser={isFreeUser}
-        onSelect={(mode) => {
-          if (mode === "interview") {
-            setStoryMode("interview");
-          } else {
-            setStoryMode("free");
-          }
-        }}
-      />
+      <div className="space-y-4">
+        {(segments.length > 0 || Boolean(reviewText)) && (
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+            <p className="text-sm text-amber-900 dark:text-amber-200">
+              Your unsaved story is still here. Choose a mode to continue — we keep every segment you already recorded.
+            </p>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="shrink-0 text-xs text-slate-600 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400"
+            >
+              Discard draft
+            </button>
+          </div>
+        )}
+        <StoryModeSelector
+          isFreeUser={isFreeUser}
+          onSelect={(mode) => {
+            setStoryMode(mode);
+            patchStoryDraft({ storyMode: mode });
+          }}
+        />
+      </div>
     );
   }
 
@@ -397,7 +597,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
       <StoryInterview
         token={token}
         isFreeUser={isFreeUser}
-        onSaved={onSaved}
+        onSaved={finishAndSave}
         onBack={() => setStoryMode(null)}
       />
     );
@@ -428,7 +628,8 @@ export function StoryRecorder({ token, onSaved }: Props) {
           </div>
           {supportsWebSpeech ? (
             <p className="text-slate-600 dark:text-slate-400 text-sm">
-              Your browser supports live transcription. Words appear as you speak. Generating your resume from story: <strong className="text-slate-900 dark:text-white">0 credits</strong>.
+              Your browser supports live transcription. Words appear as you speak. First resume generate from story is{" "}
+              <strong className="text-slate-900 dark:text-white">free</strong>; regenerates cost 1 credit. Saving to profile: first save free, later saves 1 credit.
             </p>
           ) : (
             <div className="space-y-2">
@@ -482,23 +683,29 @@ export function StoryRecorder({ token, onSaved }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-slate-600 dark:text-slate-400 text-sm">
             <span className="text-slate-900 dark:text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
+            <span className="text-xs text-slate-500 dark:text-slate-500"> · draft saved on this device</span>
           </span>
           {/* Change mode — only when not recording and not submitting */}
           {!isRecordingAnything && !submitting && (
-            <button
-              type="button"
-              onClick={() => {
-                setStoryMode(null);
-                setSegments([]);
-                const nextId = resetStoryBuildSessionId();
-                setStoryBuildSessionId(nextId);
-                setCoachSessionUnlocked(false);
-                setOpenCoachIndex(null);
-              }}
-              className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition-colors"
-            >
-              ← Change mode
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setStoryMode(null);
+                  setOpenCoachIndex(null);
+                }}
+                className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition-colors"
+              >
+                ← Change mode
+              </button>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="text-xs text-slate-600 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 transition-colors"
+              >
+                Discard draft
+              </button>
+            </>
           )}
         </div>
         <span className={cn("text-sm tabular-nums font-mono", isWarning ? "text-amber-700 dark:text-amber-400" : "text-slate-600 dark:text-slate-400")}>
@@ -525,7 +732,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                 isRecording={recordingState === "re-recording" && reRecordingIndex === i}
                 disabled={isRecordingAnything || submitting}
                 coachOpen={openCoachIndex === i}
-                onChange={(newText) => setSegments((prev) => prev.map((s, j) => j === i ? newText : s))}
+                onChange={(newText) => setSegments((prev) => persistSegments(prev.map((s, j) => j === i ? newText : s), storyMode ?? "free"))}
                 onReRecord={() => void startReRecord(i)}
                 onDelete={() => deleteSegment(i)}
                 onCoach={() => setOpenCoachIndex((prev) => prev === i ? null : i)}
@@ -539,7 +746,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                   onCoachSessionUnlocked={markCoachSessionUnlocked}
                   isFreeUser={isFreeUser}
                   onAddAsSegment={(answerText) => {
-                    setSegments((prev) => [...prev, answerText]);
+                    setSegments((prev) => persistSegments([...prev, answerText], storyMode ?? "free"));
                     setOpenCoachIndex(null);
                   }}
                   onClose={() => setOpenCoachIndex(null)}
@@ -616,7 +823,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate resume from story
+                Generate resume
+                <span className="text-xs font-normal opacity-80">
+                  ({storyGenerateCreditLabel(hasGeneratedOnce ? "free_credit" : "first_story_generate", isFreeUser)})
+                </span>
               </>
             )}
           </button>

@@ -1,20 +1,65 @@
 """Unit tests for story_build quota routing."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.billing.quota import check_quota_for_story, QuotaAction
+
+from app.services.billing.quota import (
+    QuotaAction,
+    check_quota_for_story_generate,
+    check_quota_for_story_save,
+)
 
 
 @pytest.mark.asyncio
-async def test_story_web_speech_is_free():
-    """Web Speech path costs 0 credits for free users (no subscription)."""
+async def test_story_first_generate_is_free():
+    """First story generate per account costs 0 credits."""
     mock_db = AsyncMock()
-    mock_user = MagicMock(is_suspended=False)
-    with patch("app.services.billing.quota._active_subscription_for", return_value=None):
-        result = await check_quota_for_story(
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+        "app.services.billing.quota._user_has_story_quota_event",
+        new_callable=AsyncMock,
+        return_value=False,
+    ), patch("app.services.billing.quota.record_quota_audit") as mock_audit:
+        result = await check_quota_for_story_generate(
             mock_db, user=mock_user, whisper_path=False
         )
-    assert result.charged_to == "free_web_speech"
-    assert result.action == QuotaAction.story_build
+    assert result.charged_to == "first_story_generate"
+    assert result.action == QuotaAction.story_build_generate
+    mock_audit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_story_regenerate_charges_credit():
+    """Second and later generates consume 1 credit."""
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+    mock_txn = MagicMock(id="txn-1")
+    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+        "app.services.billing.quota._user_has_story_quota_event",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch("app.services.billing.quota.consume_credit", return_value=mock_txn) as mock_consume:
+        result = await check_quota_for_story_generate(
+            mock_db, user=mock_user, whisper_path=False
+        )
+    assert result.charged_to == "free_credit"
+    assert result.action == QuotaAction.story_build_generate
+    mock_consume.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_story_first_save_is_free():
+    """First save to profile per account costs 0 credits."""
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+        "app.services.billing.quota._user_has_story_quota_event",
+        new_callable=AsyncMock,
+        return_value=False,
+    ), patch("app.services.billing.quota.record_quota_audit") as mock_audit:
+        result = await check_quota_for_story_save(mock_db, user=mock_user)
+    assert result.charged_to == "first_story_save"
+    assert result.action == QuotaAction.story_build_save
+    mock_audit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -58,8 +103,8 @@ async def test_story_whisper_blocked_for_free_tier() -> None:
 
 
 @pytest.mark.asyncio
-async def test_story_subscriber_is_free():
-    """Active subscribers pay 0 credits for story builds."""
+async def test_story_subscriber_generate_is_free():
+    """Active subscribers pay 0 credits for story generates."""
     from datetime import datetime, timezone, timedelta
     from app.models.billing import SubscriptionStatus
 
@@ -74,17 +119,19 @@ async def test_story_subscriber_is_free():
     mock_sub.period_end = now + timedelta(days=29)
 
     with patch("app.services.billing.quota._active_subscription_for", return_value=mock_sub):
-        result = await check_quota_for_story(
+        result = await check_quota_for_story_generate(
             mock_db, user=mock_user, whisper_path=False
         )
     assert result.charged_to == "subscription"
-    assert result.action == QuotaAction.story_build
+    assert result.action == QuotaAction.story_build_generate
 
 
-def test_story_build_in_free_credit_actions():
-    """story_build must be in FREE_CREDIT_ACTIONS."""
+def test_story_generate_and_save_in_free_credit_actions():
+    """story generate/save must be in FREE_CREDIT_ACTIONS."""
     from app.services.billing.quota import FREE_CREDIT_ACTIONS
-    assert QuotaAction.story_build in FREE_CREDIT_ACTIONS
+
+    assert QuotaAction.story_build_generate in FREE_CREDIT_ACTIONS
+    assert QuotaAction.story_build_save in FREE_CREDIT_ACTIONS
 
 
 @pytest.mark.asyncio

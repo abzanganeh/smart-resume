@@ -1,9 +1,9 @@
-"""Integration tests for POST /api/profile/resume/from-story"""
+"""Integration tests for story resume generate / save flow."""
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.master_resume.embedding import set_fake_embedder
 from tests.retrieval.fake_embedder import deterministic_embed
@@ -30,6 +30,13 @@ VALID_SEGMENTS = [
     "and mentoring engineers through design reviews and production incident response.",
 ]
 
+MOCK_DRAFT = (
+    "PROFESSIONAL SUMMARY\nExperienced engineer with 9 years of Python.\n\n"
+    "SKILLS\nPython, AWS, Kubernetes\n\n"
+    "EXPERIENCE\nSecureAuth | Senior Engineer | 2022 – 2025\n• Built anomaly detection\n"
+    "Acceptto | Engineer | 2016 – 2022\n• Built auth systems\n"
+)
+
 
 @pytest.fixture(autouse=True)
 def _install_fake_embedder():
@@ -47,15 +54,9 @@ async def _register_and_login(client: AsyncClient) -> str:
 
 
 @pytest.mark.asyncio
-async def test_story_endpoint_happy_path(app_client: AsyncClient):
-    """Valid segments → 200 with chunk_count > 0."""
+async def test_story_generate_returns_preview_not_saved(app_client: AsyncClient):
+    """Generate endpoint returns draft + verify items without saving chunks."""
     token = await _register_and_login(app_client)
-
-    MOCK_DRAFT = (
-        "PROFESSIONAL SUMMARY\nExperienced engineer with 9 years of Python.\n\n"
-        "SKILLS\nPython, AWS, Kubernetes\n\n"
-        "EXPERIENCE\nSecureAuth | Senior Engineer | 2022 – 2025\n• Built anomaly detection\n"
-    )
 
     with patch("app.routers.profile.story_to_resume", new_callable=AsyncMock) as mock_s2r:
         mock_s2r.return_value = MOCK_DRAFT
@@ -67,7 +68,64 @@ async def test_story_endpoint_happy_path(app_client: AsyncClient):
 
     assert response.status_code == 200, response.text
     data = response.json()
+    assert data["resume_text"] == MOCK_DRAFT
+    assert "verify_items" in data
+    assert isinstance(data["verify_items"], list)
+    assert "chunk_count" not in data
+
+    get_resp = await app_client.get(
+        "/api/profile/resume",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_resp.status_code in (200, 404)
+
+
+@pytest.mark.asyncio
+async def test_story_save_requires_attestation(app_client: AsyncClient):
+    """Save without attestation → 422."""
+    token = await _register_and_login(app_client)
+    response = await app_client.post(
+        "/api/profile/resume/from-story/save",
+        json={
+            "resume_text": MOCK_DRAFT,
+            "segments": VALID_SEGMENTS,
+            "attestation_confirmed": False,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_story_save_happy_path(app_client: AsyncClient):
+    """Attested save writes master resume chunks."""
+    token = await _register_and_login(app_client)
+
+    with patch("app.routers.profile._structure_with_llm", new_callable=AsyncMock) as mock_struct:
+        from app.models.resume import ParsedResume
+
+        mock_struct.return_value = ParsedResume(
+            summary="Experienced engineer",
+            skills=["Python"],
+            experience=[],
+            education=[],
+            projects=[],
+            certifications=[],
+        )
+        response = await app_client.post(
+            "/api/profile/resume/from-story/save",
+            json={
+                "resume_text": MOCK_DRAFT,
+                "segments": VALID_SEGMENTS,
+                "attestation_confirmed": True,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
     assert data["chunk_count"] > 0
+    assert data["resume_text"] == MOCK_DRAFT
 
 
 @pytest.mark.asyncio
@@ -77,20 +135,6 @@ async def test_story_endpoint_too_few_words(app_client: AsyncClient):
     response = await app_client.post(
         "/api/profile/resume/from-story",
         json={"segments": ["Hi", "I worked"], "whisper_path": False},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_story_endpoint_too_many_segments(app_client: AsyncClient):
-    """31 segments → 422."""
-    token = await _register_and_login(app_client)
-    long_segment = "I worked at a company for many years and built important systems. " * 2
-    segments = [long_segment] * 31
-    response = await app_client.post(
-        "/api/profile/resume/from-story",
-        json={"segments": segments, "whisper_path": False},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 422

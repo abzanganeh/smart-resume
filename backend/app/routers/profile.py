@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.polish import polish_resume
 from app.agent.story import story_to_resume
+from app.agent.story_verify import build_verify_items
 from app.agent.story_coach import MAX_EXCHANGES, coach_segment, is_complete_response
 from app.agent.story_interview import (
     MAX_QUESTIONS,
@@ -62,7 +63,9 @@ from app.models.story import (
     InterviewNextRequest,
     InterviewSubmitRequest,
     PolishResumeRequest,
+    StorySaveRequest,
     StoryToResumeRequest,
+    StoryVerifyRequest,
 )
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
@@ -72,7 +75,9 @@ from app.services.auth.dependencies import get_current_user
 from app.services.billing.quota import (
     check_quota_for_story,
     check_quota_for_story_coach,
+    check_quota_for_story_generate,
     check_quota_for_story_interview,
+    check_quota_for_story_save,
 )
 from app.services.billing.exceptions import AccountSuspendedError, InsufficientCreditsError
 from app.services.resume_validation import validate_resume_text
@@ -606,27 +611,35 @@ async def create_resume_from_story(
     user: User = Depends(get_current_user),
 ) -> dict:
     """
-    Convert a spoken career narrative (list of segment transcripts) to a
-    structured master resume via a two-step LLM pipeline:
-      Step 1: story_to_resume() — narrative → resume draft text
-      Step 2: existing replace_all_chunks pipeline — draft → chunks + embeddings
+    Convert a spoken career narrative to a resume draft for review.
 
-    Credit rules: see check_quota_for_story() in quota.py.
+    Does NOT write to the master profile — call POST /resume/from-story/save
+    after the user verifies names and dates.
+
+    Credit rules: first generate free; regenerates cost 1 credit (subscribers free).
     """
-    # ── Resolve LLM client ────────────────────────────────────────────────────
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
+    story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
     llm_client = get_llm_client(provider or None, model or None)
 
-    # ── Credit check ──────────────────────────────────────────────────────────
-    await check_quota_for_story(
-        db,
-        user=user,
-        whisper_path=body.whisper_path,
-    )
+    try:
+        billing = await check_quota_for_story_generate(
+            db,
+            user=user,
+            whisper_path=body.whisper_path,
+            session_id=story_session_id,
+        )
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "insufficient_credits",
+                "message": "Regenerating from your story costs 1 credit.",
+            },
+        ) from exc
 
-    # ── Step 1: narrative → resume draft text ─────────────────────────────────
     narrative = "\n\n---\n\n".join(seg.strip() for seg in body.segments if seg.strip())
 
     try:
@@ -638,7 +651,75 @@ async def create_resume_from_story(
             detail={"code": "story_conversion_failed", "message": str(exc)},
         ) from exc
 
-    # ── Step 2: draft text → ParsedResume + chunks + embeddings ──────────────
+    verify_items = [item.to_dict() for item in build_verify_items(body.segments, draft_text)]
+    review_count = sum(1 for item in verify_items if item["status"] == "review")
+
+    log.info(
+        "story.draft_generated",
+        user_id=str(user.id),
+        draft_chars=len(draft_text),
+        verify_review_count=review_count,
+        charged_to=billing.charged_to,
+    )
+    return {
+        "resume_text": draft_text,
+        "verify_items": verify_items,
+        "verify_review_count": review_count,
+        "billing": {
+            "charged_to": billing.charged_to,
+            "action": billing.action.value,
+        },
+    }
+
+
+@router.post("/resume/story-verify", status_code=200)
+@limiter.limit("30/minute")
+async def story_verify_draft(
+    request: Request,
+    body: StoryVerifyRequest,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Recompute verify hints after the user edits the draft text."""
+    verify_items = [item.to_dict() for item in build_verify_items(body.segments, body.resume_text)]
+    return {
+        "verify_items": verify_items,
+        "verify_review_count": sum(1 for item in verify_items if item["status"] == "review"),
+    }
+
+
+@router.post("/resume/from-story/save", status_code=200)
+@limiter.limit("5/minute")
+async def save_resume_from_story(
+    request: Request,
+    body: StorySaveRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Save a reviewed story resume to the master profile.
+
+    Requires attestation. First save free; later saves cost 1 credit (subscribers free).
+    """
+    provider = request.headers.get("X-Provider", "").strip()
+    model = request.headers.get("X-Model", "").strip()
+    story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
+
+    try:
+        billing = await check_quota_for_story_save(
+            db,
+            user=user,
+            session_id=story_session_id,
+        )
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "insufficient_credits",
+                "message": "Saving your story resume costs 1 credit.",
+            },
+        ) from exc
+
+    draft_text = body.resume_text.strip()
     parsed_sections = await _structure_with_llm(
         draft_text, provider=provider or None, model=model or None
     )
@@ -650,7 +731,7 @@ async def create_resume_from_story(
             parsed_sections=parsed_sections,
         )
     except Exception as exc:
-        log.error("story.parse_failed", error=str(exc))
+        log.error("story.save_failed", error=str(exc))
         raise HTTPException(
             status_code=502,
             detail={"code": "parse_failed", "message": str(exc)},
@@ -658,10 +739,11 @@ async def create_resume_from_story(
 
     embedding_ok = resume.last_embedded_at is not None
     log.info(
-        "story.resume_created",
+        "story.resume_saved",
         user_id=str(user.id),
         chunk_count=len(chunks),
         embedding_ok=embedding_ok,
+        charged_to=billing.charged_to,
     )
     return {
         **_resume_to_response(resume),
@@ -672,6 +754,10 @@ async def create_resume_from_story(
             else "Resume saved but embedding failed. Semantic similarity features won't work "
                  "until OPENAI_EMBEDDING_KEY is configured."
         ),
+        "billing": {
+            "charged_to": billing.charged_to,
+            "action": billing.action.value,
+        },
     }
 
 
@@ -909,44 +995,24 @@ async def story_interview_submit(
             detail={"code": "interview_generation_failed", "message": str(exc)},
         ) from exc
 
-    # Reuse the same master resume save logic (import from local scope)
-    from app.services.master_resume import crud as _master_crud
-    from app.services.master_resume.chunking import count_tokens
-    from app.services.master_resume.embedding import embed_text
+    user_segments = [m.text for m in body.history if m.role == "user" and m.text.strip()]
+    verify_items = [item.to_dict() for item in build_verify_items(user_segments, draft_text)]
+    review_count = sum(1 for item in verify_items if item["status"] == "review")
 
-    try:
-        master = await _master_crud.get_or_create_master_resume(session, user_id=user.id)
-        chunks = await _master_crud.save_chunks_from_story(
-            session,
-            master_resume_id=master.id,
-            story_text=draft_text,
-        )
-        embedding_warning: str | None = None
-        try:
-            text_for_embed = "\n\n".join(c.content for c in chunks if c.content)
-            vector = await embed_text(text_for_embed)
-            await _master_crud.update_embedding(session, master_resume_id=master.id, vector=vector)
-        except Exception as emb_exc:  # noqa: BLE001
-            embedding_warning = (
-                "Resume saved but embedding failed. "
-                "Semantic similarity features won't work until OPENAI_EMBEDDING_KEY is configured."
-            )
-            log.warning("story_interview.embed_failed", error=str(emb_exc))
-
-        await session.refresh(master)
-        return {
-            "id": str(master.id),
-            "chunk_count": len(chunks),
-            "last_embedded_at": master.last_embedded_at.isoformat() if master.last_embedded_at else None,
-            "resume_text": draft_text,
-            "embedding_warning": embedding_warning,
-        }
-    except Exception as exc:  # noqa: BLE001
-        log.error("story_interview.save_failed", error=str(exc))
-        raise HTTPException(
-            status_code=500,
-            detail={"code": "interview_save_failed", "message": str(exc)},
-        ) from exc
+    log.info(
+        "story_interview.draft_generated",
+        user_id=str(user.id),
+        verify_review_count=review_count,
+    )
+    return {
+        "resume_text": draft_text,
+        "verify_items": verify_items,
+        "verify_review_count": review_count,
+        "billing": {
+            "charged_to": "interview_session_included",
+            "action": "story_interview",
+        },
+    }
 
 
 __all__ = ["router"]
