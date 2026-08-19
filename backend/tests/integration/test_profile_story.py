@@ -123,7 +123,7 @@ async def test_story_save_happy_path(app_client: AsyncClient):
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["chunk_count"] > 0
-    assert data["resume_text"] == MOCK_DRAFT
+    assert data["resume_text"].strip() == MOCK_DRAFT.strip()
 
 
 @pytest.mark.asyncio

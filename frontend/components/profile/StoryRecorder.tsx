@@ -105,7 +105,10 @@ export function StoryRecorder({ token, onSaved }: Props) {
   const [polishError, setPolishError] = useState<string | null>(null);
   const polishInputRef = useRef<HTMLTextAreaElement>(null);
   const totalMsRef = useRef(0);
-  totalMsRef.current = totalMs;
+
+  useEffect(() => {
+    totalMsRef.current = totalMs;
+  }, [totalMs]);
 
   useEffect(() => {
     const id = readStoryBuildSessionId();
@@ -186,9 +189,15 @@ export function StoryRecorder({ token, onSaved }: Props) {
   });
 
   const finalTextRef = useRef("");
-  finalTextRef.current = finalText;
   const recordingStateRef = useRef(recordingState);
-  recordingStateRef.current = recordingState;
+
+  useEffect(() => {
+    finalTextRef.current = finalText;
+  }, [finalText]);
+
+  useEffect(() => {
+    recordingStateRef.current = recordingState;
+  }, [recordingState]);
 
   useEffect(() => {
     return () => {
