@@ -1,6 +1,6 @@
 # Staging deployment runbook
 
-Last updated: 2026-08-18 (post PR #71 — staging deploy tooling).
+Last updated: 2026-08-19 (post PR #76 — tracker active-limit enforcement, duplicate detection, funnel counts).
 
 This is the operator checklist for the **first staging deploy** of TalioCV.
 Code readiness is tracked in `docs/IMPLEMENTATION_PLAN.md` §11 (Release Phase 2).
@@ -215,6 +215,12 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 - [ ] **Track application** on job card → `/tracker/{id}` draft
 - [ ] **Tailor Resume** → session with JD prefilled
 - [ ] `/tracker` kanban drag updates status; detail page loads
+- [ ] Funnel summary strip at the top of `/tracker` reflects `GET /api/applications/funnel`
+- [ ] Create until active limit (free = 10) → 409 banner "You have reached your plan's active tracker limit"
+- [ ] Try re-creating "Software Engineer" at "Google, Inc." within 30 days of an existing row → duplicate modal, "Add anyway" succeeds; double-click the button and confirm only one row is created (button shows "Adding…" while pending)
+- [ ] Archive a row → active count drops, `?archived=true` filter shows it, drag disabled
+- [ ] Unarchive at the active limit → 409 `tracker_limit_reached`
+- [ ] Dashboard "Applications" step reads total from `funnel.total` (not full-row list)
 
 ### Billing (Stripe test mode)
 
@@ -227,6 +233,8 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 - [ ] Two-tone JD comparison: output register differs between JDs
 - [ ] One Inc regression: no fabricated metrics; education/projects present
 - [ ] Checkup → “Tailor this resume” handoff pre-fills resume text
+- [ ] Free-tier registration grant is **6 credits** (PR #76): `POST /api/auth/register` response contains `credit_balance: 6`
+- [ ] Premium plans expose `tracker_active_limit: 250` on `/api/subscriptions/current` (soft cap; marketing still says "unlimited")
 
 ### Extension & autofill (manual)
 
@@ -243,6 +251,7 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 - **App regression:** redeploy previous image/tag; no schema downgrade unless migration doc says safe
 - **Bad migration:** forward-fix migration preferred over destructive rollback
 - **Stripe misconfiguration:** disable checkout via feature flag; fix `PlanConfig` / webhook secret; replay events from Stripe dashboard
+- **⚠ Alembic 0031 (`archived_at`)** is **data-destructive on downgrade**: dropping the column loses archive timestamps and the tracker will re-count archived rows against the active limit. Before any downgrade in a live env, dump `(id, archived_at)` for non-null rows first.
 
 ---
 
