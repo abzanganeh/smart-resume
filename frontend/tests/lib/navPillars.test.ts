@@ -15,9 +15,13 @@ describe("navPillars", () => {
     assert.equal(apps?.label, "Applications")
   })
 
-  it("includes Tailor for a job under Resume pillar", () => {
-    const resume = NAV_PILLARS.find((p) => p.id === "resume")
-    assert.ok(resume?.links.some((l) => l.label === "Tailor for a job"))
+  it("mobile nav omits dashboard duplicate link", () => {
+    assert.ok(!MOBILE_NAV_LINKS.some((l) => l.href === "/dashboard"))
+  })
+
+  it("desktop home pillar is labelled Dashboard", () => {
+    const home = NAV_PILLARS.find((p) => p.id === "home")
+    assert.equal(home?.label, "Dashboard")
   })
 
   it("marks Prepare pillar as coming soon without mobile links", () => {

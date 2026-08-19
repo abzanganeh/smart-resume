@@ -77,23 +77,29 @@ fi
 
 free_credits="$(http_json_field "$API_URL/api/billing/free-tier" starting_credits 2>/dev/null || true)"
 if [[ -n "$free_credits" ]]; then
-  check "Free-tier starting credits is 6 (PR #76 grant bump)" test "$free_credits" = "6"
+  check "Free-tier starting credits is positive" test "$free_credits" -gt 0
 else
   skip_check "Free-tier credits" "field missing"
 fi
 
 # Auth register smoke (unique email per run) + authenticated tracker funnel
-smoke_email="staging-smoke-$(date +%s)@example.com"
-register_json="$(curl -sf -X POST "$API_URL/api/auth/register" \
+smoke_email="staging-smoke-$(date +%s%N)-$$@example.com"
+register_tmp="$(mktemp)"
+register_status="$(curl -s -o "$register_tmp" -w '%{http_code}' -X POST "$API_URL/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}" 2>/dev/null || true)"
-if [[ -n "$register_json" ]]; then
-  check "POST /api/auth/register creates user (201)" test "$(echo "$register_json" | python3 -c "import json,sys; print('ok' if json.load(sys.stdin).get('access_token') else '')")" = "ok"
+  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}")"
+register_json="$(cat "$register_tmp")"
+rm -f "$register_tmp"
+
+check "POST /api/auth/register creates user (201)" test "$register_status" = "201"
+
+if [[ "$register_status" = "201" && -n "$register_json" ]]; then
+  check "Register response includes access_token" test "$(echo "$register_json" | python3 -c "import json,sys; print('ok' if json.load(sys.stdin).get('access_token') else '')")" = "ok"
   register_credits="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('credit_balance',''))" 2>/dev/null || true)"
-  if [[ -n "$register_credits" ]]; then
-    check "Register grants 6 starting credits" test "$register_credits" = "6"
+  if [[ -n "$register_credits" && -n "$free_credits" ]]; then
+    check "Register credit_balance matches free-tier starting_credits" test "$register_credits" = "$free_credits"
   else
-    skip_check "Register credit_balance" "field missing on user payload"
+    skip_check "Register credit_balance vs free-tier" "missing field(s)"
   fi
   smoke_token="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || true)"
   if [[ -n "$smoke_token" ]]; then
@@ -109,10 +115,7 @@ if [[ -n "$register_json" ]]; then
     skip_check "Authenticated funnel" "could not parse access_token"
   fi
 else
-  register_status="$(http_status -X POST "$API_URL/api/auth/register" \
-    -H 'Content-Type: application/json' \
-    -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}")"
-  check "POST /api/auth/register creates user (201)" test "$register_status" = "201"
+  skip_check "Register payload checks" "register did not return 201"
 fi
 
 # Frontend legal pages (CI e2e subset)

@@ -88,13 +88,17 @@ describe("trackApplicationWithDuplicatePrompt", () => {
 })
 
 describe("formatTrackerLimitError", () => {
-  it("appends archive hint for tracker_limit_reached", () => {
+  it("returns backend message without duplicate hint", () => {
     const msg = formatTrackerLimitError(
-      new TrackerApiError("limit", {
-        status: 409,
-        code: "tracker_limit_reached",
-      }),
+      new TrackerApiError(
+        "You have reached your plan's active tracker limit of 10. Archive an existing application or upgrade your plan to add more.",
+        {
+          status: 409,
+          code: "tracker_limit_reached",
+        },
+      ),
     )
-    assert.match(msg, /Archive an application/)
+    assert.equal(msg.includes("Archive an existing"), true)
+    assert.equal((msg.match(/Archive/g) ?? []).length, 1)
   })
 })

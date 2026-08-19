@@ -12,7 +12,7 @@ export type NavPillar = {
 export const NAV_PILLARS: readonly NavPillar[] = [
   {
     id: "home",
-    label: "Home",
+    label: "Dashboard",
     links: [{ href: "/dashboard", label: "Dashboard" }],
   },
   {
@@ -43,10 +43,10 @@ export const NAV_PILLARS: readonly NavPillar[] = [
   },
 ] as const
 
-/** Flat list for mobile scroll bar — every pillar except coming-soon placeholders. */
+/** Flat list for mobile scroll bar — excludes /dashboard (fixed pill in header). */
 export const MOBILE_NAV_LINKS: readonly NavLinkDef[] = NAV_PILLARS.flatMap((pillar) =>
   pillar.comingSoon ? [] : pillar.links,
-)
+).filter((link) => link.href !== "/dashboard")
 
 export function navPathIsActive(pathname: string, href: string): boolean {
   if (href === "#") return false

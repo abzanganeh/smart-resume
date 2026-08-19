@@ -334,8 +334,13 @@ async def create_application(
             )
 
     # Duplicate detection — never blocks (409 with an explicit code so the
-    # client can confirm the override).
-    if not body.confirm_add_duplicate:
+    # client can confirm the override).  Skip when title/company are blank —
+    # corpus edge cases must not collide on empty strings.
+    if (
+        not body.confirm_add_duplicate
+        and title.strip()
+        and company.strip()
+    ):
         duplicate = await find_duplicate_application(
             db,
             user.id,
@@ -349,8 +354,7 @@ async def create_application(
                     "code": "duplicate_application",
                     "message": (
                         f"You already added '{title}' at '{company}' in the "
-                        f"last {DUPLICATE_LOOKBACK_DAYS} days. Send "
-                        "confirm_add_duplicate=true to add anyway."
+                        f"last {DUPLICATE_LOOKBACK_DAYS} days."
                     ),
                     "existing_id": str(duplicate.id),
                     "existing_created_at": duplicate.created_at.isoformat(),
