@@ -23,7 +23,11 @@ import {
   shouldBlurJobCard,
   type JobResult,
 } from "@/lib/jobs"
-import { createApplication } from "@/lib/tracker"
+import {
+  formatTrackerLimitError,
+  trackApplicationWithDuplicatePrompt,
+} from "@/lib/trackApplicationFlow"
+import { TrackerApiError } from "@/lib/tracker"
 import { userFacingError } from "@/lib/userFacingError"
 import type { FitAnalysisOutput } from "@/lib/api"
 
@@ -92,15 +96,25 @@ export function JobCard({
     setTrackLoading(true)
     setTrackError(null)
     try {
-      const app = await createApplication(accessToken, {
-        jd_title: job.title,
-        jd_company: job.company,
-        job_url: job.apply_url ?? undefined,
-        status: "draft",
-      })
+      const app = await trackApplicationWithDuplicatePrompt(
+        accessToken,
+        {
+          jd_title: job.title,
+          jd_company: job.company,
+          job_url: job.apply_url ?? undefined,
+          status: "draft",
+        },
+        (err) => window.confirm(`${err.message}\n\nAdd this application anyway?`),
+      )
       router.push(`/tracker/${app.id}`)
     } catch (e) {
-      setTrackError(userFacingError(e).message)
+      if (e instanceof TrackerApiError && e.code === "tracker_limit_reached") {
+        setTrackError(formatTrackerLimitError(e))
+      } else if (e instanceof TrackerApiError && e.code === "duplicate_application") {
+        setTrackError(null)
+      } else {
+        setTrackError(userFacingError(e).message)
+      }
     } finally {
       setTrackLoading(false)
     }
