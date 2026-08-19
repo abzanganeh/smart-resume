@@ -25,6 +25,13 @@ import type {
   AdminUserDetail,
   UserListResponse,
   CreditAdjustPayload,
+  FreeGrant,
+  FreeGrantAuditedResponse,
+  PromoAuditedResponse,
+  PromoCode,
+  PromoCodeCreatePayload,
+  PromoCodeUpdatePayload,
+  PromoRedemption,
   RefundRequest,
   RefundListResponse,
   AuditLogEntry,
@@ -883,4 +890,65 @@ export async function getAuditLog(
     return { entries: raw.items.map(mapBackendAuditEntry), total: raw.items.length }
   }
   return raw
+}
+
+// ── Promo & free grant ────────────────────────────────────────────────────────
+
+export async function getAdminFreeGrant(
+  token: string,
+): Promise<FreeGrant> {
+  return req("/api/admin/credits/free-grant", token)
+}
+
+export async function patchAdminFreeGrant(
+  token: string,
+  amount: number,
+): Promise<FreeGrantAuditedResponse> {
+  return req("/api/admin/credits/free-grant", token, {
+    method: "PATCH",
+    body: JSON.stringify({ amount }),
+  })
+}
+
+export async function listAdminPromoCodes(
+  token: string,
+  includeInactive = false,
+): Promise<PromoCode[]> {
+  const qs = includeInactive ? "?include_inactive=true" : ""
+  return req(`/api/admin/promo-codes${qs}`, token)
+}
+
+export async function createAdminPromoCode(
+  token: string,
+  payload: PromoCodeCreatePayload,
+): Promise<PromoAuditedResponse> {
+  return req("/api/admin/promo-codes", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function patchAdminPromoCode(
+  token: string,
+  promoId: string,
+  payload: PromoCodeUpdatePayload,
+): Promise<PromoAuditedResponse> {
+  return req(`/api/admin/promo-codes/${promoId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function listAdminPromoRedemptions(
+  token: string,
+  promoId: string,
+): Promise<PromoRedemption[]> {
+  return req(`/api/admin/promo-codes/${promoId}/redemptions`, token)
+}
+
+export async function listAdminUserPromoCodes(
+  token: string,
+  userId: string,
+): Promise<PromoCode[]> {
+  return req(`/api/admin/users/${userId}/promo-codes`, token)
 }

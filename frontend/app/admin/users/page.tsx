@@ -11,6 +11,7 @@ import {
   Download,
   Trash2,
   CreditCard,
+  Copy,
   ShieldOff,
   ShieldCheck,
   Info,
@@ -21,6 +22,8 @@ import {
   getAdminUsers,
   getAdminUserDetail,
   adjustUserCredits,
+  createAdminPromoCode,
+  listAdminUserPromoCodes,
   suspendUser,
   unsuspendUser,
   triggerUserExport,
@@ -32,7 +35,9 @@ import type {
   AdminUserDetail,
   CreditTransaction,
   LoginHistoryEntry,
+  PromoCode,
 } from "@/lib/admin/types"
+import { generatePromoCode } from "@/lib/admin/promoCode"
 
 const PER_PAGE = 25
 
@@ -266,6 +271,10 @@ function UserDetailDrawer({
 }) {
   const [creditAmount, setCreditAmount] = useState("")
   const [creditReason, setCreditReason] = useState("")
+  const [couponAmount, setCouponAmount] = useState("5")
+  const [couponCode, setCouponCode] = useState("")
+  const [issuedCode, setIssuedCode] = useState<string | null>(null)
+  const [userPromos, setUserPromos] = useState<PromoCode[]>([])
   const [suspendReason, setSuspendReason] = useState("")
   const [confirmDelete, setConfirmDelete] = useState("")
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "history">("overview")
@@ -273,6 +282,13 @@ function UserDetailDrawer({
   const [isPending, startTransition] = useTransition()
 
   const DRAWER_TABS = ["overview", "credits", "history"] as const
+
+  useEffect(() => {
+    if (!user || !token) return
+    void listAdminUserPromoCodes(token, user.id)
+      .then(setUserPromos)
+      .catch(() => setUserPromos([]))
+  }, [user?.id, token])
 
   function runAction(fn: () => Promise<void>) {
     setActionError(null)
@@ -400,6 +416,80 @@ function UserDetailDrawer({
                       {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                       Apply adjustment
                     </button>
+                  </div>
+                </DrawerSection>
+
+                <DrawerSection title="Issue coupon" icon={Copy}>
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-500">
+                      Creates a code only this user can redeem on Billing.
+                    </p>
+                    <div className="flex gap-3">
+                      <input
+                        type="number"
+                        min={1}
+                        value={couponAmount}
+                        onChange={(e) => setCouponAmount(e.target.value)}
+                        placeholder="Credits"
+                        className={inputCls + " w-28"}
+                      />
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="Custom code (optional)"
+                        className={inputCls + " flex-1"}
+                      />
+                    </div>
+                    {issuedCode && (
+                      <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-900/20 border border-emerald-800/40 rounded-lg px-3 py-2">
+                        <span className="font-mono">{issuedCode}</span>
+                        <button
+                          type="button"
+                          onClick={() => void navigator.clipboard.writeText(issuedCode)}
+                          className="text-emerald-200 hover:text-white"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      disabled={!couponAmount || isPending}
+                      onClick={() =>
+                        runAction(async () => {
+                          const amount = parseInt(couponAmount, 10)
+                          if (Number.isNaN(amount) || amount < 1) return
+                          const code = couponCode.trim() || generatePromoCode()
+                          const res = await createAdminPromoCode(token, {
+                            code,
+                            grant_type: "extra_credits",
+                            payload: { amount, credit_kind: "free" },
+                            restricted_user_id: user.id,
+                          })
+                          showAuditToast(res.audit_log_id)
+                          setIssuedCode(res.promo_code.code)
+                          setUserPromos((prev) => [res.promo_code, ...prev])
+                          setCouponCode("")
+                        })
+                      }
+                      className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                      Issue coupon
+                    </button>
+                    {userPromos.length > 0 && (
+                      <ul className="space-y-2 text-xs text-slate-400">
+                        {userPromos.map((promo) => (
+                          <li key={promo.id} className="flex justify-between gap-2">
+                            <span className="font-mono text-slate-300">{promo.code}</span>
+                            <span>
+                              {String((promo.payload as { amount?: number }).amount ?? "—")} cr ·{" "}
+                              {promo.is_active ? "active" : "inactive"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </DrawerSection>
 

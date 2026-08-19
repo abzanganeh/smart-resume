@@ -567,6 +567,27 @@ export async function unpauseSubscription(token: string): Promise<{ ok: boolean 
   })
 }
 
+export interface PromoRedeemResponse {
+  ok: boolean
+  idempotent: boolean
+  promo_code_id: string
+  grant_type: string
+  payload: Record<string, unknown>
+  redemption_id: string
+  credit_transaction_id: string | null
+}
+
+export async function redeemPromoCode(
+  token: string,
+  code: string,
+): Promise<PromoRedeemResponse> {
+  return request("/api/promo/redeem", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code }),
+  })
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface UserInfoPayload {

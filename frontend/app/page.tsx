@@ -2,6 +2,10 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { ProductScreenshot } from "@/components/brand/ProductScreenshot";
 import {
+  fetchFreeTierStartingCredits,
+  formatSignupCreditsCopy,
+} from "@/lib/freeTier";
+import {
   ArrowRight,
   BookOpen,
   Briefcase,
@@ -17,7 +21,11 @@ import {
   Zap,
 } from "lucide-react";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const startingCredits = await fetchFreeTierStartingCredits();
+  const creditsLabel = startingCredits === 1 ? "credit" : "credits";
+  const signupCreditsCopy = formatSignupCreditsCopy(startingCredits);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
 
@@ -39,7 +47,7 @@ export default function LandingPage() {
           matching jobs, write cover letters, and track every application — all in one place.
         </p>
         <p className="text-sm text-slate-500 mb-10 max-w-xl mx-auto">
-          Create a free account in under a minute — 6 credits included, no credit card.
+          Create a free account in under a minute — {startingCredits} {creditsLabel} included, no credit card.
           Use our AI models or bring your own API key.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -63,7 +71,7 @@ export default function LandingPage() {
             Register free
           </Link>
           {" · "}
-          6 credits on signup · No credit card required
+          {signupCreditsCopy} · No credit card required
         </p>
         <div className="mt-14 max-w-3xl mx-auto text-left">
           <ProductScreenshot priority />
@@ -244,7 +252,7 @@ export default function LandingPage() {
       <section className="text-center pb-24 px-6">
         <h2 className="text-2xl font-semibold mb-3 text-slate-100">Ready to land your next role?</h2>
         <p className="text-slate-400 text-sm mb-8 max-w-md mx-auto">
-          Create your free account and get 6 credits to tailor your first resume. No credit card, no commitment.
+          Create your free account and get {startingCredits} {creditsLabel} to tailor your first resume. No credit card, no commitment.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link

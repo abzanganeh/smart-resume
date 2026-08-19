@@ -68,6 +68,7 @@ async def _create_promo(
     max_redemptions: int | None = None,
     expires_at: datetime | None = None,
     is_active: bool = True,
+    restricted_user_id: uuid.UUID | None = None,
 ) -> PromoCode:
     admin, _ = await make_admin(
         db,
@@ -92,6 +93,9 @@ async def _create_promo(
     promo_id = uuid.UUID(create_resp.json()["promo_code"]["id"])
     row = await db.get(PromoCode, promo_id)
     assert row is not None
+    if restricted_user_id is not None:
+        row.restricted_user_id = restricted_user_id
+        await db.flush()
     if not is_active:
         row.is_active = False
         await db.flush()
@@ -251,3 +255,72 @@ async def test_promo_redeem_exhausted_code(
     )
     assert exhausted.status_code == 409
     assert exhausted.json()["detail"]["code"] == "promo_code_exhausted"
+
+
+@_redeem_mark
+@pytest.mark.asyncio
+async def test_promo_redeem_restricted_user_mismatch(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_token, owner_id = await _register(
+        app_client,
+        "promo-owner@example.com",
+    )
+    other_token, _ = await _register(app_client, "promo-other@example.com")
+
+    await _create_promo(
+        app_client,
+        db_session,
+        code="PERSONAL5",
+        amount=5,
+        max_redemptions=1,
+        restricted_user_id=uuid.UUID(owner_id),
+    )
+
+    resp = await app_client.post(
+        "/api/promo/redeem",
+        json={"code": "PERSONAL5"},
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "promo_code_invalid"
+
+
+@_redeem_mark
+@pytest.mark.asyncio
+async def test_promo_redeem_restricted_user_match(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client, "promo-restricted@example.com")
+
+    await _create_promo(
+        app_client,
+        db_session,
+        code="MYCODE3",
+        amount=3,
+        max_redemptions=1,
+        restricted_user_id=uuid.UUID(user_id),
+    )
+
+    balance_before = await get_balance(
+        db_session,
+        user_id=uuid.UUID(user_id),
+        credit_kind=CreditKind.free,
+    )
+
+    resp = await app_client.post(
+        "/api/promo/redeem",
+        json={"code": "mycode3"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["idempotent"] is False
+
+    balance = await get_balance(
+        db_session,
+        user_id=uuid.UUID(user_id),
+        credit_kind=CreditKind.free,
+    )
+    assert balance == balance_before + 3

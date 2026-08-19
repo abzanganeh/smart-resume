@@ -49,11 +49,11 @@ from app.models.user import (
 # response shape changes. Renaming or moving ``_me`` will break this
 # import silently at runtime.
 from app.routers.auth import (
-    REGISTRATION_GRANT_CREDITS,
     MeResponse,
     _auth_session_id_for_refresh_token,
     _me,
 )
+from app.services.billing.tier_limits_lookup import registration_grant_credits
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.exceptions import (
@@ -451,6 +451,7 @@ async def extension_oauth_callback(
                     "with_provider": existing.auth_provider.value,
                 },
             )
+        grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),
             email=profile["email"],
@@ -459,7 +460,7 @@ async def extension_oauth_callback(
             provider_id=profile["provider_id"],
             email_verified_at=datetime.now(timezone.utc),
             tier=UserTier.free,
-            credit_balance=REGISTRATION_GRANT_CREDITS,
+            credit_balance=grant_amount,
             accepted_tos_version="oauth",
             last_login_ip=_client_ip(request) or None,
         )
@@ -469,7 +470,7 @@ async def extension_oauth_callback(
             CreditTransaction(
                 id=uuid.uuid4(),
                 user_id=user.id,
-                delta=REGISTRATION_GRANT_CREDITS,
+                delta=grant_amount,
                 action=CreditTransactionAction.registration_grant,
                 reason="registration_grant",
                 note="registration grant via google (extension)",

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ATSGuidancePanel } from "@/components/session/ATSGuidancePanel";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { FreeTierSignupCredits } from "@/components/marketing/FreeTierSignupCredits";
 import { runCheckup, type QAOutput } from "@/lib/api";
 import { saveCheckupHandoff } from "@/lib/checkupHandoff";
 import { clsx } from "clsx";
@@ -211,7 +212,7 @@ export default function CheckupPage() {
                 Create a free account to fix with AI
                 <ArrowRight className="w-4 h-4" />
               </Link>
-              <p className="text-xs text-slate-500">6 credits on signup · No credit card</p>
+              <FreeTierSignupCredits className="text-xs text-slate-500" />
             </div>
           </div>
         )}

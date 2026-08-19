@@ -78,9 +78,10 @@ async def get_active_tier_limits(
     return _from_seed(plan_code)
 
 
-def registration_grant_credits() -> int:
-    """Free-tier registration grant — matches ``free`` resumes_per_period."""
-    return _from_seed("free").resumes_per_period
+async def registration_grant_credits(session: AsyncSession) -> int:
+    """Free-tier registration grant from active admin config or seed fallback."""
+    limits = await get_active_tier_limits(session, "free")
+    return limits.resumes_per_period
 
 
 __all__ = [

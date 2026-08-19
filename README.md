@@ -225,7 +225,9 @@ On first startup, if `BOOTSTRAP_SUPER_ADMIN_EMAIL` is set in `backend/.env`, a s
 
 First login requires TOTP enrollment (QR code shown) and a mandatory password change.
 
-Admin panel pages: Dashboard · Users · Plans · LLM Config · Feature Flags · Announcements · Refunds · Reports · Audit Log · System Health.
+Admin panel pages: Dashboard · Users · Plans · **Promo & credits** · LLM Config · Feature Flags · Announcements · Refunds · Reports · Audit Log · System Health.
+
+**Promo & credits** lets super-admins and admins set how many free credits new signups receive (default **3**, stored in active free-tier limits; existing balances are unchanged) and manage campaign coupon codes. Per-user coupons are issued from the Users drawer; users redeem codes on **Billing**.
 
 ---
 
