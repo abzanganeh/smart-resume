@@ -25,7 +25,18 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { type InterviewMessage, streamInterviewQuestion, submitInterview } from "@/lib/story";
+import {
+  type InterviewMessage,
+  type VerifyItem,
+  refreshStoryVerify,
+  saveStoryResume,
+  storySaveCreditLabel,
+  streamInterviewQuestion,
+  submitInterview,
+} from "@/lib/story";
+import { clearStoryDraft, loadStoryDraft, patchStoryDraft } from "@/lib/storyDraft";
+import { StorySaveConfirmDialog } from "./StorySaveConfirmDialog";
+import { StoryVerifyPanel } from "./StoryVerifyPanel";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 
 const MAX_QUESTIONS = 15;
@@ -40,6 +51,7 @@ interface Props {
 type InterviewPhase = "credit-disclosure" | "interviewing" | "complete" | "generating" | "done";
 
 export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
+  const [draftReady, setDraftReady] = useState(false);
   const [phase, setPhase] = useState<InterviewPhase>(
     isFreeUser ? "credit-disclosure" : "interviewing",
   );
@@ -49,10 +61,41 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [reviewText, setReviewText] = useState<string | null>(null);
+  const [verifyItems, setVerifyItems] = useState<VerifyItem[]>([]);
+  const [verifyReviewCount, setVerifyReviewCount] = useState(0);
+  const [attestationChecked, setAttestationChecked] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const interviewStartRef = useRef(false);
+
+  useEffect(() => {
+    const draft = loadStoryDraft();
+    if (draft?.interviewHistory.length) {
+      setHistory(draft.interviewHistory);
+      interviewStartRef.current = true;
+      if (draft.interviewReviewText) {
+        setReviewText(draft.interviewReviewText);
+        setPhase("done");
+      } else if (draft.interviewPhase === "complete" || draft.interviewPhase === "done") {
+        setPhase("complete");
+      } else {
+        setPhase("interviewing");
+      }
+    }
+    setDraftReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    patchStoryDraft({
+      interviewHistory: history,
+      interviewPhase: phase === "generating" ? "complete" : phase === "credit-disclosure" ? null : phase,
+      interviewReviewText: reviewText,
+    });
+  }, [draftReady, history, phase, reviewText]);
 
   const questionCount = history.filter((m) => m.role === "interviewer").length;
   const atLimit = questionCount >= MAX_QUESTIONS;
@@ -132,10 +175,11 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
 
   // Start the interview on mount (or after credit accepted)
   useEffect(() => {
+    if (!draftReady) return;
     if (phase === "interviewing" && history.length === 0 && !isStreaming && !error) {
       void fireNextQuestion([]);
     }
-  }, [phase, history.length, isStreaming, error, fireNextQuestion]);
+  }, [draftReady, phase, history.length, isStreaming, error, fireNextQuestion]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -168,7 +212,12 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
     setError(null);
     try {
       const result = await submitInterview(history, token);
-      setReviewText(result.resume_text ?? null);
+      const text = result.resume_text ?? "";
+      setReviewText(text);
+      setVerifyItems(result.verify_items ?? []);
+      setVerifyReviewCount(result.verify_review_count ?? 0);
+      setAttestationChecked(false);
+      patchStoryDraft({ interviewReviewText: text });
       setPhase("done");
     } catch (err: unknown) {
       const e = err as Error;
@@ -177,7 +226,37 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
     }
   }, [history, token]);
 
+  const userSegments = history.filter((m) => m.role === "user").map((m) => m.text);
+
+  const handleConfirmSave = useCallback(async () => {
+    if (!reviewText || !attestationChecked) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await saveStoryResume(reviewText, token, {
+        segments: userSegments,
+        attestationConfirmed: true,
+      });
+      clearStoryDraft();
+      setSaveDialogOpen(false);
+      onSaved();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message ?? "Failed to save resume to profile.");
+    } finally {
+      setSaving(false);
+    }
+  }, [reviewText, attestationChecked, token, userSegments, onSaved]);
+
   // ── Phases ─────────────────────────────────────────────────────────────────
+
+  if (!draftReady) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 text-slate-500 dark:text-slate-400 animate-spin" />
+      </div>
+    );
+  }
 
   if (phase === "credit-disclosure") {
     return (
@@ -228,21 +307,52 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
           <CheckCircle className="w-5 h-5" />
-          Resume generated from your interview
+          Resume draft ready — verify before saving
         </div>
+        <StoryVerifyPanel
+          items={verifyItems}
+          reviewCount={verifyReviewCount}
+          attestationChecked={attestationChecked}
+          onAttestationChange={setAttestationChecked}
+        />
         <textarea
           value={reviewText}
-          onChange={(e) => setReviewText(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setReviewText(next);
+            patchStoryDraft({ interviewReviewText: next });
+            void refreshStoryVerify(userSegments, next, token)
+              .then((result) => {
+                setVerifyItems(result.verify_items);
+                setVerifyReviewCount(result.verify_review_count);
+              })
+              .catch(() => undefined);
+          }}
           rows={14}
           className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-emerald-400"
         />
+        {error && (
+          <p className="text-red-700 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-500/20 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
         <button
           type="button"
-          onClick={onSaved}
-          className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 font-semibold transition-colors"
+          onClick={() => setSaveDialogOpen(true)}
+          disabled={!attestationChecked || saving}
+          className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-3 font-semibold transition-colors"
         >
-          Save to master resume →
+          Save to master resume ({storySaveCreditLabel("first_story_save", isFreeUser)})
         </button>
+        <StorySaveConfirmDialog
+          open={saveDialogOpen}
+          saveCreditLabel={storySaveCreditLabel("first_story_save", isFreeUser)}
+          reviewCount={verifyReviewCount}
+          saving={saving}
+          attestationChecked={attestationChecked}
+          onClose={() => setSaveDialogOpen(false)}
+          onConfirm={() => void handleConfirmSave()}
+        />
       </div>
     );
   }

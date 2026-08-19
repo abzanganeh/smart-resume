@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, FileText, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StoryRecorder } from "@/components/profile/StoryRecorder"
+import { hasMeaningfulStoryDraft, loadStoryDraft } from "@/lib/storyDraft"
 
 interface Props {
   onSubmit: (payload: { file?: File; text?: string }) => Promise<void>
@@ -27,6 +28,13 @@ export function ProfileUploadZone({ onSubmit, token, loading, compact = false, d
   const [dragging, setDragging] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [pasteText, setPasteText] = useState("")
+
+  useEffect(() => {
+    if (defaultStory) return
+    if (hasMeaningfulStoryDraft(loadStoryDraft())) {
+      setMode("story")
+    }
+  }, [defaultStory])
 
   const handleFile = useCallback(
     async (file: File) => {

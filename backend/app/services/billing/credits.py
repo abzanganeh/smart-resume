@@ -189,6 +189,28 @@ async def consume_credit(
     return row
 
 
+async def record_quota_audit(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    reason: str,
+    session_id: str | None = None,
+) -> CreditTransaction:
+    """Record a zero-delta quota event (first free use tracking)."""
+    row = CreditTransaction(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        delta=0,
+        action=_action_for(reason, fallback=CreditTransactionAction.llm_upgrade_pack_use),
+        reason=reason,
+        credit_kind=CreditKind.free,
+        session_id=session_id,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
 async def _refresh_user_credit_balance_cache(
     session: AsyncSession,
     *,
@@ -213,4 +235,5 @@ __all__ = [
     "consume_credit",
     "get_balance",
     "grant_credit",
+    "record_quota_audit",
 ]

@@ -119,3 +119,30 @@ class StoryToResumeRequest(BaseModel):
                 "Story is too short. Please record at least 50 words across all segments."
             )
         return self
+
+
+class StoryVerifyRequest(BaseModel):
+    segments: list[str] = Field(..., min_length=1, max_length=30)
+    resume_text: str = Field(..., min_length=50, max_length=80_000)
+
+
+class StorySaveRequest(BaseModel):
+    resume_text: str = Field(..., min_length=50, max_length=80_000)
+    segments: list[str] = Field(
+        default_factory=list,
+        max_length=30,
+        description="Original story segments for audit (optional).",
+    )
+    attestation_confirmed: bool = Field(
+        ...,
+        description="User confirmed names, dates, skills, and employers are accurate.",
+    )
+    whisper_path: bool = False
+
+    @model_validator(mode="after")
+    def validate_attestation(self) -> "StorySaveRequest":
+        if not self.attestation_confirmed:
+            raise ValueError(
+                "You must confirm names, dates, and employers before saving to your profile."
+            )
+        return self

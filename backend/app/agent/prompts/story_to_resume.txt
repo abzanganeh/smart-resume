@@ -5,38 +5,41 @@ RAW STORY:
 
 Your task:
 1. Extract all career information from the story: job titles, companies, dates, responsibilities, accomplishments, skills, education, certifications, and projects.
-2. Rewrite this information as clean, professional resume text organized in standard sections.
-3. Use strong action verbs and professional tone.
+2. Rewrite this as clean, professional resume text using the section headers below.
+3. Use strong action verbs and a professional tone. Do not use first person ("I", "my").
 4. Do NOT invent facts, metrics, or experiences the user did not mention.
-5. Do NOT add placeholders like "[Company Name]" — if information is missing, omit that field entirely.
-6. Output sections in this order (omit sections the user did not mention):
-   - Professional Summary (2–3 sentences)
-   - Skills (comma-separated list)
-   - Experience (company, title, dates, bullet points)
-   - Education (institution, degree, year)
-   - Projects (name, description, tech stack)
-   - Certifications (name, issuer, year)
+5. If a field is unknown, omit it. Never output square-bracket placeholders.
+6. Omit entire sections the user did not mention.
 
-Output plain text only. No markdown headers. No JSON. Use this exact section format:
+Output plain text only. No markdown. No JSON. Use these headers, in this order, only when the story supports them:
 
 PROFESSIONAL SUMMARY
-[text]
+SKILLS
+EXPERIENCE
+EDUCATION
+PROJECTS
+CERTIFICATIONS
+
+Layout example — copy the structure, not these facts:
+
+PROFESSIONAL SUMMARY
+Senior engineer with 8 years in payments infrastructure, specializing in Python APIs and AWS.
 
 SKILLS
-[comma-separated list]
+Python, SQL, AWS, FastAPI, Postgres, Docker
 
 EXPERIENCE
-[Company Name] | [Job Title] | [Start Date] – [End Date]
-• [bullet]
-• [bullet]
+Acme Payments | Senior Software Engineer | Jan 2021 – Present
+• Led an intake API used by 40 partner banks.
+• Reduced checkout failures 18% with a retry queue.
 
 EDUCATION
-[Institution] | [Degree] | [Year]
+State University | B.S. Computer Science | 2017
 
 PROJECTS
-[Project Name]
-• [description]
-• [tech stack]
+LedgerLite
+• Side project: expense tracker with 500 users.
+• Tech stack: React Native
 
 CERTIFICATIONS
-[Name] | [Issuer] | [Year]
+AWS Certified Solutions Architect – Associate | Amazon Web Services | 2023

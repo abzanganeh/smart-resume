@@ -10,6 +10,8 @@ export const FREE_TIER_CREDIT_ACTIONS = [
   { action: "Resume tailor (full pipeline)", cost: "1 credit" },
   { action: "Cover letter generation", cost: "1 credit" },
   { action: "Coached story interview", cost: "1 credit" },
+  { action: "Story resume regenerate", cost: "1 credit" },
+  { action: "Story resume re-save", cost: "1 credit" },
   { action: "Whisper story transcription", cost: "2 credits" },
   { action: "ATS score recalculation", cost: "1 credit" },
 ] as const;

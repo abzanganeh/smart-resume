@@ -20,11 +20,11 @@ async function runTests() {
   let capturedBody = ""
 
   const mockResponse = {
-    id: "resume-1",
-    chunk_count: 5,
-    last_embedded_at: "2026-06-01T00:00:00Z",
-    embedding_warning: null,
-  }
+    resume_text: "PROFESSIONAL SUMMARY\nEngineer\n",
+    verify_items: [],
+    verify_review_count: 0,
+    billing: { charged_to: "first_story_generate", action: "story_build_generate" },
+  };
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     capturedUrl = String(input)
@@ -47,10 +47,11 @@ async function runTests() {
     assert(capturedHeaders["Authorization"] === "Bearer test-token", "sends auth header")
     assert(capturedHeaders["Content-Type"] === "application/json", "sends JSON content type")
     const body = JSON.parse(capturedBody) as { segments: string[]; whisper_path: boolean }
-    assert(body.whisper_path === false, "defaults whisper_path to false")
-    assert(Array.isArray(body.segments), "sends segments array")
-    assert(result.chunk_count === 5, "returns response chunk_count")
-    assert(result.embedding_warning === null, "returns embedding_warning")
+    assert(body.whisper_path === false, "defaults whisper_path to false");
+    assert(Array.isArray(body.segments), "sends segments array");
+    assert(result.resume_text.includes("PROFESSIONAL SUMMARY"), "returns preview resume_text");
+    assert(result.verify_review_count === 0, "returns verify_review_count");
+    assert(result.billing.charged_to === "first_story_generate", "returns billing info");
 
     // Test 2: no BYOK headers
     await submitStory(

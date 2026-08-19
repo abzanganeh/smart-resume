@@ -13,6 +13,8 @@ Thumbs.db
 # Secrets
 .env
 .env.local
+.env.staging
+**/.env.staging
 *.env
 *client_secret*.json
 *.pem
