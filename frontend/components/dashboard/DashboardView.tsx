@@ -44,7 +44,7 @@ import { isSubscriptionActive } from "@/lib/billing"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { getProfileResume, type ProfileResume } from "@/lib/profile"
 import { getJobPreferences } from "@/lib/jobs"
-import { listApplications } from "@/lib/tracker"
+import { getApplicationFunnel } from "@/lib/tracker"
 import { DashboardStepStack } from "@/components/dashboard/DashboardStepStack"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
@@ -221,22 +221,16 @@ export function DashboardView({ token }: { token: string }) {
       setJobRolesStale(false)
     }
     try {
-      // TODO(B3): swap this full list-fetch for the aggregate funnel endpoint
-      // once /api/applications/funnel lands.  Today's dashboard only needs
-      // counts, so a payload of every row is over-fetch for heavy users.
-      const apps = await listApplications(token)
-      const active = apps.filter(
-        (a) => a.status === "draft" || a.status === "applied",
-      ).length
-      const interviewing = apps.filter((a) => a.status === "interviewing").length
-      const offer = apps.filter(
-        (a) => a.status === "offer" || a.status === "accepted",
-      ).length
+      // /api/applications/funnel returns aggregate per-status counts plus
+      // ``total`` in one round-trip so we don't over-fetch full row payloads
+      // just to compute a handful of scalars.
+      const funnel = await getApplicationFunnel(token)
+      const counts = funnel.status_counts
       setApplicationCounts({
-        active,
-        interviewing,
-        offer,
-        total: apps.length,
+        active: (counts.draft ?? 0) + (counts.applied ?? 0),
+        interviewing: counts.interviewing ?? 0,
+        offer: (counts.offer ?? 0) + (counts.accepted ?? 0),
+        total: funnel.total,
       })
     } catch {
       setApplicationCounts(null)
