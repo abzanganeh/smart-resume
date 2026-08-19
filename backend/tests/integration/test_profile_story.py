@@ -102,16 +102,14 @@ async def test_story_save_happy_path(app_client: AsyncClient):
     token = await _register_and_login(app_client)
 
     with patch("app.routers.profile._structure_with_llm", new_callable=AsyncMock) as mock_struct:
-        from app.models.resume import ParsedResume
-
-        mock_struct.return_value = ParsedResume(
-            summary="Experienced engineer",
-            skills=["Python"],
-            experience=[],
-            education=[],
-            projects=[],
-            certifications=[],
-        )
+        mock_struct.return_value = {
+            "summary": "Experienced engineer",
+            "skills": ["Python"],
+            "experience": [],
+            "education": [],
+            "projects": [],
+            "certifications": [],
+        }
         response = await app_client.post(
             "/api/profile/resume/from-story/save",
             json={
