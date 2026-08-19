@@ -77,17 +77,43 @@ fi
 
 free_credits="$(http_json_field "$API_URL/api/billing/free-tier" starting_credits 2>/dev/null || true)"
 if [[ -n "$free_credits" ]]; then
-  check "Free-tier starting credits exposed" test "$free_credits" -ge 0
+  check "Free-tier starting credits is 6 (PR #76 grant bump)" test "$free_credits" = "6"
 else
   skip_check "Free-tier credits" "field missing"
 fi
 
-# Auth register smoke (unique email per run)
+# Auth register smoke (unique email per run) + authenticated tracker funnel
 smoke_email="staging-smoke-$(date +%s)@example.com"
-register_status="$(http_status -X POST "$API_URL/api/auth/register" \
+register_json="$(curl -sf -X POST "$API_URL/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}")"
-check "POST /api/auth/register creates user (201)" test "$register_status" = "201"
+  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}" 2>/dev/null || true)"
+if [[ -n "$register_json" ]]; then
+  check "POST /api/auth/register creates user (201)" test "$(echo "$register_json" | python3 -c "import json,sys; print('ok' if json.load(sys.stdin).get('access_token') else '')")" = "ok"
+  register_credits="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('credit_balance',''))" 2>/dev/null || true)"
+  if [[ -n "$register_credits" ]]; then
+    check "Register grants 6 starting credits" test "$register_credits" = "6"
+  else
+    skip_check "Register credit_balance" "field missing on user payload"
+  fi
+  smoke_token="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || true)"
+  if [[ -n "$smoke_token" ]]; then
+    funnel_status="$(http_status -H "Authorization: Bearer $smoke_token" "$API_URL/api/applications/funnel")"
+    check "GET /api/applications/funnel returns 200 (auth)" test "$funnel_status" = "200"
+    funnel_limit="$(curl -sf -H "Authorization: Bearer $smoke_token" "$API_URL/api/applications/funnel" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tracker_active_limit',''))" 2>/dev/null || true)"
+    if [[ -n "$funnel_limit" ]]; then
+      check "Funnel exposes free-tier tracker_active_limit=10" test "$funnel_limit" = "10"
+    else
+      skip_check "Funnel tracker_active_limit" "field missing"
+    fi
+  else
+    skip_check "Authenticated funnel" "could not parse access_token"
+  fi
+else
+  register_status="$(http_status -X POST "$API_URL/api/auth/register" \
+    -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}")"
+  check "POST /api/auth/register creates user (201)" test "$register_status" = "201"
+fi
 
 # Frontend legal pages (CI e2e subset)
 for path in /legal/privacy /legal/terms /checkup; do
