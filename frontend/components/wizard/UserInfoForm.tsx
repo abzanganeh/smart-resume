@@ -37,7 +37,7 @@ function isAiMlJob(jdText: string): boolean {
 /** Badge shown next to a field that was pre-filled from the resume. */
 function FilledBadge() {
   return (
-    <span className="inline-flex items-center gap-1 ml-2 text-emerald-400 text-[10px] font-medium">
+    <span className="inline-flex items-center gap-1 ml-2 text-emerald-700 dark:text-emerald-400 text-[10px] font-medium">
       <CheckCircle2 className="h-3 w-3" />
       from resume
     </span>
@@ -106,8 +106,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
   };
 
   const inputCls =
-    "w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600";
-  const labelCls = "flex items-center text-slate-400 text-xs mb-1 font-medium";
+    "w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600";
+  const labelCls = "flex items-center text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium";
 
   const showTransitionToggle = isAiMlJob(jdText);
 
@@ -125,8 +125,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
     <form onSubmit={handleSubmit} className="space-y-5">
 
       {/* ── Contact info ──────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-4">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-4 space-y-4">
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
           Contact — verify or correct what we found
         </p>
 
@@ -221,8 +221,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
       </div>
 
       {/* ── Role & Stage ──────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-4">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-4 space-y-4">
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
           Role & Experience Level
         </p>
 
@@ -235,7 +235,7 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
             placeholder="e.g. Registered Nurse, Product Manager, Software Engineer, Data Analyst…"
             className={inputCls}
           />
-          <p className="text-slate-600 text-[11px] mt-1">
+          <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-1">
             Any role, any industry — be as specific as the job posting.
           </p>
         </div>
@@ -253,12 +253,12 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
                 }}
                 className={`text-left px-3 py-2.5 rounded-lg border text-sm transition-all ${
                   form.career_stage === value && stageConfirmed
-                    ? "border-amber-400 bg-amber-400/10 text-amber-300"
-                    : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500"
+                    ? "border-amber-400 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300"
+                    : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-500"
                 }`}
               >
                 <span className="font-medium">{label}</span>
-                <span className="block text-[11px] mt-0.5 text-slate-500">{hint}</span>
+                <span className="block text-[11px] mt-0.5 text-slate-600 dark:text-slate-400">{hint}</span>
               </button>
             ))}
           </div>
@@ -277,7 +277,7 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
           placeholder="e.g. AWS Solutions Architect, PMP, Google Analytics — comma separated"
           className={inputCls}
         />
-        <p className="text-slate-600 text-[11px] mt-1">Leave blank if none.</p>
+        <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-1">Leave blank if none.</p>
       </div>
 
       {/* ── Career transition (only for AI/ML JDs) ────────────────────── */}
@@ -291,9 +291,9 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
               onChange={(e) => set("is_career_transition", e.target.checked)}
               className="mt-0.5 w-4 h-4 rounded accent-violet-400 shrink-0"
             />
-            <label htmlFor="transition" className="text-slate-300 text-sm cursor-pointer leading-relaxed">
+            <label htmlFor="transition" className="text-slate-700 dark:text-slate-300 text-sm cursor-pointer leading-relaxed">
               I'm transitioning into AI/ML from another field
-              <span className="block text-slate-500 text-xs mt-0.5">
+              <span className="block text-slate-600 dark:text-slate-400 text-xs mt-0.5">
                 The rewrite will highlight transferable skills and frame your background
                 as complementary experience for this AI role.
               </span>
@@ -303,7 +303,7 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
       )}
 
       {/* ── Editable note ─────────────────────────────────────────────── */}
-      <p className="flex items-center gap-1.5 text-slate-600 text-xs">
+      <p className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 text-xs">
         <Pencil className="h-3 w-3" />
         All fields pre-filled from your resume are editable — correct anything that looks wrong.
       </p>

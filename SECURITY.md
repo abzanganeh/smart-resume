@@ -23,7 +23,7 @@ Do not open public GitHub issues for undisclosed vulnerabilities.
 
 ## Scope
 
-This policy covers the Smart Resume Agent repository and official releases.
+This policy covers the TalioCV repository and official releases.
 
 Out of scope:
 

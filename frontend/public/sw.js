@@ -1,4 +1,4 @@
-/* Smart Resume web push service worker (IMPLEMENTATION_PLAN §6b) */
+/* TalioCV web push service worker (IMPLEMENTATION_PLAN §6b) */
 const SW_VERSION = "dev";
 const VAPID_PUBLIC_KEY = "";
 
@@ -25,10 +25,10 @@ self.addEventListener("push", (event) => {
         payload = {};
       }
 
-      const title = payload.title || "Smart Resume";
+      const title = payload.title || "TalioCV";
       const body = payload.body || "You have a new notification";
       const url = payload.url || "/notifications";
-      const tag = payload.tag || "smart-resume";
+      const tag = payload.tag || "taliocv";
       const notificationId = payload.notification_id || null;
 
       await self.registration.showNotification(title, {

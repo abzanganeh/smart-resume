@@ -10,6 +10,7 @@ import { clsx } from "clsx"
 import { JobsNavItem } from "@/components/nav/JobsNavItem"
 import { NotificationBell } from "@/components/nav/NotificationBell"
 import { UsageWidget } from "@/components/nav/UsageWidget"
+import { ThemeToggle } from "@/components/theme/ThemeToggle"
 
 export function NavBar() {
   const { data: session, status } = useSession()
@@ -57,16 +58,16 @@ export function NavBar() {
   }
 
   return (
-    <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
+    <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Brand */}
         <Link href="/" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
-          <BrandLogo className="h-11 w-auto max-w-[240px] sm:max-w-[280px]" />
+          <BrandLogo className="h-12 w-auto max-w-[260px] sm:max-w-[300px]" />
         </Link>
 
         {/* Nav links (authenticated) */}
         {renderUserMenu && (
-          <div className="flex items-center gap-1 text-sm text-slate-400 overflow-x-auto">
+          <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 overflow-x-auto">
             <NavLink href="/session/new">New session</NavLink>
             <NavLink href="/profile">Edit master resume</NavLink>
             <NavLink href="/fit">Job fit</NavLink>
@@ -79,15 +80,14 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeToggle />
           {renderUserMenu && (
             <>
               <NotificationBell />
               <UsageWidget />
             </>
           )}
-          {status === "loading" && !renderUserMenu ? (
-            <div className="w-20 h-7 bg-slate-800 rounded animate-pulse" />
-          ) : renderUserMenu ? (
+          {renderUserMenu ? (
             <UserMenu
               displayName={session!.backendUser?.display_name ?? session!.user?.name ?? "You"}
               email={session!.user?.email ?? ""}
@@ -102,7 +102,7 @@ export function NavBar() {
             <div className="flex items-center gap-2">
               <Link
                 href="/auth"
-                className="text-slate-400 hover:text-slate-200 text-sm font-medium px-3 py-1.5 transition-colors"
+                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium px-3 py-1.5 transition-colors"
               >
                 Sign in
               </Link>
@@ -126,7 +126,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
-      className="px-3 py-1.5 rounded-lg hover:bg-slate-800 hover:text-slate-200 transition-colors whitespace-nowrap"
+      className="px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
     >
       {children}
     </Link>
@@ -195,19 +195,19 @@ function UserMenu({
       <button
         type="button"
         onClick={() => setDropdownOpen((v) => !v)}
-        className="flex items-center gap-2 hover:bg-slate-800 rounded-lg px-2 py-1.5 transition-colors"
+        className="flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg px-2 py-1.5 transition-colors"
         aria-haspopup="true"
         aria-expanded={dropdownOpen}
       >
-        <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-400 text-xs font-semibold">
+        <div className="w-7 h-7 rounded-full bg-amber-500/20 dark:bg-amber-400/20 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center text-amber-700 dark:text-amber-400 text-xs font-semibold">
           {initials}
         </div>
-        <span className="text-sm text-slate-200 max-w-[120px] truncate hidden sm:block">
+        <span className="text-sm text-slate-800 dark:text-slate-200 max-w-[120px] truncate hidden sm:block">
           {displayName}
         </span>
         <ChevronDown
           className={clsx(
-            "w-4 h-4 text-slate-500 transition-transform hidden sm:block",
+            "w-4 h-4 text-slate-600 dark:text-slate-400 transition-transform hidden sm:block",
             dropdownOpen && "rotate-180",
           )}
         />
@@ -215,14 +215,14 @@ function UserMenu({
 
       {dropdownOpen && (
         <div
-          className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-50"
+          className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-50"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="px-4 py-3 border-b border-slate-800">
-            <p className="text-sm font-medium text-slate-200 truncate">{displayName}</p>
-            <p className="text-xs text-slate-500 truncate">{email}</p>
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{displayName}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{email}</p>
             {liveCredits !== undefined && (
-              <p className="text-xs text-amber-400 mt-0.5">
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
                 {liveCredits} credit{liveCredits !== 1 ? "s" : ""} remaining
               </p>
             )}
@@ -243,12 +243,12 @@ function UserMenu({
             </DropdownItem>
           </div>
 
-          <div className="p-1 border-t border-slate-800">
+          <div className="p-1 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => void onLogout()}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-950/40 rounded-lg transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sign out
@@ -272,9 +272,9 @@ function DropdownItem({
   return (
     <Link
       href={href}
-      className="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
+      className="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
     >
-      <span className="text-slate-500">{icon}</span>
+      <span className="text-slate-600 dark:text-slate-400">{icon}</span>
       {children}
     </Link>
   )

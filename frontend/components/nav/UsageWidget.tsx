@@ -73,7 +73,7 @@ export function UsageWidget() {
 
   if (status === "loading" || status === "unauthenticated" || !token) return null
   if (loading && !current) {
-    return <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
+    return <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600 dark:text-slate-400" />
   }
   if (!current) return null
 
@@ -81,21 +81,22 @@ export function UsageWidget() {
   const isSubscribed = !!sub && isSubscriptionActive(sub.status)
 
   if (isSubscribed) {
-    const tierLabel = sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)
+    const tierLabel =
+      sub.plan_display_name ?? sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)
 
     return (
       <Link
         href="/billing"
-        className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-700"
+        className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700"
         title={`${tierLabel}: ${sub.resumes_used}/${sub.resumes_limit} resumes, ${sub.searches_used}/${sub.searches_limit} searches this period`}
       >
-        <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-        <span className="hidden sm:inline text-amber-400">{tierLabel}</span>
-        <span className="hidden sm:inline text-slate-500">&middot;</span>
+        <TrendingUp className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+        <span className="hidden sm:inline text-amber-700 dark:text-amber-400">{tierLabel}</span>
+        <span className="hidden sm:inline text-slate-600 dark:text-slate-400">&middot;</span>
         <span className="tabular-nums" aria-label="resume usage">
           {sub.resumes_used}&thinsp;/&thinsp;{sub.resumes_limit}
         </span>
-        <span className="hidden md:inline text-slate-500">&middot;</span>
+        <span className="hidden md:inline text-slate-600 dark:text-slate-400">&middot;</span>
         <span className="hidden md:inline tabular-nums" aria-label="search usage">
           {sub.searches_used}&thinsp;/&thinsp;{sub.searches_limit}
         </span>
@@ -108,12 +109,12 @@ export function UsageWidget() {
   return (
     <Link
       href="/billing"
-      className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-700"
-      title="Upgrade to a plan for unlimited access"
+      className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700"
+      title="Free plan — 1 credit per tailored resume. Upgrade for a monthly allowance plus job search, fit analysis, and Whisper voice."
     >
-      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+      <Zap className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
       <span className="tabular-nums">{credits}</span>
-      <span className="hidden sm:inline text-slate-400">
+      <span className="hidden sm:inline text-slate-600 dark:text-slate-400">
         {credits === 1 ? "credit" : "credits"} left
       </span>
       <span className="hidden sm:inline bg-amber-400 text-slate-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">

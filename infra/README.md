@@ -1,4 +1,4 @@
-# Smart Resume — Job Search Infrastructure (Release Phase 3 §18.10)
+# TalioCV — Job Search Infrastructure (Release Phase 3 §18.10)
 
 This directory contains AWS Lambda handlers and Terraform for the job-search
 cache pipeline and saved-search alert dispatcher described in

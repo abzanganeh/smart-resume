@@ -34,7 +34,7 @@ export function SuggestionActionButtons({
       <button
         type="button"
         onClick={onReject}
-        className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-[11px] transition-colors"
+        className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-[11px] transition-colors"
       >
         <X className="w-3 h-3" />
         {rejectLabel}
@@ -94,9 +94,9 @@ export function SummaryHighlight({
 
   return (
     <div className="space-y-2">
-      <p className="text-slate-400 text-sm leading-relaxed line-through opacity-60">{currentText}</p>
+      <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed line-through opacity-60">{currentText}</p>
       <HighlightBox tone="pending">
-        <p className="text-amber-100 text-sm leading-relaxed whitespace-pre-wrap">{proposed}</p>
+        <p className="text-amber-900 dark:text-amber-100 text-sm leading-relaxed whitespace-pre-wrap">{proposed}</p>
         <div className="flex justify-end mt-2">
           <SuggestionActionButtons
             onAccept={() => onAccept(suggestion.id)}
@@ -125,12 +125,12 @@ export function SkillChip({
 }) {
   const base =
     tone === "accepted"
-      ? "bg-emerald-900/40 border-emerald-500/50 text-emerald-200"
+      ? "bg-emerald-50 dark:bg-emerald-900/40 border-emerald-500/50 text-emerald-800 dark:text-emerald-200"
       : tone === "pending"
-        ? "bg-amber-900/40 border-amber-500/50 text-amber-200"
+        ? "bg-amber-50 dark:bg-amber-900/40 border-amber-500/50 text-amber-800 dark:text-amber-200"
         : tone === "rejected"
-          ? "bg-red-900/30 border-red-600/50 text-red-300 line-through"
-          : "bg-slate-800 border-slate-700 text-slate-300";
+          ? "bg-red-50 dark:bg-red-900/30 border-red-600/50 text-red-700 dark:text-red-300 line-through"
+          : "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300";
 
   const isPendingRemove =
     tone === "pending" &&
@@ -203,14 +203,14 @@ export function SuggestedBulletRow({
     return (
       <div className={`${HIGHLIGHT.pending} rounded-lg px-2.5 py-2 space-y-1.5`}>
         <div className="flex items-start gap-2">
-          <span className="text-red-400/80 mt-0.5 shrink-0">•</span>
-          <p className="flex-1 text-red-300/80 text-sm leading-relaxed line-through">
+          <span className="text-red-700 dark:text-red-400/80 mt-0.5 shrink-0">•</span>
+          <p className="flex-1 text-red-700 dark:text-red-300/80 text-sm leading-relaxed line-through">
             {originalText ?? suggestion?.patch.bullet_old ?? suggestion?.patch.project_bullet_old}
           </p>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-amber-400 mt-0.5 shrink-0">•</span>
-          <p className="flex-1 text-amber-100 text-sm leading-relaxed">{proposed}</p>
+          <span className="text-amber-700 dark:text-amber-400 mt-0.5 shrink-0">•</span>
+          <p className="flex-1 text-amber-900 dark:text-amber-100 text-sm leading-relaxed">{proposed}</p>
         </div>
         <div className="flex justify-end">
           <SuggestionActionButtons
@@ -224,14 +224,14 @@ export function SuggestedBulletRow({
 
   const textClass =
     tone === "accepted"
-      ? "text-emerald-100"
+      ? "text-emerald-900 dark:text-emerald-100"
       : tone === "rejected"
-        ? "text-red-300 line-through"
-        : "text-slate-200";
+        ? "text-red-700 dark:text-red-300 line-through"
+        : "text-slate-800 dark:text-slate-200";
 
   return (
     <div className={`group flex items-start gap-2 ${tone !== "none" ? HIGHLIGHT[tone] + " rounded-lg px-2 py-1.5" : ""}`}>
-      <span className="text-slate-500 mt-1 shrink-0">•</span>
+      <span className="text-slate-600 dark:text-slate-400 mt-1 shrink-0">•</span>
       <p className={`flex-1 text-sm leading-relaxed ${textClass}`}>{displayText}</p>
       {(onRegen || onEdit || onDelete) && (
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
@@ -240,7 +240,7 @@ export function SuggestedBulletRow({
               type="button"
               disabled={phaseRunning}
               onClick={onRegen}
-              className="p-1 rounded text-slate-500 hover:text-amber-400 disabled:opacity-40"
+              className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 disabled:opacity-40"
               title="Regenerate bullet"
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -250,7 +250,7 @@ export function SuggestedBulletRow({
             <button
               type="button"
               onClick={onEdit}
-              className="p-1 rounded text-slate-500 hover:text-amber-400"
+              className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
               title="Edit bullet"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -260,7 +260,7 @@ export function SuggestedBulletRow({
             <button
               type="button"
               onClick={onDelete}
-              className="p-1 rounded text-slate-500 hover:text-red-400"
+              className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-red-400"
               title="Delete bullet"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -340,7 +340,7 @@ export function InlineFieldSuggestion({
 
   if (suggestion.status === "accepted") {
     return (
-      <span className={`${HIGHLIGHT.accepted} rounded px-1.5 py-0.5 text-emerald-100`}>
+      <span className={`${HIGHLIGHT.accepted} rounded px-1.5 py-0.5 text-emerald-900 dark:text-emerald-100`}>
         {current}
       </span>
     );
@@ -348,8 +348,8 @@ export function InlineFieldSuggestion({
 
   return (
     <span className="inline-flex flex-col gap-1">
-      <span className="text-slate-500 line-through text-xs">{current}</span>
-      <span className={`${HIGHLIGHT.pending} rounded px-1.5 py-0.5 text-amber-100 text-xs inline-flex items-center gap-2`}>
+      <span className="text-slate-600 dark:text-slate-400 line-through text-xs">{current}</span>
+      <span className={`${HIGHLIGHT.pending} rounded px-1.5 py-0.5 text-amber-900 dark:text-amber-100 text-xs inline-flex items-center gap-2`}>
         {proposed}
         <SuggestionActionButtons
           onAccept={() => onAccept(suggestion.id)}
@@ -391,12 +391,12 @@ export function OrphanSuggestionCard({
   const preview = orphanPatchPreview(suggestion.patch);
   return (
     <HighlightBox tone={tone === "none" ? "pending" : tone}>
-      <p className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-wider mb-1">
+      <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400/80 uppercase tracking-wider mb-1">
         AI suggestion
       </p>
       <div className="space-y-1 mb-2">
         {preview.map((line, i) => (
-          <p key={i} className="text-slate-300 text-xs">{line}</p>
+          <p key={i} className="text-slate-700 dark:text-slate-300 text-xs">{line}</p>
         ))}
       </div>
       {suggestion.status === "pending" && (
@@ -408,7 +408,7 @@ export function OrphanSuggestionCard({
         </div>
       )}
       {suggestion.status === "accepted" && (
-        <p className="text-emerald-400 text-xs flex items-center gap-1">
+        <p className="text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-1">
           <Check className="w-3 h-3" /> Applied
         </p>
       )}

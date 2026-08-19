@@ -1,7 +1,7 @@
 """Ephemeral cross-product handoff tokens for Flint import (Strategy B Phase 1).
 
 Tokens are single-use, short-lived, and stored separately from tailoring
-sessions so redeem does not require Smart Resume JWT auth.
+sessions so redeem does not require TalioCV JWT auth.
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ async def create_jd_handoff_token(
     from the extension, which never has a tailoring session. Flint's
     ``import_from_smart_resume`` command treats an empty session id as
     "JD-only mode" and uses the desktop's locally stored profile instead
-    of fetching a tailored resume from Smart Resume. Keep this contract
+    of fetching a tailored resume from TalioCV. Keep this contract
     in sync with ``smart_resume_session_id`` handling on the Flint side
     (``flint/src-tauri/src/commands/import_from_smart_resume.rs``).
     Resume summary is empty for the same reason.

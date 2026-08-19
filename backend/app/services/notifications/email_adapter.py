@@ -28,7 +28,7 @@ def _wrap_html(inner: str) -> str:
         'max-width:560px;margin:0 auto;padding:24px">'
         f"{inner}"
         '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>'
-        '<p style="font-size:11px;color:#9ca3af">Smart Resume — '
+        '<p style="font-size:11px;color:#9ca3af">TalioCV — '
         "automated message, please do not reply.</p>"
         "</div>"
     )

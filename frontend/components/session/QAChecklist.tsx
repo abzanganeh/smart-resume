@@ -10,9 +10,9 @@ interface Props {
 }
 
 const STATUS_CONFIG = {
-  pass: { icon: CheckCircle, cls: "text-green-400", bg: "bg-green-400/5 border-green-400/20" },
-  warn: { icon: AlertTriangle, cls: "text-amber-400", bg: "bg-amber-400/5 border-amber-400/20" },
-  fail: { icon: XCircle, cls: "text-red-400", bg: "bg-red-400/5 border-red-400/20" },
+  pass: { icon: CheckCircle, cls: "text-green-700 dark:text-green-400", bg: "bg-green-400/5 border-green-400/20" },
+  warn: { icon: AlertTriangle, cls: "text-amber-700 dark:text-amber-400", bg: "bg-amber-500/5 dark:bg-amber-400/5 border-amber-400/20" },
+  fail: { icon: XCircle, cls: "text-red-700 dark:text-red-400", bg: "bg-red-400/5 border-red-400/20" },
 };
 
 function QARow({ item }: { item: QAItem }) {
@@ -22,7 +22,7 @@ function QARow({ item }: { item: QAItem }) {
     <div className={cn("flex items-start gap-3 border rounded-lg p-3", cfg.bg)}>
       <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", cfg.cls)} />
       <div className="flex-1">
-        <p className="text-slate-200 text-sm">{item.item}</p>
+        <p className="text-slate-800 dark:text-slate-200 text-sm">{item.item}</p>
         {item.note && <p className={cn("text-xs mt-0.5", cfg.cls)}>{item.note}</p>}
       </div>
     </div>
@@ -32,7 +32,7 @@ function QARow({ item }: { item: QAItem }) {
 export function QAChecklist({ output, streaming }: Props) {
   if (!output && streaming) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 py-8">
+      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 py-8">
         <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
         Running quality assurance checklist…
       </div>
@@ -57,24 +57,24 @@ export function QAChecklist({ output, streaming }: Props) {
               : "Unknown"}
           </p>
           {output.overall_status === "pass" && (
-            <p className="text-green-400/70 text-sm">Your resume passes all quality checks. Ready to export.</p>
+            <p className="text-green-700 dark:text-green-400/70 text-sm">Your resume passes all quality checks. Ready to export.</p>
           )}
         </div>
         {/* ATS score (Phase 4) — distinct from Phase 2 audit score */}
         {typeof output.ats_score === "number" && (
           <div className="text-right shrink-0">
-            <p className="text-slate-400 text-xs flex items-center justify-end gap-1">
+            <p className="text-slate-600 dark:text-slate-400 text-xs flex items-center justify-end gap-1">
               Tailored resume ATS score
               <span
                 title="Measures how well your tailored resume matches the job description."
-                className="cursor-help text-slate-600 hover:text-slate-400"
+                className="cursor-help text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300"
               >
                 <Info className="w-3 h-3" />
               </span>
             </p>
-            <p className="text-2xl font-bold text-slate-100 mt-0.5">
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
               {output.ats_score}
-              <span className="text-slate-500 text-sm font-normal"> / 100</span>
+              <span className="text-slate-600 dark:text-slate-400 text-sm font-normal"> / 100</span>
             </p>
           </div>
         )}
@@ -91,13 +91,13 @@ export function QAChecklist({ output, streaming }: Props) {
       {/* User action required */}
       {(output.user_action_required ?? []).length > 0 && (
         <div className="bg-red-400/10 border border-red-400/20 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-red-400 font-semibold text-sm mb-2">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-semibold text-sm mb-2">
             <AlertCircle className="w-4 h-4" />
             Action required before export
           </div>
           <ul className="space-y-1">
             {(output.user_action_required ?? []).map((action, i) => (
-              <li key={i} className="text-red-300 text-sm flex items-start gap-2">
+              <li key={i} className="text-red-700 dark:text-red-300 text-sm flex items-start gap-2">
                 <span className="mt-1">›</span>
                 {action}
               </li>

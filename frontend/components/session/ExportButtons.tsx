@@ -51,7 +51,7 @@ export function ExportButtons({
       <a
         href={disabled ? undefined : exportUrl(sessionId, "docx")}
         download={docxName}
-        className={cn(btnCls, disabled ? "pointer-events-none opacity-40 bg-slate-700 text-slate-300" : "bg-slate-700 text-slate-300 hover:bg-slate-600")}
+        className={cn(btnCls, disabled ? "pointer-events-none opacity-40 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600")}
       >
         <File className="w-4 h-4" />
         Download DOCX
@@ -59,7 +59,7 @@ export function ExportButtons({
       <a
         href={disabled ? undefined : exportUrl(sessionId, "txt")}
         download={txtName}
-        className={cn(btnCls, "bg-slate-800 text-slate-400 hover:bg-slate-700", disabled && "pointer-events-none opacity-40")}
+        className={cn(btnCls, "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700", disabled && "pointer-events-none opacity-40")}
       >
         <FileText className="w-4 h-4" />
         Plain text
@@ -67,7 +67,7 @@ export function ExportButtons({
       <button
         onClick={handleCopy}
         disabled={disabled}
-        className={cn(btnCls, "bg-slate-800 text-slate-400 hover:bg-slate-700")}
+        className={cn(btnCls, "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700")}
       >
         <Copy className="w-4 h-4" />
         {copied ? "Copied!" : "Copy to clipboard"}

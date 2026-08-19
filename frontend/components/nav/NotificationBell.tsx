@@ -88,7 +88,7 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative p-2 rounded-lg hover:bg-slate-800 text-slate-300 transition-colors"
+        className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
         aria-label="Notifications"
         aria-expanded={open}
       >
@@ -101,38 +101,38 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-[420px] overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-xl z-50">
-          <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-200">Notifications</span>
+        <div className="absolute right-0 mt-2 w-80 max-h-[420px] overflow-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50">
+          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Notifications</span>
             <Link
               href="/notifications"
-              className="text-xs text-amber-400 hover:text-amber-300"
+              className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
               onClick={() => setOpen(false)}
             >
               View all
             </Link>
           </div>
           {loading ? (
-            <p className="px-3 py-4 text-sm text-slate-500">Loading…</p>
+            <p className="px-3 py-4 text-sm text-slate-600 dark:text-slate-400">Loading…</p>
           ) : items.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-slate-500">No notifications yet.</p>
+            <p className="px-3 py-4 text-sm text-slate-600 dark:text-slate-400">No notifications yet.</p>
           ) : (
-            <ul className="divide-y divide-slate-800">
+            <ul className="divide-y divide-slate-200 dark:divide-slate-800">
               {items.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={() => onItemClick(item)}
                     className={cn(
-                      "w-full text-left px-3 py-2.5 hover:bg-slate-800/80 transition-colors",
-                      !item.read_at && "bg-slate-800/40"
+                      "w-full text-left px-3 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors",
+                      !item.read_at && "bg-slate-100/40 dark:bg-slate-800/40"
                     )}
                   >
-                    <p className="text-sm font-medium text-slate-200 line-clamp-1">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 line-clamp-1">
                       {item.title || item.type}
                     </p>
                     {item.body && (
-                      <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mt-0.5">
                         {item.body}
                       </p>
                     )}

@@ -8,7 +8,7 @@
  * (sr_refresh) set by FastAPI — browsers send it automatically on fetch
  * requests to localhost:8000 with `credentials:"include"`.
  *
- * OAuth SSO (Google / GitHub):
+ * OAuth SSO (Google / GitHub / Microsoft / LinkedIn / Apple):
  *   NextAuth handles the OAuth code exchange with the provider.
  *   After obtaining tokens, we call POST /api/auth/callback with
  *   id_token or access_token so FastAPI creates/syncs the User row
@@ -18,15 +18,30 @@ import NextAuth from "next-auth"
 import type { User } from "next-auth"
 import Google from "next-auth/providers/google"
 import GitHub from "next-auth/providers/github"
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
+import LinkedIn from "next-auth/providers/linkedin"
 import Credentials from "next-auth/providers/credentials"
 
 const API_URL =
   process.env.INTERNAL_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000"
-const NEXTAUTH_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
 const isLocalEnv =
   process.env.NEXT_PUBLIC_APP_ENV === "local" || process.env.NODE_ENV !== "production"
+
+// Pinned NEXTAUTH_URL forces OAuth redirect_uri to localhost even when the browser
+// uses a LAN IP — PKCE/state cookies then live on 192.168.x.x while the callback
+// hits localhost and Auth.js returns Configuration. In local dev, trust Host instead.
+if (
+  isLocalEnv &&
+  process.env.AUTH_TRUST_HOST !== "false" &&
+  process.env.AUTH_TRUST_HOST !== "0"
+) {
+  delete process.env.AUTH_URL
+  delete process.env.NEXTAUTH_URL
+}
+
+const NEXTAUTH_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000"
 const nextAuthSecret =
   process.env.NEXTAUTH_SECRET ??
   (isLocalEnv ? "local-dev-nextauth-secret-change-me" : undefined)
@@ -56,6 +71,10 @@ interface BackendAuthUser extends User {
 
 // ── Backend OAuth sync helper ─────────────────────────────────────────────────
 
+type OAuthSyncResult =
+  | { ok: true; access_token: string; expires_in: number; user: BackendUser }
+  | { ok: false; error: string }
+
 /**
  * Call the backend after an OAuth sign-in to create/sync the backend user.
  * NextAuth has already exchanged the auth code; pass id_token or access_token.
@@ -65,8 +84,8 @@ async function syncOAuthWithBackend(
   accessToken: string | undefined,
   idToken: string | undefined,
   callbackUrl: string,
-): Promise<{ access_token: string; expires_in: number; user: BackendUser } | null> {
-  if (!idToken && !accessToken) return null
+): Promise<OAuthSyncResult> {
+  if (!idToken && !accessToken) return { ok: false, error: "OAuthBackendSyncPending" }
   try {
     const res = await fetch(`${API_URL}/api/auth/callback`, {
       method: "POST",
@@ -78,16 +97,40 @@ async function syncOAuthWithBackend(
         redirect_uri: callbackUrl,
       }),
     })
-    if (!res.ok) return null
-    return res.json()
+    if (!res.ok) {
+      try {
+        const data = (await res.json()) as {
+          detail?: { code?: string; with_provider?: string }
+        }
+        const code = data.detail?.code
+        if (code === "email_already_registered" && data.detail?.with_provider) {
+          return {
+            ok: false,
+            error: `email_registered_with_sso:${data.detail.with_provider}`,
+          }
+        }
+        if (code) return { ok: false, error: code }
+      } catch {
+        /* ignore parse errors */
+      }
+      return { ok: false, error: "OAuthBackendSyncPending" }
+    }
+    const body = (await res.json()) as {
+      access_token: string
+      expires_in: number
+      user: BackendUser
+    }
+    return { ok: true, ...body }
   } catch {
-    return null
+    return { ok: false, error: "OAuthBackendSyncPending" }
   }
 }
 
 const PLACEHOLDER_OAUTH_CLIENT_IDS = new Set([
   "local-google-id",
   "local-github-id",
+  "local-microsoft-id",
+  "local-linkedin-id",
   "playwright-google-client-id",
   "playwright-github-client-id",
 ])
@@ -110,6 +153,22 @@ const githubOAuthConfigured = oauthCredentialsConfigured(
   process.env.GITHUB_CLIENT_ID,
   process.env.GITHUB_CLIENT_SECRET,
 )
+const microsoftOAuthConfigured = oauthCredentialsConfigured(
+  process.env.AZURE_AD_CLIENT_ID,
+  process.env.AZURE_AD_CLIENT_SECRET,
+)
+const linkedinOAuthConfigured = oauthCredentialsConfigured(
+  process.env.LINKEDIN_CLIENT_ID,
+  process.env.LINKEDIN_CLIENT_SECRET,
+)
+
+/** Map NextAuth provider id → backend /api/auth/callback provider slug. */
+const BACKEND_OAUTH_PROVIDER: Record<string, string> = {
+  google: "google",
+  github: "github",
+  "microsoft-entra-id": "microsoft",
+  linkedin: "linkedin",
+}
 
 const oauthProviders = [
   ...(googleOAuthConfigured
@@ -125,6 +184,23 @@ const oauthProviders = [
         GitHub({
           clientId: process.env.GITHUB_CLIENT_ID!,
           clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        }),
+      ]
+    : []),
+  ...(microsoftOAuthConfigured
+    ? [
+        MicrosoftEntraID({
+          clientId: process.env.AZURE_AD_CLIENT_ID!,
+          clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+          issuer: "https://login.microsoftonline.com/common/v2.0",
+        }),
+      ]
+    : []),
+  ...(linkedinOAuthConfigured
+    ? [
+        LinkedIn({
+          clientId: process.env.LINKEDIN_CLIENT_ID!,
+          clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
         }),
       ]
     : []),
@@ -254,21 +330,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token
       }
 
-      // ── OAuth sign-in (Google / GitHub) ───────────────────────────────────
-      if (user && account && (account.provider === "google" || account.provider === "github")) {
+      // ── OAuth sign-in (Google / GitHub / Microsoft / LinkedIn) ──
+      if (
+        user &&
+        account &&
+        BACKEND_OAUTH_PROVIDER[account.provider]
+      ) {
+        const backendProvider = BACKEND_OAUTH_PROVIDER[account.provider]!
         const synced = await syncOAuthWithBackend(
-          account.provider,
+          backendProvider,
           account.access_token ?? undefined,
           account.id_token ?? undefined,
           `${NEXTAUTH_URL}/api/auth/callback/${account.provider}`,
         )
-        if (synced) {
+        if (synced.ok) {
           token.backendAccessToken = synced.access_token
           token.backendExpiresAt = Date.now() + synced.expires_in * 1000
           token.backendUser = synced.user
         } else {
-          // OAuth sync with backend not yet available — mark so UI can inform user.
-          token.error = "OAuthBackendSyncPending"
+          token.error = synced.error
         }
         return token
       }

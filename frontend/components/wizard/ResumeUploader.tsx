@@ -172,11 +172,11 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
     <div className="space-y-6">
       {/* Story mode promotional card */}
       {!hasMasterResume && (
-        <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 flex items-start gap-3">
+        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/60 p-4 flex items-start gap-3">
           <span className="text-2xl">🎙</span>
           <div className="flex-1 space-y-1">
-            <p className="text-white font-medium text-sm">Don&apos;t have a resume file yet?</p>
-            <p className="text-slate-400 text-xs">
+            <p className="text-slate-900 dark:text-white font-medium text-sm">Don&apos;t have a resume file yet?</p>
+            <p className="text-slate-600 dark:text-slate-400 text-xs">
               Build your master profile by telling your story first — 10–20 minutes of speaking → a complete resume.
             </p>
           </div>
@@ -202,7 +202,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
               "px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5",
               mode === t.id
                 ? "bg-amber-400 text-slate-900"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700",
+                : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700",
             )}
           >
             {t.icon}{t.label}
@@ -218,13 +218,13 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
           onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) void handleFile(f); }}
           className={cn(
             "border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors",
-            dragging ? "border-amber-400 bg-amber-400/5" : "border-slate-700 hover:border-slate-500",
+            dragging ? "border-amber-400 bg-amber-500/5 dark:bg-amber-400/5" : "border-slate-300 dark:border-slate-700 hover:border-slate-500",
           )}
           onClick={() => document.getElementById("resume-file-input")?.click()}
         >
-          <Upload className="w-10 h-10 text-slate-500 mx-auto mb-3" />
-          <p className="text-slate-300 font-medium">Drop your resume here</p>
-          <p className="text-slate-500 text-sm mt-1">PDF, DOCX, or TXT · Max 5MB</p>
+          <Upload className="w-10 h-10 text-slate-600 dark:text-slate-400 mx-auto mb-3" />
+          <p className="text-slate-700 dark:text-slate-300 font-medium">Drop your resume here</p>
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">PDF, DOCX, or TXT · Max 5MB</p>
           <input
             id="resume-file-input" type="file"
             accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
@@ -241,10 +241,10 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
             placeholder="Paste your resume text here…"
-            className="w-full h-64 bg-slate-800 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600"
+            className="w-full h-64 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600"
           />
           <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-xs">{pasteText.length.toLocaleString()} / 15,000 chars</span>
+            <span className="text-slate-600 dark:text-slate-400 text-xs">{pasteText.length.toLocaleString()} / 15,000 chars</span>
             <button
               onClick={() => void handlePaste()}
               disabled={!pasteText.trim() || loading}
@@ -271,17 +271,17 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
       {mode === "saved" && (
         <div className="space-y-4">
           {savedLoading && (
-            <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
+            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm py-8 justify-center">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading your master resume…
             </div>
           )}
           {!savedLoading && savedText === "" && (
-            <div className="text-center py-10 border-2 border-dashed border-slate-700 rounded-xl space-y-3">
-              <BookUser className="w-10 h-10 text-slate-600 mx-auto" />
-              <p className="text-slate-400 font-medium">No master resume found</p>
-              <p className="text-slate-500 text-sm">
+            <div className="text-center py-10 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl space-y-3">
+              <BookUser className="w-10 h-10 text-slate-600 dark:text-slate-400 mx-auto" />
+              <p className="text-slate-600 dark:text-slate-400 font-medium">No master resume found</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
                 Upload your career history on the{" "}
-                <a href="/profile" target="_blank" className="text-amber-400 hover:underline">
+                <a href="/profile" target="_blank" className="text-amber-700 dark:text-amber-400 hover:underline">
                   Profile page
                 </a>{" "}
                 first, then come back here to reuse it.
@@ -290,7 +290,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
           )}
           {!savedLoading && savedText && (
             <div className="space-y-3">
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
                 Your saved master resume will be used for this session.
                 Edit below if needed before parsing.
               </p>
@@ -299,10 +299,10 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
                 onChange={(e) => setSavedText(e.target.value)}
                 disabled={loading}
                 rows={12}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
               />
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 text-xs">{savedText.length.toLocaleString()} characters</span>
+                <span className="text-slate-600 dark:text-slate-400 text-xs">{savedText.length.toLocaleString()} characters</span>
                 <button
                   type="button" onClick={() => void handleUseSaved()} disabled={!savedText.trim() || loading}
                   className="px-5 py-2 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 disabled:opacity-40 transition-colors text-sm"
@@ -316,14 +316,14 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
+        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
           <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
           Parsing resume with AI…
         </div>
       )}
 
       {error && (
-        <div className="flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+        <div className="flex items-start gap-2 text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           {error}
         </div>

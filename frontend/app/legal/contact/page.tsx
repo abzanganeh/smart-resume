@@ -63,12 +63,12 @@ export default function DpoContactPage() {
 
       <form
         onSubmit={onSubmit}
-        className="not-prose mt-6 space-y-4 rounded-xl border border-slate-800 bg-slate-950/60 p-6"
+        className="not-prose mt-6 space-y-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 p-6"
       >
         <div className="space-y-2">
           <label
             htmlFor="dpo-name"
-            className="block text-xs font-medium uppercase tracking-widest text-slate-400"
+            className="block text-xs font-medium uppercase tracking-widest text-slate-600 dark:text-slate-400"
           >
             Your name
           </label>
@@ -80,14 +80,14 @@ export default function DpoContactPage() {
             disabled={submitting}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-amber-400 focus:outline-none"
           />
         </div>
 
         <div className="space-y-2">
           <label
             htmlFor="dpo-email"
-            className="block text-xs font-medium uppercase tracking-widest text-slate-400"
+            className="block text-xs font-medium uppercase tracking-widest text-slate-600 dark:text-slate-400"
           >
             Reply-to email
           </label>
@@ -100,14 +100,14 @@ export default function DpoContactPage() {
             disabled={submitting}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-amber-400 focus:outline-none"
           />
         </div>
 
         <div className="space-y-2">
           <label
             htmlFor="dpo-topic"
-            className="block text-xs font-medium uppercase tracking-widest text-slate-400"
+            className="block text-xs font-medium uppercase tracking-widest text-slate-600 dark:text-slate-400"
           >
             Topic
           </label>
@@ -118,7 +118,7 @@ export default function DpoContactPage() {
             disabled={submitting}
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-amber-400 focus:outline-none"
           >
             <option value="data_subject_request">
               Data subject request (access / erasure / portability)
@@ -135,7 +135,7 @@ export default function DpoContactPage() {
         <div className="space-y-2">
           <label
             htmlFor="dpo-message"
-            className="block text-xs font-medium uppercase tracking-widest text-slate-400"
+            className="block text-xs font-medium uppercase tracking-widest text-slate-600 dark:text-slate-400"
           >
             Message
           </label>
@@ -149,9 +149,9 @@ export default function DpoContactPage() {
             rows={6}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-amber-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-amber-400 focus:outline-none"
           />
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             Please describe your request.  Minimum 20 characters.
           </p>
         </div>
@@ -167,7 +167,7 @@ export default function DpoContactPage() {
         {status.kind === "success" ? (
           <p
             role="status"
-            className="rounded-md border border-emerald-700 bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200"
+            className="rounded-md border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/40 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200"
           >
             Thanks — your message has been sent.  We respond within 30 days
             (most requests within 5 business days).
@@ -177,7 +177,7 @@ export default function DpoContactPage() {
         {status.kind === "error" ? (
           <p
             role="alert"
-            className="rounded-md border border-rose-700 bg-rose-900/40 px-3 py-2 text-sm text-rose-200"
+            className="rounded-md border border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200"
           >
             {status.message}
           </p>

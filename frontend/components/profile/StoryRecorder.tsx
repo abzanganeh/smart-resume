@@ -7,14 +7,16 @@
  * Each segment is editable after recording.
  * "Generate resume from story" calls POST /api/profile/resume/from-story.
  *
- * Credit path:
- *   - Web Speech (Chrome/Edge): 0 credits
- *   - Whisper fallback (Firefox/Safari): 2 credits — shown in disclosure before start
+ * Entitlement path:
+ *   - Web Speech (Chrome/Edge): free on every plan, 0 credits
+ *   - Whisper fallback (Firefox/Safari): paid plans only, metered by the plan's
+ *     whisper_uses_per_period allowance — disclosed before start
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Clock, Loader2, Mic, RotateCcw, Send, Sparkles, Wand2 } from "lucide-react";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { useEntitlement } from "@/hooks/useEntitlement";
 import { StoryCoach } from "./StoryCoach";
 import { StoryInterview } from "./StoryInterview";
 import { type StoryMode, StoryModeSelector } from "./StoryModeSelector";
@@ -59,6 +61,7 @@ interface Props {
 type RecordingState = "idle" | "recording" | "re-recording";
 
 export function StoryRecorder({ token, onSaved }: Props) {
+  const { isFreeUser } = useEntitlement();
   const [storyMode, setStoryMode] = useState<StoryMode | null>(null);
   const [segments, setSegments] = useState<string[]>([]);
   const [recordingState, setRecordingState]     = useState<RecordingState>("idle");
@@ -230,9 +233,9 @@ export function StoryRecorder({ token, onSaved }: Props) {
   if (submitting) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-        <Loader2 className="w-10 h-10 text-amber-400 animate-spin" />
-        <p className="text-slate-300 font-medium">Crafting your resume from the story…</p>
-        <p className="text-slate-500 text-sm">This may take up to 30 seconds</p>
+        <Loader2 className="w-10 h-10 text-amber-700 dark:text-amber-400 animate-spin" />
+        <p className="text-slate-700 dark:text-slate-300 font-medium">Crafting your resume from the story…</p>
+        <p className="text-slate-600 dark:text-slate-400 text-sm">This may take up to 30 seconds</p>
       </div>
     );
   }
@@ -244,14 +247,14 @@ export function StoryRecorder({ token, onSaved }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-400" />
-            <p className="text-green-400 font-semibold text-sm">Resume crafted from your story</p>
+            <CheckCircle className="w-5 h-5 text-green-700 dark:text-green-400" />
+            <p className="text-green-700 dark:text-green-400 font-semibold text-sm">Resume crafted from your story</p>
           </div>
           {prevText && (
             <button
               type="button"
               onClick={() => { setReviewText(prevText); setPrevText(null); }}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-400 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Undo last polish
@@ -259,7 +262,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
           )}
         </div>
 
-        <p className="text-slate-400 text-sm">
+        <p className="text-slate-600 dark:text-slate-400 text-sm">
           Review and edit below. Use the AI assistant to refine any section, then save to your profile.
         </p>
 
@@ -268,15 +271,15 @@ export function StoryRecorder({ token, onSaved }: Props) {
           value={reviewText}
           onChange={(e) => { setReviewText(e.target.value); setPrevText(null); }}
           rows={18}
-          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400/50"
+          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-amber-400/50"
         />
 
         {/* AI Polish panel */}
-        <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3">
+        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Wand2 className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-semibold text-slate-300">Polish with AI</span>
-            <span className="text-xs text-slate-600 ml-auto">Free — no credits used</span>
+            <Wand2 className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Polish with AI</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400 ml-auto">Free — no credits used</span>
           </div>
 
           {/* Example prompts */}
@@ -295,7 +298,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                   setPolishInstruction(ex);
                   setTimeout(() => polishInputRef.current?.focus(), 30);
                 }}
-                className="text-xs px-2.5 py-1 rounded-full border border-slate-700 text-slate-400 hover:border-amber-400/50 hover:text-amber-300 transition-colors disabled:opacity-40"
+                className="text-xs px-2.5 py-1 rounded-full border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-amber-400/50 hover:text-amber-800 dark:hover:text-amber-300 transition-colors disabled:opacity-40"
               >
                 {ex}
               </button>
@@ -317,7 +320,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
               disabled={polishing}
               placeholder="Tell AI what to change… (Enter to send)"
               rows={2}
-              className="flex-1 resize-none bg-slate-900 border border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed"
+              className="flex-1 resize-none bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed"
             />
             <button
               type="button"
@@ -334,13 +337,13 @@ export function StoryRecorder({ token, onSaved }: Props) {
           </div>
 
           {polishError && (
-            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            <p className="text-red-700 dark:text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
               {polishError}
             </p>
           )}
 
           {polishing && (
-            <p className="text-slate-500 text-xs flex items-center gap-1.5">
+            <p className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" />
               Applying changes…
             </p>
@@ -360,12 +363,12 @@ export function StoryRecorder({ token, onSaved }: Props) {
           <button
             type="button"
             onClick={() => { setReviewText(null); setPrevText(null); }}
-            className="px-5 py-3 border border-slate-700 hover:border-slate-500 bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl transition-colors text-sm"
+            className="px-5 py-3 border border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium rounded-xl transition-colors text-sm"
           >
             Back
           </button>
         </div>
-        <p className="text-slate-600 text-xs">
+        <p className="text-slate-600 dark:text-slate-400 text-xs">
           Your resume is already saved — this view lets you refine it before continuing to the JD flow.
         </p>
       </div>
@@ -376,7 +379,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
   if (!storyMode) {
     return (
       <StoryModeSelector
-        isFreeUser
+        isFreeUser={isFreeUser}
         onSelect={(mode) => {
           if (mode === "interview") {
             setStoryMode("interview");
@@ -393,7 +396,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
     return (
       <StoryInterview
         token={token}
-        isFreeUser
+        isFreeUser={isFreeUser}
         onSaved={onSaved}
         onBack={() => setStoryMode(null)}
       />
@@ -408,7 +411,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
         <button
           type="button"
           onClick={() => setStoryMode(null)}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition-colors"
         >
           ← Change mode
         </button>
@@ -418,41 +421,43 @@ export function StoryRecorder({ token, onSaved }: Props) {
           supportsWebSpeech ? "border-green-500/30 bg-green-500/5" : "border-amber-500/30 bg-amber-500/5",
         )}>
           <div className="flex items-center gap-2">
-            <Mic className={cn("w-4 h-4", supportsWebSpeech ? "text-green-400" : "text-amber-400")} />
-            <span className={cn("font-semibold text-sm", supportsWebSpeech ? "text-green-400" : "text-amber-400")}>
+            <Mic className={cn("w-4 h-4", supportsWebSpeech ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400")} />
+            <span className={cn("font-semibold text-sm", supportsWebSpeech ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400")}>
               {supportsWebSpeech ? "Live transcription — free, no API key needed" : "AI transcription via Whisper"}
             </span>
           </div>
           {supportsWebSpeech ? (
-            <p className="text-slate-400 text-sm">
-              Your browser supports live transcription. Words appear as you speak. Generating your resume from story: <strong className="text-white">0 credits</strong>.
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
+              Your browser supports live transcription. Words appear as you speak. Generating your resume from story: <strong className="text-slate-900 dark:text-white">0 credits</strong>.
             </p>
           ) : (
             <div className="space-y-2">
-              <p className="text-slate-400 text-sm">
-                Your browser does not support live transcription. We&apos;ll use Whisper AI to transcribe each segment.
-                Cost: <strong className="text-white">2 credits per story</strong>.
+              <p className="text-slate-600 dark:text-slate-400 text-sm">
+                Your browser does not support live transcription, so we&apos;ll use Whisper AI to
+                transcribe each segment. Whisper needs{" "}
+                <strong className="text-slate-900 dark:text-white">a paid plan</strong> and counts
+                against that plan&apos;s transcription allowance.
               </p>
-              <p className="text-slate-500 text-xs">
-                Switch to Chrome or Edge to record for free.
+              <p className="text-slate-600 dark:text-slate-400 text-xs">
+                Switch to Chrome or Edge to record free on any plan.
               </p>
             </div>
           )}
         </div>
 
-        <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-5 space-y-2">
-          <p className="text-slate-300 font-medium text-sm">How it works</p>
-          <ol className="text-slate-400 text-sm space-y-1 list-decimal list-inside">
+        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-5 space-y-2">
+          <p className="text-slate-700 dark:text-slate-300 font-medium text-sm">How it works</p>
+          <ol className="text-slate-600 dark:text-slate-400 text-sm space-y-1 list-decimal list-inside">
             <li>Record up to 30 segments of 60 seconds each (30 min total)</li>
             <li>Talk naturally — jobs, skills, accomplishments, education</li>
             <li>Edit any segment after recording</li>
             <li>
-              <span className="text-indigo-400 font-medium">Optionally tap "Coach me ✨"</span> on
+              <span className="text-indigo-700 dark:text-indigo-400 font-medium">Optionally tap "Coach me ✨"</span> on
               any segment — the AI asks one follow-up question to add missing metrics or outcomes
             </li>
             <li>Click &ldquo;Generate resume from story&rdquo; when done</li>
           </ol>
-          <p className="text-slate-500 text-xs pt-1">
+          <p className="text-slate-600 dark:text-slate-400 text-xs pt-1">
             <Clock className="w-3 h-3 inline mr-1" />
             Most people finish in 10–15 minutes
           </p>
@@ -464,7 +469,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
           className="w-full py-4 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
         >
           <Mic className="w-5 h-5" />
-          {supportsWebSpeech ? "Start your story — free" : "Start your story — 2 credits"}
+          {supportsWebSpeech ? "Start your story — free" : "Start your story — needs a paid plan"}
         </button>
       </div>
     );
@@ -475,8 +480,8 @@ export function StoryRecorder({ token, onSaved }: Props) {
       {/* Header bar */}
       <div className="flex items-center justify-between gap-3 px-1">
         <div className="flex items-center gap-3">
-          <span className="text-slate-400 text-sm">
-            <span className="text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
+          <span className="text-slate-600 dark:text-slate-400 text-sm">
+            <span className="text-slate-900 dark:text-white font-semibold">{segments.length}</span> / {MAX_SEGMENTS} segments
           </span>
           {/* Change mode — only when not recording and not submitting */}
           {!isRecordingAnything && !submitting && (
@@ -490,22 +495,22 @@ export function StoryRecorder({ token, onSaved }: Props) {
                 setCoachSessionUnlocked(false);
                 setOpenCoachIndex(null);
               }}
-              className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+              className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition-colors"
             >
               ← Change mode
             </button>
           )}
         </div>
-        <span className={cn("text-sm tabular-nums font-mono", isWarning ? "text-amber-400" : "text-slate-400")}>
+        <span className={cn("text-sm tabular-nums font-mono", isWarning ? "text-amber-700 dark:text-amber-400" : "text-slate-600 dark:text-slate-400")}>
           {totalMinsLabel} / 30:00
-          {isWarning && <span className="ml-2 text-amber-400 text-xs">⚠ Almost at limit</span>}
+          {isWarning && <span className="ml-2 text-amber-700 dark:text-amber-400 text-xs">⚠ Almost at limit</span>}
         </span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+      <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div
-          className={cn("h-full rounded-full transition-all", isWarning ? "bg-amber-400" : "bg-amber-400/60")}
+          className={cn("h-full rounded-full transition-all", isWarning ? "bg-amber-400" : "bg-amber-500/60 dark:bg-amber-400/60")}
           style={{ width: `${Math.min((totalMs / MAX_TOTAL_MS) * 100, 100)}%` }}
         />
       </div>
@@ -532,7 +537,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
                   storyBuildSessionId={storyBuildSessionId}
                   coachSessionUnlocked={coachSessionUnlocked}
                   onCoachSessionUnlocked={markCoachSessionUnlocked}
-                  isFreeUser
+                  isFreeUser={isFreeUser}
                   onAddAsSegment={(answerText) => {
                     setSegments((prev) => [...prev, answerText]);
                     setOpenCoachIndex(null);
@@ -552,24 +557,24 @@ export function StoryRecorder({ token, onSaved }: Props) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             </span>
-            <span className="text-red-400 text-sm font-medium">
+            <span className="text-red-700 dark:text-red-400 text-sm font-medium">
               Recording segment {segments.length + 1} · {durationLabel}
             </span>
             <button
               type="button"
               onClick={() => void stopCurrentSegment()}
-              className="ml-auto px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-full transition-colors"
+              className="ml-auto px-3 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white text-xs font-semibold rounded-full transition-colors"
             >
               Done
             </button>
           </div>
           {/* Live transcript */}
           <div className="min-h-12 text-sm leading-relaxed pl-1">
-            <span className="text-slate-200">{finalText}</span>
+            <span className="text-slate-800 dark:text-slate-200">{finalText}</span>
             {finalText && interimText && " "}
-            {interimText && <span className="text-slate-500 italic">{interimText}</span>}
+            {interimText && <span className="text-slate-600 dark:text-slate-400 italic">{interimText}</span>}
             {!finalText && !interimText && (
-              <span className="text-slate-600 italic">Start speaking…</span>
+              <span className="text-slate-600 dark:text-slate-400 italic">Start speaking…</span>
             )}
           </div>
         </div>
@@ -577,7 +582,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
 
       {/* Whisper transcribing */}
       {voiceState === "transcribing" && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm py-3 justify-center">
+        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm py-3 justify-center">
           <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
           Transcribing segment with Whisper…
         </div>
@@ -589,7 +594,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
           <button
             type="button"
             onClick={() => void startNewSegment()}
-            className="flex-1 py-3 border border-slate-700 hover:border-amber-400/50 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+            className="flex-1 py-3 border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
           >
             <Mic className="w-4 h-4" />
             {segments.length === 0 ? "Start recording" : "Record next segment"}
@@ -619,7 +624,7 @@ export function StoryRecorder({ token, onSaved }: Props) {
       </div>
 
       {error && (
-        <div className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+        <div className="text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
           {error}
         </div>
       )}

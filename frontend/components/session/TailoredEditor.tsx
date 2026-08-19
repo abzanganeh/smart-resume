@@ -88,10 +88,10 @@ interface Props {
 
 function SectionHeader({ title, count }: { title: string; count?: number }) {
   return (
-    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 border-b border-slate-700 pb-1.5 mb-3 flex items-center gap-2">
+    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700 pb-1.5 mb-3 flex items-center gap-2">
       {title}
       {count !== undefined && (
-        <span className="text-slate-600 font-normal normal-case tracking-normal">({count})</span>
+        <span className="text-slate-600 dark:text-slate-400 font-normal normal-case tracking-normal">({count})</span>
       )}
     </h2>
   );
@@ -99,7 +99,7 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
 
 function SavedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-emerald-400 font-medium">
+    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
       <Check className="w-3 h-3" /> saved
     </span>
   );
@@ -147,10 +147,10 @@ function InlineText({
   if (!editing) {
     return (
       <div className="group relative">
-        <p className="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap pr-8">{value}</p>
+        <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed whitespace-pre-wrap pr-8">{value}</p>
         <button
           onClick={() => { setDraft(value); setEditing(true); }}
-          className="absolute top-0 right-0 p-1 rounded text-slate-400 hover:text-amber-400 transition opacity-80 hover:opacity-100"
+          className="absolute top-0 right-0 p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition opacity-80 hover:opacity-100"
           title="Edit"
         >
           <Pencil className="w-3.5 h-3.5" />
@@ -168,7 +168,7 @@ function InlineText({
         onChange={(e) => setDraft(e.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+        className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
       />
       <div className="flex gap-2">
         <button
@@ -181,7 +181,7 @@ function InlineText({
         </button>
         <button
           onClick={() => setEditing(false)}
-          className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+          className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
         >
           Cancel
         </button>
@@ -245,7 +245,7 @@ function BulletList({
                 value={drafts[idx] ?? b}
                 onChange={(e) => setDrafts((p) => ({ ...p, [idx]: e.target.value }))}
                 rows={2}
-                className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
               <div className="flex gap-2">
                 <button
@@ -258,7 +258,7 @@ function BulletList({
                 </button>
                 <button
                   onClick={() => setEditingIdx(null)}
-                  className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                  className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
                 >
                   Cancel
                 </button>
@@ -266,19 +266,19 @@ function BulletList({
             </div>
           ) : (
             <>
-              <span className="text-slate-500 mt-1 shrink-0">•</span>
-              <p className="flex-1 text-slate-200 text-sm leading-relaxed">{b}</p>
+              <span className="text-slate-600 dark:text-slate-400 mt-1 shrink-0">•</span>
+              <p className="flex-1 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">{b}</p>
               <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition shrink-0">
                 <button
                   onClick={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
-                  className="p-1 rounded text-slate-500 hover:text-amber-400"
+                  className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
                   title="Edit bullet"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => commitDelete(idx)}
-                  className="p-1 rounded text-slate-500 hover:text-red-400"
+                  className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-red-400"
                   title="Delete bullet"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -297,7 +297,7 @@ function BulletList({
             onChange={(e) => setNewBullet(e.target.value)}
             placeholder={addPlaceholder}
             rows={2}
-            className="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-600"
+            className="w-full bg-white dark:bg-slate-900 border border-emerald-500/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-500 dark:placeholder:text-slate-600"
           />
           <div className="flex gap-2">
             <button
@@ -310,7 +310,7 @@ function BulletList({
             </button>
             <button
               onClick={() => { setAdding(false); setNewBullet(""); }}
-              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+              className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -319,7 +319,7 @@ function BulletList({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-400 transition mt-1"
+          className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition mt-1"
         >
           <Plus className="w-3.5 h-3.5" />
           Add bullet
@@ -394,7 +394,7 @@ function ScopedBulletList({
                 value={drafts[idx] ?? b}
                 onChange={(e) => setDrafts((p) => ({ ...p, [idx]: e.target.value }))}
                 rows={2}
-                className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
               <div className="flex gap-2">
                 <button
@@ -407,7 +407,7 @@ function ScopedBulletList({
                 </button>
                 <button
                   onClick={() => setEditingIdx(null)}
-                  className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                  className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
                 >
                   Cancel
                 </button>
@@ -466,7 +466,7 @@ function ScopedBulletList({
             onChange={(e) => setNewBullet(e.target.value)}
             placeholder={addPlaceholder}
             rows={2}
-            className="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-600"
+            className="w-full bg-white dark:bg-slate-900 border border-emerald-500/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-500 dark:placeholder:text-slate-600"
           />
           <div className="flex gap-2">
             <button
@@ -479,7 +479,7 @@ function ScopedBulletList({
             </button>
             <button
               onClick={() => { setAdding(false); setNewBullet(""); }}
-              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+              className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
             >
               Cancel
             </button>
@@ -488,7 +488,7 @@ function ScopedBulletList({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-400 transition mt-1"
+          className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition mt-1"
         >
           <Plus className="w-3.5 h-3.5" />
           Add bullet
@@ -1053,17 +1053,17 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
 
   return (
     <div className="space-y-8">
-      <div className="rounded-xl border border-slate-700 bg-slate-800/40 px-4 py-3 text-xs text-slate-300">
-        <p className="font-semibold text-slate-200 mb-1">Edit your resume directly — no chat required</p>
+      <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 px-4 py-3 text-xs text-slate-700 dark:text-slate-300">
+        <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Edit your resume directly — no chat required</p>
         <p>
           Use <strong>Edit</strong> or the pencil icon on summary, skills, experience, education, and projects.
           Expand an experience row to edit its bullets. Use the trash icon to remove a whole experience entry or project card.
         </p>
       </div>
       {pendingCount > 0 && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-100 space-y-1.5">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-900 dark:text-amber-100 space-y-1.5">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-semibold text-amber-300">
+            <p className="font-semibold text-amber-700 dark:text-amber-300">
               {pendingCount} pending suggestion{pendingCount !== 1 ? "s" : ""} — not applied yet
             </p>
             <div className="flex items-center gap-3 shrink-0">
@@ -1079,7 +1079,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       }
                     }
                   }}
-                  className="shrink-0 text-emerald-300 hover:text-emerald-100 underline text-[11px] font-semibold"
+                  className="shrink-0 text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 underline text-[11px] font-semibold"
                 >
                   Accept all
                 </button>
@@ -1092,14 +1092,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       if (s.status === "pending") onRejectSuggestion(s.id);
                     }
                   }}
-                  className="shrink-0 text-amber-300/80 hover:text-amber-200 underline text-[11px]"
+                  className="shrink-0 text-amber-700 dark:text-amber-300/80 hover:text-amber-900 dark:hover:text-amber-200 underline text-[11px]"
                 >
                   Ignore all
                 </button>
               )}
             </div>
           </div>
-          <p className="text-amber-200/80">
+          <p className="text-amber-800 dark:text-amber-200/80">
             <span className="inline-block w-2 h-2 rounded-sm bg-amber-500/60 mr-1 align-middle" />
             Yellow = proposed change
             <span className="mx-2">·</span>
@@ -1111,20 +1111,20 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
         </div>
       )}
       {suggestionDraft && (
-        <div className="bg-amber-400/10 border border-amber-400/30 rounded-xl p-4 space-y-2">
-          <p className="text-xs text-amber-400 font-semibold uppercase tracking-wide">
+        <div className="bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 rounded-xl p-4 space-y-2">
+          <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wide">
             ATS suggestion — edit and apply to your resume
           </p>
           <textarea
             value={draftText}
             onChange={(e) => setDraftText(e.target.value)}
             rows={3}
-            className="w-full bg-slate-900 border border-amber-400/40 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+            className="w-full bg-white dark:bg-slate-900 border border-amber-400/40 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
           <button
             type="button"
             onClick={() => onClearSuggestion?.()}
-            className="text-xs text-slate-400 hover:text-slate-200 underline"
+            className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 underline"
           >
             Dismiss
           </button>
@@ -1136,7 +1136,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             type="button"
             onClick={handleUndo}
             disabled={!canUndo}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 disabled:opacity-30"
             title="Undo (Ctrl+Z)"
           >
             <Undo2 className="w-3.5 h-3.5" /> Undo
@@ -1145,7 +1145,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             type="button"
             onClick={handleRedo}
             disabled={!canRedo}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-400 hover:text-slate-200 disabled:opacity-30"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 disabled:opacity-30"
             title="Redo (Ctrl+Y)"
           >
             <Redo2 className="w-3.5 h-3.5" /> Redo
@@ -1155,7 +1155,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
           <button
             type="button"
             onClick={() => setAddMode(addMode ? null : "master")}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700"
+            className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
           >
             Add Section
           </button>
@@ -1163,19 +1163,19 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       </div>
 
       {addMode && (
-        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3">
+        <div className="bg-slate-100/60 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-xl p-4 space-y-3">
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setAddMode("master")}
-              className={`px-3 py-1 rounded text-xs ${addMode === "master" ? "bg-amber-400 text-slate-900" : "bg-slate-700 text-slate-300"}`}
+              className={`px-3 py-1 rounded text-xs ${addMode === "master" ? "bg-amber-400 text-slate-900" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"}`}
             >
               Pull from master resume
             </button>
             <button
               type="button"
               onClick={() => setAddMode("manual")}
-              className={`px-3 py-1 rounded text-xs ${addMode === "manual" ? "bg-amber-400 text-slate-900" : "bg-slate-700 text-slate-300"}`}
+              className={`px-3 py-1 rounded text-xs ${addMode === "manual" ? "bg-amber-400 text-slate-900" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"}`}
             >
               Write manually
             </button>
@@ -1184,7 +1184,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
           {addMode === "master" && (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {skippedChunks.length === 0 ? (
-                <p className="text-xs text-slate-500">No skipped master-resume chunks available.</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">No skipped master-resume chunks available.</p>
               ) : (
                 skippedChunks.map((chunk) => (
                   <button
@@ -1192,13 +1192,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                     type="button"
                     disabled={phaseRunning}
                     onClick={() => addFromMasterChunk(chunk)}
-                    className="w-full text-left p-3 rounded-lg border border-slate-700 hover:border-amber-400/40 bg-slate-900/50 disabled:opacity-50"
+                    className="w-full text-left p-3 rounded-lg border border-slate-300 dark:border-slate-700 hover:border-amber-400/40 bg-white/50 dark:bg-slate-900/50 disabled:opacity-50"
                   >
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
                       <span>{chunk.section}</span>
                       <span>score {chunk.score.toFixed(2)}</span>
                     </div>
-                    <p className="text-sm text-slate-300 line-clamp-2">
+                    <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
                       {(chunk as { content?: string }).content ?? chunk.reason}
                     </p>
                   </button>
@@ -1224,7 +1224,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                     className={`px-3 py-1 rounded text-xs ${
                       manualSectionType === value
                         ? "bg-amber-400 text-slate-900"
-                        : "bg-slate-700 text-slate-300"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
                     }`}
                   >
                     {label}
@@ -1241,7 +1241,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       ? "Certification or award name"
                       : "Job title or section label (e.g. Awards)"
                 }
-                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm"
               />
               {manualSectionType !== "certifications" && (
                 <input
@@ -1252,7 +1252,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       ? "One-line description (optional)"
                       : "Company / label"
                   }
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm"
                 />
               )}
               <textarea
@@ -1264,7 +1264,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                     ? "Optional details (leave blank to use title only)"
                     : "Section content…"
                 }
-                className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm resize-none"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm resize-none"
               />
               <button
                 type="button"
@@ -1279,12 +1279,12 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       )}
 
       {orphanedSuggestions(suggestions, data).length > 0 && (
-        <section className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3">
+        <section className="rounded-xl border border-red-500/40 bg-red-50 dark:bg-red-950/20 px-4 py-3">
           <SectionHeader
             title="Couldn't apply — chat suggestion didn't match your resume"
             count={orphanedSuggestions(suggestions, data).length}
           />
-          <p className="text-xs text-red-200/80 mb-3">
+          <p className="text-xs text-red-800 dark:text-red-200/80 mb-3">
             The AI proposed a change that doesn&apos;t match anything in your resume (maybe already deleted, wrong section, or wrong name).
             Click <strong>Ignore</strong> to dismiss, or edit manually with the pencil / trash icons.
           </p>
@@ -1304,7 +1304,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       {/* ── Contact / name (appears on exported PDF) ─────────────────────── */}
       <section>
         <SectionHeader title="Name on resume" />
-        <p className="text-xs text-slate-500 mb-2">
+        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
           This is the header on your downloaded PDF — edit here or ask chat to rename you.
         </p>
         {editingContactName ? (
@@ -1312,7 +1312,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             <input
               value={editingContactValue}
               onChange={(e) => setEditingContactValue(e.target.value)}
-              className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-lg font-semibold text-slate-100 min-w-[16rem]"
+              className="bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-2 py-1 text-lg font-semibold text-slate-900 dark:text-slate-100 min-w-[16rem]"
               autoFocus
             />
             <button
@@ -1328,14 +1328,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             <button
               type="button"
               onClick={() => setEditingContactName(false)}
-              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
             >
               <X className="w-3 h-3" />
             </button>
           </span>
         ) : (
           <span className="inline-flex items-center gap-2">
-            <span className="text-xl font-semibold text-slate-100">
+            <span className="text-xl font-semibold text-slate-900 dark:text-slate-100">
               <InlineFieldSuggestion
                 current={displayName || "Your name"}
                 suggestion={contactNameSuggestion(suggestions)}
@@ -1351,7 +1351,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                 setEditingContactValue(displayName);
                 setEditingContactName(true);
               }}
-              className="p-1 rounded text-slate-400 hover:text-amber-400 transition"
+              className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -1367,7 +1367,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             type="button"
             disabled={phaseRunning}
             onClick={() => regen({ section: "summary" })}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+            className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 disabled:opacity-40"
           >
             <RotateCw className="w-3.5 h-3.5" /> Regenerate
           </button>
@@ -1400,7 +1400,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   setSkillsDraft(hasCats ? data.skills.join("\n") : data.skills.join(", "));
                   setEditingSkills(true);
                 }}
-                className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400"
+                className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
               >
                 <Pencil className="w-3.5 h-3.5" /> Edit
               </button>
@@ -1409,7 +1409,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               type="button"
               disabled={phaseRunning}
               onClick={() => regen({ section: "skills" })}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+              className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 disabled:opacity-40"
             >
               <RotateCw className="w-3.5 h-3.5" /> Regenerate
             </button>
@@ -1417,7 +1417,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
         </div>
         {editingSkills ? (
           <div className="space-y-2">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               {skillsHaveCategories
                 ? "One category per line — e.g. \"AI & ML: Python, LLMs, RAG\". Ordered by JD relevance."
                 : "Comma-separated, ordered by JD relevance. Use \"Category: skill1, skill2\" format to group."}
@@ -1427,7 +1427,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               value={skillsDraft}
               onChange={(e) => setSkillsDraft(e.target.value)}
               rows={skillsHaveCategories ? 6 : 3}
-              className="w-full bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+              className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
             />
             <div className="flex gap-2">
               <button
@@ -1442,7 +1442,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   setSkillsDraft(hasCats ? data.skills.join("\n") : data.skills.join(", "));
                   setEditingSkills(false);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
               >
                 Cancel
               </button>
@@ -1458,7 +1458,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                 const items = s.slice(colonIdx + 2).split(",").map((x) => x.trim()).filter(Boolean);
                 return (
                   <div key={i} className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{category}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{category}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {items.map((item, j) => (
                         <SkillChip
@@ -1530,18 +1530,18 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   id={resumeAnchorDomId({ section: "experience", entry_index: expIndex })}
                   className={`border rounded-xl overflow-hidden ${
                     deleteTone === "pending"
-                      ? "border-red-500/50 bg-red-950/20"
+                      ? "border-red-500/50 bg-red-50 dark:bg-red-950/20"
                       : hasPendingHighlight
                       ? "border-amber-500/50 ring-1 ring-amber-500/25"
-                      : "border-slate-700"
+                      : "border-slate-300 dark:border-slate-700"
                   }`}
                 >
                   <button
                     onClick={() => setExpandedExp(open ? null : exp.company)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-left transition"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-100/60 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
                   >
                     <div>
-                      <p className="text-slate-100 text-sm font-semibold">
+                      <p className="text-slate-900 dark:text-slate-100 text-sm font-semibold">
                         {editingExpField === `${exp.company}:title` ? (
                           <span
                             className="inline-flex items-center gap-1"
@@ -1558,7 +1558,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 }
                                 if (e.key === "Escape") setEditingExpField(null);
                               }}
-                              className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-sm text-slate-100 outline-none w-72"
+                              className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-sm text-slate-900 dark:text-slate-100 outline-none w-72"
                             />
                             <button
                               type="button"
@@ -1573,7 +1573,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             <button
                               type="button"
                               onClick={() => setEditingExpField(null)}
-                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -1595,14 +1595,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 setEditingExpField(`${exp.company}:title`);
                                 setEditingExpValue(exp.title);
                               }}
-                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 transition opacity-80"
+                              className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition opacity-80"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
                           </span>
                         )}
                       </p>
-                      <p className="text-slate-400 text-xs">
+                      <p className="text-slate-600 dark:text-slate-400 text-xs">
                         {editingExpField === `${exp.company}:company` ? (
                           <span
                             className="inline-flex items-center gap-1"
@@ -1620,7 +1620,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 }
                                 if (e.key === "Escape") setEditingExpField(null);
                               }}
-                              className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-200 outline-none w-56"
+                              className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 outline-none w-56"
                             />
                             <button
                               type="button"
@@ -1636,7 +1636,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             <button
                               type="button"
                               onClick={() => setEditingExpField(null)}
-                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -1652,7 +1652,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 setEditingExpField(`${exp.company}:company`);
                                 setEditingExpValue(exp.company);
                               }}
-                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 transition opacity-80"
+                              className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition opacity-80"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -1675,7 +1675,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 }
                                 if (e.key === "Escape") setEditingExpField(null);
                               }}
-                              className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-200 outline-none w-36"
+                              className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 outline-none w-36"
                             />
                             <button
                               type="button"
@@ -1690,7 +1690,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             <button
                               type="button"
                               onClick={() => setEditingExpField(null)}
-                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                              className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -1712,7 +1712,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 setEditingExpField(`${exp.company}:dates`);
                                 setEditingExpValue(exp.dates);
                               }}
-                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 transition opacity-80"
+                              className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 transition opacity-80"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -1727,7 +1727,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                         />
                       )}
                       {exp.keywords_injected?.length > 0 && (
-                        <span className="text-xs text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
+                        <span className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">
                           {exp.keywords_injected.length} kw injected
                         </span>
                       )}
@@ -1738,26 +1738,26 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           e.stopPropagation();
                           void deleteExperienceEntry(expIndex);
                         }}
-                        className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition"
+                        className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                       {open ? (
-                        <ChevronUp className="w-4 h-4 text-slate-500" />
+                        <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       ) : (
-                        <ChevronDown className="w-4 h-4 text-slate-500" />
+                        <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       )}
                     </div>
                   </button>
 
                   {open && (
-                    <div className="px-4 py-4 space-y-4 bg-slate-900/40">
+                    <div className="px-4 py-4 space-y-4 bg-white/40 dark:bg-slate-900/40">
                       <div className="flex justify-end">
                         <button
                           type="button"
                           disabled={phaseRunning}
                           onClick={() => regen({ section: "experience", company: exp.company })}
-                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 disabled:opacity-40"
+                          className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 disabled:opacity-40"
                         >
                           <RotateCw className="w-3.5 h-3.5" /> Regenerate section
                         </button>
@@ -1780,17 +1780,17 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
 
                       {exp.removed_bullets?.length > 0 && (
                         <div>
-                          <p className="text-xs text-slate-500 font-semibold mb-1.5">Removed (not JD-relevant)</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold mb-1.5">Removed (not JD-relevant)</p>
                           <div className="space-y-1">
                             {exp.removed_bullets.map((rb, i) => (
-                              <p key={i} className="text-slate-600 text-xs line-through pl-4">{rb}</p>
+                              <p key={i} className="text-slate-600 dark:text-slate-400 text-xs line-through pl-4">{rb}</p>
                             ))}
                           </div>
                         </div>
                       )}
                       {deleteSug?.status === "pending" && (
                         <div className="flex items-center justify-between pt-2 border-t border-red-500/30">
-                          <p className="text-red-300 text-xs">Suggested removal of this experience entry</p>
+                          <p className="text-red-700 dark:text-red-300 text-xs">Suggested removal of this experience entry</p>
                           <SuggestionActionButtons
                             onAccept={() => acceptSug(deleteSug.id)}
                             onReject={() => rejectSug(deleteSug.id)}
@@ -1810,7 +1810,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       {data.education.length > 0 && (
         <section>
           <SectionHeader title="Education" count={data.education.length} />
-          <p className="text-[11px] text-slate-500 mb-3 -mt-2">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 -mt-2">
             Click a row to expand bullets · use the pencil to edit degree, school, or year
           </p>
           <div className="space-y-3">
@@ -1841,17 +1841,17 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   className={`border rounded-xl overflow-hidden ${
                     eduPending
                       ? "border-amber-500/50 ring-1 ring-amber-500/25"
-                      : "border-slate-700"
+                      : "border-slate-300 dark:border-slate-700"
                   }`}
                 >
                   <button
                     onClick={() => setExpandedEdu(open ? null : edu.institution)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-left transition"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-100/60 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <GraduationCap className="w-4 h-4 text-slate-400 shrink-0" />
+                      <GraduationCap className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-slate-100 text-sm font-semibold">
+                        <p className="text-slate-900 dark:text-slate-100 text-sm font-semibold">
                           {editingEduField === fieldKey("degree") ? (
                             <span
                               className="inline-flex items-center gap-1"
@@ -1868,7 +1868,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   }
                                   if (e.key === "Escape") setEditingEduField(null);
                                 }}
-                                className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-sm text-slate-100 outline-none w-64 max-w-full"
+                                className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-sm text-slate-900 dark:text-slate-100 outline-none w-64 max-w-full"
                               />
                               <button
                                 type="button"
@@ -1883,7 +1883,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                               <button
                                 type="button"
                                 onClick={() => setEditingEduField(null)}
-                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -1899,14 +1899,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   setEditingEduField(fieldKey("degree"));
                                   setEditingEduValue(edu.degree);
                                 }}
-                                className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                                className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 opacity-80"
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
                             </span>
                           )}
                         </p>
-                        <p className="text-slate-400 text-xs flex flex-wrap items-center gap-x-1">
+                        <p className="text-slate-600 dark:text-slate-400 text-xs flex flex-wrap items-center gap-x-1">
                           {editingEduField === fieldKey("institution") ? (
                             <span
                               className="inline-flex items-center gap-1"
@@ -1925,7 +1925,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   }
                                   if (e.key === "Escape") setEditingEduField(null);
                                 }}
-                                className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-200 outline-none w-48 max-w-full"
+                                className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 outline-none w-48 max-w-full"
                               />
                               <button
                                 type="button"
@@ -1942,7 +1942,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                               <button
                                 type="button"
                                 onClick={() => setEditingEduField(null)}
-                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -1964,7 +1964,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   setEditingEduField(fieldKey("institution"));
                                   setEditingEduValue(edu.institution);
                                 }}
-                                className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                                className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 opacity-80"
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
@@ -1988,7 +1988,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   if (e.key === "Escape") setEditingEduField(null);
                                 }}
                                 placeholder="Year"
-                                className="bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-200 outline-none w-24"
+                                className="bg-slate-200 dark:bg-slate-700 border border-amber-400/60 rounded px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 outline-none w-24"
                               />
                               <button
                                 type="button"
@@ -2003,7 +2003,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                               <button
                                 type="button"
                                 onClick={() => setEditingEduField(null)}
-                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                                className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -2011,7 +2011,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           ) : (
                             <span className="inline-flex items-center gap-1">
                               {edu.year || (
-                                <span className="text-slate-600 italic">no year</span>
+                                <span className="text-slate-600 dark:text-slate-400 italic">no year</span>
                               )}
                               <button
                                 type="button"
@@ -2021,7 +2021,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   setEditingEduField(fieldKey("year"));
                                   setEditingEduValue(edu.year);
                                 }}
-                                className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                                className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 opacity-80"
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
@@ -2037,23 +2037,23 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                         />
                       )}
                       {edu.bullets.length > 0 && (
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">
                           {edu.bullets.length} bullet{edu.bullets.length !== 1 ? "s" : ""}
                         </span>
                       )}
                       {open ? (
-                        <ChevronUp className="w-4 h-4 text-slate-500" />
+                        <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       ) : (
-                        <ChevronDown className="w-4 h-4 text-slate-500" />
+                        <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       )}
                     </div>
                   </button>
 
                   {open && (
-                    <div className="px-4 py-4 bg-slate-900/40 space-y-4">
+                    <div className="px-4 py-4 bg-white/40 dark:bg-slate-900/40 space-y-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <p className="text-xs text-slate-500 mb-1.5">Degree</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1.5">Degree</p>
                           <InlineText
                             value={edu.degree}
                             onSave={(text) => saveEduField(edu.institution, { new_degree: text })}
@@ -2062,7 +2062,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           />
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500 mb-1.5">Institution</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1.5">Institution</p>
                           <InlineText
                             value={edu.institution}
                             onSave={(text) =>
@@ -2073,7 +2073,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           />
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500 mb-1.5">Year</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1.5">Year</p>
                           <InlineText
                             value={edu.year}
                             onSave={(text) => saveEduField(edu.institution, { new_year: text })}
@@ -2083,7 +2083,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                         </div>
                       </div>
                       {edu.bullets.length === 0 && bulletAddSugs.length === 0 && (
-                        <p className="text-slate-600 text-xs flex items-center gap-1.5">
+                        <p className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1.5">
                           <Info className="w-3.5 h-3.5" />
                           No bullets yet — add relevant coursework, GPA, thesis, or activities.
                         </p>
@@ -2104,8 +2104,8 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                         >
                           <div className="space-y-1">
                             {(sug.patch.add_education_bullets ?? []).map((bullet, bi) => (
-                              <p key={bi} className="text-amber-100 text-sm flex gap-2">
-                                <span className="text-amber-400 shrink-0">+</span>
+                              <p key={bi} className="text-amber-900 dark:text-amber-100 text-sm flex gap-2">
+                                <span className="text-amber-700 dark:text-amber-400 shrink-0">+</span>
                                 {bullet}
                               </p>
                             ))}
@@ -2128,33 +2128,33 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
           <button
             type="button"
             onClick={() => setAddingProject((v) => !v)}
-            className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+            className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-300"
           >
             <Plus className="w-3.5 h-3.5" /> Add project
           </button>
         </div>
 
         {addingProject && (
-          <div className="mb-4 border border-emerald-500/30 rounded-xl p-4 bg-emerald-950/10 space-y-2">
+          <div className="mb-4 border border-emerald-500/30 rounded-xl p-4 bg-emerald-50 dark:bg-emerald-950/10 space-y-2">
             <input
               autoFocus
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="Project name"
-              className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <input
               value={newProjectDesc}
               onChange={(e) => setNewProjectDesc(e.target.value)}
               placeholder="One-line description (optional)"
-              className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
             />
             <textarea
               value={newProjectBullets}
               onChange={(e) => setNewProjectBullets(e.target.value)}
               placeholder="One bullet per line…"
               rows={4}
-              className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 resize-none"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none"
             />
             <div className="flex gap-2">
               <button
@@ -2178,7 +2178,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               <button
                 type="button"
                 onClick={() => setAddingProject(false)}
-                className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-xs hover:bg-slate-600"
+                className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
               >
                 Cancel
               </button>
@@ -2209,10 +2209,10 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   id={resumeAnchorDomId({ section: "projects", entry_index: i })}
                   className={`border rounded-xl px-4 py-3 ${
                     removalTone === "pending"
-                      ? "border-red-500/50 bg-red-950/20"
+                      ? "border-red-500/50 bg-red-50 dark:bg-red-950/20"
                       : removalTone === "accepted"
-                        ? "border-emerald-500/40 bg-emerald-950/10 opacity-60"
-                        : "border-slate-700 bg-slate-800/30"
+                        ? "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/10 opacity-60"
+                        : "border-slate-300 dark:border-slate-700 bg-slate-100/30 dark:bg-slate-800/30"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
@@ -2223,7 +2223,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             autoFocus
                             value={editingProjectValue}
                             onChange={(e) => setEditingProjectValue(e.target.value)}
-                            className="flex-1 bg-slate-900 border border-amber-400/60 rounded px-2 py-1 text-sm text-slate-100 outline-none"
+                            className="flex-1 bg-white dark:bg-slate-900 border border-amber-400/60 rounded px-2 py-1 text-sm text-slate-900 dark:text-slate-100 outline-none"
                           />
                           <button
                             type="button"
@@ -2238,14 +2238,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           <button
                             type="button"
                             onClick={() => setEditingProjectField(null)}
-                            className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300"
+                            className="p-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-700 dark:text-slate-300"
                           >
                             <X className="w-3 h-3" />
                           </button>
                         </div>
                       ) : (
                         <p className={`text-sm font-semibold flex items-center gap-1 flex-wrap ${
-                          removalTone === "pending" ? "text-red-300 line-through" : "text-slate-100"
+                          removalTone === "pending" ? "text-red-700 dark:text-red-300 line-through" : "text-slate-900 dark:text-slate-100"
                         }`}>
                           <InlineFieldSuggestion
                             current={projectName}
@@ -2262,7 +2262,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                 setEditingProjectField(`${i}:name`);
                                 setEditingProjectValue(projectName);
                               }}
-                              className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                              className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 opacity-80"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -2276,7 +2276,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                               autoFocus
                               value={editingProjectValue}
                               onChange={(e) => setEditingProjectValue(e.target.value)}
-                              className="flex-1 bg-slate-900 border border-amber-400/60 rounded px-2 py-1 text-xs text-slate-200 outline-none"
+                              className="flex-1 bg-white dark:bg-slate-900 border border-amber-400/60 rounded px-2 py-1 text-xs text-slate-800 dark:text-slate-200 outline-none"
                             />
                             <button
                               type="button"
@@ -2290,7 +2290,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             </button>
                           </div>
                         ) : (
-                          <p className="text-slate-400 text-xs flex items-center gap-1 flex-wrap">
+                          <p className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 flex-wrap">
                             <InlineFieldSuggestion
                               current={projectDesc}
                               suggestion={descSug}
@@ -2306,7 +2306,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                                   setEditingProjectField(`${i}:description`);
                                   setEditingProjectValue(projectDesc);
                                 }}
-                                className="p-0.5 rounded text-slate-400 hover:text-amber-400 opacity-80"
+                                className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 opacity-80"
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
@@ -2321,7 +2321,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                             setEditingProjectField(`${i}:description`);
                             setEditingProjectValue("");
                           }}
-                          className="text-[10px] text-slate-500 hover:text-amber-400"
+                          className="text-[10px] text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
                         >
                           + Add description
                         </button>
@@ -2338,7 +2338,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           href={String(p.url)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-slate-500 hover:text-amber-400 truncate max-w-[120px]"
+                          className="text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 truncate max-w-[120px]"
                         >
                           {String(p.url)}
                         </a>
@@ -2347,7 +2347,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                         type="button"
                         title="Delete this project"
                         onClick={() => void deleteProject(i)}
-                        className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition"
+                        className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -2362,13 +2362,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                     >
                       <div className="space-y-1">
                         {bullets.map((b, j) => (
-                          <p key={j} className="text-red-300/70 text-sm line-through flex gap-2">
+                          <p key={j} className="text-red-700 dark:text-red-300/70 text-sm line-through flex gap-2">
                             <span className="shrink-0">•</span>{b}
                           </p>
                         ))}
                         {(replaceAllSug.patch.project_bullets_replace_all ?? []).map((b, j) => (
-                          <p key={`new-${j}`} className="text-amber-100 text-sm flex gap-2">
-                            <span className="text-amber-400 shrink-0">•</span>{b}
+                          <p key={`new-${j}`} className="text-amber-900 dark:text-amber-100 text-sm flex gap-2">
+                            <span className="text-amber-700 dark:text-amber-400 shrink-0">•</span>{b}
                           </p>
                         ))}
                       </div>
@@ -2385,7 +2385,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
 
                   {removalSug?.status === "pending" && (
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-red-500/30">
-                      <p className="text-red-300 text-xs">Suggested removal</p>
+                      <p className="text-red-700 dark:text-red-300 text-xs">Suggested removal</p>
                       <SuggestionActionButtons
                         onAccept={() => acceptSug(removalSug.id)}
                         onReject={() => rejectSug(removalSug.id)}
@@ -2405,13 +2405,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             onAccept={acceptSug}
             onReject={rejectSug}
           >
-            <p className="text-amber-200 text-sm font-semibold">{sug.patch.new_project?.name}</p>
+            <p className="text-amber-800 dark:text-amber-200 text-sm font-semibold">{sug.patch.new_project?.name}</p>
             {sug.patch.new_project?.description && (
-              <p className="text-amber-200/60 text-xs mt-0.5">{sug.patch.new_project.description}</p>
+              <p className="text-amber-800 dark:text-amber-200/60 text-xs mt-0.5">{sug.patch.new_project.description}</p>
             )}
             {(sug.patch.new_project?.bullets ?? []).map((b, j) => (
-              <p key={j} className="text-amber-100/90 text-sm flex gap-2 mt-1">
-                <span className="text-amber-400 shrink-0">•</span>{b}
+              <p key={j} className="text-amber-900 dark:text-amber-100/90 text-sm flex gap-2 mt-1">
+                <span className="text-amber-700 dark:text-amber-400 shrink-0">•</span>{b}
               </p>
             ))}
           </PendingAdditionCard>
@@ -2426,14 +2426,14 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             {data.certifications.map((c, i) => (
               <span
                 key={i}
-                className="group inline-flex items-center gap-1 bg-slate-800 border border-slate-700 text-slate-300 rounded px-2.5 py-1 text-xs"
+                className="group inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded px-2.5 py-1 text-xs"
               >
                 {c}
                 <button
                   type="button"
                   title="Remove"
                   onClick={() => void deleteCertification(i)}
-                  className="p-0.5 rounded text-slate-500 hover:text-red-400 opacity-80"
+                  className="p-0.5 rounded text-slate-600 dark:text-slate-400 hover:text-red-400 opacity-80"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -2447,22 +2447,22 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       {data.metrics_needed.length > 0 && (
         <section>
           <SectionHeader title="Metrics Needed" count={data.metrics_needed.length} />
-          <p className="text-slate-500 text-xs mb-3">
+          <p className="text-slate-600 dark:text-slate-400 text-xs mb-3">
             The AI couldn't fabricate these numbers. Add them to your resume and re-run the rewrite.
           </p>
           <div className="space-y-2">
             {data.metrics_needed.map((m, i) => (
               <div
                 key={i}
-                className="flex items-start gap-2 bg-amber-400/5 border border-amber-400/20 rounded-lg px-3 py-2.5 text-sm"
+                className="flex items-start gap-2 bg-amber-500/5 dark:bg-amber-400/5 border border-amber-400/20 rounded-lg px-3 py-2.5 text-sm"
               >
-                <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <Info className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-amber-300 text-xs font-medium mb-0.5">
+                  <p className="text-amber-700 dark:text-amber-300 text-xs font-medium mb-0.5">
                     {m.section}
                     {m.company ? ` · ${m.company}` : ""} · bullet {m.bullet_index + 1}
                   </p>
-                  <p className="text-slate-300">{m.prompt}</p>
+                  <p className="text-slate-700 dark:text-slate-300">{m.prompt}</p>
                 </div>
               </div>
             ))}
@@ -2472,8 +2472,8 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
 
       {/* ── Rewrite notes ────────────────────────────────────────────────── */}
       {data.rewrite_notes.length > 0 && hasGuardRewriteNotes(data.rewrite_notes) && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Smart Resume auto-corrected parts of the AI draft for accuracy (metrics, titles, or
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          TalioCV auto-corrected parts of the AI draft for accuracy (metrics, titles, or
           missing sections). Review the rewrite notes below.
         </div>
       )}
@@ -2481,7 +2481,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
         <section>
           <button
             onClick={() => setShowNotes((v) => !v)}
-            className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition mb-2"
+            className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition mb-2"
           >
             {showNotes ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             {showNotes ? "Hide" : "Show"} AI rewrite notes ({data.rewrite_notes.length})
@@ -2489,7 +2489,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
           {showNotes && (
             <div className="space-y-1.5">
               {data.rewrite_notes.map((note, i) => (
-                <p key={i} className="text-slate-500 text-xs flex gap-2">
+                <p key={i} className="text-slate-600 dark:text-slate-400 text-xs flex gap-2">
                   <span className="text-slate-700 shrink-0">·</span>
                   {note}
                 </p>

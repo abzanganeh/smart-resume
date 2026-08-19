@@ -125,10 +125,10 @@ export function ResizableSplit({
         onMouseDown={startDrag}
         onDoubleClick={resetWidth}
         className={`hidden lg:flex w-2.5 shrink-0 items-center justify-center cursor-col-resize group touch-none ${
-          isDragging ? "bg-amber-400/20" : ""
+          isDragging ? "bg-amber-500/20 dark:bg-amber-400/20" : ""
         }`}
       >
-        <div className="w-1 h-16 rounded-full bg-slate-700 group-hover:bg-amber-400/70 transition-colors" />
+        <div className="w-1 h-16 rounded-full bg-slate-200 dark:bg-slate-700 group-hover:bg-amber-400/70 transition-colors" />
       </div>
 
       <div

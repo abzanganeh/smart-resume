@@ -71,6 +71,37 @@ function formatCents(cents: number, currency = "USD"): string {
   }).format(cents / 100)
 }
 
+/** Concrete allowance lines so a plan card states numbers, not just feature names. */
+function planAllowances(plan: BillingPlan): string[] {
+  const limits = plan.limits
+  if (!limits) return []
+  const period = plan.code === "weekly" ? "week" : plan.cycle === "yearly" ? "year" : "month"
+  const lines = [
+    `${limits.resumes_per_period} resumes & cover letters / ${period}`,
+    `${limits.searches_per_period} job searches / ${period}`,
+    `${limits.fit_analyses_per_period} fit analyses / ${period}`,
+    `Track ${limits.career_watch_companies} companies in Career Watch`,
+  ]
+  lines.push(
+    limits.whisper_uses_per_period === null
+      ? "Whisper voice transcription (fair use)"
+      : `${limits.whisper_uses_per_period} Whisper voice transcriptions / ${period}`,
+  )
+  return lines
+}
+
+/**
+ * Yearly savings are derived from live Stripe amounts rather than hardcoded, so the
+ * marketing claim can never drift from what the customer is actually charged.
+ */
+function yearlySavingsPercent(plans: BillingPlan[]): number | null {
+  const monthly = plans.find((p) => p.code === "monthly_pro")?.amount_cents
+  const yearly = plans.find((p) => p.code === "yearly_pro")?.amount_cents
+  if (!monthly || !yearly) return null
+  const pct = Math.round((1 - yearly / (monthly * 12)) * 100)
+  return pct > 0 ? pct : null
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     year: "numeric",
@@ -109,8 +140,8 @@ function PlanCard({
       className={clsx(
         "relative flex flex-col rounded-2xl border p-6 gap-5 transition-shadow",
         isHighlighted
-          ? "border-amber-400/60 bg-slate-900 shadow-[0_0_30px_-6px] shadow-amber-400/20"
-          : "border-slate-700 bg-slate-900/60",
+          ? "border-amber-400/60 bg-white dark:bg-slate-900 shadow-[0_0_30px_-6px] shadow-amber-400/20"
+          : "border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60",
       )}
     >
       {isHighlighted && (
@@ -123,19 +154,19 @@ function PlanCard({
 
       {plan.trial_days && plan.trial_days > 0 && (
         <div className="absolute top-4 right-4">
-          <span className="bg-emerald-500/20 text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-500/30">
+          <span className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-500/30">
             {plan.trial_days}-day free trial
           </span>
         </div>
       )}
 
       <div>
-        <h3 className="text-lg font-semibold text-slate-100">{plan.display_name}</h3>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.display_name}</h3>
         <div className="flex items-end gap-1.5 mt-2">
-          <span className="text-3xl font-bold text-white">
+          <span className="text-3xl font-bold text-slate-900 dark:text-white">
             {formatCents(displayAmount, currency)}
           </span>
-          <span className="text-slate-400 text-sm mb-1">
+          <span className="text-slate-600 dark:text-slate-400 text-sm mb-1">
             {plan.code === "weekly"
               ? "/ week"
               : showYearly
@@ -144,23 +175,32 @@ function PlanCard({
           </span>
         </div>
         {showYearly && isYearlyTier && (
-          <p className="text-emerald-400 text-xs mt-1 font-medium">
+          <p className="text-emerald-700 dark:text-emerald-400 text-xs mt-1 font-medium">
             Billed annually
           </p>
         )}
       </div>
 
       <ul className="flex flex-col gap-2 flex-1">
+        {planAllowances(plan).map((line) => (
+          <li
+            key={line}
+            className="flex items-start gap-2 text-sm font-medium text-slate-800 dark:text-slate-200"
+          >
+            <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400 mt-0.5 shrink-0" />
+            {line}
+          </li>
+        ))}
         {plan.features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
-            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+          <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400 mt-0.5 shrink-0" />
             {FEATURE_LABELS[f] ?? f}
           </li>
         ))}
       </ul>
 
       {isCurrentPlan ? (
-        <div className="w-full py-2.5 text-center text-sm font-semibold text-amber-400 border border-amber-400/40 rounded-xl bg-amber-400/5">
+        <div className="w-full py-2.5 text-center text-sm font-semibold text-amber-700 dark:text-amber-400 border border-amber-400/40 rounded-xl bg-amber-500/5 dark:bg-amber-400/5">
           Current plan
         </div>
       ) : (
@@ -171,7 +211,7 @@ function PlanCard({
             "w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2",
             isHighlighted
               ? "bg-amber-400 text-slate-900 hover:bg-amber-300 disabled:opacity-50"
-              : "bg-slate-700 text-slate-100 hover:bg-slate-600 disabled:opacity-50",
+              : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50",
           )}
         >
           {isBusy ? (
@@ -191,22 +231,24 @@ function PlanCard({
 interface UsageMeterProps {
   label: string
   used: number
-  limit: number
+  /** null means no per-period cap (Premium fair use) */
+  limit: number | null
 }
 
 function UsageMeter({ label, used, limit }: UsageMeterProps) {
-  const pct = Math.min(100, (used / Math.max(limit, 1)) * 100)
+  const uncapped = limit === null
+  const pct = uncapped ? 0 : Math.min(100, (used / Math.max(limit, 1)) * 100)
   const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-emerald-500"
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex justify-between text-sm">
-        <span className="text-slate-400">{label}</span>
-        <span className="text-slate-300 font-medium tabular-nums">
-          {used} / {limit}
+        <span className="text-slate-600 dark:text-slate-400">{label}</span>
+        <span className="text-slate-700 dark:text-slate-300 font-medium tabular-nums">
+          {uncapped ? `${used} · fair use` : `${used} / ${limit}`}
         </span>
       </div>
-      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
         <div
           className={clsx("h-full rounded-full transition-all", color)}
           style={{ width: `${pct}%` }}
@@ -386,7 +428,7 @@ export default function BillingPage() {
   if (status === "loading" || !session) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-slate-600 dark:text-slate-400" />
       </div>
     )
   }
@@ -395,12 +437,13 @@ export default function BillingPage() {
   const isSubscribed = !!sub && isSubscriptionActive(sub.status)
   const isAnyActionBusy = busyAction !== null
 
+  // The backend resolves the canonical tier; fall back to the legacy interval enum
+  // only for subscriptions created before `plan_code` was exposed.
   const currentPlanCode = sub
-    ? sub.plan === "weekly"
-      ? "weekly"
-      : sub.billing_cycle === "yearly"
+    ? sub.plan_code ??
+      (sub.billing_cycle === "yearly" && sub.plan !== "weekly"
         ? "yearly_pro"
-        : LEGACY_PLAN_CODE_MAP[sub.plan] ?? sub.plan
+        : LEGACY_PLAN_CODE_MAP[sub.plan] ?? sub.plan)
     : null
 
   const visiblePlans = prices
@@ -411,6 +454,8 @@ export default function BillingPage() {
       })
     : []
 
+  const yearlySavings = prices ? yearlySavingsPercent(prices.plans) : null
+
   const order = yearlyToggle ? YEARLY_PLAN_ORDER : PLAN_ORDER
   const orderedPlans = [...visiblePlans].sort(
     (a, b) => order.indexOf(a.code) - order.indexOf(b.code),
@@ -420,18 +465,18 @@ export default function BillingPage() {
     <main className="max-w-5xl mx-auto px-4 py-10 space-y-10">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-amber-400" />
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-amber-700 dark:text-amber-400" />
           Billing &amp; Plans
         </h1>
-        <p className="text-slate-400 text-sm">
+        <p className="text-slate-600 dark:text-slate-400 text-sm">
           Manage your subscription, usage, and payment details.
         </p>
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="bg-red-950/50 border border-red-800 text-red-300 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
           <XCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
@@ -439,39 +484,44 @@ export default function BillingPage() {
 
       {/* Current subscription card */}
       {isSubscribed && sub && (
-        <section className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5">
+        <section className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-6 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
+              <p className="text-xs text-slate-600 dark:text-slate-400 uppercase tracking-wider font-medium">
                 Current plan
               </p>
-              <h2 className="text-xl font-bold text-white capitalize mt-0.5">
-                {sub.plan}{" "}
-                {sub.billing_cycle === "yearly" && (
-                  <span className="text-sm font-normal text-amber-400">(yearly)</span>
-                )}
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-0.5">
+                {sub.plan_display_name ?? sub.plan}{" "}
+                <span className="text-sm font-normal text-amber-700 dark:text-amber-400">
+                  ({sub.plan === "weekly"
+                    ? "weekly"
+                    : sub.billing_cycle === "yearly"
+                      ? "yearly"
+                      : "monthly"}
+                  )
+                </span>
               </h2>
               <div className="flex items-center gap-2 mt-1">
                 <StatusBadge status={sub.status} />
                 {sub.cancel_at_period_end && (
-                  <span className="text-xs text-amber-400">
+                  <span className="text-xs text-amber-700 dark:text-amber-400">
                     Cancels {formatDate(sub.period_end)}
                   </span>
                 )}
               </div>
             </div>
-            <div className="text-right text-sm text-slate-400">
+            <div className="text-right text-sm text-slate-600 dark:text-slate-400">
               {sub.status === "trialing" && sub.trial_ends_at ? (
                 <p>
                   Trial ends{" "}
-                  <span className="text-slate-200 font-medium">
+                  <span className="text-slate-800 dark:text-slate-200 font-medium">
                     {formatDate(sub.trial_ends_at)}
                   </span>
                 </p>
               ) : (
                 <p>
                   Renews{" "}
-                  <span className="text-slate-200 font-medium">
+                  <span className="text-slate-800 dark:text-slate-200 font-medium">
                     {formatDate(sub.period_end)}
                   </span>
                 </p>
@@ -483,8 +533,8 @@ export default function BillingPage() {
           </div>
 
           {/* Usage meters */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider">
               This period
             </p>
             <UsageMeter
@@ -497,10 +547,19 @@ export default function BillingPage() {
               used={sub.searches_used}
               limit={sub.searches_limit}
             />
+            <UsageMeter
+              label="Whisper voice transcriptions"
+              used={sub.whisper_uses_used}
+              limit={sub.whisper_uses_limit}
+            />
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Cover letters and section regenerations draw on your resume allowance. Reaching a
+              limit falls back to credits rather than blocking you.
+            </p>
           </div>
 
           {/* Management CTAs */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <ActionButton
               label="Billing portal"
               icon={<CreditCard className="w-4 h-4" />}
@@ -552,18 +611,19 @@ export default function BillingPage() {
 
       {/* Free credits summary (no subscription) */}
       {!isSubscribed && !loadingCurrent && current && (
-        <section className="bg-slate-900 border border-slate-700 rounded-2xl p-5 flex items-center justify-between gap-4">
+        <section className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-slate-400">Free credits remaining</p>
-            <p className="text-2xl font-bold text-amber-400">
+            <p className="text-sm text-slate-600 dark:text-slate-400">Free credits remaining</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
               {current.credit_balance}{" "}
-              <span className="text-sm font-normal text-slate-400">
+              <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
                 credit{current.credit_balance === 1 ? "" : "s"} left
               </span>
             </p>
           </div>
-          <p className="text-xs text-slate-500 max-w-[200px] text-right">
-            Subscribe to a plan for unlimited access and job search.
+          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-[220px] text-right">
+            Subscribe for a monthly resume allowance plus job search, fit analysis, and Whisper
+            voice — none of which the free plan includes.
           </p>
         </section>
       )}
@@ -601,7 +661,7 @@ export default function BillingPage() {
       {/* Plan selection */}
       <section className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             {isSubscribed ? "Change plan" : "Choose a plan"}
           </h2>
 
@@ -612,8 +672,8 @@ export default function BillingPage() {
               className={clsx(
                 "flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-colors",
                 yearlyToggle
-                  ? "bg-amber-400/10 border-amber-400/40 text-amber-400"
-                  : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200",
+                  ? "bg-amber-500/10 dark:bg-amber-400/10 border-amber-400/40 text-amber-700 dark:text-amber-400"
+                  : "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200",
               )}
             >
               <span
@@ -629,7 +689,8 @@ export default function BillingPage() {
                   )}
                 />
               </span>
-              Yearly billing (−20%)
+              Yearly billing
+              {yearlySavings !== null && ` (−${yearlySavings}%)`}
             </button>
           )}
         </div>
@@ -639,7 +700,7 @@ export default function BillingPage() {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-72 bg-slate-800 rounded-2xl animate-pulse"
+                className="h-72 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-pulse"
               />
             ))}
           </div>
@@ -659,7 +720,7 @@ export default function BillingPage() {
           </div>
         )}
         {!loadingPrices && orderedPlans.length === 0 && (
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-6 text-sm text-slate-300 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl px-5 py-6 text-sm text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-3">
             <p>
               Pricing is temporarily unavailable. Please retry in a moment.
             </p>
@@ -670,7 +731,7 @@ export default function BillingPage() {
                 void loadPrices()
                 if (token) void loadCurrent()
               }}
-              className="bg-slate-800 text-slate-100 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors"
+              className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               Retry
             </button>
@@ -685,18 +746,18 @@ export default function BillingPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    active: { label: "Active", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-    trialing: { label: "Trial", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-    grace: { label: "Payment failed", className: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
-    paused: { label: "Paused", className: "bg-slate-600/40 text-slate-400 border-slate-600/50" },
+    active: { label: "Active", className: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
+    trialing: { label: "Trial", className: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+    grace: { label: "Payment failed", className: "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30" },
+    paused: { label: "Paused", className: "bg-slate-600/40 text-slate-600 dark:text-slate-400 border-slate-400 dark:border-slate-600/50" },
     cancel_at_period_end: {
       label: "Cancels at period end",
-      className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+      className: "bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30",
     },
-    cancelled: { label: "Cancelled", className: "bg-red-500/20 text-red-400 border-red-500/30" },
-    expired: { label: "Expired", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+    cancelled: { label: "Cancelled", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
+    expired: { label: "Expired", className: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/30" },
   }
-  const cfg = map[status] ?? { label: status, className: "bg-slate-700 text-slate-400 border-slate-600" }
+  const cfg = map[status] ?? { label: status, className: "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border-slate-400 dark:border-slate-600" }
   return (
     <span className={clsx("text-xs font-semibold px-2.5 py-0.5 rounded-full border", cfg.className)}>
       {cfg.label}
@@ -723,8 +784,8 @@ function ActionButton({
 }: ActionButtonProps) {
   const cls = {
     primary: "bg-amber-400 text-slate-900 hover:bg-amber-300",
-    default: "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700",
-    danger: "bg-red-950/60 text-red-400 hover:bg-red-950 border border-red-800/50",
+    default: "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700",
+    danger: "bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 border border-red-200 dark:border-red-800/50",
   }[variant]
 
   return (

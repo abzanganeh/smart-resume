@@ -188,7 +188,7 @@ async def get_job_description(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobDescriptionResponse:
-    """Load an extension-saved JD for the tailoring wizard (Flint Resume web)."""
+    """Load an extension-saved JD for the tailoring wizard (TalioCV web)."""
     try:
         jd_uuid = uuid.UUID(jd_id)
     except ValueError as exc:

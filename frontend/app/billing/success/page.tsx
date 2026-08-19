@@ -74,7 +74,7 @@ export default function BillingSuccessPage() {
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-slate-600 dark:text-slate-400" />
       </div>
     )
   }
@@ -82,8 +82,8 @@ export default function BillingSuccessPage() {
   if (status === "unauthenticated" || !session?.backendAccessToken) {
     return (
       <main className="max-w-lg mx-auto px-4 py-20 text-center space-y-6">
-        <h1 className="text-2xl font-bold text-white">Sign in to confirm billing status</h1>
-        <p className="text-slate-400">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Sign in to confirm billing status</h1>
+        <p className="text-slate-600 dark:text-slate-400">
           We need your account session to verify your latest subscription state.
         </p>
         <Link
@@ -102,29 +102,29 @@ export default function BillingSuccessPage() {
     <main className="max-w-lg mx-auto px-4 py-20 text-center space-y-6">
       <div className="flex justify-center">
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
-          <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+          <CheckCircle2 className="w-8 h-8 text-emerald-700 dark:text-emerald-400" />
         </div>
       </div>
 
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
-          <Sparkles className="w-5 h-5 text-amber-400" />
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2">
+          <Sparkles className="w-5 h-5 text-amber-700 dark:text-amber-400" />
           You&apos;re all set!
         </h1>
         {sub && isSubscriptionActive(sub.status) ? (
-          <p className="text-slate-400">
+          <p className="text-slate-600 dark:text-slate-400">
             Your{" "}
-            <span className="text-white font-medium capitalize">{sub.plan}</span> plan is now{" "}
-            <span className="text-emerald-400 font-medium">{sub.status}</span>. Start tailoring
+            <span className="text-slate-900 dark:text-white font-medium capitalize">{sub.plan}</span> plan is now{" "}
+            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{sub.status}</span>. Start tailoring
             resumes right away.
           </p>
         ) : timedOut ? (
-          <p className="text-amber-300">
+          <p className="text-amber-700 dark:text-amber-300">
             Checkout completed, but activation is still processing. This usually resolves within a
             minute after Stripe webhook delivery.
           </p>
         ) : (
-          <p className="text-slate-400">
+          <p className="text-slate-600 dark:text-slate-400">
             Your subscription is confirmed. It may take a few moments to activate.
           </p>
         )}
@@ -139,7 +139,7 @@ export default function BillingSuccessPage() {
         </Link>
         <Link
           href="/billing"
-          className="bg-slate-800 text-slate-200 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-colors border border-slate-700"
+          className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700"
         >
           View billing
         </Link>

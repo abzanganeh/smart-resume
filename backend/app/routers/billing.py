@@ -77,7 +77,13 @@ from app.services.billing.llm_upgrade import (
     get_phase3_tier_status,
     normalize_llm_upgrade_code,
 )
-from app.services.billing.tier_limits_lookup import registration_grant_credits
+from app.services.billing.plan_code import resolve_plan_code_for_subscription
+from app.services.billing.price_resolver import reverse_lookup_code
+from app.services.billing.public_prices import display_name_for_plan_code
+from app.services.billing.tier_limits_lookup import (
+    get_active_tier_limits,
+    registration_grant_credits,
+)
 
 log = structlog.get_logger("billing.router")
 
@@ -195,6 +201,10 @@ class SubscriptionView(BaseModel):
     id: uuid.UUID
     plan: str
     billing_cycle: str
+    # Canonical tier code and marketing label; ``plan`` alone cannot distinguish
+    # Pro / Pro+ / Premium because the legacy enum only stores the interval.
+    plan_code: str
+    plan_display_name: str
     llm_upgrade: str
     llm_upgrade_billing_cycle: str | None
     status: str
@@ -202,7 +212,12 @@ class SubscriptionView(BaseModel):
     period_start: datetime
     period_end: datetime
     resumes_used: int
+    resumes_limit: int
     searches_used: int
+    searches_limit: int
+    fit_analyses_limit: int
+    whisper_uses_used: int
+    whisper_uses_limit: int | None
     upgraded_resumes_used: int
     cancel_at_period_end: bool
     payment_failed_at: datetime | None
@@ -619,11 +634,24 @@ async def subscriptions_current(
     ).scalar_one_or_none()
     if sub is None:
         return SubscriptionCurrentResponse(subscription=None, credit_balance=free_credits)
+
+    plan_code = resolve_plan_code_for_subscription(
+        sub, plan_config_code=await reverse_lookup_code(db, sub.stripe_price_id)
+    )
+    limits = await get_active_tier_limits(db, plan_code)
+
     return SubscriptionCurrentResponse(
         subscription=SubscriptionView(
             id=sub.id,
             plan=sub.plan.value,
             billing_cycle=sub.billing_cycle.value,
+            plan_code=plan_code,
+            plan_display_name=display_name_for_plan_code(plan_code),
+            resumes_limit=limits.resumes_per_period,
+            searches_limit=limits.searches_per_period,
+            fit_analyses_limit=limits.fit_analyses_per_period,
+            whisper_uses_used=sub.whisper_uses_used,
+            whisper_uses_limit=limits.whisper_uses_per_period,
             llm_upgrade=sub.llm_upgrade.value,
             llm_upgrade_billing_cycle=(
                 sub.llm_upgrade_billing_cycle.value

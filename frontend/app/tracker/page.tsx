@@ -127,7 +127,7 @@ export default function TrackerPage() {
   if (status === "loading" || !token) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     )
   }
@@ -136,8 +136,8 @@ export default function TrackerPage() {
     <div className="max-w-[1400px] mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Application tracker</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Application tracker</h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
             Drag cards between columns to update pipeline status.
           </p>
         </div>
@@ -152,7 +152,7 @@ export default function TrackerPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
@@ -161,17 +161,17 @@ export default function TrackerPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <form
             onSubmit={handleCreate}
-            className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-6 space-y-4"
+            className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4"
           >
-            <h2 className="text-lg font-semibold text-white">New application</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">New application</h2>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, mode: "resume" }))}
                 className={`flex-1 py-2 rounded-lg text-sm ${
                   form.mode === "resume"
-                    ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                    : "bg-slate-800 text-slate-300"
+                    ? "bg-amber-500/20 dark:bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                 }`}
               >
                 Link resume
@@ -181,8 +181,8 @@ export default function TrackerPage() {
                 onClick={() => setForm((f) => ({ ...f, mode: "manual" }))}
                 className={`flex-1 py-2 rounded-lg text-sm ${
                   form.mode === "manual"
-                    ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                    : "bg-slate-800 text-slate-300"
+                    ? "bg-amber-500/20 dark:bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                 }`}
               >
                 Enter manually
@@ -193,7 +193,7 @@ export default function TrackerPage() {
                 required
                 value={form.resume_record_id}
                 onChange={(e) => setForm((f) => ({ ...f, resume_record_id: e.target.value }))}
-                className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                className="w-full rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
               >
                 <option value="">Select a resume…</option>
                 {resumes.map((r) => (
@@ -209,14 +209,14 @@ export default function TrackerPage() {
                   placeholder="Job title"
                   value={form.jd_title}
                   onChange={(e) => setForm((f) => ({ ...f, jd_title: e.target.value }))}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                  className="w-full rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
                 />
                 <input
                   required
                   placeholder="Company"
                   value={form.jd_company}
                   onChange={(e) => setForm((f) => ({ ...f, jd_company: e.target.value }))}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-200"
+                  className="w-full rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
                 />
               </>
             )}
@@ -224,7 +224,7 @@ export default function TrackerPage() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+                className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               >
                 Cancel
               </button>
@@ -241,7 +241,7 @@ export default function TrackerPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+          <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-4">
@@ -250,20 +250,20 @@ export default function TrackerPage() {
             return (
               <section
                 key={col.key}
-                className="min-w-[220px] flex-1 rounded-xl border border-slate-800 bg-slate-950/50"
+                className="min-w-[220px] flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => onDrop(col.key)}
               >
-                <header className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
-                  <h2 className="text-sm font-medium text-slate-300">{col.label}</h2>
-                  <span className="text-xs text-slate-500">{columnApps.length}</span>
+                <header className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300">{col.label}</h2>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">{columnApps.length}</span>
                 </header>
                 <div className="p-2 space-y-2 min-h-[120px]">
                   {col.key === "draft" && (
                     <button
                       type="button"
                       onClick={() => setShowForm(true)}
-                      className="w-full border border-dashed border-slate-700 rounded-lg py-2 text-xs text-slate-500 hover:border-amber-400/50 hover:text-amber-300"
+                      className="w-full border border-dashed border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs text-slate-600 dark:text-slate-400 hover:border-amber-400/50 hover:text-amber-800 dark:hover:text-amber-300"
                     >
                       + Add application
                     </button>
@@ -276,20 +276,20 @@ export default function TrackerPage() {
                       data-status={app.status}
                       onDragStart={() => setDraggingId(app.id)}
                       onDragEnd={() => setDraggingId(null)}
-                      className="rounded-lg border border-slate-800 bg-slate-900 p-3 cursor-grab active:cursor-grabbing hover:border-slate-600"
+                      className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 cursor-grab active:cursor-grabbing hover:border-slate-600"
                     >
                       <div className="flex items-start gap-2">
-                        <GripVertical className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
+                        <GripVertical className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <Link
                             href={`/tracker/${app.id}`}
-                            className="block text-sm font-medium text-white hover:text-amber-300 truncate"
+                            className="block text-sm font-medium text-slate-900 dark:text-white hover:text-amber-800 dark:hover:text-amber-300 truncate"
                           >
                             {app.jd_title}
                           </Link>
-                          <p className="text-xs text-slate-500 truncate">{app.jd_company}</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{app.jd_company}</p>
                           {pendingMoves[app.id] && (
-                            <p className="text-[11px] text-amber-400 mt-1">Saving status...</p>
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">Saving status...</p>
                           )}
                         </div>
                       </div>

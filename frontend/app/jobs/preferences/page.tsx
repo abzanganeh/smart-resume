@@ -149,7 +149,7 @@ function PreferencesPageContent() {
 
   if (status === "loading" || !session) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Loading…
       </div>
@@ -157,83 +157,83 @@ function PreferencesPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <Link
           href="/jobs"
-          className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-8"
+          className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 text-sm mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to job search
         </Link>
 
         <h1 className="text-2xl font-bold mb-2">Job search preferences</h1>
-        <p className="text-slate-400 text-sm mb-8">
+        <p className="text-slate-600 dark:text-slate-400 text-sm mb-8">
           Manage saved searches, alerts, and blocked companies.
         </p>
 
         {error && (
-          <div className="mb-6 flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+          <div className="mb-6 flex items-start gap-2 text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="flex justify-center py-16 text-slate-500">
+          <div className="flex justify-center py-16 text-slate-600 dark:text-slate-400">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
         ) : (
           <div className="space-y-12">
             <section>
-              <h2 className="text-lg font-semibold text-white mb-1">Add saved search</h2>
-              <p className="text-sm text-slate-400 mb-4">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">Add saved search</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                 Up to {MAX_SAVED_SEARCHES} saved searches ({searches.length}/{MAX_SAVED_SEARCHES}).
                 Alerts enabled on up to {MAX_ALERT_SEARCHES} ({alertCount}/{MAX_ALERT_SEARCHES}).
               </p>
 
               <form
                 onSubmit={handleCreateSearch}
-                className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4"
+                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4"
               >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block">
-                    <span className="text-xs text-slate-500 mb-1 block">Name</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Name</span>
                     <input
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       required
                       placeholder="Remote Python roles"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-slate-500 mb-1 block">Query</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Query</span>
                     <input
                       value={newQuery}
                       onChange={(e) => setNewQuery(e.target.value)}
                       required
                       placeholder="Python backend engineer"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                   </label>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block">
-                    <span className="text-xs text-slate-500 mb-1 block">Location (optional)</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Location (optional)</span>
                     <input
                       value={newLocation}
                       onChange={(e) => setNewLocation(e.target.value)}
                       placeholder="Remote"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs text-slate-500 mb-1 block">Alert frequency</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Alert frequency</span>
                     <select
                       value={newAlert}
                       onChange={(e) => setNewAlert(e.target.value as AlertFrequency)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     >
                       {ALERT_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -254,24 +254,24 @@ function PreferencesPageContent() {
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-white mb-4">Saved searches</h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Saved searches</h2>
               {searches.length === 0 ? (
-                <p className="text-sm text-slate-500">No saved searches yet.</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">No saved searches yet.</p>
               ) : (
                 <ul className="space-y-3">
                   {searches.map((search) => (
                     <li
                       key={search.id}
-                      className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"
                       data-testid={`saved-search-${search.id}`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                         <div>
-                          <p className="font-medium text-white">{search.name}</p>
-                          <p className="text-sm text-slate-400 mt-0.5">
+                          <p className="font-medium text-slate-900 dark:text-white">{search.name}</p>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
                             {summarizeSearchQuery(search)}
                           </p>
-                          <p className="text-xs text-slate-600 mt-1">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                             Last run:{" "}
                             {search.last_alerted_at
                               ? new Date(search.last_alerted_at).toLocaleString()
@@ -285,7 +285,7 @@ function PreferencesPageContent() {
                               handleAlertChange(search, e.target.value as AlertFrequency)
                             }
                             aria-label={`Alert frequency for ${search.name}`}
-                            className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200"
                           >
                             {ALERT_OPTIONS.map((opt) => (
                               <option key={opt.value} value={opt.value}>
@@ -297,7 +297,7 @@ function PreferencesPageContent() {
                             type="button"
                             onClick={() => handleDeleteSearch(search.id)}
                             aria-label={`Delete ${search.name}`}
-                            className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40"
+                            className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -325,7 +325,7 @@ export default function JobPreferencesPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading…
         </div>
       }

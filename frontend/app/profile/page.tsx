@@ -186,7 +186,7 @@ function ProfilePageContent() {
   if (status === "loading" || !session) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-slate-600 dark:text-slate-400" />
       </div>
     )
   }
@@ -201,23 +201,23 @@ function ProfilePageContent() {
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="flex-1 min-w-0 space-y-8">
           <header className="space-y-1">
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <UserCircle className="w-7 h-7 text-amber-400" />
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <UserCircle className="w-7 h-7 text-amber-700 dark:text-amber-400" />
               Master resume profile
             </h1>
-            <p className="text-slate-400 text-sm">
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
               Chunked, embedded career history used to tailor every session.
             </p>
           </header>
 
           {error && (
-            <div className="bg-red-950/50 border border-red-800 text-red-300 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+            <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
               <XCircle className="w-4 h-4 shrink-0" />
               {error}
             </div>
           )}
 
-          <section className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6">
+          <section className="bg-white/60 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 rounded-2xl p-6">
             <ProfileUploadZone
               onSubmit={handleUpload}
               token={token ?? ""}
@@ -236,19 +236,19 @@ function ProfilePageContent() {
 
           {loadingProfile ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-slate-600 dark:text-slate-400" />
             </div>
           ) : liveCount > 0 ? (
             <section className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-slate-400 space-y-0.5">
+                <div className="text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
                   <p>
-                    <span className="text-slate-200 font-medium tabular-nums">{liveCount}</span>{" "}
+                    <span className="text-slate-800 dark:text-slate-200 font-medium tabular-nums">{liveCount}</span>{" "}
                     live chunk{liveCount === 1 ? "" : "s"}
                   </p>
                   <p>
                     Last embedded{" "}
-                    <span className="text-slate-300">
+                    <span className="text-slate-700 dark:text-slate-300">
                       {formatTimestamp(profile?.last_embedded_at ?? null)}
                     </span>
                   </p>
@@ -283,7 +283,7 @@ function ProfilePageContent() {
                     disabled={reembedding || uploading}
                     className={clsx(
                       "flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-colors",
-                      "border-amber-400/40 text-amber-400 hover:bg-amber-400/10",
+                      "border-amber-400/40 text-amber-700 dark:text-amber-400 hover:bg-amber-400/10",
                       "disabled:opacity-50",
                     )}
                   >
@@ -299,12 +299,12 @@ function ProfilePageContent() {
               </div>
 
               {showContinue && onboardingIncomplete && fromOnboarding && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   Your master resume is indexed. Continue to the final onboarding step, then open your dashboard.
                 </p>
               )}
               {showContinue && onboardingIncomplete && !fromOnboarding && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   Your master resume is indexed. Finish setup to open your dashboard and start tailoring.
                 </p>
               )}
@@ -316,11 +316,11 @@ function ProfilePageContent() {
 
                 return (
                   <div key={sectionKey} data-section={sectionKey} className="space-y-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-800 pb-2">
-                      <h2 className="text-base font-semibold text-white">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
                         {SECTION_LABELS[sectionKey] ?? sectionKey}
                       </h2>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
                         {sectionLive} chunk{sectionLive === 1 ? "" : "s"}
                         {profile?.last_embedded_at && (
                           <>
@@ -347,7 +347,7 @@ function ProfilePageContent() {
             </section>
           ) : (
             !uploading && (
-              <p className="text-center text-slate-500 text-sm py-8">
+              <p className="text-center text-slate-600 dark:text-slate-400 text-sm py-8">
                 No master resume yet — upload or paste above to get started.
               </p>
             )
@@ -376,7 +376,7 @@ export default function ProfilePage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+          <Loader2 className="w-6 h-6 animate-spin text-slate-600 dark:text-slate-400" />
         </div>
       }
     >

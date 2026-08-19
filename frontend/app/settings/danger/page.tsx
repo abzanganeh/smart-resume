@@ -118,7 +118,7 @@ export default function DangerZonePage() {
   if (status === "loading" || !token || loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     );
   }
@@ -133,20 +133,20 @@ export default function DangerZonePage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">
-      <Link href="/settings" className="text-sm text-slate-500 hover:text-slate-300">
+      <Link href="/settings" className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300">
         ← Account settings
       </Link>
-      <h1 className="text-2xl font-semibold text-white mt-4 mb-2 flex items-center gap-2">
-        <AlertTriangle className="w-6 h-6 text-red-400" />
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mt-4 mb-2 flex items-center gap-2">
+        <AlertTriangle className="w-6 h-6 text-red-700 dark:text-red-400" />
         Danger zone
       </h1>
-      <p className="text-sm text-slate-500 mb-8">
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-8">
         Export your data or permanently delete your account after a 30-day grace period.
       </p>
 
       {closureDate && formattedClosure && (
         <div
-          className="mb-6 rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-200"
+          className="mb-6 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"
           data-testid="closure-banner"
         >
           Account will be deleted on {formattedClosure}.
@@ -162,14 +162,14 @@ export default function DangerZonePage() {
       )}
 
       {error && (
-        <p className="mb-4 text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
+        <p className="mb-4 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg px-3 py-2">
           {error}
         </p>
       )}
 
-      <section className="mb-8 border border-slate-800 rounded-xl p-4 space-y-4">
-        <h2 className="font-medium text-slate-200">Download my data</h2>
-        <p className="text-sm text-slate-500">
+      <section className="mb-8 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
+        <h2 className="font-medium text-slate-800 dark:text-slate-200">Download my data</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Request a ZIP of your resumes, applications, saved jobs, and account info.
           Limited to 2 exports per 24 hours.
         </p>
@@ -180,7 +180,7 @@ export default function DangerZonePage() {
           className={cn(
             "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium",
             exportBusy
-              ? "bg-slate-800 text-slate-500"
+              ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
               : "bg-slate-200 text-slate-900 hover:bg-white",
           )}
         >
@@ -201,7 +201,7 @@ export default function DangerZonePage() {
             href={downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300"
+            className="inline-flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 hover:text-emerald-300"
             data-testid="export-download-link"
           >
             <Download className="w-4 h-4" />
@@ -210,9 +210,9 @@ export default function DangerZonePage() {
         )}
       </section>
 
-      <section className="border border-red-900/50 rounded-xl p-4 bg-red-950/10 space-y-4">
-        <h2 className="font-medium text-red-300">Close account</h2>
-        <p className="text-sm text-slate-500">
+      <section className="border border-red-200 dark:border-red-900/50 rounded-xl p-4 bg-red-50 dark:bg-red-950/10 space-y-4">
+        <h2 className="font-medium text-red-700 dark:text-red-300">Close account</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Your account enters a 30-day grace period. You can cancel anytime before deletion.
         </p>
         {!closureDate && (
@@ -232,14 +232,14 @@ export default function DangerZonePage() {
       {showCloseDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div
-            className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 space-y-4"
+            className="w-full max-w-md rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 space-y-4"
             role="dialog"
             aria-modal="true"
           >
             {closeStep === "prompt" ? (
               <>
-                <h3 className="text-lg font-semibold text-white">Download your data first?</h3>
-                <p className="text-sm text-slate-400">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Download your data first?</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   We recommend exporting your data before closing your account.
                 </p>
                 <div className="flex flex-wrap gap-3">
@@ -253,14 +253,14 @@ export default function DangerZonePage() {
                   <button
                     type="button"
                     onClick={() => void handleClose(true)}
-                    className="px-4 py-2 rounded-lg text-sm border border-slate-600 text-slate-300"
+                    className="px-4 py-2 rounded-lg text-sm border border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                   >
                     Skip export
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCloseDialog(false)}
-                    className="px-4 py-2 rounded-lg text-sm text-slate-500"
+                    className="px-4 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-400"
                   >
                     Cancel
                   </button>
@@ -268,9 +268,9 @@ export default function DangerZonePage() {
               </>
             ) : (
               <>
-                <h3 className="text-lg font-semibold text-white">Confirm account closure</h3>
-                <p className="text-sm text-slate-400">
-                  Type <strong className="text-red-400">DELETE</strong> to schedule deletion in
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Confirm account closure</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Type <strong className="text-red-700 dark:text-red-400">DELETE</strong> to schedule deletion in
                   30 days.
                 </p>
                 <input
@@ -278,7 +278,7 @@ export default function DangerZonePage() {
                   value={deleteConfirm}
                   onChange={(e) => setDeleteConfirm(e.target.value)}
                   placeholder="DELETE"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 text-sm"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm"
                   data-testid="delete-confirm-input"
                 />
                 <div className="flex gap-3">
@@ -293,7 +293,7 @@ export default function DangerZonePage() {
                   <button
                     type="button"
                     onClick={() => setShowCloseDialog(false)}
-                    className="px-4 py-2 rounded-lg text-sm text-slate-500"
+                    className="px-4 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-400"
                   >
                     Cancel
                   </button>

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { afterEach, describe, it, mock } from "node:test";
+import assert from "node:assert/strict";
 import {
   FREE_TIER_STARTING_CREDITS,
   fetchFreeTierStartingCredits,
@@ -6,38 +7,40 @@ import {
 
 describe("fetchFreeTierStartingCredits", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    mock.restoreAll();
   });
 
   it("returns API value when fetch succeeds", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
+    mock.method(globalThis, "fetch", async () =>
+      ({
         ok: true,
         json: async () => ({ starting_credits: 5 }),
-      }),
+      }) as Response,
     );
 
-    await expect(fetchFreeTierStartingCredits()).resolves.toBe(5);
+    assert.equal(await fetchFreeTierStartingCredits(), 5);
   });
 
   it("falls back to 3 when fetch fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
+    mock.method(globalThis, "fetch", async () => {
+      throw new Error("network");
+    });
 
-    await expect(fetchFreeTierStartingCredits()).resolves.toBe(
+    assert.equal(
+      await fetchFreeTierStartingCredits(),
       FREE_TIER_STARTING_CREDITS,
     );
   });
 
   it("falls back to 3 when response is not ok", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
+    mock.method(globalThis, "fetch", async () =>
+      ({
         ok: false,
-      }),
+      }) as Response,
     );
 
-    await expect(fetchFreeTierStartingCredits()).resolves.toBe(
+    assert.equal(
+      await fetchFreeTierStartingCredits(),
       FREE_TIER_STARTING_CREDITS,
     );
   });

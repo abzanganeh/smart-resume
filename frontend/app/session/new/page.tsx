@@ -437,13 +437,13 @@ function NewSessionContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-sr-bg text-sr-fg">
       <div className="max-w-2xl mx-auto px-6 py-12">
 
         <button
           type="button"
           onClick={handleWizardBack}
-          className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm mb-8 transition-colors"
+          className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 text-sm mb-8 transition-colors"
         >
           ← Back
         </button>
@@ -462,7 +462,7 @@ function NewSessionContent() {
                     ? "bg-amber-400 text-slate-900 hover:bg-amber-300 cursor-pointer"
                     : i === stepIndex
                     ? "bg-amber-400 text-slate-900 ring-2 ring-amber-400/30"
-                    : "bg-slate-800 text-slate-500 cursor-default"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-default"
                 }`}
               >
                 {i < stepIndex ? "✓" : i + 1}
@@ -470,17 +470,17 @@ function NewSessionContent() {
               <span
                 className={`text-xs font-medium hidden sm:block ${
                   i === stepIndex
-                    ? "text-slate-200"
+                    ? "text-slate-800 dark:text-slate-200"
                     : i < stepIndex
-                    ? "text-slate-400"
-                    : "text-slate-600"
+                    ? "text-slate-600 dark:text-slate-400"
+                    : "text-slate-600 dark:text-slate-400 dark:text-slate-600"
                 }`}
               >
                 {STEP_LABELS[s]}
               </span>
               {i < STEPS.length - 1 && (
                 <div
-                  className={`flex-1 h-px ${i < stepIndex ? "bg-amber-400" : "bg-slate-800"}`}
+                  className={`flex-1 h-px ${i < stepIndex ? "bg-amber-400" : "bg-slate-200 dark:bg-slate-800"}`}
                 />
               )}
             </div>
@@ -488,20 +488,21 @@ function NewSessionContent() {
         </div>
 
         {/* Step content */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8">
 
           {/* ── Step 1: Upload Resume ───────────────────────────────────── */}
           {step === "resume" && !sessionId && (
             <div className="py-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-              <p className="text-slate-500 text-sm mt-4">Starting your session…</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mt-4">Starting your session…</p>
             </div>
           )}
           {step === "resume" && sessionId && (
             <div>
               <h1 className="text-xl font-bold mb-1">Upload your resume</h1>
-              <p className="text-slate-400 text-sm mb-6">
-                Upload a file, paste text, record by voice, or reuse your saved master resume.
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
+                Upload a file, paste text, speak it, or reuse your saved master resume. Voice with
+                live transcription is free in Chrome and Edge.
               </p>
               <ResumeUploader
                 sessionId={sessionId}
@@ -517,8 +518,8 @@ function NewSessionContent() {
           {step === "jd" && (
             <div>
               <h1 className="text-xl font-bold mb-1">Job description</h1>
-              <p className="text-slate-400 text-sm mb-6">
-                Paste the full job posting. Smart Resume uses platform AI to extract ATS keywords
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
+                Paste the full job posting. TalioCV uses platform AI to extract ATS keywords
                 and pre-fill your info from your resume.
               </p>
               <JDInput
@@ -536,12 +537,12 @@ function NewSessionContent() {
           {step === "info" && (
             <div>
               <h1 className="text-xl font-bold mb-1">Your information</h1>
-              <p className="text-slate-400 text-sm mb-6">
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
                 We pre-filled everything we found in your resume.
                 Correct anything that looks wrong, then add your target role.
               </p>
               {infoHydrating && !parsedResume ? (
-                <p className="text-slate-500 text-sm">Loading your resume details…</p>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">Loading your resume details…</p>
               ) : (
                 <UserInfoForm
                   onSubmit={handleUserInfo}
@@ -562,7 +563,7 @@ export default function NewSessionPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-sr-bg flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading…
         </div>
       }

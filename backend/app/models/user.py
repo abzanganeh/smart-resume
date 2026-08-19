@@ -48,6 +48,9 @@ class AuthProvider(str, enum.Enum):
     email = "email"
     google = "google"
     github = "github"
+    microsoft = "microsoft"
+    linkedin = "linkedin"
+    apple = "apple"
 
 
 class UserTier(str, enum.Enum):

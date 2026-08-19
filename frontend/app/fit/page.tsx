@@ -40,22 +40,22 @@ const FIT_LABEL_STYLE: Record<
 > = {
   strong: {
     label: "Strong",
-    badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+    badge: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
     gauge: "stroke-emerald-400",
   },
   good: {
     label: "Good",
-    badge: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+    badge: "bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40",
     gauge: "stroke-sky-400",
   },
   partial: {
     label: "Partial",
-    badge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+    badge: "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40",
     gauge: "stroke-amber-400",
   },
   weak: {
     label: "Weak",
-    badge: "bg-red-500/20 text-red-300 border-red-500/40",
+    badge: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40",
     gauge: "stroke-red-400",
   },
 };
@@ -92,8 +92,8 @@ function FitScoreGauge({ score, fitLabel }: { score: number; fitLabel: FitLabel 
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-white">{score}</span>
-          <span className="text-xs text-slate-500">/ 100</span>
+          <span className="text-3xl font-bold text-slate-900 dark:text-white">{score}</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400">/ 100</span>
         </div>
       </div>
       <span
@@ -110,10 +110,10 @@ function FitScoreGauge({ score, fitLabel }: { score: number; fitLabel: FitLabel 
 
 function LockedState() {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-10 text-center max-w-lg mx-auto">
-      <Lock className="w-10 h-10 text-amber-400 mx-auto mb-4" />
-      <h2 className="text-xl font-semibold text-white mb-2">Subscription required</h2>
-      <p className="text-slate-400 text-sm mb-6">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 p-10 text-center max-w-lg mx-auto">
+      <Lock className="w-10 h-10 text-amber-700 dark:text-amber-400 mx-auto mb-4" />
+      <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Subscription required</h2>
+      <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
         Job fit analysis compares your master resume against any job description using
         vector matching and AI — available on paid plans only.
       </p>
@@ -175,10 +175,10 @@ function FitResults({
       <div className="flex flex-col sm:flex-row gap-8 items-center sm:items-start">
         <FitScoreGauge score={result.overall_fit_score} fitLabel={result.fit_label} />
         <div className="flex-1 text-center sm:text-left">
-          <pre className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+          <pre className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-sans">
             {result.recommendation}
           </pre>
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">
             {result.should_apply
               ? "Recommendation: worth applying with targeted resume tailoring."
               : "Recommendation: address key gaps before applying."}
@@ -188,34 +188,34 @@ function FitResults({
 
       {result.section_fits.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Section breakdown</h3>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Section breakdown</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {result.section_fits.map((section) => (
               <div
                 key={section.section_type}
-                className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-white capitalize">
+                  <span className="text-sm font-medium text-slate-900 dark:text-white capitalize">
                     {section.section_type.replace(/_/g, " ")}
                   </span>
-                  <span className="text-sm font-mono text-amber-400">{section.match_score}%</span>
+                  <span className="text-sm font-mono text-amber-700 dark:text-amber-400">{section.match_score}%</span>
                 </div>
-                <div className="h-1.5 bg-slate-800 rounded-full mb-3 overflow-hidden">
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mb-3 overflow-hidden">
                   <div
                     className="h-full bg-amber-400 rounded-full transition-all"
                     style={{ width: `${section.match_score}%` }}
                   />
                 </div>
                 {section.matched_items.length > 0 && (
-                  <ul className="text-xs text-emerald-400/90 space-y-0.5 mb-2">
+                  <ul className="text-xs text-emerald-700 dark:text-emerald-400/90 space-y-0.5 mb-2">
                     {section.matched_items.map((item) => (
                       <li key={item}>✓ {item}</li>
                     ))}
                   </ul>
                 )}
                 {section.missing_items.length > 0 && (
-                  <ul className="text-xs text-red-400/80 space-y-0.5">
+                  <ul className="text-xs text-red-700 dark:text-red-400/80 space-y-0.5">
                     {section.missing_items.map((item) => (
                       <li key={item}>✗ {item}</li>
                     ))}
@@ -229,22 +229,22 @@ function FitResults({
 
       <div className="grid sm:grid-cols-2 gap-6">
         <div>
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">Key strengths</h3>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Key strengths</h3>
           <ul className="space-y-1.5">
             {result.key_strengths.map((s) => (
-              <li key={s} className="text-sm text-slate-400 flex gap-2">
-                <span className="text-emerald-400 shrink-0">+</span>
+              <li key={s} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2">
+                <span className="text-emerald-700 dark:text-emerald-400 shrink-0">+</span>
                 {s}
               </li>
             ))}
           </ul>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-300 mb-2">Key gaps</h3>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Key gaps</h3>
           <ul className="space-y-1.5">
             {result.key_gaps.map((g) => (
-              <li key={g} className="text-sm text-slate-400 flex gap-2">
-                <span className="text-red-400 shrink-0">−</span>
+              <li key={g} className="text-sm text-slate-600 dark:text-slate-400 flex gap-2">
+                <span className="text-red-700 dark:text-red-400 shrink-0">−</span>
                 {g}
               </li>
             ))}
@@ -265,7 +265,7 @@ function FitResults({
           type="button"
           disabled
           title="Coming in Release Phase 3"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-500 text-sm cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm cursor-not-allowed"
         >
           <Search className="w-4 h-4" />
           Find similar jobs
@@ -276,7 +276,7 @@ function FitResults({
             type="button"
             onClick={handleAddBullets}
             disabled={adding || added}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm hover:border-slate-600 disabled:opacity-50"
           >
             {adding ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -288,7 +288,7 @@ function FitResults({
         )}
       </div>
       {addError && (
-        <p className="text-red-400 text-sm flex items-center gap-2">
+        <p className="text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           {addError}
         </p>
@@ -327,17 +327,17 @@ function HistoryPanel({
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12 text-slate-500">
+      <div className="flex justify-center py-12 text-slate-600 dark:text-slate-400">
         <Loader2 className="w-6 h-6 animate-spin" />
       </div>
     );
   }
   if (error) {
-    return <p className="text-red-400 text-sm text-center py-8">{error}</p>;
+    return <p className="text-red-700 dark:text-red-400 text-sm text-center py-8">{error}</p>;
   }
   if (items.length === 0) {
     return (
-      <p className="text-slate-500 text-sm text-center py-12">
+      <p className="text-slate-600 dark:text-slate-400 text-sm text-center py-12">
         No analyses yet. Run your first fit check on the Analyze tab.
       </p>
     );
@@ -352,19 +352,19 @@ function HistoryPanel({
             <button
               type="button"
               onClick={() => onSelect(item.id)}
-              className="w-full text-left px-4 py-3 rounded-xl border border-slate-800 bg-slate-900 hover:border-slate-700 transition-colors flex items-center justify-between gap-4"
+              className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-700 transition-colors flex items-center justify-between gap-4"
             >
               <div>
-                <span className="text-sm text-white font-medium">
+                <span className="text-sm text-slate-900 dark:text-white font-medium">
                   Score {item.overall_fit_score} — {style.label}
                 </span>
-                <span className="block text-xs text-slate-500 mt-0.5">
+                <span className="block text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                   {item.created_at
                     ? new Date(item.created_at).toLocaleString()
                     : "Unknown date"}
                 </span>
               </div>
-              <Briefcase className="w-4 h-4 text-slate-600 shrink-0" />
+              <Briefcase className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
             </button>
           </li>
         );
@@ -482,7 +482,7 @@ function FitPageContent() {
 
   if (status === "loading" || !session || subscribed === null) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Loading…
       </div>
@@ -491,13 +491,13 @@ function FitPageContent() {
 
   if (subscribed === false) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
         <div className="max-w-3xl mx-auto px-6 py-12">
           <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
-            <Briefcase className="w-7 h-7 text-amber-400" />
+            <Briefcase className="w-7 h-7 text-amber-700 dark:text-amber-400" />
             Job fit analysis
           </h1>
-          <p className="text-slate-400 text-sm mb-10">
+          <p className="text-slate-600 dark:text-slate-400 text-sm mb-10">
             See how your master resume matches a job before tailoring.
           </p>
           <LockedState />
@@ -507,25 +507,25 @@ function FitPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
-          <Briefcase className="w-7 h-7 text-amber-400" />
+          <Briefcase className="w-7 h-7 text-amber-700 dark:text-amber-400" />
           Job fit analysis
         </h1>
-        <p className="text-slate-400 text-sm mb-8">
+        <p className="text-slate-600 dark:text-slate-400 text-sm mb-8">
           Compare your master resume against any job — powered by vector matching and AI.
         </p>
 
-        <div className="flex gap-2 mb-6 border-b border-slate-800 pb-2">
+        <div className="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-2">
           <button
             type="button"
             onClick={() => setPageTab("analyze")}
             className={clsx(
               "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
               pageTab === "analyze"
-                ? "bg-slate-800 text-white"
-                : "text-slate-500 hover:text-slate-300",
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300",
             )}
           >
             Analyze
@@ -536,8 +536,8 @@ function FitPageContent() {
             className={clsx(
               "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
               pageTab === "history"
-                ? "bg-slate-800 text-white"
-                : "text-slate-500 hover:text-slate-300",
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300",
             )}
           >
             <History className="w-4 h-4" />
@@ -566,8 +566,8 @@ function FitPageContent() {
                       className={clsx(
                         "px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors",
                         inputTab === tab
-                          ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
-                          : "border-slate-800 text-slate-500 hover:border-slate-700",
+                          ? "border-amber-400/60 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300"
+                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-700",
                       )}
                     >
                       {label}
@@ -580,14 +580,14 @@ function FitPageContent() {
                     value={jdText}
                     onChange={(e) => setJdText(e.target.value)}
                     placeholder="Paste the full job description…"
-                    className="w-full h-56 bg-slate-900 border border-slate-800 rounded-xl p-4 text-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600 mb-2"
+                    className="w-full h-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-slate-800 dark:text-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600 mb-2"
                   />
                 )}
 
                 {inputTab === "upload" && (
-                  <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-slate-700 rounded-xl bg-slate-900/50 cursor-pointer hover:border-slate-600 mb-2">
-                    <Upload className="w-8 h-8 text-slate-600 mb-2" />
-                    <span className="text-sm text-slate-400">
+                  <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-900/50 cursor-pointer hover:border-slate-600 mb-2">
+                    <Upload className="w-8 h-8 text-slate-600 dark:text-slate-400 mb-2" />
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
                       {file ? file.name : "PDF, DOCX, or TXT"}
                     </span>
                     <input
@@ -604,12 +604,12 @@ function FitPageContent() {
                     value={jdUrl}
                     onChange={(e) => setJdUrl(e.target.value)}
                     placeholder="https://jobs.example.com/backend-engineer"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600 mb-2"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600 mb-2"
                   />
                 )}
 
                 {inputTab === "paste" && (
-                  <p className="text-xs text-slate-600 mb-4">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
                     {jdText.length.toLocaleString()} / {MAX_JD.toLocaleString()} characters
                   </p>
                 )}
@@ -633,7 +633,7 @@ function FitPageContent() {
             )}
 
             {error && (
-              <div className="mt-4 flex items-start gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+              <div className="mt-4 flex items-start gap-2 text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 {error}
               </div>
@@ -651,7 +651,7 @@ function FitPageContent() {
                       setFile(null);
                       setJdUrl("");
                     }}
-                    className="text-xs text-slate-500 hover:text-slate-300"
+                    className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300"
                   >
                     ← New analysis
                   </button>
@@ -675,7 +675,7 @@ export default function FitPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading…
         </div>
       }

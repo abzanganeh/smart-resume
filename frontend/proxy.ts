@@ -73,7 +73,12 @@ export default auth(async function proxy(req) {
     return NextResponse.redirect(new URL("/onboarding", req.url))
   }
 
-  if (AUTH_ONLY_PATHS.some((p) => pathname === p) && session) {
+  // Only bounce away from /auth when the backend token is present — a bare NextAuth
+  // OAuth session without backend sync must stay here to show the error banner.
+  if (
+    AUTH_ONLY_PATHS.some((p) => pathname === p) &&
+    session?.backendAccessToken
+  ) {
     return NextResponse.redirect(new URL(postAuthLandingPath(session), req.url))
   }
 

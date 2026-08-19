@@ -65,7 +65,7 @@ export default function NotificationsPage() {
   if (status === "loading" || !token) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-700 dark:text-amber-400" />
       </div>
     );
   }
@@ -74,9 +74,9 @@ export default function NotificationsPage() {
     <main className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Notifications</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            <Link href="/settings/notifications" className="text-amber-400 hover:underline">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Notifications</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            <Link href="/settings/notifications" className="text-amber-700 dark:text-amber-400 hover:underline">
               Notification settings
             </Link>
           </p>
@@ -84,7 +84,7 @@ export default function NotificationsPage() {
         <button
           type="button"
           onClick={handleMarkAll}
-          className="text-sm text-amber-400 hover:text-amber-300"
+          className="text-sm text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
         >
           Mark all read
         </button>
@@ -99,8 +99,8 @@ export default function NotificationsPage() {
             className={cn(
               "px-3 py-1.5 rounded-lg text-sm capitalize",
               tab === t
-                ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                ? "bg-amber-500/20 dark:bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             )}
           >
             {t}
@@ -114,8 +114,8 @@ export default function NotificationsPage() {
             className={cn(
               "px-3 py-1.5 rounded-lg text-sm",
               tab === c.id
-                ? "bg-amber-400/20 text-amber-300 border border-amber-400/40"
-                : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                ? "bg-amber-500/20 dark:bg-amber-400/20 text-amber-700 dark:text-amber-300 border border-amber-400/40"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
             )}
           >
             {c.label}
@@ -125,18 +125,18 @@ export default function NotificationsPage() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-amber-700 dark:text-amber-400" />
         </div>
       ) : items.length === 0 ? (
-        <p className="text-slate-500 text-center py-12">No notifications in this view.</p>
+        <p className="text-slate-600 dark:text-slate-400 text-center py-12">No notifications in this view.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
             <li
               key={item.id}
               className={cn(
-                "border border-slate-800 rounded-xl p-4 flex gap-3",
-                !item.read_at && "bg-slate-900/80"
+                "border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex gap-3",
+                !item.read_at && "bg-white/80 dark:bg-slate-900/80"
               )}
             >
               <button
@@ -144,18 +144,18 @@ export default function NotificationsPage() {
                 className="flex-1 text-left min-w-0"
                 onClick={() => handleRead(item)}
               >
-                <p className="font-medium text-slate-200">{item.title || item.type}</p>
+                <p className="font-medium text-slate-800 dark:text-slate-200">{item.title || item.type}</p>
                 {item.body && (
-                  <p className="text-sm text-slate-500 mt-1">{item.body}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{item.body}</p>
                 )}
-                <p className="text-xs text-slate-600 mt-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
                   {new Date(item.created_at).toLocaleString()}
                 </p>
               </button>
               <button
                 type="button"
                 onClick={() => handleDismiss(item.id)}
-                className="shrink-0 p-1 text-slate-500 hover:text-slate-300"
+                className="shrink-0 p-1 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300"
                 aria-label="Dismiss"
               >
                 <X className="w-4 h-4" />

@@ -857,9 +857,9 @@ function SessionContent() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       {expiryWarning && (
-        <div className="bg-amber-400/10 border-b border-amber-400/30 px-6 py-2 text-center text-amber-400 text-sm">
+        <div className="bg-amber-500/10 dark:bg-amber-400/10 border-b border-amber-400/30 px-6 py-2 text-center text-amber-700 dark:text-amber-400 text-sm">
           <AlertCircle className="w-4 h-4 inline mr-1.5 -mt-0.5" />
           Your session expires in 4 hours. Download your resume before it&apos;s gone.
         </div>
@@ -867,7 +867,7 @@ function SessionContent() {
 
       {namePromptRecord && authSession?.backendAccessToken && (
         <div className="bg-emerald-400/10 border-b border-emerald-400/30 px-6 py-3">
-          <p className="text-sm text-emerald-200 mb-2">
+          <p className="text-sm text-emerald-800 dark:text-emerald-200 mb-2">
             Name this resume for your dashboard (you can change it later):
           </p>
           <div className="flex flex-wrap items-center gap-2 max-w-xl">
@@ -875,7 +875,7 @@ function SessionContent() {
               type="text"
               value={namePromptValue}
               onChange={(e) => setNamePromptValue(e.target.value)}
-              className="flex-1 min-w-[12rem] bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100"
+              className="flex-1 min-w-[12rem] bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
               placeholder="e.g. Acme — Staff Engineer"
             />
             <button
@@ -889,7 +889,7 @@ function SessionContent() {
             <button
               type="button"
               onClick={() => setNamePromptRecord(null)}
-              className="text-sm text-slate-400 hover:text-slate-200 px-2 py-2"
+              className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 px-2 py-2"
             >
               Skip
             </button>
@@ -910,7 +910,7 @@ function SessionContent() {
                   onClick={() => clickable && goTo(s)}
                   disabled={!clickable}
                   className={`relative px-4 py-1.5 rounded-full text-sm font-medium transition-colors
-                    ${active ? "bg-amber-400 text-slate-900" : hasOutput ? "bg-slate-700 text-slate-200 hover:bg-slate-600" : clickable ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-slate-800 text-slate-500 cursor-not-allowed"}`}
+                    ${active ? "bg-amber-400 text-slate-900" : hasOutput ? "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600" : clickable ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-not-allowed"}`}
                 >
                   {STEP_LABELS[s]}
                   {isStale && (
@@ -926,25 +926,25 @@ function SessionContent() {
           })}
         </div>
 
-        <p className="text-xs text-slate-500 mb-4">
+        <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
           Click any step above to jump back — your progress is saved.
         </p>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8">
           {!llmErrorActive && sessionAiControls}
 
           {runError && (
             <div className="flex flex-col sm:flex-row sm:items-start gap-2 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3 mb-6">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-700 dark:text-red-400" />
               <div className="flex-1 min-w-0">
                 {runErrorType?.startsWith("llm_") && (
-                  <span className="inline-block text-amber-400 text-xs font-semibold uppercase tracking-wide mr-2 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5 mb-1">
+                  <span className="inline-block text-amber-700 dark:text-amber-400 text-xs font-semibold uppercase tracking-wide mr-2 bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5 mb-1">
                     AI model error
                   </span>
                 )}
-                <span className="text-red-300">{runError}</span>
+                <span className="text-red-700 dark:text-red-300">{runError}</span>
                 {runErrorType?.startsWith("llm_") && (
-                  <p className="text-xs text-slate-400 mt-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
                     {runErrorType === "llm_insufficient_credits" ? (
                       <>
                         Provider credits are exhausted. Switch to Platform AI (Gemini) below or add
@@ -953,7 +953,7 @@ function SessionContent() {
                           href="https://openrouter.ai/settings/credits"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-amber-400 underline hover:no-underline"
+                          className="text-amber-700 dark:text-amber-400 underline hover:no-underline"
                         >
                           OpenRouter credits
                         </a>
@@ -972,7 +972,7 @@ function SessionContent() {
                   <button
                     type="button"
                     onClick={openAiSettings}
-                    className="text-amber-400 hover:text-amber-300 text-xs font-semibold underline hover:no-underline"
+                    className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 text-xs font-semibold underline hover:no-underline"
                   >
                     Change AI settings
                   </button>
@@ -980,7 +980,7 @@ function SessionContent() {
                 {runErrorCode === "master_resume_required" ? (
                   <Link
                     href="/profile"
-                    className="whitespace-nowrap underline hover:no-underline text-red-400"
+                    className="whitespace-nowrap underline hover:no-underline text-red-700 dark:text-red-400"
                     onClick={() => setRunError(null)}
                   >
                     Upload master resume →
@@ -989,7 +989,7 @@ function SessionContent() {
                   runErrorCode === "subscription_required" ? (
                   <Link
                     href="/billing"
-                    className="whitespace-nowrap underline hover:no-underline text-red-400"
+                    className="whitespace-nowrap underline hover:no-underline text-red-700 dark:text-red-400"
                     onClick={() => setRunError(null)}
                   >
                     View billing →
@@ -1003,7 +1003,7 @@ function SessionContent() {
                       setRunErrorType(null);
                       runCurrentPhase({ force: true });
                     }}
-                    className="underline hover:no-underline text-red-400"
+                    className="underline hover:no-underline text-red-700 dark:text-red-400"
                   >
                     Retry
                   </button>
@@ -1027,13 +1027,13 @@ function SessionContent() {
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div>
                   <h1 className="text-xl font-bold mb-1">Analysis</h1>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">
                     JD keywords and resume audit — one run extracts keywords then scores your resume.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {phase1Complete && (
-                    <Link href="/session/new" className="text-xs text-amber-400 hover:text-amber-300 underline">
+                    <Link href="/session/new" className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline">
                       New session
                     </Link>
                   )}
@@ -1043,7 +1043,7 @@ function SessionContent() {
                         type="button"
                         onClick={() => runCurrentPhase({ auditOnly: true, force: true })}
                         disabled={phaseRunning}
-                        className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                        className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                       >
                         Re-run audit only
                       </button>
@@ -1052,7 +1052,7 @@ function SessionContent() {
                           type="button"
                           onClick={() => runCurrentPhase({ force: true })}
                           disabled={phaseRunning}
-                          className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                          className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                         >
                           Re-run full analysis
                         </button>
@@ -1086,7 +1086,7 @@ function SessionContent() {
               )}
               <div className="space-y-8">
                 <section>
-                  <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
+                  <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">
                     JD Keywords
                   </h2>
                   <KeywordDashboard
@@ -1097,7 +1097,7 @@ function SessionContent() {
                 </section>
                 {auditSectionVisible && (
                   <section>
-                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
+                    <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-3">
                       Resume Audit
                     </h2>
                     <AuditPanel
@@ -1138,7 +1138,7 @@ function SessionContent() {
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div>
                   <h1 className="text-xl font-bold mb-1">Tailored Rewrite</h1>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">
                     Your resume, rewritten with exact JD phrasing and quality rules applied.
                   </p>
                 </div>
@@ -1148,13 +1148,13 @@ function SessionContent() {
                       type="button"
                       onClick={() => runCurrentPhase({ force: true })}
                       disabled={phaseRunning}
-                      className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                      className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                     >
                       {phaseRunning ? "Regenerating…" : "Regenerate Resume"}
                     </button>
                     {showRecalcConfirm ? (
                       <>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/30 text-xs text-amber-300">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 text-xs text-amber-700 dark:text-amber-300">
                           <Zap className="w-3.5 h-3.5 shrink-0" />
                           Costs 1 credit
                         </div>
@@ -1169,7 +1169,7 @@ function SessionContent() {
                         <button
                           type="button"
                           onClick={() => setShowRecalcConfirm(false)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                         >
                           Cancel
                         </button>
@@ -1179,7 +1179,7 @@ function SessionContent() {
                         type="button"
                         onClick={() => setShowRecalcConfirm(true)}
                         disabled={atsRecalcRunning || phaseRunning}
-                        className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                        className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                       >
                         {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
                       </button>
@@ -1208,11 +1208,11 @@ function SessionContent() {
                     onClick={() => void handleTrackApplication()}
                     disabled={trackLoading || phaseRunning}
                     data-testid="track-application-from-session"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
                   >
                     {trackLoading ? "Creating…" : "Track this application"}
                   </button>
-                  {trackError && <p className="text-xs text-red-400">{trackError}</p>}
+                  {trackError && <p className="text-xs text-red-700 dark:text-red-400">{trackError}</p>}
                 </div>
               )}
               {tailored && (
@@ -1233,7 +1233,7 @@ function SessionContent() {
                 left={
                   <>
                     {suggestionError && (
-                      <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-200">
                         {suggestionError}
                       </div>
                     )}
@@ -1269,16 +1269,16 @@ function SessionContent() {
                   </>
                 }
                 right={
-                  <div className="flex flex-col h-[clamp(480px,75vh,820px)] border border-slate-700 rounded-xl overflow-hidden bg-slate-900/60">
+                  <div className="flex flex-col h-[clamp(480px,75vh,820px)] border border-slate-300 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-900/60">
                     {/* Tab bar */}
-                    <div className="flex border-b border-slate-700 shrink-0">
+                    <div className="flex border-b border-slate-300 dark:border-slate-700 shrink-0">
                       <button
                         type="button"
                         onClick={() => setSidebarTab("ats")}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
                           sidebarTab === "ats"
-                            ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "text-amber-700 dark:text-amber-400 border-b-2 border-amber-400 bg-slate-100/40 dark:bg-slate-800/40"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                         }`}
                       >
                         <Sparkles className="w-3.5 h-3.5" />
@@ -1292,8 +1292,8 @@ function SessionContent() {
                         onClick={() => setSidebarTab("chat")}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
                           sidebarTab === "chat"
-                            ? "text-amber-400 border-b-2 border-amber-400 bg-slate-800/40"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "text-amber-700 dark:text-amber-400 border-b-2 border-amber-400 bg-slate-100/40 dark:bg-slate-800/40"
+                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                         }`}
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
@@ -1321,7 +1321,7 @@ function SessionContent() {
                             onApplyMechanicalFix={applyMechanicalFix}
                           />
                         ) : (
-                          <p className="text-slate-500 text-xs py-4 text-center">
+                          <p className="text-slate-600 dark:text-slate-400 text-xs py-4 text-center">
                             Run QA &amp; Export to see your ATS score and guidance.
                           </p>
                         )}
@@ -1362,7 +1362,7 @@ function SessionContent() {
           {step === "export" && (
             <div>
               <h1 className="text-xl font-bold mb-1">QA & Export</h1>
-              <p className="text-slate-400 text-sm mb-4">Final quality check before you download.</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Final quality check before you download.</p>
               {!qa && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
@@ -1402,7 +1402,7 @@ function SessionContent() {
               {qa && (
                 <div className="mt-6 space-y-4">
                   <div>
-                    <h2 className="text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
+                    <h2 className="text-slate-700 dark:text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
                     <ExportButtons
                       sessionId={sessionId}
                       disabled={false}
@@ -1412,27 +1412,27 @@ function SessionContent() {
                     />
                   </div>
                   <div>
-                    <h2 className="text-slate-300 font-semibold mb-3 text-sm">Prepare for the interview</h2>
+                    <h2 className="text-slate-700 dark:text-slate-300 font-semibold mb-3 text-sm">Prepare for the interview</h2>
                     <OpenInFlintButton sessionId={sessionId} disabled={false} />
                   </div>
                 </div>
               )}
               {tailored && (
-                <div className="mt-6 pt-6 border-t border-slate-800">
+                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setCoverLetterOpen(true)}
-                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Generate cover letter
                   </button>
                 </div>
               )}
               {qa && (
-                <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap gap-3">
+                <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-wrap gap-3">
                   <Link
                     href="/dashboard"
-                    className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm font-semibold text-slate-200 hover:bg-slate-700"
+                    className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Return to dashboard
                   </Link>
@@ -1465,7 +1465,7 @@ export default function SessionPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-400">
           Loading session…
         </div>
       }

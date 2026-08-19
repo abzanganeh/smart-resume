@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { LegalPageShell } from "@/components/legal/LegalPageShell"
 
 export const metadata: Metadata = {
-  title: "Do Not Sell My Personal Information — Smart Resume",
+  title: "Do Not Sell My Personal Information — TalioCV",
   description:
-    "California Consumer Privacy Act (CCPA) statement.  Smart Resume does not sell user personal information.",
+    "California Consumer Privacy Act (CCPA) statement.  TalioCV does not sell user personal information.",
 }
 
 const LAST_UPDATED = "2026-05-31"
@@ -25,7 +25,7 @@ export default function CcpaPage() {
       <h2>Our position</h2>
       <p>
         <strong>
-          Smart Resume Agent does not sell or &quot;share&quot; (as those
+          TalioCV does not sell or &quot;share&quot; (as those
           terms are defined under the CCPA / CPRA) the personal information
           of any user — California resident or otherwise.
         </strong>{" "}
