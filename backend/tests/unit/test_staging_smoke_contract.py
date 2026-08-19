@@ -12,7 +12,8 @@ from app.services.billing.tier_limits import seed_row_for_plan
 
 pytestmark = pytest.mark.unit
 
-# Mirrors scripts/staging-smoke.sh expectations (B4, 2026-08-19).
+# Seed values checked by staging-smoke.sh (B4+). Register credits in smoke
+# compare against GET /api/billing/free-tier starting_credits, not a literal here.
 EXPECTED_FREE_STARTING_CREDITS = 6
 EXPECTED_FREE_TRACKER_ACTIVE_LIMIT = 10
 

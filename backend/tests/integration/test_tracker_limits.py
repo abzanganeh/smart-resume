@@ -206,6 +206,53 @@ async def test_duplicate_returns_409_with_existing_id(
     assert detail["existing_id"] == existing_id
     assert detail["lookback_days"] == 30
     assert detail["resolution"] == "confirm_add_duplicate"
+    assert "confirm_add_duplicate=true" not in detail["message"]
+
+
+async def test_blank_title_skips_duplicate_detection(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Resume-linked rows with whitespace-only titles must not dedupe."""
+    from app.models.dashboard import ResumeRecord, ResumeRecordStatus
+
+    token, user_id = await _register(app_client)
+    limits = _limits(tracker_active_limit=None)
+
+    async def _record_with_blank_title() -> ResumeRecord:
+        record = ResumeRecord(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            session_id=f"sess-{uuid.uuid4().hex[:8]}",
+            jd_title="   ",
+            jd_company="Acme Corp",
+            jd_text_hash=uuid.uuid4().hex,
+            tags=[],
+            current_ats_score=80,
+            starting_ats_score=75,
+            status=ResumeRecordStatus.draft,
+        )
+        db_session.add(record)
+        await db_session.flush()
+        return record
+
+    dup_mock = AsyncMock(return_value=None)
+    with _patch_limits(limits), patch(
+        "app.routers.tracker.find_duplicate_application", dup_mock
+    ):
+        first = await app_client.post(
+            "/api/applications",
+            json={"resume_record_id": str((await _record_with_blank_title()).id)},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert first.status_code == 201, first.text
+        second = await app_client.post(
+            "/api/applications",
+            json={"resume_record_id": str((await _record_with_blank_title()).id)},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert second.status_code == 201, second.text
+    dup_mock.assert_not_called()
 
 
 async def test_confirm_add_duplicate_overrides_check(
