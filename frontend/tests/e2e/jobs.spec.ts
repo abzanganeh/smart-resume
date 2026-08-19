@@ -107,7 +107,28 @@ async function mockSubscription(page: Page) {
   )
 }
 
+async function mockJobPreferences(page: Page) {
+  await page.route(`${API}/api/jobs/preferences`, (route: Route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          blocked_companies: [],
+          default_filters: {},
+          preferred_titles: ["Python engineer", "Backend engineer"],
+          preferred_titles_confirmed: true,
+          preferred_titles_stale: false,
+          min_preferred_titles: 5,
+        }),
+      })
+    }
+    return route.continue()
+  })
+}
+
 async function mockJobsApi(page: Page) {
+  await mockJobPreferences(page)
   await page.route(`${API}/api/profile/resume`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -179,6 +200,7 @@ async function mockJobsApi(page: Page) {
 }
 
 async function mockStaleSearch(page: Page) {
+  await mockJobPreferences(page)
   await page.route(`${API}/api/jobs/saved`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -401,4 +423,43 @@ test("track application creates draft and navigates to tracker detail", async ({
 
   await page.getByTestId(`track-application-${MOCK_JOB_ID}`).click()
   await page.waitForURL(new RegExp(`/tracker/${NEW_APP_ID}`), { timeout: 15_000 })
+})
+
+test("match my resume mode shows scored results", async ({ page }) => {
+  const MATCH_JOB = {
+    ...MOCK_JOB,
+    score: 0.91,
+  }
+
+  await mockAuth(page)
+  await mockSubscription(page)
+  await mockJobsApi(page)
+
+  await page.route(`${API}/api/jobs/match`, async (route: Route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue()
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobs: [MATCH_JOB],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        results_may_be_stale: false,
+        message: null,
+      }),
+    })
+  })
+
+  await login(page)
+  await page.goto(`${BASE}/jobs`)
+
+  await page.getByTestId("jobs-mode-match").click()
+  await page.getByTestId("jobs-match-submit").click()
+
+  await expect(page.getByText("Senior Python Engineer")).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId(`job-match-score-${MOCK_JOB_ID}`)).toHaveText("91% match")
 })
