@@ -60,6 +60,7 @@ export default function TrackerPage() {
   } | null>(null)
   const [duplicateWarning, setDuplicateWarning] =
     useState<DuplicateWarning | null>(null)
+  const [confirmingDuplicate, setConfirmingDuplicate] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [pendingMoves, setPendingMoves] = useState<
@@ -165,7 +166,10 @@ export default function TrackerPage() {
   }
 
   async function confirmDuplicate() {
-    if (!duplicateWarning) return
+    // In-flight guard: rapid double-click on "Add anyway" must not
+    // submit multiple duplicate creates while the first request is
+    // still pending.
+    if (!duplicateWarning || confirmingDuplicate) return
     const origin = duplicateWarning.form
     const body =
       origin.mode === "resume" && origin.resume_record_id
@@ -180,7 +184,12 @@ export default function TrackerPage() {
             status: "draft" as ApplicationStatus,
             confirm_add_duplicate: true,
           }
-    await submitCreate({ body, origin })
+    setConfirmingDuplicate(true)
+    try {
+      await submitCreate({ body, origin })
+    } finally {
+      setConfirmingDuplicate(false)
+    }
   }
 
   async function moveApplication(
@@ -392,16 +401,19 @@ export default function TrackerPage() {
               <button
                 type="button"
                 onClick={() => setDuplicateWarning(null)}
-                className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                disabled={confirmingDuplicate}
+                className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => void confirmDuplicate()}
-                className="px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold"
+                disabled={confirmingDuplicate}
+                aria-busy={confirmingDuplicate}
+                className="px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Add anyway
+                {confirmingDuplicate ? "Adding…" : "Add anyway"}
               </button>
             </div>
           </div>

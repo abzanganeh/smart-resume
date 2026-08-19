@@ -39,6 +39,7 @@ from app.services.tracker import (
     find_duplicate_application,
     get_owned_application,
     list_applications,
+    lock_user_for_tracker_write,
     next_round_number,
     resolve_title_company,
     validate_attachment_upload,
@@ -306,9 +307,14 @@ async def create_application(
     # Enforce the per-plan cap on non-archived rows.  We check this before
     # duplicate detection so users learn about the hard limit before being
     # asked to confirm a dedupe warning they would then hit a limit on.
+    #
+    # The count → compare → insert sequence is a TOCTOU race under
+    # concurrent requests, so we serialize it per-user via a Postgres
+    # transactional advisory lock (released at COMMIT/ROLLBACK).
     plan_code = await resolve_plan_code_for_user(db, user)
     limits = await get_active_tier_limits(db, plan_code)
     if limits.tracker_active_limit is not None:
+        await lock_user_for_tracker_write(db, user.id)
         active_count = await count_active_applications(db, user.id)
         if active_count >= limits.tracker_active_limit:
             raise HTTPException(
@@ -558,6 +564,9 @@ async def unarchive_application(
         plan_code = await resolve_plan_code_for_user(db, user)
         limits = await get_active_tier_limits(db, plan_code)
         if limits.tracker_active_limit is not None:
+            # Same TOCTOU concern as create — serialize the count/compare
+            # /write sequence per user (see ``lock_user_for_tracker_write``).
+            await lock_user_for_tracker_write(db, user.id)
             active_count = await count_active_applications(db, user.id)
             if active_count >= limits.tracker_active_limit:
                 raise HTTPException(

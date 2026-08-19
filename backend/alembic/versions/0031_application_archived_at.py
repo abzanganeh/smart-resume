@@ -7,6 +7,15 @@ NULL`` means the row is active; a non-null timestamp means archived.
 We also add a partial index on active rows (``archived_at IS NULL``) so
 the active-count query used to enforce the per-plan cap stays cheap for
 users with lots of history.
+
+.. warning::
+    ``downgrade()`` is **data-destructive**: dropping the ``archived_at``
+    column permanently loses the archive timestamps.  Rolling back after
+    any archiving activity in production means the tracker cannot tell
+    archived rows from active ones and will re-count them against the
+    active limit.  If a rollback in a live environment is ever needed,
+    dump ``(id, archived_at)`` for non-null rows first — see
+    ``docs/RUNBOOK-migrations.md`` for the procedure.
 """
 
 from __future__ import annotations

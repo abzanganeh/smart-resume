@@ -425,3 +425,101 @@ async def test_funnel_scoped_to_user(
         )
     assert r1.json()["total"] == 2
     assert r2.json()["total"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Concurrency: the advisory lock in ``lock_user_for_tracker_write`` must
+# keep two parallel transactions from both winning the count/compare/write
+# race on ``tracker_active_limit``.
+#
+# The shared-session ``app_client`` fixture cannot service two HTTP
+# requests concurrently (a single SQLAlchemy AsyncSession rejects
+# concurrent operations), so this test drives the service layer directly
+# with two independent sessions bound to the real Postgres engine.
+# ---------------------------------------------------------------------------
+
+
+async def test_concurrent_creates_cannot_exceed_active_limit(
+    db_session: AsyncSession,
+) -> None:
+    """Two ``count → compare → insert`` transactions racing on the same
+    user with limit=1 must serialize: exactly one succeeds and the other
+    sees the row that just won.  Regression guard for the TOCTOU race
+    ``lock_user_for_tracker_write`` closes."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.user import User
+    from app.services.tracker import (
+        count_active_applications,
+        lock_user_for_tracker_write,
+    )
+
+    # Only Postgres has ``pg_advisory_xact_lock`` — skip on other dialects.
+    bind = db_session.bind
+    if bind is None or bind.dialect.name != "postgresql":
+        pytest.skip("Advisory-lock concurrency only meaningful on Postgres")
+
+    # Seed a user directly (no HTTP) so the transactions below can commit
+    # independently.
+    engine = bind
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    user_id = uuid.uuid4()
+    async with factory() as setup:
+        setup.add(
+            User(
+                id=user_id,
+                email=f"race-{user_id.hex[:8]}@example.com",
+                password_hash="x",
+                display_name="Race",
+                tier="free",
+                auth_provider="email",
+                email_verified_at=datetime.now(timezone.utc),
+            )
+        )
+        await setup.commit()
+
+    limit = 1
+    barrier = asyncio.Event()
+    outcomes: list[str] = []
+
+    async def attempt(label: str) -> None:
+        async with factory() as session:
+            async with session.begin():
+                await lock_user_for_tracker_write(session, user_id)
+                active = await count_active_applications(session, user_id)
+                # Both coroutines pause after passing the guard so the
+                # race window is maximally open without the lock; with
+                # the lock, only one is inside the critical section at a
+                # time and the other will see ``active == 1`` on entry.
+                await barrier.wait()
+                if active >= limit:
+                    outcomes.append(f"{label}:blocked")
+                    return
+                session.add(
+                    Application(
+                        id=uuid.uuid4(),
+                        user_id=user_id,
+                        jd_title=f"Race {label}",
+                        jd_company=f"Co {label}",
+                        status="draft",
+                        status_history=[],
+                    )
+                )
+                outcomes.append(f"{label}:created")
+
+    task_a = asyncio.create_task(attempt("A"))
+    task_b = asyncio.create_task(attempt("B"))
+    # Give both tasks time to reach the barrier so they contend for the
+    # lock in parallel.
+    await asyncio.sleep(0.1)
+    barrier.set()
+    await asyncio.gather(task_a, task_b)
+
+    created = [o for o in outcomes if o.endswith(":created")]
+    blocked = [o for o in outcomes if o.endswith(":blocked")]
+    assert len(created) == 1, f"expected exactly one to win, got {outcomes}"
+    assert len(blocked) == 1, f"expected exactly one to be blocked, got {outcomes}"

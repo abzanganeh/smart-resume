@@ -271,6 +271,38 @@ async def count_active_applications(
     return int(count)
 
 
+# Namespace for the tracker advisory lock so it does not collide with any
+# other pg_advisory_xact_lock usage in the codebase.  The value is
+# arbitrary but must be stable across processes.
+_TRACKER_LOCK_NAMESPACE = 0x54524B31  # "TRK1"
+
+
+async def lock_user_for_tracker_write(
+    db: AsyncSession, user_id: uuid.UUID
+) -> None:
+    """Serialize concurrent tracker mutations for ``user_id`` within the
+    current transaction.
+
+    ``tracker_active_limit`` enforcement does ``read count → compare →
+    write``, which is a classic TOCTOU race: two parallel requests can
+    both see ``active_count == limit - 1`` and each commit a new row,
+    ending at ``limit + 1``.  We take a per-user Postgres transactional
+    advisory lock so the count/compare/write sequence is serialized per
+    user without blocking other users.  The lock is released
+    automatically at COMMIT/ROLLBACK.
+
+    On non-Postgres dialects (e.g. SQLite in some unit tests) this call
+    is a no-op — those environments do not run the concurrency scenarios
+    this guard exists for.
+    """
+    dialect_name = db.bind.dialect.name if db.bind is not None else ""
+    if dialect_name != "postgresql":
+        return
+    await db.execute(
+        select(func.pg_advisory_xact_lock(_TRACKER_LOCK_NAMESPACE, func.hashtext(str(user_id))))
+    )
+
+
 def _sql_normalize(column: Any) -> Any:
     """SQL expression equivalent of :func:`normalize_for_dedupe`."""
     return func.trim(
@@ -363,6 +395,7 @@ __all__ = [
     "build_timeline",
     "count_active_applications",
     "find_duplicate_application",
+    "lock_user_for_tracker_write",
     "get_owned_application",
     "list_applications",
     "next_round_number",
