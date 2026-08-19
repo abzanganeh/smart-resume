@@ -44,7 +44,8 @@ import { isSubscriptionActive } from "@/lib/billing"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { getProfileResume, type ProfileResume } from "@/lib/profile"
 import { getJobPreferences } from "@/lib/jobs"
-import { DashboardCockpitPath } from "@/components/dashboard/DashboardCockpitPath"
+import { listApplications } from "@/lib/tracker"
+import { DashboardStepStack } from "@/components/dashboard/DashboardStepStack"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -182,6 +183,12 @@ export function DashboardView({ token }: { token: string }) {
   const [preferredTitles, setPreferredTitles] = useState<string[]>([])
   const [jobRolesReady, setJobRolesReady] = useState(false)
   const [jobRolesStale, setJobRolesStale] = useState(false)
+  const [applicationCounts, setApplicationCounts] = useState<{
+    active: number
+    interviewing: number
+    offer: number
+    total: number
+  } | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
   const masterChunkCount =
@@ -212,6 +219,27 @@ export function DashboardView({ token }: { token: string }) {
       setPreferredTitles([])
       setJobRolesReady(false)
       setJobRolesStale(false)
+    }
+    try {
+      // TODO(B3): swap this full list-fetch for the aggregate funnel endpoint
+      // once /api/applications/funnel lands.  Today's dashboard only needs
+      // counts, so a payload of every row is over-fetch for heavy users.
+      const apps = await listApplications(token)
+      const active = apps.filter(
+        (a) => a.status === "draft" || a.status === "applied",
+      ).length
+      const interviewing = apps.filter((a) => a.status === "interviewing").length
+      const offer = apps.filter(
+        (a) => a.status === "offer" || a.status === "accepted",
+      ).length
+      setApplicationCounts({
+        active,
+        interviewing,
+        offer,
+        total: apps.length,
+      })
+    } catch {
+      setApplicationCounts(null)
     }
   }, [token])
 
@@ -453,32 +481,39 @@ export function DashboardView({ token }: { token: string }) {
         </button>
       </header>
 
-      <DashboardCockpitPath
+      <DashboardStepStack
         hasMasterResume={hasMasterResume}
         masterChunkCount={masterChunkCount}
         masterUpdatedAt={masterProfile?.last_embedded_at ?? null}
         jobRolesReady={jobRolesReady}
         jobRolesStale={jobRolesStale}
         preferredTitles={preferredTitles}
+        tailoredResumeCount={summary?.counts.resumes ?? 0}
+        applicationCounts={applicationCounts}
         formatDate={formatDate}
       />
 
-      <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {[
-          { href: "/fit", label: "Job fit analysis", icon: TrendingUp },
-          { href: "/cover-letter/new", label: "Cover letter", icon: Sparkles },
-          { href: "/career-watch", label: "Career Watch", icon: Bell },
-        ].map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-center gap-2 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:border-amber-400/40 transition-colors"
-          >
-            <Icon className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
-            {label}
-          </Link>
-        ))}
-      </section>
+      <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
+          Your workspace
+        </h2>
+        <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { href: "/fit", label: "Job fit analysis", icon: TrendingUp },
+            { href: "/cover-letter/new", label: "Cover letter", icon: Sparkles },
+            { href: "/career-watch", label: "Career Watch", icon: Bell },
+          ].map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-2 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:border-amber-400/40 transition-colors"
+            >
+              <Icon className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
+              {label}
+            </Link>
+          ))}
+        </section>
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <section className="lg:col-span-1 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
@@ -644,7 +679,7 @@ export function DashboardView({ token }: { token: string }) {
         </section>
       )}
 
-      <section className="space-y-4">
+      <section className="space-y-4" id="tailored-resumes">
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             Tailored resumes
