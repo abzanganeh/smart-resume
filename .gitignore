@@ -1,5 +1,6 @@
 # Internal design docs (markdown only — not pushed to GitHub)
 docs/**/*.md
+docs/**/*.txt
 tech_docs/
 
 # Personal resume files — local only, never commit

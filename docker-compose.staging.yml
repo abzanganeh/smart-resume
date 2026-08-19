@@ -21,6 +21,19 @@ services:
         required: true
 
   frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:${STAGING_BACKEND_PORT:-8001}
+        GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+        GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+        GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+        LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+        LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
+        AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-}
+        AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET:-}
     ports: !override
       - "${STAGING_FRONTEND_PORT:-3001}:3000"
     env_file:

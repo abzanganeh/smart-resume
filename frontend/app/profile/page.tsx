@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense, useTransition } from "react"
 import { useSession } from "next-auth/react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowRight, Loader2, RefreshCw, UserCircle, XCircle } from "lucide-react"
+import { ArrowLeft, ArrowRight, Loader2, RefreshCw, UserCircle, XCircle } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
 import { patchOnboarding } from "@/lib/auth/api"
 import { needsOnboarding, postOnboardingDestination } from "@/lib/auth/onboarding"
@@ -198,6 +199,13 @@ function ProfilePageContent() {
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-10">
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-6 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Dashboard
+      </Link>
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="flex-1 min-w-0 space-y-8">
           <header className="space-y-1">

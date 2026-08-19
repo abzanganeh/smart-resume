@@ -14,6 +14,7 @@ import {
   FileText,
   Loader2,
   Mic,
+  Search,
   Sparkles,
   Upload,
   Zap,
@@ -28,6 +29,8 @@ import {
   resolveOnboardingStepIndex,
 } from "@/lib/auth/onboarding"
 import { getProfileChunks, liveChunkCount } from "@/lib/profile"
+import { getJobPreferences } from "@/lib/jobs"
+import { JobTitlePicker } from "@/components/jobs/JobTitlePicker"
 import {
   FREE_TIER_CREDIT_ACTIONS,
   FREE_TIER_STARTING_CREDITS,
@@ -79,8 +82,9 @@ function OnboardingAiStep() {
           ))}
         </ul>
         <p className="text-xs text-slate-600 dark:text-slate-400 pt-1">
-          {VOICE_AVAILABILITY_COPY} You can also just upload or paste a resume. Job search and
-          fit analysis need a paid plan. Subscribers draw on plan limits instead of credits.
+          {VOICE_AVAILABILITY_COPY} You can also just upload or paste a resume. After your master
+          resume, TalioCV suggests job titles to search our company job corpus. Fit analysis and
+          expanded search need a paid plan.
         </p>
       </div>
     </div>
@@ -108,6 +112,13 @@ const STEPS = [
     icon: Mic,
     bodyKey: "master" as const,
     cta: "Generate or upload resume",
+  },
+  {
+    title: "Which roles should we search for?",
+    subtitle: "Pick job titles that match your experience — we'll find openings from our company corpus.",
+    icon: Search,
+    bodyKey: "jobTitles" as const,
+    cta: "Continue",
   },
   {
     title: "You're all set!",
@@ -156,9 +167,10 @@ function OnboardingPageContent() {
 
     void (async () => {
       try {
-        const [user, chunks] = await Promise.all([
+        const [user, chunks, prefs] = await Promise.all([
           fetchMe(token),
           getProfileChunks(token).catch(() => []),
+          getJobPreferences(token).catch(() => null),
         ])
         if (cancelled) return
 
@@ -175,9 +187,11 @@ function OnboardingPageContent() {
 
         const urlStep = parseOnboardingStepParam(urlStepParam)
         const hasMaster = liveChunkCount(chunks) > 0
+        const hasJobTitles = Boolean(prefs?.preferred_titles_confirmed)
         const stepIndex = resolveOnboardingStepIndex(user, {
           urlStepIndex: urlStep,
           hasMasterResume: hasMaster,
+          hasJobTitles,
         })
 
         if (user.onboarding_ai_choice === "platform") {
@@ -232,6 +246,7 @@ function OnboardingPageContent() {
   const Icon = current.icon
   const isLast = step === STEPS.length - 1
   const isMasterStep = step === 2
+  const isJobTitlesStep = step === 3
 
   function handlePrimary() {
     setError(null)
@@ -350,6 +365,16 @@ function OnboardingPageContent() {
             </p>
           </div>
         )
+      case "jobTitles":
+        return token ? (
+          <JobTitlePicker
+            accessToken={token}
+            submitLabel="Continue"
+            onComplete={async () => {
+              setStep(4)
+            }}
+          />
+        ) : null
       case "done":
         return (
           <div className="space-y-4 max-w-md mx-auto">
@@ -357,6 +382,13 @@ function OnboardingPageContent() {
               Track every resume you build, monitor ATS scores over time, and manage your
               subscription from the dashboard.
             </p>
+            <Link
+              href="/jobs"
+              className="flex items-center justify-center gap-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100/40 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-200 transition-colors"
+            >
+              <Search className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+              Search jobs from your titles
+            </Link>
             <Link
               href="/session/new"
               className="flex items-center justify-center gap-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100/40 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-200 transition-colors"
@@ -404,6 +436,7 @@ function OnboardingPageContent() {
           </p>
         )}
 
+        {!isJobTitlesStep && (
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           {step > 0 && (
             <button
@@ -444,6 +477,7 @@ function OnboardingPageContent() {
             </button>
           )}
         </div>
+        )}
       </div>
     </main>
   )

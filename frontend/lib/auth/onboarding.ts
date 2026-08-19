@@ -5,9 +5,9 @@ import {
 } from "@/lib/extensionHandoff"
 
 /** Paths reachable while onboarding is incomplete (AI choice not finished). */
-export const ONBOARDING_EXEMPT_PREFIXES = ["/onboarding", "/profile", "/session/new"]
+export const ONBOARDING_EXEMPT_PREFIXES = ["/onboarding", "/profile", "/session/new", "/jobs/setup"]
 
-export const ONBOARDING_STEP_COUNT = 4
+export const ONBOARDING_STEP_COUNT = 5
 
 export function isOnboardingExempt(pathname: string): boolean {
   return ONBOARDING_EXEMPT_PREFIXES.some(
@@ -62,21 +62,28 @@ export function parseOnboardingStepParam(raw: string | null): number | null {
  */
 export function resolveOnboardingStepIndex(
   user: BackendUser | null | undefined,
-  options?: { urlStepIndex?: number | null; hasMasterResume?: boolean },
+  options?: {
+    urlStepIndex?: number | null
+    hasMasterResume?: boolean
+    hasJobTitles?: boolean
+  },
 ): number {
   if (!user || user.onboarding_completed_at) return -1
 
   const url = options?.urlStepIndex
   const hasMaster = Boolean(options?.hasMasterResume)
+  const hasJobTitles = Boolean(options?.hasJobTitles)
   const hasAiChoice = user.onboarding_ai_choice === "platform"
 
   if (url != null && url >= 0 && url < ONBOARDING_STEP_COUNT) {
+    if (url >= 4 && hasAiChoice && hasMaster && hasJobTitles) return 4
     if (url >= 3 && hasAiChoice && hasMaster) return 3
     if (url >= 2 && hasAiChoice) return 2
     if (url === 1) return 1
     if (url === 0) return 0
   }
 
+  if (hasMaster && hasAiChoice && hasJobTitles) return 4
   if (hasMaster && hasAiChoice) return 3
   if (hasAiChoice) return 2
   return 0

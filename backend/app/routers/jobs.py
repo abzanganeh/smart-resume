@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import job_fit as job_fit_agent
+from app.agent import job_title_suggestions
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
@@ -45,10 +46,26 @@ from app.services.jobs.schemas import (
     JobResult,
     JobSearchRequest,
     JobSearchResponse,
+    JobTitleSuggestionsOut,
+    PreferredTitlesOut,
+    PreferredTitlesUpdate,
     SavedSearchCreate,
     SavedSearchOut,
     SavedSearchUpdate,
 )
+from app.services.jobs.preferred_titles import (
+    MIN_PREFERRED_JOB_TITLES,
+    PREFERRED_TITLES_CONFIRMED_AT_KEY,
+    PREFERRED_TITLES_KEY,
+    PREFERRED_TITLES_SOURCE_HASH_KEY,
+    compute_master_resume_hash,
+    get_preferred_titles,
+    has_confirmed_preferred_titles,
+    is_source_stale,
+    search_filters_from_user,
+    set_preferred_titles,
+)
+from app.services.master_resume import crud as master_crud
 from app.services.retrieval.exceptions import MasterResumeRequiredError
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -58,9 +75,7 @@ MAX_SAVED_SEARCHES = 10
 MAX_ALERT_SEARCHES = 5
 
 
-async def _require_active_subscription(
-    db: AsyncSession, *, user_id: uuid.UUID
-) -> None:
+async def _has_active_subscription(db: AsyncSession, *, user_id: uuid.UUID) -> bool:
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)
@@ -84,8 +99,67 @@ async def _require_active_subscription(
             .limit(1)
         )
     ).scalar_one_or_none()
-    if sub is None:
+    return sub is not None
+
+
+async def _require_active_subscription(
+    db: AsyncSession, *, user_id: uuid.UUID
+) -> None:
+    if not await _has_active_subscription(db, user_id=user_id):
         raise HTTPException(status_code=402, detail={"code": "subscription_required"})
+
+
+async def _require_job_search_access(
+    db: AsyncSession,
+    *,
+    user: User,
+    expand: bool,
+) -> None:
+    """Paid users get full search; free users with confirmed titles get corpus search.
+
+    All 402 responses include ``resolution`` so legacy clients that only checked
+    for ``code=="subscription_required"`` still get a routable hint
+    (``upgrade`` vs ``choose_job_titles``) without needing to learn every new
+    ``code`` value.
+    """
+    if await _has_active_subscription(db, user_id=user.id):
+        return
+    if expand:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "subscription_required",
+                "resolution": "upgrade",
+                "message": "Expanded job search requires a paid plan.",
+            },
+        )
+    if has_confirmed_preferred_titles(user):
+        return
+    if get_preferred_titles(user):
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "preferred_titles_incomplete",
+                "resolution": "choose_job_titles",
+                "min_required": MIN_PREFERRED_JOB_TITLES,
+                "message": (
+                    f"Pick at least {MIN_PREFERRED_JOB_TITLES} job titles to "
+                    "unlock free corpus search."
+                ),
+            },
+        )
+    raise HTTPException(
+        status_code=402,
+        detail={
+            "code": "job_titles_required",
+            "resolution": "choose_job_titles",
+            "min_required": MIN_PREFERRED_JOB_TITLES,
+            "message": (
+                f"Pick at least {MIN_PREFERRED_JOB_TITLES} job titles to "
+                "unlock free corpus search."
+            ),
+        },
+    )
 
 
 def _rate_limit_user_key(request: Request) -> str:
@@ -106,9 +180,29 @@ def _rate_limit_user_key(request: Request) -> str:
 def _merge_filters(
     user: User, request_filters: dict
 ) -> dict:
-    defaults = dict(user.job_default_filters or {})
+    defaults = search_filters_from_user(user)
     defaults.update(request_filters or {})
     return defaults
+
+
+async def _preferences_response(
+    db: AsyncSession, user: User
+) -> JobPreferencesOut:
+    titles = get_preferred_titles(user)
+    stale = False
+    if len(titles) >= MIN_PREFERRED_JOB_TITLES:
+        resume = await master_crud.get_raw_resume(db, user_id=user.id)
+        if resume is not None and (resume.raw_text or "").strip():
+            current_hash = compute_master_resume_hash(resume.raw_text)
+            stale = is_source_stale(user, current_hash=current_hash)
+    return JobPreferencesOut(
+        blocked_companies=list(user.blocked_companies or []),
+        default_filters=search_filters_from_user(user),
+        preferred_titles=titles,
+        preferred_titles_confirmed=len(titles) >= MIN_PREFERRED_JOB_TITLES,
+        preferred_titles_stale=stale,
+        min_preferred_titles=MIN_PREFERRED_JOB_TITLES,
+    )
 
 
 def _blocked(user: User) -> list[str]:
@@ -155,7 +249,7 @@ async def search_jobs(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _require_active_subscription(db, user_id=user.id)
+    await _require_job_search_access(db, user=user, expand=body.expand)
     filters = _merge_filters(user, body.filters)
     jobs, total, stale, message, charge, source = await run_keyword_search(
         db,
@@ -180,6 +274,72 @@ async def search_jobs(
         results_may_be_stale=stale,
         message=message,
         source=source,
+    )
+
+
+@router.get("/title-suggestions", response_model=JobTitleSuggestionsOut)
+@limiter.limit("30/hour", key_func=_rate_limit_user_key)
+async def get_title_suggestions(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    resume = await master_crud.get_raw_resume(db, user_id=user.id)
+    if resume is None or not (resume.raw_text or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Build your master resume on /profile before choosing job titles.",
+        )
+
+    llm_client = None
+    try:
+        llm_client = get_llm_client(None, None)
+    except Exception:  # noqa: BLE001
+        llm_client = None
+
+    suggestions, held, source = await job_title_suggestions.suggest_job_titles(
+        resume_text=resume.raw_text,
+        parsed_sections=resume.parsed_sections,
+        llm_client=llm_client,
+    )
+    return JobTitleSuggestionsOut(
+        suggestions=suggestions,
+        held_titles=held,
+        source=source,
+        source_hash=compute_master_resume_hash(resume.raw_text),
+    )
+
+
+@router.put("/preferred-titles", response_model=PreferredTitlesOut)
+@limiter.limit("30/hour", key_func=_rate_limit_user_key)
+async def update_preferred_titles(
+    request: Request,
+    body: PreferredTitlesUpdate,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if len(body.titles) < MIN_PREFERRED_JOB_TITLES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "preferred_titles_incomplete",
+                "min_required": MIN_PREFERRED_JOB_TITLES,
+                "message": f"Select at least {MIN_PREFERRED_JOB_TITLES} job titles.",
+            },
+        )
+    resume = await master_crud.get_raw_resume(db, user_id=user.id)
+    source_hash = (
+        compute_master_resume_hash(resume.raw_text)
+        if resume is not None and (resume.raw_text or "").strip()
+        else None
+    )
+    saved = set_preferred_titles(user, body.titles, source_hash=source_hash)
+    await db.commit()
+    return PreferredTitlesOut(
+        titles=saved,
+        confirmed=len(saved) >= MIN_PREFERRED_JOB_TITLES,
+        stale=False,
+        min_required=MIN_PREFERRED_JOB_TITLES,
     )
 
 
@@ -426,11 +586,9 @@ async def delete_saved_search(
 async def get_preferences(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return JobPreferencesOut(
-        blocked_companies=list(user.blocked_companies or []),
-        default_filters=dict(user.job_default_filters or {}),
-    )
+    return await _preferences_response(db, user)
 
 
 @router.put("/preferences", response_model=JobPreferencesOut)
@@ -444,12 +602,29 @@ async def update_preferences(
     if body.blocked_companies is not None:
         user.blocked_companies = [c.strip() for c in body.blocked_companies if c.strip()]
     if body.default_filters is not None:
-        user.job_default_filters = body.default_filters
+        reserved = {
+            PREFERRED_TITLES_KEY,
+            PREFERRED_TITLES_CONFIRMED_AT_KEY,
+            PREFERRED_TITLES_SOURCE_HASH_KEY,
+        }
+        filters = {
+            k: v for k, v in (user.job_default_filters or {}).items() if k in reserved
+        }
+        for k, v in body.default_filters.items():
+            if k in reserved:
+                continue
+            filters[k] = v
+        user.job_default_filters = filters
+    if body.preferred_titles is not None:
+        resume = await master_crud.get_raw_resume(db, user_id=user.id)
+        source_hash = (
+            compute_master_resume_hash(resume.raw_text)
+            if resume is not None and (resume.raw_text or "").strip()
+            else None
+        )
+        set_preferred_titles(user, body.preferred_titles, source_hash=source_hash)
     await db.commit()
-    return JobPreferencesOut(
-        blocked_companies=list(user.blocked_companies or []),
-        default_filters=dict(user.job_default_filters or {}),
-    )
+    return await _preferences_response(db, user)
 
 
 @router.get("/{job_id}", response_model=JobResult)
