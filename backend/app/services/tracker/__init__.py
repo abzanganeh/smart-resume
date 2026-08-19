@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -22,6 +23,12 @@ from app.models.tracker import (
     InterviewRound,
     OfferDetail,
 )
+
+# Rolling window for duplicate detection.  We only flag apps as duplicates
+# if the same (title, company) pair appears within this many days of an
+# existing row — older matches are treated as intentional new applications
+# to the same role (e.g. re-applying six months later).
+DUPLICATE_LOOKBACK_DAYS = 30
 
 
 def _utcnow() -> datetime:
@@ -213,7 +220,13 @@ async def list_applications(
     company: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    archived: bool | None = False,
 ) -> list[Application]:
+    """List a user's applications.
+
+    ``archived=False`` (default) returns only active rows; ``archived=True``
+    returns only archived rows; ``archived=None`` returns both.
+    """
     query = select(Application).where(Application.user_id == user_id)
     if status is not None:
         query = query.where(Application.status == status)
@@ -224,5 +237,136 @@ async def list_applications(
         query = query.where(Application.created_at >= date_from)
     if date_to is not None:
         query = query.where(Application.created_at <= date_to)
+    if archived is False:
+        query = query.where(Application.archived_at.is_(None))
+    elif archived is True:
+        query = query.where(Application.archived_at.is_not(None))
     query = query.order_by(desc(Application.updated_at))
     return list((await db.execute(query)).scalars().all())
+
+
+_NORMALIZE_RE = re.compile(r"[^a-z0-9]+")
+
+
+def normalize_for_dedupe(value: str | None) -> str:
+    """Lowercase + collapse non-alphanumerics so 'Google, Inc.' collides with
+    'google inc' when detecting duplicate applications."""
+    if not value:
+        return ""
+    return _NORMALIZE_RE.sub(" ", value.lower()).strip()
+
+
+async def count_active_applications(
+    db: AsyncSession, user_id: uuid.UUID
+) -> int:
+    """Count non-archived applications for the user (any status)."""
+    count = (
+        await db.execute(
+            select(func.count(Application.id)).where(
+                Application.user_id == user_id,
+                Application.archived_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    return int(count)
+
+
+def _sql_normalize(column: Any) -> Any:
+    """SQL expression equivalent of :func:`normalize_for_dedupe`."""
+    return func.trim(
+        func.regexp_replace(func.lower(column), r"[^a-z0-9]+", " ", "g")
+    )
+
+
+async def find_duplicate_application(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    jd_title: str,
+    jd_company: str,
+    now: datetime | None = None,
+) -> Application | None:
+    """Return an existing recent application with matching normalized
+    (title, company), or ``None`` if there is no duplicate.
+
+    Archived rows do not trigger duplicate detection — if the user
+    intentionally archived the original, they can re-open a new one
+    without a warning.  The match window is
+    :data:`DUPLICATE_LOOKBACK_DAYS` days from ``now``.
+    """
+    normalized_title = normalize_for_dedupe(jd_title)
+    normalized_company = normalize_for_dedupe(jd_company)
+    if not normalized_title or not normalized_company:
+        return None
+    cutoff = (now or _utcnow()) - timedelta(days=DUPLICATE_LOOKBACK_DAYS)
+    stmt = (
+        select(Application)
+        .where(
+            Application.user_id == user_id,
+            Application.archived_at.is_(None),
+            Application.created_at >= cutoff,
+            _sql_normalize(Application.jd_title) == normalized_title,
+            _sql_normalize(Application.jd_company) == normalized_company,
+        )
+        .order_by(desc(Application.created_at))
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def application_funnel_counts(
+    db: AsyncSession, user_id: uuid.UUID
+) -> dict[str, int]:
+    """Aggregate application counts grouped by status, plus derived totals.
+
+    Returned dict shape::
+
+        {
+            "draft": N, "applied": N, "interviewing": N, "offer": N,
+            "accepted": N, "rejected": N, "withdrawn": N,
+            "active_total": N,   # non-archived rows, any status
+            "archived_total": N, # archived rows
+            "total": N,          # active + archived
+        }
+    """
+    per_status_stmt = (
+        select(
+            Application.status,
+            Application.archived_at.is_not(None).label("is_archived"),
+            func.count(Application.id).label("cnt"),
+        )
+        .where(Application.user_id == user_id)
+        .group_by(Application.status, "is_archived")
+    )
+    rows = (await db.execute(per_status_stmt)).all()
+    counts: dict[str, int] = {s.value: 0 for s in ApplicationStatus}
+    active_total = 0
+    archived_total = 0
+    for status, is_archived, cnt in rows:
+        cnt_int = int(cnt)
+        if is_archived:
+            archived_total += cnt_int
+        else:
+            counts[status.value] += cnt_int
+            active_total += cnt_int
+    counts["active_total"] = active_total
+    counts["archived_total"] = archived_total
+    counts["total"] = active_total + archived_total
+    return counts
+
+
+__all__ = [
+    "DUPLICATE_LOOKBACK_DAYS",
+    "append_status_history",
+    "application_funnel_counts",
+    "attachment_usage",
+    "build_timeline",
+    "count_active_applications",
+    "find_duplicate_application",
+    "get_owned_application",
+    "list_applications",
+    "next_round_number",
+    "normalize_for_dedupe",
+    "resolve_title_company",
+    "validate_attachment_upload",
+]

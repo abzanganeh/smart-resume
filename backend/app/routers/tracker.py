@@ -28,9 +28,15 @@ from app.models.tracker import (
 )
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
+from app.services.billing.plan_code_resolver import resolve_plan_code_for_user
+from app.services.billing.tier_limits_lookup import get_active_tier_limits
 from app.services.tracker import (
+    DUPLICATE_LOOKBACK_DAYS,
     append_status_history,
+    application_funnel_counts,
     build_timeline,
+    count_active_applications,
+    find_duplicate_application,
     get_owned_application,
     list_applications,
     next_round_number,
@@ -72,6 +78,10 @@ class ApplicationCreateRequest(BaseModel):
     contact_name: str | None = None
     contact_email: str | None = None
     job_url: str | None = None
+    # Set to ``True`` to bypass duplicate detection when the user has
+    # already acknowledged that a similar application exists.  Ignored
+    # for the tracker_active_limit check — that always applies.
+    confirm_add_duplicate: bool = False
 
 
 class ApplicationPatchRequest(BaseModel):
@@ -94,8 +104,25 @@ class ApplicationSummary(BaseModel):
     status: str
     applied_date: datetime | None
     follow_up_date: datetime | None
+    archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ApplicationFunnelResponse(BaseModel):
+    """Aggregate application counts for dashboards.
+
+    ``status_counts`` groups active (non-archived) rows by status.  The
+    ``active_total`` / ``archived_total`` / ``total`` scalars derive from
+    the same query so callers can render both a per-status funnel and a
+    "N of M active slots used" progress bar without a second round trip.
+    """
+
+    status_counts: dict[str, int]
+    active_total: int
+    archived_total: int
+    total: int
+    tracker_active_limit: int | None
 
 
 class InterviewRoundCreateRequest(BaseModel):
@@ -223,6 +250,7 @@ def _summary(app: Application) -> ApplicationSummary:
         status=app.status.value,
         applied_date=app.applied_date,
         follow_up_date=app.follow_up_date,
+        archived_at=app.archived_at,
         created_at=app.created_at,
         updated_at=app.updated_at,
     )
@@ -274,6 +302,57 @@ async def create_application(
         jd_title=body.jd_title,
         jd_company=body.jd_company,
     )
+
+    # Enforce the per-plan cap on non-archived rows.  We check this before
+    # duplicate detection so users learn about the hard limit before being
+    # asked to confirm a dedupe warning they would then hit a limit on.
+    plan_code = await resolve_plan_code_for_user(db, user)
+    limits = await get_active_tier_limits(db, plan_code)
+    if limits.tracker_active_limit is not None:
+        active_count = await count_active_applications(db, user.id)
+        if active_count >= limits.tracker_active_limit:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "tracker_limit_reached",
+                    "message": (
+                        f"You have reached your plan's active tracker limit of "
+                        f"{limits.tracker_active_limit}. Archive an existing "
+                        "application or upgrade your plan to add more."
+                    ),
+                    "active_count": active_count,
+                    "limit": limits.tracker_active_limit,
+                    "plan_code": plan_code,
+                    "resolution": "archive_or_upgrade",
+                },
+            )
+
+    # Duplicate detection — never blocks (409 with an explicit code so the
+    # client can confirm the override).
+    if not body.confirm_add_duplicate:
+        duplicate = await find_duplicate_application(
+            db,
+            user.id,
+            jd_title=title,
+            jd_company=company,
+        )
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "duplicate_application",
+                    "message": (
+                        f"You already added '{title}' at '{company}' in the "
+                        f"last {DUPLICATE_LOOKBACK_DAYS} days. Send "
+                        "confirm_add_duplicate=true to add anyway."
+                    ),
+                    "existing_id": str(duplicate.id),
+                    "existing_created_at": duplicate.created_at.isoformat(),
+                    "lookback_days": DUPLICATE_LOOKBACK_DAYS,
+                    "resolution": "confirm_add_duplicate",
+                },
+            )
+
     now = _utcnow()
     app = Application(
         id=uuid.uuid4(),
@@ -310,7 +389,28 @@ async def get_applications(
     company: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    archived: str = "false",
 ) -> list[ApplicationSummary]:
+    """List applications for the current user.
+
+    ``archived`` accepts ``"false"`` (default, active rows only),
+    ``"true"`` (archived rows only), or ``"all"`` (both).  Sent as a
+    string so a caller can distinguish "unset" from "explicitly false"
+    without wrestling with the FastAPI ``bool | None`` truthiness
+    surprises.
+    """
+    archived_value = (archived or "false").lower()
+    if archived_value == "all":
+        archived_filter: bool | None = None
+    elif archived_value == "true":
+        archived_filter = True
+    elif archived_value == "false":
+        archived_filter = False
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="archived must be one of: true, false, all",
+        )
     apps = await list_applications(
         db,
         user.id,
@@ -318,8 +418,37 @@ async def get_applications(
         company=company,
         date_from=date_from,
         date_to=date_to,
+        archived=archived_filter,
     )
     return [_summary(a) for a in apps]
+
+
+@router.get("/api/applications/funnel")
+@limiter.limit("120/minute")
+async def get_application_funnel(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> ApplicationFunnelResponse:
+    """Return per-status counts and plan-level slot usage in one call.
+
+    Used by the dashboard step stack and the tracker funnel widget so we
+    don't over-fetch full row payloads just to compute a handful of
+    integers.
+    """
+    counts = await application_funnel_counts(db, user.id)
+    status_counts = {
+        s.value: counts.get(s.value, 0) for s in ApplicationStatus
+    }
+    plan_code = await resolve_plan_code_for_user(db, user)
+    limits = await get_active_tier_limits(db, plan_code)
+    return ApplicationFunnelResponse(
+        status_counts=status_counts,
+        active_total=counts["active_total"],
+        archived_total=counts["archived_total"],
+        total=counts["total"],
+        tracker_active_limit=limits.tracker_active_limit,
+    )
 
 
 @router.get("/api/applications/{application_id}")
@@ -385,6 +514,70 @@ async def patch_application(
 
     app.updated_at = now
     await db.flush()
+    return _summary(app)
+
+
+@router.post("/api/applications/{application_id}/archive")
+@limiter.limit("30/minute")
+async def archive_application(
+    request: Request,
+    application_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> ApplicationSummary:
+    """Mark an application as archived (frees an active-slot for the plan cap).
+
+    Idempotent — archiving an already-archived row leaves the existing
+    ``archived_at`` timestamp untouched so we don't lose the original
+    archive time on repeated calls from a flaky client.
+    """
+    app = await get_owned_application(db, user.id, application_id)
+    if app.archived_at is None:
+        app.archived_at = _utcnow()
+        app.updated_at = app.archived_at
+        await db.flush()
+    return _summary(app)
+
+
+@router.post("/api/applications/{application_id}/unarchive")
+@limiter.limit("30/minute")
+async def unarchive_application(
+    request: Request,
+    application_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> ApplicationSummary:
+    """Restore an archived application to active.
+
+    Enforces the same ``tracker_active_limit`` as creation — un-archiving
+    consumes an active slot, so a user at their cap must archive
+    something else first (or upgrade) before they can un-archive.
+    """
+    app = await get_owned_application(db, user.id, application_id)
+    if app.archived_at is not None:
+        plan_code = await resolve_plan_code_for_user(db, user)
+        limits = await get_active_tier_limits(db, plan_code)
+        if limits.tracker_active_limit is not None:
+            active_count = await count_active_applications(db, user.id)
+            if active_count >= limits.tracker_active_limit:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "tracker_limit_reached",
+                        "message": (
+                            f"Un-archiving would exceed your plan's active "
+                            f"tracker limit of {limits.tracker_active_limit}. "
+                            "Archive another application or upgrade."
+                        ),
+                        "active_count": active_count,
+                        "limit": limits.tracker_active_limit,
+                        "plan_code": plan_code,
+                        "resolution": "archive_or_upgrade",
+                    },
+                )
+        app.archived_at = None
+        app.updated_at = _utcnow()
+        await db.flush()
     return _summary(app)
 
 
