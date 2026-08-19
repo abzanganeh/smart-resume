@@ -27,6 +27,10 @@ def detect_platform(url: str | None) -> str:
         return "greenhouse"
     if host.endswith("linkedin.com"):
         return "linkedin"
+    if host.endswith("lever.co"):
+        return "lever"
+    if host.endswith("ashbyhq.com"):
+        return "ashby"
     return "unknown"
 
 
