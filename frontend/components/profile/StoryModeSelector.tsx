@@ -69,7 +69,7 @@ export function StoryModeSelector({ isFreeUser, onSelect }: Props) {
           How would you like to build your resume?
         </h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Choose a mode — you can always switch by refreshing.
+          Choose a mode — recorded segments stay saved if you leave this page.
         </p>
       </div>
 
