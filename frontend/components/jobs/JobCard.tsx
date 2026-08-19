@@ -17,6 +17,7 @@ import {
 import { clsx } from "clsx"
 import {
   fitJob,
+  formatMatchScore,
   formatPostedDate,
   formatSalaryRange,
   isJobNew,
@@ -67,6 +68,7 @@ export function JobCard({
   const blurred = shouldBlurJobCard(index, isSubscribed)
   const salary = formatSalaryRange(job)
   const showNewBadge = isJobNew(job)
+  const matchScoreLabel = formatMatchScore(job.score)
 
   const handleCheckFit = async () => {
     if (blurred || fitLoading) return
@@ -151,6 +153,15 @@ export function JobCard({
               <span>{formatPostedDate(job.posted_date)}</span>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
+              {matchScoreLabel && (
+                <span
+                  data-testid={`job-match-score-${job.id}`}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 inline-flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" aria-hidden />
+                  {matchScoreLabel}
+                </span>
+              )}
               {showNewBadge && (
                 <span
                   data-testid={`job-new-badge-${job.id}`}

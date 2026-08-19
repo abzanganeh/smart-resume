@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Loader2, Search, Settings2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, Loader2, Search, Settings2, Sparkles } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
 import { getSubscriptionCurrent } from "@/lib/api"
 import { isSubscriptionActive } from "@/lib/billing"
@@ -12,6 +12,7 @@ import { JobCardSkeleton } from "@/components/jobs/JobCardSkeleton"
 import {
   getJobPreferences,
   listSavedJobs,
+  matchJobs,
   MIN_PREFERRED_JOB_TITLES,
   saveJob,
   searchJobs,
@@ -19,6 +20,7 @@ import {
   type DatePostedFilter,
   type JobResult,
   type JobSearchFilters,
+  type JobSearchMode,
 } from "@/lib/jobs"
 
 const PAGE_SIZE = 20
@@ -63,6 +65,7 @@ function JobsPageContent() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [preferredTitles, setPreferredTitles] = useState<string[]>([])
   const [titlesConfirmed, setTitlesConfirmed] = useState(false)
+  const [searchMode, setSearchMode] = useState<JobSearchMode>("keyword")
 
   const loadPreferences = useCallback(async () => {
     if (!token) return
@@ -112,6 +115,67 @@ function JobsPageContent() {
     if (employmentType) filters.employment_type = employmentType
     if (datePosted !== "any") filters.date_posted = datePosted
     return filters
+  }
+
+  const resetResults = () => {
+    setError(null)
+    setHasSearched(false)
+    setJobs([])
+    setTotal(0)
+    setPage(1)
+    setStale(false)
+    setStaleMessage(null)
+  }
+
+  const handleModeChange = (mode: JobSearchMode) => {
+    if (mode === searchMode) return
+    setSearchMode(mode)
+    resetResults()
+  }
+
+  const runMatch = async (nextPage: number, append: boolean) => {
+    if (!token) return
+
+    setError(null)
+    if (append) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+      setHasSearched(true)
+    }
+
+    try {
+      const res = await matchJobs(token, {
+        page: nextPage,
+        page_size: PAGE_SIZE,
+      })
+
+      setJobs((prev) => (append ? [...prev, ...res.jobs] : res.jobs))
+      setTotal(res.total)
+      setPage(res.page)
+      setStale(res.results_may_be_stale)
+      setStaleMessage(res.message)
+    } catch (e) {
+      const err = e as Error & { code?: string; status?: number }
+      if (err.code === "subscription_required") {
+        setSubscribed(false)
+        setError("Subscription required to match jobs against your master resume.")
+      } else if (
+        err.message?.includes("master resume") ||
+        err.message?.includes("Upload a master resume")
+      ) {
+        setError("Upload a master resume on your profile before using Match my resume.")
+      } else {
+        setError(err.message ?? "Match failed.")
+      }
+      if (!append) {
+        setJobs([])
+        setTotal(0)
+      }
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
   }
 
   const runSearch = async (nextPage: number, append: boolean, queryOverride?: string) => {
@@ -168,10 +232,18 @@ function JobsPageContent() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
+    if (searchMode === "match") {
+      void runMatch(1, false)
+      return
+    }
     void runSearch(1, false)
   }
 
   const handleLoadMore = () => {
+    if (searchMode === "match") {
+      void runMatch(page + 1, true)
+      return
+    }
     void runSearch(page + 1, true)
   }
 
@@ -234,7 +306,7 @@ function JobsPageContent() {
           </Link>
         </div>
 
-        {!titlesConfirmed && (
+        {!titlesConfirmed && searchMode === "keyword" && (
           <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-slate-700 dark:text-slate-300">
             <p className="mb-2">
               Pick job titles from your resume to search our company job corpus (500+ tech employers).
@@ -248,7 +320,7 @@ function JobsPageContent() {
           </div>
         )}
 
-        {preferredTitles.length > 0 && (
+        {preferredTitles.length > 0 && searchMode === "keyword" && (
           <div className="mb-6">
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Your target roles</p>
             <div className="flex flex-wrap gap-2">
@@ -256,7 +328,10 @@ function JobsPageContent() {
                 <button
                   key={title}
                   type="button"
-                  onClick={() => void runSearch(1, false, title)}
+                  onClick={() => {
+                    setSearchMode("keyword")
+                    void runSearch(1, false, title)
+                  }}
                   className="px-3 py-1.5 rounded-full text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-amber-400/60 text-slate-700 dark:text-slate-300"
                 >
                   {title}
@@ -276,6 +351,58 @@ function JobsPageContent() {
           onSubmit={handleSearch}
           className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4 mb-8"
         >
+          <div
+            className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-1 bg-slate-50 dark:bg-slate-950"
+            role="tablist"
+            aria-label="Job search mode"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={searchMode === "keyword"}
+              data-testid="jobs-mode-keyword"
+              onClick={() => handleModeChange("keyword")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                searchMode === "keyword"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              Search by role
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={searchMode === "match"}
+              data-testid="jobs-mode-match"
+              onClick={() => handleModeChange("match")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                searchMode === "match"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Match my resume
+            </button>
+          </div>
+
+          {searchMode === "match" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Rank open roles against your master resume. Requires an active subscription and a
+                resume on your profile.
+              </p>
+              {!subscribed && (
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  Upgrade to unlock resume matching — keyword search still works with your target
+                  titles.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Role / keywords</span>
@@ -356,17 +483,24 @@ function JobsPageContent() {
               </select>
             </label>
           </div>
+            </>
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            data-testid="jobs-search-submit"
+            data-testid={searchMode === "match" ? "jobs-match-submit" : "jobs-search-submit"}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-40"
           >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Searching…
+                {searchMode === "match" ? "Matching…" : "Searching…"}
+              </>
+            ) : searchMode === "match" ? (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Match my resume
               </>
             ) : (
               <>
@@ -384,6 +518,11 @@ function JobsPageContent() {
             {error.includes("Subscription") && (
               <Link href="/billing" className="ml-auto text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 shrink-0">
                 Upgrade
+              </Link>
+            )}
+            {(error.includes("master resume") || error.includes("Upload a master resume")) && (
+              <Link href="/profile" className="ml-auto text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 shrink-0">
+                Go to profile
               </Link>
             )}
             {(error.includes("Choose at least") || error.includes("job titles")) && (
@@ -405,7 +544,11 @@ function JobsPageContent() {
         )}
 
         {!loading && hasSearched && jobs.length === 0 && !error && (
-          <p className="text-center text-slate-600 dark:text-slate-400 py-12">No jobs found. Try different keywords.</p>
+          <p className="text-center text-slate-600 dark:text-slate-400 py-12">
+            {searchMode === "match"
+              ? "No matching jobs right now. Try again later or search by role."
+              : "No jobs found. Try different keywords."}
+          </p>
         )}
 
         {!loading && jobs.length > 0 && (

@@ -71,14 +71,12 @@ export interface JobSearchResponse {
   source?: string
 }
 
-export interface JobSearchRequest {
-  query: string
-  location?: string | null
-  filters?: JobSearchFilters
+export interface JobMatchRequest {
   page?: number
   page_size?: number
-  expand?: boolean
 }
+
+export type JobSearchMode = "keyword" | "match"
 
 export interface SavedSearch {
   id: string
@@ -127,6 +125,21 @@ export const MIN_PREFERRED_JOB_TITLES = 5
 export interface JobFitResponse {
   analysis_id: string
   result: FitAnalysisOutput
+}
+
+export interface JobSearchRequest {
+  query: string
+  location?: string | null
+  filters?: JobSearchFilters
+  page?: number
+  page_size?: number
+  expand?: boolean
+}
+
+export function formatMatchScore(score: number | null | undefined): string | null {
+  if (score == null || Number.isNaN(score)) return null
+  const pct = score <= 1 ? Math.round(score * 100) : Math.round(score)
+  return `${pct}% match`
 }
 
 export function formatSalaryRange(job: JobResult): string | null {
@@ -246,6 +259,16 @@ export async function searchJobs(
   body: JobSearchRequest,
 ): Promise<JobSearchResponse> {
   return jobsRequest("/api/jobs/search", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function matchJobs(
+  token: string,
+  body: JobMatchRequest = {},
+): Promise<JobSearchResponse> {
+  return jobsRequest("/api/jobs/match", token, {
     method: "POST",
     body: JSON.stringify(body),
   })
