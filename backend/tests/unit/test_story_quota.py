@@ -14,7 +14,9 @@ async def test_story_first_generate_is_free():
     """First story generate per account costs 0 credits."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id="user-1")
-    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+    with patch("app.services.billing.quota._lock_user_for_quota", new_callable=AsyncMock), patch(
+        "app.services.billing.quota._active_subscription_for", return_value=None
+    ), patch(
         "app.services.billing.quota._user_has_story_quota_event",
         new_callable=AsyncMock,
         return_value=False,
@@ -28,12 +30,40 @@ async def test_story_first_generate_is_free():
 
 
 @pytest.mark.asyncio
+async def test_story_generate_legacy_story_build_charges_credit():
+    """Users who already used legacy story_build cannot get another free generate."""
+    mock_db = AsyncMock()
+    mock_user = MagicMock(is_suspended=False, id="user-1")
+    mock_txn = MagicMock(id="txn-1")
+
+    with patch("app.services.billing.quota._lock_user_for_quota", new_callable=AsyncMock), patch(
+        "app.services.billing.quota._active_subscription_for",
+        return_value=None,
+    ), patch(
+        "app.services.billing.quota._user_has_story_quota_event",
+        new_callable=AsyncMock,
+        return_value=True,
+    ), patch(
+        "app.services.billing.quota.consume_credit",
+        return_value=mock_txn,
+    ) as mock_consume:
+        result = await check_quota_for_story_generate(
+            mock_db, user=mock_user, whisper_path=False
+        )
+
+    assert result.charged_to == "free_credit"
+    mock_consume.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_story_regenerate_charges_credit():
     """Second and later generates consume 1 credit."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id="user-1")
     mock_txn = MagicMock(id="txn-1")
-    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+    with patch("app.services.billing.quota._lock_user_for_quota", new_callable=AsyncMock), patch(
+        "app.services.billing.quota._active_subscription_for", return_value=None
+    ), patch(
         "app.services.billing.quota._user_has_story_quota_event",
         new_callable=AsyncMock,
         return_value=True,
@@ -51,7 +81,9 @@ async def test_story_first_save_is_free():
     """First save to profile per account costs 0 credits."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id="user-1")
-    with patch("app.services.billing.quota._active_subscription_for", return_value=None), patch(
+    with patch("app.services.billing.quota._lock_user_for_quota", new_callable=AsyncMock), patch(
+        "app.services.billing.quota._active_subscription_for", return_value=None
+    ), patch(
         "app.services.billing.quota._user_has_story_quota_event",
         new_callable=AsyncMock,
         return_value=False,

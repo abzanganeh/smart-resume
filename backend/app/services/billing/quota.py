@@ -281,16 +281,22 @@ async def check_quota_for_section_regen(
     )
 
 
+async def _lock_user_for_quota(session: AsyncSession, *, user_id: uuid.UUID) -> None:
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+
+
 async def _user_has_story_quota_event(
     session: AsyncSession,
     *,
     user_id: uuid.UUID,
     reason: str,
+    legacy_reasons: tuple[str, ...] = (),
 ) -> bool:
+    reasons = (reason, *legacy_reasons)
     row = await session.execute(
         select(CreditTransaction.id)
         .where(CreditTransaction.user_id == user_id)
-        .where(CreditTransaction.reason == reason)
+        .where(CreditTransaction.reason.in_(reasons))
         .limit(1)
     )
     return row.scalar_one_or_none() is not None
@@ -333,6 +339,8 @@ async def check_quota_for_story_generate(
 
         await check_and_increment_whisper_use(session, user=user)
 
+    await _lock_user_for_quota(session, user_id=user.id)
+
     sub_decision = await _subscriber_story_decision(
         session, user=user, action=QuotaAction.story_build_generate
     )
@@ -340,7 +348,12 @@ async def check_quota_for_story_generate(
         return sub_decision
 
     reason = QuotaAction.story_build_generate.value
-    if not await _user_has_story_quota_event(session, user_id=user.id, reason=reason):
+    if not await _user_has_story_quota_event(
+        session,
+        user_id=user.id,
+        reason=reason,
+        legacy_reasons=(QuotaAction.story_build.value,),
+    ):
         await record_quota_audit(
             session,
             user_id=user.id,
@@ -384,6 +397,8 @@ async def check_quota_for_story_save(
     if user.is_suspended:
         raise AccountSuspendedError("account_suspended")
 
+    await _lock_user_for_quota(session, user_id=user.id)
+
     sub_decision = await _subscriber_story_decision(
         session, user=user, action=QuotaAction.story_build_save
     )
@@ -391,7 +406,12 @@ async def check_quota_for_story_save(
         return sub_decision
 
     reason = QuotaAction.story_build_save.value
-    if not await _user_has_story_quota_event(session, user_id=user.id, reason=reason):
+    if not await _user_has_story_quota_event(
+        session,
+        user_id=user.id,
+        reason=reason,
+        legacy_reasons=(QuotaAction.story_build.value,),
+    ):
         await record_quota_audit(
             session,
             user_id=user.id,

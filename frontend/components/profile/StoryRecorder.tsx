@@ -30,6 +30,7 @@ import {
   saveStoryResume,
   storyGenerateCreditLabel,
   storySaveCreditLabel,
+  type VerifyItem,
 } from "@/lib/story";
 import {
   clearStoryDraft,
