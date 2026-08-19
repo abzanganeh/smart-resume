@@ -49,9 +49,9 @@ const CATEGORY_LABELS: Record<BlockingIssue["category"], string> = {
 };
 
 const IMPACT_STYLES: Record<BlockingIssue["impact"], string> = {
-  high: "bg-red-400/15 text-red-300 border-red-400/30",
-  medium: "bg-amber-400/15 text-amber-300 border-amber-400/30",
-  low: "bg-slate-600/40 text-slate-400 border-slate-600",
+  high: "bg-red-400/15 text-red-700 dark:text-red-300 border-red-400/30",
+  medium: "bg-amber-500/15 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border-amber-400/30",
+  low: "bg-slate-600/40 text-slate-600 dark:text-slate-400 border-slate-400 dark:border-slate-600",
 };
 
 const RANK_LABELS = {
@@ -63,23 +63,23 @@ const RANK_LABELS = {
 } as const;
 
 const RANK_STYLES = {
-  needs_work: "bg-red-400/15 text-red-300 border-red-400/30",
-  fair: "bg-amber-400/15 text-amber-300 border-amber-400/30",
-  good: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
-  great: "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
-  excellent: "bg-emerald-400/25 text-emerald-100 border-emerald-400/50",
+  needs_work: "bg-red-400/15 text-red-700 dark:text-red-300 border-red-400/30",
+  fair: "bg-amber-500/15 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border-amber-400/30",
+  good: "bg-emerald-400/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30",
+  great: "bg-emerald-400/20 text-emerald-800 dark:text-emerald-200 border-emerald-400/40",
+  excellent: "bg-emerald-400/25 text-emerald-900 dark:text-emerald-100 border-emerald-400/50",
 } as const;
 
 const NARRATIVE_SEVERITY_STYLES = {
-  minor: "bg-slate-600/30 text-slate-300 border-slate-600",
-  urgent: "bg-amber-400/15 text-amber-300 border-amber-400/30",
-  critical: "bg-red-400/15 text-red-300 border-red-400/30",
+  minor: "bg-slate-600/30 text-slate-700 dark:text-slate-300 border-slate-400 dark:border-slate-600",
+  urgent: "bg-amber-500/15 dark:bg-amber-400/15 text-amber-700 dark:text-amber-300 border-amber-400/30",
+  critical: "bg-red-400/15 text-red-700 dark:text-red-300 border-red-400/30",
 } as const;
 
 function scoreColor(score: number): string {
-  if (score >= 70) return "text-green-400";
-  if (score >= 45) return "text-amber-400";
-  return "text-red-400";
+  if (score >= 70) return "text-green-700 dark:text-green-400";
+  if (score >= 45) return "text-amber-700 dark:text-amber-400";
+  return "text-red-700 dark:text-red-400";
 }
 
 function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
@@ -119,7 +119,7 @@ function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
         <span className={cn("text-2xl font-bold tabular-nums", scoreColor(score))}>
           {score}
         </span>
-        <span className="text-[10px] text-slate-500 uppercase tracking-wide">/ 100</span>
+        <span className="text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-wide">/ 100</span>
       </div>
     </div>
   );
@@ -157,25 +157,25 @@ function ScoreHistory({ scores }: { scores: number[] }) {
       {/* Baseline → current comparison */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-slate-500">Baseline</span>
-          <span className="font-bold tabular-nums text-slate-400">{baseline}</span>
-          <span className="text-slate-600">→</span>
-          <span className="font-bold tabular-nums text-slate-200">Now {latest}</span>
+          <span className="text-slate-600 dark:text-slate-400">Baseline</span>
+          <span className="font-bold tabular-nums text-slate-600 dark:text-slate-400">{baseline}</span>
+          <span className="text-slate-600 dark:text-slate-400">→</span>
+          <span className="font-bold tabular-nums text-slate-800 dark:text-slate-200">Now {latest}</span>
         </div>
         {!unchanged && (
           <span
             className={cn(
               "text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded",
               trendUp
-                ? "bg-emerald-400/15 text-emerald-400"
-                : "bg-red-400/15 text-red-400",
+                ? "bg-emerald-400/15 text-emerald-700 dark:text-emerald-400"
+                : "bg-red-400/15 text-red-700 dark:text-red-400",
             )}
           >
             {trendUp ? "↑" : "↓"} {trendUp ? "+" : ""}{delta} pts
           </span>
         )}
         {unchanged && (
-          <span className="text-[11px] text-slate-600 bg-slate-700/40 px-1.5 py-0.5 rounded">
+          <span className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-200/40 dark:bg-slate-700/40 px-1.5 py-0.5 rounded">
             no change
           </span>
         )}
@@ -206,7 +206,7 @@ function ScoreHistory({ scores }: { scores: number[] }) {
             );
           })}
         </svg>
-        <span className="text-[10px] text-slate-600">{scores.length} recalculations</span>
+        <span className="text-[10px] text-slate-600 dark:text-slate-400">{scores.length} recalculations</span>
       </div>
     </div>
   );
@@ -231,7 +231,7 @@ function QuickWinCard({
       className={cn(
         "border rounded-xl p-3 space-y-2 transition-colors",
         addressed
-          ? "bg-slate-800/50 border-slate-600/60 opacity-75"
+          ? "bg-slate-100/50 dark:bg-slate-800/50 border-slate-400 dark:border-slate-600/60 opacity-75"
           : "bg-emerald-400/5 border-emerald-400/20",
       )}
     >
@@ -239,7 +239,7 @@ function QuickWinCard({
         <Zap
           className={cn(
             "w-4 h-4 shrink-0 mt-0.5",
-            addressed ? "text-slate-500" : "text-emerald-400",
+            addressed ? "text-slate-600 dark:text-slate-400" : "text-emerald-700 dark:text-emerald-400",
           )}
         />
         <div className="flex-1 min-w-0">
@@ -247,21 +247,21 @@ function QuickWinCard({
             <span
               className={cn(
                 "text-[10px] uppercase tracking-wide font-semibold",
-                addressed ? "text-slate-500" : "text-emerald-400/80",
+                addressed ? "text-slate-600 dark:text-slate-400" : "text-emerald-700 dark:text-emerald-400/80",
               )}
             >
               {CATEGORY_LABELS[issue.category]}
             </span>
             {addressed && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-400 border border-slate-600/60">
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-400 border border-slate-400 dark:border-slate-600/60">
                 Addressed
               </span>
             )}
           </div>
-          <p className={cn("text-sm mt-0.5", addressed ? "text-slate-500" : "text-slate-200")}>
+          <p className={cn("text-sm mt-0.5", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-800 dark:text-slate-200")}>
             {issue.description}
           </p>
-          <p className={cn("text-xs mt-1", addressed ? "text-slate-600" : "text-slate-400")}>
+          <p className={cn("text-xs mt-1", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-600 dark:text-slate-400")}>
             {issue.suggestion}
           </p>
         </div>
@@ -272,7 +272,7 @@ function QuickWinCard({
           <button
             type="button"
             onClick={onApplyMechanical}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
           >
             <Check className="w-3 h-3" />
             Apply fix
@@ -285,8 +285,8 @@ function QuickWinCard({
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
               addressed
-                ? "bg-slate-700/60 border border-slate-600 text-slate-400 hover:bg-slate-600/60 hover:text-slate-200"
-                : "bg-amber-400/10 border border-amber-400/20 text-amber-400 hover:bg-amber-400/20",
+                ? "bg-slate-200/60 dark:bg-slate-700/60 border border-slate-400 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600/60 hover:text-slate-900 dark:hover:text-slate-200"
+                : "bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 text-amber-700 dark:text-amber-400 hover:bg-amber-400/20",
             )}
           >
             <MessageSquare className="w-3 h-3" />
@@ -297,7 +297,7 @@ function QuickWinCard({
           <button
             type="button"
             onClick={onSkip}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700/60 border border-slate-700 text-slate-400 text-xs font-semibold hover:bg-red-900/30 hover:text-red-400 transition-colors"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-400 transition-colors"
           >
             <X className="w-3 h-3" />
             Skip
@@ -334,10 +334,10 @@ function BlockingIssueRow({
       className={cn(
         "border rounded-lg overflow-hidden transition-colors",
         addressed
-          ? "border-slate-600/60 bg-slate-800/40 opacity-75"
+          ? "border-slate-400 dark:border-slate-600/60 bg-slate-100/40 dark:bg-slate-800/40 opacity-75"
           : selected
-          ? "border-amber-400/50 bg-amber-400/5"
-          : "border-slate-700",
+          ? "border-amber-400/50 bg-amber-500/5 dark:bg-amber-400/5"
+          : "border-slate-300 dark:border-slate-700",
       )}
     >
       <div className="flex items-stretch">
@@ -349,8 +349,8 @@ function BlockingIssueRow({
             className={cn(
               "shrink-0 px-3 flex items-center justify-center border-r transition-colors",
               selected
-                ? "bg-amber-400/15 border-amber-400/40"
-                : "bg-slate-800/50 border-slate-700 hover:bg-slate-800",
+                ? "bg-amber-500/15 dark:bg-amber-400/15 border-amber-400/40"
+                : "bg-slate-100/50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800",
             )}
           >
             <span
@@ -368,7 +368,7 @@ function BlockingIssueRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 bg-slate-800/50 hover:bg-slate-800 text-left transition"
+        className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition"
       >
         <span
           className={cn(
@@ -378,38 +378,38 @@ function BlockingIssueRow({
         >
           {issue.impact}
         </span>
-        <span className="text-[10px] text-slate-500 uppercase shrink-0">
+        <span className="text-[10px] text-slate-600 dark:text-slate-400 uppercase shrink-0">
           {CATEGORY_LABELS[issue.category]}
         </span>
         {addressed && (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-400 border border-slate-600/60 shrink-0">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-400 border border-slate-400 dark:border-slate-600/60 shrink-0">
             Addressed
           </span>
         )}
-        <span className={cn("text-sm flex-1 truncate", addressed ? "text-slate-500" : "text-slate-300")}>
+        <span className={cn("text-sm flex-1 truncate", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-700 dark:text-slate-300")}>
           {issue.description}
         </span>
         {open ? (
-          <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+          <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+          <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
         )}
       </button>
       </div>
       {open && (
-        <div className="px-3 py-2.5 border-t border-slate-700 bg-slate-900/40 space-y-2">
-          <p className="text-slate-400 text-xs">
-            <span className="text-slate-500 font-medium">Suggestion: </span>
+        <div className="px-3 py-2.5 border-t border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-900/40 space-y-2">
+          <p className="text-slate-600 dark:text-slate-400 text-xs">
+            <span className="text-slate-600 dark:text-slate-400 font-medium">Suggestion: </span>
             {issue.suggestion}
           </p>
-          <p className="text-[10px] text-slate-600">
+          <p className="text-[10px] text-slate-600 dark:text-slate-400">
             Fix effort: {issue.fix_effort.replace(/_/g, " ")}
           </p>
           {issue.anchor && onScrollToAnchor && (
             <button
               type="button"
               onClick={() => onScrollToAnchor(issue.anchor!)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               Jump to entry →
             </button>
@@ -419,7 +419,7 @@ function BlockingIssueRow({
             <button
               type="button"
               onClick={onStartQueue}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 text-amber-700 dark:text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
             >
               <MessageSquare className="w-3 h-3" />
               Fix with AI →
@@ -432,8 +432,8 @@ function BlockingIssueRow({
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 addressed
-                  ? "bg-slate-700/60 border border-slate-600 text-slate-400 hover:bg-slate-600/60"
-                  : "bg-amber-400/10 border border-amber-400/20 text-amber-400 hover:bg-amber-400/20",
+                  ? "bg-slate-200/60 dark:bg-slate-700/60 border border-slate-400 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600/60"
+                  : "bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 text-amber-700 dark:text-amber-400 hover:bg-amber-400/20",
               )}
             >
               <MessageSquare className="w-3 h-3" />
@@ -534,7 +534,7 @@ export function ATSGuidancePanel({
 
   if (streaming && !output) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 py-6">
+      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 py-6">
         <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
         Calculating ATS score…
       </div>
@@ -543,7 +543,7 @@ export function ATSGuidancePanel({
 
   if (!output || output.ats_score === undefined) {
     return (
-      <div className="text-slate-500 text-sm py-4">
+      <div className="text-slate-600 dark:text-slate-400 text-sm py-4">
         Run QA or recalculate to see ATS guidance.
       </div>
     );
@@ -564,8 +564,8 @@ export function ATSGuidancePanel({
     <div className={cn("space-y-5", variant === "sidebar" && "text-sm")}>
       {/* Stale banner — shown after the user accepts a chat patch but hasn't recalculated yet */}
       {staleSince && (
-        <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-400/10 border border-amber-400/30">
-          <span className="text-xs text-amber-300">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30">
+          <span className="text-xs text-amber-700 dark:text-amber-300">
             Resume changed since this score was computed. The number below may be out of date.
           </span>
           {onRecalculate && (
@@ -573,7 +573,7 @@ export function ATSGuidancePanel({
               type="button"
               onClick={onRecalculate}
               disabled={recalculateDisabled}
-              className="shrink-0 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-200 text-xs font-semibold border border-amber-400/40"
+              className="shrink-0 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-800 dark:text-amber-200 text-xs font-semibold border border-amber-400/40"
             >
               Recalculate
             </button>
@@ -586,8 +586,8 @@ export function ATSGuidancePanel({
         <ScoreRing score={output.ats_score} size={ringSize} />
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <h2 className={cn("font-bold text-slate-100", variant === "primary" ? "text-lg" : "text-base")}>
+            <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+            <h2 className={cn("font-bold text-slate-900 dark:text-slate-100", variant === "primary" ? "text-lg" : "text-base")}>
               ATS Score
             </h2>
             {output.rank_label && (
@@ -602,13 +602,13 @@ export function ATSGuidancePanel({
             )}
           </div>
           {output.headline && (
-            <p className="text-sm text-slate-300 leading-relaxed">{output.headline}</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{output.headline}</p>
           )}
           <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-slate-400">Ceiling</span>
-            <span className="text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>
+            <span className="text-slate-600 dark:text-slate-400">Ceiling</span>
+            <span className="text-amber-700 dark:text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>
             {(output.score_ceiling ?? 0) > 0 && (
-              <span className="text-slate-600 text-xs">
+              <span className="text-slate-600 dark:text-slate-400 text-xs">
                 ({(output.score_ceiling ?? 0) - output.ats_score > 0
                   ? `${(output.score_ceiling ?? 0) - output.ats_score} pts gap`
                   : "at ceiling"})
@@ -631,18 +631,18 @@ export function ATSGuidancePanel({
 
       {output.category_summaries && output.category_summaries.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-200">Analysis highlights</h3>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Analysis highlights</h3>
           <div className="space-y-2">
             {output.category_summaries.map((category) => (
               <div
                 key={category.category_key}
-                className="border border-slate-700 rounded-lg bg-slate-900/40 p-3 space-y-2"
+                className="border border-slate-300 dark:border-slate-700 rounded-lg bg-white/40 dark:bg-slate-900/40 p-3 space-y-2"
               >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-slate-100">{category.label}</span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{category.label}</span>
                   <div className="flex items-center gap-2">
                     {category.issue_count > 0 && (
-                      <span className="text-xs text-slate-400 tabular-nums">
+                      <span className="text-xs text-slate-600 dark:text-slate-400 tabular-nums">
                         {category.issue_count} issue{category.issue_count === 1 ? "" : "s"}
                       </span>
                     )}
@@ -657,7 +657,7 @@ export function ATSGuidancePanel({
                   </div>
                 </div>
                 {category.why_it_matters && (
-                  <p className="text-xs text-slate-400 leading-relaxed">{category.why_it_matters}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{category.why_it_matters}</p>
                 )}
               </div>
             ))}
@@ -668,15 +668,15 @@ export function ATSGuidancePanel({
       {/* Quick wins */}
       {quickWins.length > 0 && (
         <section>
-          <h3 className="text-emerald-400 font-semibold text-sm flex items-center gap-1.5 mb-2">
+          <h3 className="text-emerald-700 dark:text-emerald-400 font-semibold text-sm flex items-center gap-1.5 mb-2">
             <Zap className="w-4 h-4" />
             Quick wins
           </h3>
-          <p className="text-[11px] text-slate-500 mb-2">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
             Fix with AI opens chat and proposes resume edits — accept each patch on your resume to apply it.
             Items grey out after a patch is accepted. Use Skip if you do not want to fix one.
             {addressedCount > 0 && (
-              <span className="text-slate-600"> · {addressedCount} addressed</span>
+              <span className="text-slate-600 dark:text-slate-400"> · {addressedCount} addressed</span>
             )}
           </p>
           <div className="space-y-2">
@@ -705,7 +705,7 @@ export function ATSGuidancePanel({
       {blocking.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <h3 className="text-slate-300 font-semibold text-sm">
+            <h3 className="text-slate-700 dark:text-slate-300 font-semibold text-sm">
               Blocking issues ({blocking.length})
             </h3>
             {(onStartQueue || onSendToChat) && (
@@ -714,7 +714,7 @@ export function ATSGuidancePanel({
                   <button
                     type="button"
                     onClick={() => setSelectedKeys(new Set())}
-                    className="text-slate-400 hover:text-slate-200"
+                    className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                   >
                     Clear ({selectedKeys.size})
                   </button>
@@ -722,7 +722,7 @@ export function ATSGuidancePanel({
                   <button
                     type="button"
                     onClick={() => setSelectedKeys(new Set(blocking.map((issue) => issueKey(issue))))}
-                    className="text-slate-400 hover:text-slate-200"
+                    className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                   >
                     Select all
                   </button>
@@ -738,14 +738,14 @@ export function ATSGuidancePanel({
             const hasNonLength = selectedIssues.some((issue) => issue.category !== "length");
             const conflicting = hasLength && hasNonLength;
             return (
-            <div className="mb-3 p-3 rounded-lg bg-amber-400/10 border border-amber-400/30 flex flex-col gap-2">
+            <div className="mb-3 p-3 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 flex flex-col gap-2">
               {conflicting && (
-                <p className="text-[11px] text-amber-300/80">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300/80">
                   Length issues can't be fixed while adding content — deselect the Length issue or fix it separately after other edits are done.
                 </p>
               )}
               <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-amber-200 font-semibold flex-1 min-w-0">
+              <span className="text-xs text-amber-800 dark:text-amber-200 font-semibold flex-1 min-w-0">
                 {selectedKeys.size} issue{selectedKeys.size === 1 ? "" : "s"} selected
               </span>
               {onStartQueue && (
@@ -770,7 +770,7 @@ export function ATSGuidancePanel({
                     sendIssuesToChat(selectedIssues, buildBatchChatMessage(selectedIssues));
                     setSelectedKeys(new Set());
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-200 text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 dark:bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-800 dark:text-amber-200 text-xs font-semibold transition-colors"
                 >
                   <MessageSquare className="w-3 h-3" />
                   Fix together
@@ -815,23 +815,23 @@ export function ATSGuidancePanel({
 
   if (variant === "sidebar") {
     return (
-      <aside className="border border-slate-700 rounded-xl bg-slate-900/60 overflow-hidden">
+      <aside className="border border-slate-300 dark:border-slate-700 rounded-xl bg-white/60 dark:bg-slate-900/60 overflow-hidden">
         <button
           type="button"
           onClick={() => setSidebarOpen((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/60 hover:bg-slate-800 text-left"
+          className="w-full flex items-center justify-between px-4 py-3 bg-slate-100/60 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
         >
-          <span className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-400" />
             ATS Guidance
             <span className={cn("tabular-nums", scoreColor(output.ats_score))}>
               {output.ats_score}/100
             </span>
           </span>
           {sidebarOpen ? (
-            <ChevronUp className="w-4 h-4 text-slate-500" />
+            <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-500" />
+            <ChevronDown className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           )}
         </button>
         {sidebarOpen && <div className="p-4">{content}</div>}

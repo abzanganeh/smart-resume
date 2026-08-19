@@ -1,6 +1,6 @@
-# Smart Resume — Backend
+# TalioCV — Backend
 
-FastAPI API for the Smart Resume Agent.
+FastAPI API for the TalioCV.
 
 ## Run locally
 

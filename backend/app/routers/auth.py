@@ -61,9 +61,16 @@ from app.services.auth.exceptions import (
 from app.services.auth.oauth import (
     exchange_github_code,
     exchange_google_code,
+    exchange_linkedin_code,
+    exchange_microsoft_code,
     fetch_github_profile_with_access_token,
     fetch_google_profile_with_access_token,
+    fetch_linkedin_profile_with_access_token,
+    fetch_microsoft_profile_with_access_token,
+    verify_apple_id_token,
     verify_google_id_token,
+    verify_linkedin_id_token,
+    verify_microsoft_id_token,
 )
 from app.services.auth.password import (
     check_strength,
@@ -117,7 +124,7 @@ class LoginRequest(BaseModel):
 
 
 class CallbackRequest(BaseModel):
-    provider: Literal["google", "github"]
+    provider: Literal["google", "github", "microsoft", "linkedin"]
     code: str | None = Field(None, min_length=1, max_length=4096)
     id_token: str | None = Field(None, min_length=1, max_length=8192)
     access_token: str | None = Field(None, min_length=1, max_length=4096)
@@ -603,6 +610,26 @@ async def oauth_callback(
                 profile = await fetch_google_profile_with_access_token(payload.access_token)
             else:
                 profile = await exchange_google_code(
+                    payload.code or "",
+                    payload.redirect_uri,
+                )
+        elif payload.provider == "microsoft":
+            if payload.id_token:
+                profile = await verify_microsoft_id_token(payload.id_token)
+            elif payload.access_token:
+                profile = await fetch_microsoft_profile_with_access_token(payload.access_token)
+            else:
+                profile = await exchange_microsoft_code(
+                    payload.code or "",
+                    payload.redirect_uri,
+                )
+        elif payload.provider == "linkedin":
+            if payload.access_token:
+                profile = await fetch_linkedin_profile_with_access_token(payload.access_token)
+            elif payload.id_token:
+                profile = await verify_linkedin_id_token(payload.id_token)
+            else:
+                profile = await exchange_linkedin_code(
                     payload.code or "",
                     payload.redirect_uri,
                 )

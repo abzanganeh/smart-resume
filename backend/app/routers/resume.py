@@ -303,7 +303,7 @@ async def submit_jd(
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 resp = await client.get(
                     body.jd_url,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; SmartResume/1.0)"},
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; TalioCV/1.0)"},
                 )
                 jd_text = strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)
         except Exception:

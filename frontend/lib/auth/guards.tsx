@@ -42,6 +42,14 @@ export function useRequireAuth(callbackUrl?: string) {
       return
     }
 
+    if (!session.backendAccessToken && session.error) {
+      saveAuthReturnUrl(dest)
+      router.replace(
+        `/auth?error=${encodeURIComponent(session.error)}`,
+      )
+      return
+    }
+
     if (session.error === "TokenExpired") {
       if (refreshingRef.current || isRefreshRateLimited()) return
       refreshingRef.current = true

@@ -43,25 +43,25 @@ function AssistantBubble({ message }: { message: AssistantMessage }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-start gap-2">
-        <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center shrink-0 mt-0.5">
-          <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+        <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0 mt-0.5">
+          <MessageSquare className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
         </div>
-        <div className="flex-1 min-w-0 text-slate-300 text-sm leading-relaxed bg-slate-800/50 rounded-2xl rounded-tl-sm px-3 py-2 space-y-2 break-words whitespace-pre-wrap">
+        <div className="flex-1 min-w-0 text-slate-700 dark:text-slate-300 text-sm leading-relaxed bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl rounded-tl-sm px-3 py-2 space-y-2 break-words whitespace-pre-wrap">
           <p className="break-words whitespace-pre-wrap">{message.content}</p>
           {message.suggestionCount > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-amber-400/80 border-t border-slate-700/50 pt-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400/80 border-t border-slate-300 dark:border-slate-700/50 pt-2">
               <Sparkles className="w-3 h-3" />
               {message.suggestionCount} yellow highlight{message.suggestionCount !== 1 ? "s" : ""} in resume — click Accept to apply (not applied yet)
             </div>
           )}
           {message.unplaceableCount > 0 && (
-            <div className="text-[11px] text-red-300/90 border-t border-slate-700/50 pt-2 space-y-1">
+            <div className="text-[11px] text-red-700 dark:text-red-300/90 border-t border-slate-300 dark:border-slate-700/50 pt-2 space-y-1">
               <p>
                 {message.unplaceableCount} suggestion{message.unplaceableCount !== 1 ? "s" : ""} could not be matched to your resume
                 {message.suggestionCount === 0 ? " — nothing was highlighted" : ""}.
               </p>
-              <p className="text-slate-400">
-                Check the <strong className="text-slate-300">Couldn&apos;t apply</strong> banner above the resume, or edit manually (trash icon / pencil).
+              <p className="text-slate-600 dark:text-slate-400">
+                Check the <strong className="text-slate-700 dark:text-slate-300">Couldn&apos;t apply</strong> banner above the resume, or edit manually (trash icon / pencil).
               </p>
             </div>
           )}
@@ -74,10 +74,10 @@ function AssistantBubble({ message }: { message: AssistantMessage }) {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2">
-      <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
-        <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+        <MessageSquare className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
       </div>
-      <div className="bg-slate-800/50 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+      <div className="bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
@@ -192,24 +192,24 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
   return (
     <div className="flex flex-col h-full min-h-0">
       {queueBanner && (
-        <div className="shrink-0 border-b border-amber-400/20 bg-amber-400/5 px-3 py-2.5 space-y-1">
+        <div className="shrink-0 border-b border-amber-400/20 bg-amber-500/5 dark:bg-amber-400/5 px-3 py-2.5 space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wider">
               Issue {queueBanner.current} / {queueBanner.total}
             </span>
             <button
               type="button"
               onClick={queueBanner.onSkip}
-              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+              className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
             >
               <SkipForward className="w-3 h-3" />
               Skip
             </button>
           </div>
-          <p className="text-slate-200 text-xs font-medium leading-snug">
+          <p className="text-slate-800 dark:text-slate-200 text-xs font-medium leading-snug">
             {queueBanner.issue.description}
           </p>
-          <p className="text-slate-500 text-[11px] leading-snug">
+          <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-snug">
             {queueBanner.issue.suggestion}
           </p>
         </div>
@@ -218,12 +218,12 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[6.5rem]">
         {messages.length === 0 && (
           <div className="text-center py-8 space-y-3">
-            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center mx-auto">
-              <MessageSquare className="w-5 h-5 text-amber-400" />
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto">
+              <MessageSquare className="w-5 h-5 text-amber-700 dark:text-amber-400" />
             </div>
             <div>
-              <p className="text-slate-300 text-sm font-medium">Resume Chat</p>
-              <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+              <p className="text-slate-700 dark:text-slate-300 text-sm font-medium">Resume Chat</p>
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-1 leading-relaxed">
                 Ask me to improve anything — suggestions appear inline in the resume on the left.
               </p>
             </div>
@@ -238,7 +238,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
                   key={ex}
                   type="button"
                   onClick={() => { setInput(ex); inputRef.current?.focus(); }}
-                  className="w-full text-left text-xs text-slate-400 hover:text-amber-400 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg px-3 py-2 transition-colors"
+                  className="w-full text-left text-xs text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700/50 rounded-lg px-3 py-2 transition-colors"
                 >
                   &ldquo;{ex}&rdquo;
                 </button>
@@ -259,9 +259,9 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-slate-700/60 p-3 space-y-2">
+      <div className="border-t border-slate-300 dark:border-slate-700/60 p-3 space-y-2">
         {noResume && (
-          <p className="text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-lg px-2 py-1.5">
+          <p className="text-xs text-amber-700 dark:text-amber-400/80 bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 rounded-lg px-2 py-1.5">
             Run the Tailored Rewrite first to enable chat editing.
           </p>
         )}
@@ -282,7 +282,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
             disabled={loading || noResume}
             placeholder={noResume ? "Run rewrite first…" : "Ask me to change anything… (Enter to send)"}
             rows={4}
-            className="flex-1 resize-none bg-slate-800 border border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed min-h-[6.5rem]"
+            className="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:border-amber-400/60 rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 outline-none transition-colors disabled:opacity-40 leading-relaxed min-h-[6.5rem]"
           />
           <div className="flex flex-col gap-2">
             {input.trim() && !loading && (
@@ -290,7 +290,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
                 type="button"
                 onClick={() => setInput("")}
                 title="Clear message (Esc)"
-                className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+                className="p-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -309,7 +309,7 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
             </button>
           </div>
         </div>
-        <p className="text-[10px] text-slate-600">Shift+Enter for new line · Enter to send · Esc to clear</p>
+        <p className="text-[10px] text-slate-600 dark:text-slate-400">Shift+Enter for new line · Enter to send · Esc to clear</p>
       </div>
     </div>
   );

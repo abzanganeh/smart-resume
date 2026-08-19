@@ -62,7 +62,7 @@ class DPOContactResponse(BaseModel):
 async def dpo_contact(request: Request, payload: DPOContactRequest) -> DPOContactResponse:
     topic = payload.topic if payload.topic in _VALID_TOPICS else "other"
 
-    subject = f"[DPO][{topic}] {payload.name} — Smart Resume privacy inquiry"
+    subject = f"[DPO][{topic}] {payload.name} — TalioCV privacy inquiry"
     body_text = (
         f"From: {payload.name} <{payload.email}>\n"
         f"Topic: {topic}\n\n"

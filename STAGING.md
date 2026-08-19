@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-17 (post PR #66).
 
-This is the operator checklist for the **first staging deploy** of Smart Resume.
+This is the operator checklist for the **first staging deploy** of TalioCV.
 Code readiness is tracked in `docs/IMPLEMENTATION_PLAN.md` §11 (Release Phase 2).
 Local design docs under `docs/` are gitignored; this file is the tracked operator guide.
 
@@ -10,7 +10,7 @@ Local design docs under `docs/` are gitignored; this file is the tracked operato
 
 ## 1. Identity and auth (already implemented)
 
-Smart Resume does **not** use an external IdP product (no Supabase Auth for the main app).
+TalioCV does **not** use an external IdP product (no Supabase Auth for the main app).
 
 | Layer | Technology | Canonical user id |
 |-------|------------|-------------------|

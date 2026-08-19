@@ -72,9 +72,18 @@ function runTests() {
   assert(fixture.blocking_issues.length === 3, "fixture has three blocking issues");
   assert(fixture.quick_wins.length === 1, "fixture has one quick win");
 
-  assert(scoreColor(74) === "text-green-400", "score 74 uses green color");
-  assert(scoreColor(55) === "text-amber-400", "score 55 uses amber color");
-  assert(scoreColor(30) === "text-red-400", "score 30 uses red color");
+  assert(
+    scoreColor(74) === "text-green-700 dark:text-green-400",
+    "score 74 uses green color in both themes",
+  );
+  assert(
+    scoreColor(55) === "text-amber-700 dark:text-amber-400",
+    "score 55 uses amber color in both themes",
+  );
+  assert(
+    scoreColor(30) === "text-red-700 dark:text-red-400",
+    "score 30 uses red color in both themes",
+  );
 
   const sorted = sortBlockingIssues(fixture.blocking_issues);
   assert(sorted[0].impact === "high" && sorted[0].fix_effort === "one_click", "high + one_click sorts first");

@@ -8,12 +8,13 @@ export type VoiceState = "idle" | "speaking" | "recording" | "transcribing" | "p
  * Unified voice-recording hook.
  *
  * Primary path  — Web Speech API (Chrome / Edge):
- *   No API key required. Live interim text appears as the user speaks.
+ *   Free on every plan. Live interim text appears as the user speaks.
  *   Transcript is ready the moment the user stops; no backend call needed.
  *
- * Fallback path — MediaRecorder → OpenAI Whisper:
+ * Fallback path — MediaRecorder → platform Whisper endpoint:
  *   Used when SpeechRecognition is not available (Firefox, Safari).
- *   Requires an OpenAI API key (BYOK or backend .env).
+ *   Gated by the subscriber's whisper_uses_per_period allowance; the free plan
+ *   is rejected with `whisper_not_available`.
  */
 
 function formatDuration(ms: number) {

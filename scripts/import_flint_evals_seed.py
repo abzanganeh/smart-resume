@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import Flint evals/questions JSON packs into Smart Resume question seed bank."""
+"""Import Flint evals/questions JSON packs into TalioCV question seed bank."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Smart Resume Agent.
+Thanks for your interest in contributing to TalioCV.
 
 ## Before You Start
 

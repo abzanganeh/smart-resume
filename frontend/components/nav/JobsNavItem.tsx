@@ -37,7 +37,7 @@ export function JobsNavItem() {
 
   if (status !== "authenticated" || subscribed === null) {
     return (
-      <span className="px-3 py-1.5 rounded-lg text-slate-600 whitespace-nowrap text-sm">
+      <span className="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 whitespace-nowrap text-sm">
         Search jobs
       </span>
     )
@@ -47,7 +47,7 @@ export function JobsNavItem() {
     return (
       <Link
         href="/jobs"
-        className="px-3 py-1.5 rounded-lg hover:bg-slate-800 hover:text-slate-200 transition-colors whitespace-nowrap"
+        className="px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
       >
         Search jobs
       </Link>
@@ -57,7 +57,7 @@ export function JobsNavItem() {
   return (
     <Link
       href="/billing"
-      className="px-3 py-1.5 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap inline-flex items-center gap-1.5 text-amber-400/90 hover:text-amber-300"
+      className="px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400/90 hover:text-amber-800 dark:hover:text-amber-300"
       title="Subscribe to search jobs"
     >
       Search jobs

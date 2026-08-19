@@ -7,18 +7,18 @@ export default function BillingCancelPage() {
   return (
     <main className="max-w-lg mx-auto px-4 py-20 text-center space-y-6">
       <div className="flex justify-center">
-        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
-          <XCircle className="w-8 h-8 text-slate-400" />
+        <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <XCircle className="w-8 h-8 text-slate-600 dark:text-slate-400" />
         </div>
       </div>
 
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">Not ready yet?</h1>
-        <p className="text-slate-400">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Not ready yet?</h1>
+        <p className="text-slate-600 dark:text-slate-400">
           No worries — your checkout was cancelled and nothing was charged. Come back
           whenever you&apos;re ready to unlock full access.
         </p>
-        <p className="text-slate-500 text-sm">
+        <p className="text-slate-600 dark:text-slate-400 text-sm">
           You can return directly to the billing matrix and choose a plan again.
         </p>
       </div>
@@ -32,13 +32,13 @@ export default function BillingCancelPage() {
         </Link>
         <Link
           href="/"
-          className="bg-slate-800 text-slate-200 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-colors border border-slate-700"
+          className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700"
         >
           Back to home
         </Link>
         <Link
           href="/session/new"
-          className="bg-slate-900 text-slate-300 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-800 transition-colors border border-slate-700"
+          className="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-medium text-sm px-6 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-300 dark:border-slate-700"
         >
           Continue using free credits
         </Link>

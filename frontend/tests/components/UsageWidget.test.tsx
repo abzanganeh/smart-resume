@@ -26,16 +26,23 @@ export const FREE_USER_FIXTURE = {
 export const SUBSCRIBED_USER_FIXTURE = {
   subscription: {
     id: "sub_test_123",
+    // Legacy interval enum — deliberately kept alongside plan_code to prove the
+    // widget prefers the resolved tier label over "Monthly".
     plan: "monthly",
     billing_cycle: "recurring",
+    plan_code: "monthly_pro",
+    plan_display_name: "Pro",
     status: "active",
-    trial_ends_at: null,
+    trial_ends_at: null as string | null,
     period_start: "2026-05-01T00:00:00Z",
     period_end: "2026-06-01T00:00:00Z",
     resumes_used: 12,
     resumes_limit: 150,
     searches_used: 45,
     searches_limit: 300,
+    fit_analyses_limit: 50,
+    whisper_uses_used: 1,
+    whisper_uses_limit: 5 as number | null,
     cancel_at_period_end: false,
     paused_at: null,
     pause_resumes_at: null,
@@ -52,7 +59,9 @@ function deriveWidgetProps(current: typeof FREE_USER_FIXTURE | typeof SUBSCRIBED
   if (isSubscribed && sub) {
     return {
       kind: "subscribed" as const,
-      tierLabel: sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1),
+      tierLabel:
+        ("plan_display_name" in sub ? sub.plan_display_name : null) ??
+        sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1),
       resumesUsed: sub.resumes_used,
       resumesLimit: sub.resumes_limit,
       searchesUsed: sub.searches_used,
@@ -90,8 +99,8 @@ function runTests() {
     const props = deriveWidgetProps(SUBSCRIBED_USER_FIXTURE)
     assert(props.kind === "subscribed", "subscribed user → kind is subscribed")
     assert(
-      "tierLabel" in props && props.tierLabel === "Monthly",
-      "subscribed user → tier label is Monthly",
+      "tierLabel" in props && props.tierLabel === "Pro",
+      "subscribed user → tier label uses resolved plan display name, not the interval",
     )
     assert(
       "resumesUsed" in props && props.resumesUsed === 12,
@@ -147,7 +156,7 @@ function runTests() {
     const props = deriveWidgetProps(trialFixture)
     assert(props.kind === "subscribed", "trialing subscription → treated as subscribed")
     assert(
-      "tierLabel" in props && props.tierLabel === "Monthly",
+      "tierLabel" in props && props.tierLabel === "Pro",
       "trialing → correct tier label",
     )
   }

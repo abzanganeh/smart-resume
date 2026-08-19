@@ -40,7 +40,7 @@ function formatApiErrorMessage(
       }
       return {
         code,
-        message: "You're out of credits. Upgrade or wait for your next grant.",
+        message: "You're out of credits. Subscribe from Billing to keep going.",
       };
     }
     if (code === "subscription_required") {
@@ -976,6 +976,15 @@ export async function getFitDetail(
 
 // ── Billing types ─────────────────────────────────────────────────────────────
 
+/** Per-period allowances from the backend tier-limits seed. null = no cap. */
+export interface BillingPlanLimits {
+  resumes_per_period: number;
+  searches_per_period: number;
+  fit_analyses_per_period: number;
+  whisper_uses_per_period: number | null;
+  career_watch_companies: number;
+}
+
 export interface BillingPlan {
   code: string;
   display_name: string;
@@ -985,6 +994,7 @@ export interface BillingPlan {
   stripe_price_id: string;
   is_active: boolean;
   features: string[];
+  limits: BillingPlanLimits | null;
 }
 
 export interface BillingAddon {
@@ -1113,9 +1123,13 @@ export interface SubscriptionCurrentResponse {
   /** null when user has no subscription (free tier) */
   subscription: {
     id: string;
-    /** Legacy enum or new plan code string from backend */
+    /** Legacy interval enum (`daily` | `weekly` | `monthly`) — cannot identify the tier */
     plan: string;
     billing_cycle: "recurring" | "yearly";
+    /** Canonical tier code, e.g. `monthly_plus` */
+    plan_code: string;
+    /** Marketing label, e.g. `Pro+` */
+    plan_display_name: string;
     status: SubscriptionStatus;
     trial_ends_at: string | null;
     period_start: string;
@@ -1124,6 +1138,10 @@ export interface SubscriptionCurrentResponse {
     resumes_limit: number;
     searches_used: number;
     searches_limit: number;
+    fit_analyses_limit: number;
+    whisper_uses_used: number;
+    /** null means unlimited (Premium fair-use) */
+    whisper_uses_limit: number | null;
     cancel_at_period_end: boolean;
     paused_at: string | null;
     pause_resumes_at: string | null;

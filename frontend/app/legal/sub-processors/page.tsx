@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { LegalPageShell } from "@/components/legal/LegalPageShell"
 
 export const metadata: Metadata = {
-  title: "Sub-processors — Smart Resume",
+  title: "Sub-processors — TalioCV",
   description:
-    "List of sub-processors used by Smart Resume Agent.  Updated with 30-day notice as required by our Privacy Policy.",
+    "List of sub-processors used by TalioCV.  Updated with 30-day notice as required by our Privacy Policy.",
 }
 
 const LAST_UPDATED = "2026-05-31"
@@ -67,9 +67,23 @@ const SUBPROCESSORS: Subprocessor[] = [
     privacyUrl: "https://sentry.io/privacy/",
   },
   {
+    name: "Google (Gemini)",
+    purpose:
+      "Default LLM provider for the platform-managed tier.  Processes résumé and job-description text for keyword extraction, gap analysis, rewriting, and quality checks on the Free, Weekly, Pro, and Pro+ plans.",
+    region: "Global (US headquartered)",
+    privacyUrl: "https://policies.google.com/privacy",
+  },
+  {
+    name: "Anthropic",
+    purpose:
+      "LLM provider for the Premium plan's résumé rewrite step.  Processes résumé and job-description text for that plan only.",
+    region: "Global (US headquartered)",
+    privacyUrl: "https://www.anthropic.com/legal/privacy",
+  },
+  {
     name: "OpenAI",
     purpose:
-      "Default LLM provider for the platform-managed tier (Phase 2 / Phase 3 / Phase 4 prompts) and the platform-owned embedding model.  BYOK users may configure a different provider for chat models; embeddings always use the platform key for cross-document determinism.",
+      "Platform-owned embedding model (used for master-résumé chunk retrieval and fit scoring) and Whisper speech-to-text for voice input on paid plans.  We do not accept customer-supplied API keys.",
     region: "Global (US headquartered)",
     privacyUrl: "https://openai.com/policies/privacy-policy",
   },
@@ -79,7 +93,7 @@ export default function SubProcessorsPage() {
   return (
     <LegalPageShell title="Sub-processors" lastUpdated={LAST_UPDATED}>
       <p>
-        Smart Resume engages the following sub-processors to operate the
+        TalioCV engages the following sub-processors to operate the
         Service.  This list is updated with at least <strong>30 days&apos;
         notice</strong> before any material change, in line with §19.9 of our
         system design and Section 4 of the{" "}

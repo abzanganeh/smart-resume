@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   promoRedeemErrorMessage,
   promoRedeemIdempotentMessage,
@@ -7,24 +8,33 @@ import {
 
 describe("promoRedeem copy", () => {
   it("maps invalid code", () => {
-    expect(promoRedeemErrorMessage("promo_code_invalid")).toBe(
+    assert.equal(
+      promoRedeemErrorMessage("promo_code_invalid"),
       "That code is not valid.",
     );
   });
 
   it("maps expired code", () => {
-    expect(promoRedeemErrorMessage("promo_code_expired")).toBe(
+    assert.equal(
+      promoRedeemErrorMessage("promo_code_expired"),
       "That code has expired.",
     );
   });
 
   it("formats success message", () => {
-    expect(promoRedeemSuccessMessage(5)).toBe("Code applied — 5 credits added.");
-    expect(promoRedeemSuccessMessage(1)).toBe("Code applied — 1 credit added.");
+    assert.equal(
+      promoRedeemSuccessMessage(5),
+      "Code applied — 5 credits added.",
+    );
+    assert.equal(
+      promoRedeemSuccessMessage(1),
+      "Code applied — 1 credit added.",
+    );
   });
 
   it("formats idempotent message", () => {
-    expect(promoRedeemIdempotentMessage()).toBe(
+    assert.equal(
+      promoRedeemIdempotentMessage(),
       "This code was already applied to your account.",
     );
   });

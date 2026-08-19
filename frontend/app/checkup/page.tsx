@@ -68,14 +68,14 @@ export default function CheckupPage() {
   }, [jdText, jobTitle, resumeTab, resumeText]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-      <header className="border-b border-slate-800 bg-slate-950/60">
+    <main className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 text-slate-900 dark:text-white">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <Link href="/" className="shrink-0">
             <BrandLogo className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-3 text-sm">
-            <Link href="/auth" className="text-slate-400 hover:text-white transition-colors">
+            <Link href="/auth" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
               Sign in
             </Link>
             <Link
@@ -90,21 +90,21 @@ export default function CheckupPage() {
 
       <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
         <div className="text-center max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-300 mb-4">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+          <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-700 dark:text-slate-300 mb-4">
+            <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-400" />
             Free ATS check — no account required
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">Resume checkup</h1>
-          <p className="text-slate-400 text-sm leading-relaxed">
+          <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
             Paste your resume and a job description to get an instant ATS-style score,
             issue breakdown, and quick wins. No signup, no paywall.
           </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          <section className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-amber-400" />
+          <section className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
               Your resume
             </h2>
             <div className="flex gap-2">
@@ -116,8 +116,8 @@ export default function CheckupPage() {
                   className={clsx(
                     "px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
                     resumeTab === tab
-                      ? "bg-amber-400/15 border-amber-400/40 text-amber-200"
-                      : "border-slate-700 text-slate-400 hover:border-slate-600",
+                      ? "bg-amber-500/15 dark:bg-amber-400/15 border-amber-400/40 text-amber-800 dark:text-amber-200"
+                      : "border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-600",
                   )}
                 >
                   {tab === "paste" ? "Paste text" : "Upload file"}
@@ -130,7 +130,7 @@ export default function CheckupPage() {
                 onChange={(e) => setResumeText(e.target.value.slice(0, MAX_RESUME))}
                 placeholder="Paste your resume text here..."
                 rows={12}
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 resize-y"
+                className="w-full rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 resize-y"
               />
             ) : (
               <div className="space-y-3">
@@ -144,7 +144,7 @@ export default function CheckupPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center gap-2 py-8 rounded-lg border border-dashed border-slate-600 hover:border-amber-400/40 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="w-full flex flex-col items-center gap-2 py-8 rounded-lg border border-dashed border-slate-400 dark:border-slate-600 hover:border-amber-400/40 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
                 >
                   <Upload className="w-6 h-6" />
                   <span className="text-sm">
@@ -155,9 +155,9 @@ export default function CheckupPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-amber-400" />
+          <section className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-amber-700 dark:text-amber-400" />
               Target job
             </h2>
             <input
@@ -165,21 +165,21 @@ export default function CheckupPage() {
               value={jobTitle}
               onChange={(e) => setJobTitle(e.target.value)}
               placeholder="Job title (optional)"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50"
+              className="w-full rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50"
             />
             <textarea
               value={jdText}
               onChange={(e) => setJdText(e.target.value.slice(0, MAX_JD))}
               placeholder="Paste the full job description (at least 20 characters)..."
               rows={14}
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 resize-y"
+              className="w-full rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-600 focus:outline-none focus:border-amber-400/50 resize-y"
             />
-            <p className="text-xs text-slate-500">{jdText.length.toLocaleString()} / {MAX_JD.toLocaleString()} chars</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">{jdText.length.toLocaleString()} / {MAX_JD.toLocaleString()} chars</p>
           </section>
         </div>
 
         {error && (
-          <p className="text-red-400 text-sm flex items-center gap-2 justify-center">
+          <p className="text-red-700 dark:text-red-400 text-sm flex items-center gap-2 justify-center">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -200,8 +200,8 @@ export default function CheckupPage() {
         {result && (
           <div className="space-y-6">
             <ATSGuidancePanel output={result} variant="primary" />
-            <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-6 text-center space-y-3">
-              <p className="text-slate-200 text-sm">
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/5 dark:bg-amber-400/5 p-6 text-center space-y-3">
+              <p className="text-slate-800 dark:text-slate-200 text-sm">
                 Want AI to fix these issues and export a tailored resume?
               </p>
               <Link
@@ -212,7 +212,9 @@ export default function CheckupPage() {
                 Create a free account to fix with AI
                 <ArrowRight className="w-4 h-4" />
               </Link>
-              <FreeTierSignupCredits className="text-xs text-slate-500" />
+              <FreeTierSignupCredits
+                className="text-xs text-slate-600 dark:text-slate-400"
+              />
             </div>
           </div>
         )}

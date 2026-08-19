@@ -37,10 +37,10 @@ interface Props {
 }
 
 const FIT_LABEL_COLOR: Record<string, string> = {
-  strong: "text-emerald-400",
-  good: "text-sky-400",
-  partial: "text-amber-400",
-  weak: "text-red-400",
+  strong: "text-emerald-700 dark:text-emerald-400",
+  good: "text-sky-700 dark:text-sky-400",
+  partial: "text-amber-700 dark:text-amber-400",
+  weak: "text-red-700 dark:text-red-400",
 }
 
 export function JobCard({
@@ -110,19 +110,19 @@ export function JobCard({
     <article
       data-testid={`job-card-${job.id}`}
       className={clsx(
-        "relative rounded-xl border border-slate-800 bg-slate-900 p-5",
+        "relative rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5",
         blurred && "overflow-hidden",
       )}
     >
       <div className={clsx("space-y-4", blurred && "blur-sm select-none pointer-events-none")}>
         <div className="flex gap-4">
-          <div className="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6 text-slate-500" aria-hidden />
+          <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center shrink-0">
+            <Building2 className="w-6 h-6 text-slate-600 dark:text-slate-400" aria-hidden />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-white truncate">{job.title}</h3>
-            <p className="text-sm text-slate-400">{job.company}</p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white truncate">{job.title}</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{job.company}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-600 dark:text-slate-400">
               {job.location && (
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="w-3 h-3" />
@@ -142,14 +142,14 @@ export function JobCard({
                 </span>
               )}
               {job.remote && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                   Remote
                 </span>
               )}
               {job.sources.map((source) => (
                 <span
                   key={source}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-800 text-slate-400 border border-slate-700"
+                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
                 >
                   {source === "hirebase"
                     ? "Hirebase"
@@ -161,7 +161,7 @@ export function JobCard({
                 </span>
               ))}
               {job.employment_type && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700 capitalize">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 capitalize">
                   {job.employment_type.replace(/_/g, " ")}
                 </span>
               )}
@@ -172,27 +172,27 @@ export function JobCard({
         {fitResult && (
           <div
             data-testid={`job-fit-score-${job.id}`}
-            className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3"
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 px-4 py-3"
           >
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               Fit score:{" "}
               <span className={clsx("font-semibold", FIT_LABEL_COLOR[fitResult.fit_label])}>
                 {fitResult.overall_fit_score}/100 ({fitResult.fit_label})
               </span>
             </p>
-            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{fitResult.recommendation}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{fitResult.recommendation}</p>
           </div>
         )}
 
-        {fitError && <p className="text-xs text-red-400">{fitError}</p>}
-        {trackError && <p className="text-xs text-red-400">{trackError}</p>}
+        {fitError && <p className="text-xs text-red-700 dark:text-red-400">{fitError}</p>}
+        {trackError && <p className="text-xs text-red-700 dark:text-red-400">{trackError}</p>}
 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={handleCheckFit}
             disabled={fitLoading || blurred}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
           >
             {fitLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -218,7 +218,7 @@ export function JobCard({
             onClick={handleTrackApplication}
             disabled={trackLoading || blurred}
             data-testid={`track-application-${job.id}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
           >
             {trackLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -233,7 +233,7 @@ export function JobCard({
               target="_blank"
               rel="noopener noreferrer"
               className={clsx(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-200 text-sm hover:border-slate-600",
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm hover:border-slate-600",
                 blurred && "pointer-events-none opacity-40",
               )}
               tabIndex={blurred ? -1 : 0}
@@ -250,8 +250,8 @@ export function JobCard({
             className={clsx(
               "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm disabled:opacity-40",
               saved
-                ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
-                : "border-slate-700 text-slate-200 hover:border-slate-600",
+                ? "border-amber-400/40 bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300"
+                : "border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-slate-600",
             )}
           >
             {saveLoading ? (
@@ -267,7 +267,7 @@ export function JobCard({
       </div>
 
       {blurred && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60 backdrop-blur-[1px]">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50/60 dark:bg-slate-950/60 backdrop-blur-[1px]">
           <Link
             href="/billing"
             className="px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300 shadow-lg"

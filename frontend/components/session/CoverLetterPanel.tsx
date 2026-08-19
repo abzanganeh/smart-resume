@@ -96,16 +96,16 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
         aria-label="Close cover letter panel"
         onClick={onClose}
       />
-      <aside className="relative w-full max-w-lg bg-slate-900 border-l border-slate-700 h-full overflow-y-auto shadow-2xl">
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-10">
+      <aside className="relative w-full max-w-lg bg-white dark:bg-slate-900 border-l border-slate-300 dark:border-slate-700 h-full overflow-y-auto shadow-2xl">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-lg font-bold text-white">Cover letter</h2>
-            <p className="text-slate-400 text-sm">Tailored to your resume and this JD</p>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Cover letter</h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">Tailored to your resume and this JD</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -114,7 +114,7 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
 
         <div className="px-6 py-5 space-y-6">
           <fieldset>
-            <legend className="text-sm font-semibold text-slate-300 mb-3">Tone</legend>
+            <legend className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Tone</legend>
             <div className="space-y-2">
               {TONES.map((t) => (
                 <label
@@ -122,8 +122,8 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
                   className={cn(
                     "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
                     tone === t.value
-                      ? "border-amber-400/60 bg-amber-400/10"
-                      : "border-slate-700 hover:border-slate-600",
+                      ? "border-amber-400/60 bg-amber-500/10 dark:bg-amber-400/10"
+                      : "border-slate-300 dark:border-slate-700 hover:border-slate-600",
                   )}
                 >
                   <input
@@ -136,8 +136,8 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
                     disabled={generating}
                   />
                   <span>
-                    <span className="block text-sm font-medium text-white">{t.label}</span>
-                    <span className="block text-xs text-slate-400">{t.hint}</span>
+                    <span className="block text-sm font-medium text-slate-900 dark:text-white">{t.label}</span>
+                    <span className="block text-xs text-slate-600 dark:text-slate-400">{t.hint}</span>
                   </span>
                 </label>
               ))}
@@ -145,8 +145,8 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
           </fieldset>
 
           <div>
-            <label htmlFor="custom-hook" className="block text-sm font-semibold text-slate-300 mb-2">
-              Custom hook <span className="text-slate-500 font-normal">(optional)</span>
+            <label htmlFor="custom-hook" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              Custom hook <span className="text-slate-600 dark:text-slate-400 font-normal">(optional)</span>
             </label>
             <input
               id="custom-hook"
@@ -155,12 +155,12 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
               onChange={(e) => setCustomHook(e.target.value)}
               placeholder="e.g. Your team's work on real-time ML pipelines caught my eye…"
               disabled={generating}
-              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400/50"
+              className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400/50"
             />
           </div>
 
           {error && (
-            <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+            <div className="text-sm text-red-700 dark:text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
               {error}
             </div>
           )}
@@ -185,7 +185,7 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
 
           {letter && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                 <span>{letter.word_count} words · {letter.tone} tone</span>
                 {letter.keywords_used.length > 0 && (
                   <span>{letter.keywords_used.length} JD keywords used</span>
@@ -195,7 +195,7 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
                 readOnly
                 value={letter.body_plain}
                 rows={16}
-                className="w-full px-3 py-3 rounded-lg bg-slate-950 border border-slate-800 text-sm text-slate-200 leading-relaxed resize-none focus:outline-none"
+                className="w-full px-3 py-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-200 leading-relaxed resize-none focus:outline-none"
               />
               <div className="flex flex-wrap gap-2">
                 <a
@@ -209,7 +209,7 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
                 <a
                   href={coverLetterExportUrl(sessionId, "docx")}
                   download="cover_letter.docx"
-                  className={cn(btnCls, "bg-slate-700 text-slate-200 hover:bg-slate-600")}
+                  className={cn(btnCls, "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600")}
                 >
                   <File className="w-4 h-4" />
                   DOCX
@@ -217,7 +217,7 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
                 <a
                   href={coverLetterExportUrl(sessionId, "txt")}
                   download="cover_letter.txt"
-                  className={cn(btnCls, "bg-slate-800 text-slate-400 hover:bg-slate-700")}
+                  className={cn(btnCls, "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700")}
                 >
                   <FileText className="w-4 h-4" />
                   TXT

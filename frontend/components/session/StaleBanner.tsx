@@ -10,9 +10,9 @@ interface Props {
 
 export function StaleBanner({ message, onRerun, running }: Props) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-400/10 border border-amber-400/30 rounded-lg px-4 py-3 mb-6">
-      <div className="flex items-start gap-2 flex-1 text-amber-200 text-sm">
-        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 rounded-lg px-4 py-3 mb-6">
+      <div className="flex items-start gap-2 flex-1 text-amber-800 dark:text-amber-200 text-sm">
+        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
         <span>{message}</span>
       </div>
       <button
