@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Loader2, Search, Settings2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, Loader2, Search, Settings2 } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
 import { getSubscriptionCurrent } from "@/lib/api"
 import { isSubscriptionActive } from "@/lib/billing"
@@ -208,6 +208,13 @@ function JobsPageContent() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white">
       <div className="max-w-4xl mx-auto px-6 py-12">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Dashboard
+        </Link>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">

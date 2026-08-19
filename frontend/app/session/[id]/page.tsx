@@ -48,7 +48,11 @@ import { ResumeChat } from "@/components/session/ResumeChat";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
-import { createApplication } from "@/lib/tracker";
+import {
+  formatTrackerLimitError,
+  trackApplicationWithDuplicatePrompt,
+} from "@/lib/trackApplicationFlow";
+import { TrackerApiError } from "@/lib/tracker";
 
 type Step = "analysis" | "rewrite" | "export";
 
@@ -807,15 +811,25 @@ function SessionContent() {
     setTrackError(null);
     try {
       const record = await getSessionResumeRecord(sessionId);
-      const app = await createApplication(authSession.backendAccessToken, {
-        resume_record_id: record.id,
-        jd_title: record.jd_title,
-        jd_company: record.jd_company,
-        status: "draft",
-      });
+      const app = await trackApplicationWithDuplicatePrompt(
+        authSession.backendAccessToken,
+        {
+          resume_record_id: record.id,
+          jd_title: record.jd_title,
+          jd_company: record.jd_company,
+          status: "draft",
+        },
+        (err) => window.confirm(`${err.message}\n\nAdd this application anyway?`),
+      );
       router.push(`/tracker/${app.id}`);
     } catch (e) {
-      setTrackError(e instanceof Error ? e.message : "Could not create application.");
+      if (e instanceof TrackerApiError && e.code === "tracker_limit_reached") {
+        setTrackError(formatTrackerLimitError(e));
+      } else if (e instanceof TrackerApiError && e.code === "duplicate_application") {
+        setTrackError(null);
+      } else {
+        setTrackError(e instanceof Error ? e.message : "Could not create application.");
+      }
     } finally {
       setTrackLoading(false);
     }
