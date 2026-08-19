@@ -1,0 +1,24 @@
+# Example TLS reverse proxy for staging VM (Caddy 2)
+# Copy to /etc/caddy/Caddyfile and set domain names + upstream ports.
+#
+# Prerequisites:
+#   - docker compose staging stack on localhost:3001 (frontend) and :8001 (backend)
+#   - DNS A records for staging.example.com and staging-api.example.com
+#
+# Then set in backend/.env.staging:
+#   FRONTEND_BASE_URL=https://staging.example.com
+#   ALLOWED_ORIGINS=["https://staging.example.com"]
+# And in .env.staging:
+#   NEXTAUTH_URL=https://staging.example.com
+#   STAGING_FRONTEND_PORT=3001
+#   STAGING_BACKEND_PORT=8001
+
+staging.example.com {
+	encode gzip
+	reverse_proxy localhost:3001
+}
+
+staging-api.example.com {
+	encode gzip
+	reverse_proxy localhost:8001
+}

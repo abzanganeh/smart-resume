@@ -106,6 +106,34 @@ class GeminiAdapter(LLMClient):
     def model_name(self) -> str:
         return self._model_name
 
+    def _needs_thinking_headroom(self) -> bool:
+        """Gemini 3.x spends hidden tokens on reasoning before visible text."""
+        name = self._model_name.lower()
+        return "gemini-3" in name or name.startswith("gemini-3")
+
+    def _output_token_cap(self, max_tokens: int) -> int:
+        if self._needs_thinking_headroom():
+            return max(max_tokens, 4096)
+        return max_tokens
+
+    def _visible_text(self, resp: Any) -> str:
+        try:
+            text = resp.text or ""
+            if text:
+                return text
+        except ValueError:
+            text = ""
+        parts_text: list[str] = []
+        for cand in getattr(resp, "candidates", None) or []:
+            content = getattr(cand, "content", None)
+            for part in getattr(content, "parts", None) or []:
+                if getattr(part, "thought", False):
+                    continue
+                piece = getattr(part, "text", None)
+                if piece:
+                    parts_text.append(piece)
+        return "".join(parts_text)
+
     def _build_contents(self, messages: list[LLMMessage]) -> tuple[str, list[dict]]:
         system_text = "\n\n".join(m.content for m in messages if m.role == "system")
         contents = [{"role": m.role if m.role != "assistant" else "model", "parts": [m.content]}
@@ -123,13 +151,13 @@ class GeminiAdapter(LLMClient):
         system_text, contents = self._build_contents(messages)
         generation_config = genai.GenerationConfig(
             temperature=temperature,
-            max_output_tokens=max_tokens,
+            max_output_tokens=self._output_token_cap(max_tokens),
         )
         if response_schema:
             sanitized_schema = _sanitize_schema_for_gemini(response_schema)
             generation_config = genai.GenerationConfig(
                 temperature=temperature,
-                max_output_tokens=max_tokens,
+                max_output_tokens=self._output_token_cap(max_tokens),
                 response_mime_type="application/json",
                 response_schema=sanitized_schema,
             )
@@ -142,7 +170,7 @@ class GeminiAdapter(LLMClient):
             contents,
             generation_config=generation_config,
         )
-        content = resp.text or ""
+        content = self._visible_text(resp)
         usage = resp.usage_metadata
         return LLMResponse(
             content=content,
@@ -166,7 +194,10 @@ class GeminiAdapter(LLMClient):
         )
         resp = await model.generate_content_async(
             contents,
-            generation_config=genai.GenerationConfig(temperature=temperature, max_output_tokens=max_tokens),
+            generation_config=genai.GenerationConfig(
+                temperature=temperature,
+                max_output_tokens=self._output_token_cap(max_tokens),
+            ),
             stream=True,
         )
         async for chunk in resp:

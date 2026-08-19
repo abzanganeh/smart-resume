@@ -1,6 +1,6 @@
 # Staging deployment runbook
 
-Last updated: 2026-08-17 (post PR #66).
+Last updated: 2026-08-18 (post PR #71 — staging deploy tooling).
 
 This is the operator checklist for the **first staging deploy** of TalioCV.
 Code readiness is tracked in `docs/IMPLEMENTATION_PLAN.md` §11 (Release Phase 2).
@@ -18,7 +18,7 @@ TalioCV does **not** use an external IdP product (no Supabase Auth for the main 
 | API identity | FastAPI + Postgres `users` table | `users.id` (UUID) |
 | API tokens | HS256 access JWT (15 min) + refresh cookie (rotation) | tied to `users.id` |
 
-**Sign-in methods:** email/password, Google SSO, GitHub SSO.
+**Sign-in methods:** email/password, Google SSO, GitHub SSO, LinkedIn SSO (Microsoft Entra optional).
 
 **OAuth flow:** NextAuth completes the provider exchange → frontend calls
 `POST /api/auth/callback` with `id_token` or `access_token` → backend upserts
@@ -29,10 +29,12 @@ as `backendAccessToken`.
 
 - `AUTH_DISABLE` is **ignored** (auth always enforced)
 - Set `AUTH_SECRET`, `BYOK_ENCRYPTION_KEY`, `NEXTAUTH_SECRET`
-- Register OAuth redirect URIs (Google Console + GitHub app):
-  - `{FRONTEND_BASE_URL}/api/auth/callback/google`
-  - `{FRONTEND_BASE_URL}/api/auth/callback/github`
-  - `{FRONTEND_BASE_URL}/auth/extension/google/callback` (extension; optional until published)
+- Register OAuth redirect URIs per provider:
+  - Google: `{FRONTEND_BASE_URL}/api/auth/callback/google`
+  - GitHub: `{FRONTEND_BASE_URL}/api/auth/callback/github`
+  - LinkedIn: `{FRONTEND_BASE_URL}/api/auth/callback/linkedin`
+  - Microsoft: `{FRONTEND_BASE_URL}/api/auth/callback/microsoft-entra-id`
+  - Extension (optional): `{FRONTEND_BASE_URL}/auth/extension/google/callback`
 - Set `FRONTEND_BASE_URL` and `NEXTAUTH_URL` to the public staging frontend URL
 - Configure CORS: add staging origin to `ALLOWED_ORIGINS` in backend env
 
@@ -64,25 +66,49 @@ There is **no Terraform for the Next.js/FastAPI app** today. Terraform under
 
 ### Deploy sequence
 
+**Local staging simulation** (ports `3001`/`8001` so `pnpm dev` can keep `:3000`):
+
 ```bash
-# 1. Clone and configure
+# 1. Generate staging env (gitignored *.env files)
+python3 scripts/setup-staging-env.py --local-sim   # dummy Stripe IDs for local boot only
+# Or omit --local-sim and fill real Stripe test keys in backend/.env.staging
+
+# 2. Validate before boot (backend aborts on startup_price_gap in staging)
+python3 scripts/setup-staging-env.py --check
+
+# 3. Start stack (postgres/redis + backend + frontend)
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+
+# 4. Automated smoke (HTTP)
+chmod +x scripts/staging-smoke.sh
+./scripts/staging-smoke.sh
+
+# 5. Manual UI checklist — STAGING.md §5
+```
+
+**VM / public staging** (ports `3000`/`8000` behind TLS):
+
+```bash
+cp .env.staging.example .env.staging
+cp backend/.env.staging.example backend/.env.staging
+# Set STAGING_FRONTEND_PORT=3000 STAGING_BACKEND_PORT=8000 in .env.staging
+# Set FRONTEND_BASE_URL / NEXTAUTH_URL to https://your-staging-domain
+# See infra/caddy/Caddyfile.staging.example
+
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+./scripts/staging-smoke.sh   # with API_URL / FRONTEND_URL env overrides
+```
+
+Legacy single-file dev path (not recommended for staging gates):
+
+```bash
 cp backend/.env.example backend/.env
-cp frontend/.env.local.example frontend/.env.local
-cp .env.example .env                    # root OAuth vars for compose
-
-# 2. Set APP_ENV=staging in backend/.env
-# 3. Fill required secrets (see §3)
-
-# 4. Migrate
+cp .env.example .env
+# Set APP_ENV=staging manually; fill §3 secrets
 docker compose up -d postgres redis
 cd backend && uv run alembic upgrade head
-
-# 5. Start app
 docker compose up -d --build
-
-# 6. Verify
-curl -sf http://localhost:8000/health   # or /docs
-curl -sf http://localhost:3000
+curl -sf http://localhost:8000/health
 ```
 
 ### Optional: job-search infra (Phase 3)
@@ -115,7 +141,8 @@ Copy from `backend/.env.example` and `frontend/.env.local.example`.
 | `FRONTEND_BASE_URL` | backend | CORS, email links, extension callback |
 | `ALLOWED_ORIGINS` | backend | JSON array with staging frontend origin |
 | `GOOGLE_CLIENT_ID/SECRET` | both | Google SSO |
-| `GITHUB_CLIENT_ID/SECRET` | frontend | GitHub SSO (optional but planned) |
+| `GITHUB_CLIENT_ID/SECRET` | both | GitHub SSO |
+| `LINKEDIN_CLIENT_ID/SECRET` | both | LinkedIn SSO |
 | `GEMINI_API_KEY` | backend | platform LLM (default provider) |
 | `OPENAI_EMBEDDING_KEY` | backend | master-resume embeddings (or reuse OpenAI key) |
 | `STRIPE_SECRET_KEY` | backend | billing |
