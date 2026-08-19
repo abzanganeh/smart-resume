@@ -398,8 +398,13 @@ export function DashboardView({ token }: { token: string }) {
     router.push(`/session/${session_id}`)
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, title: string) => {
     if (deletingIds.has(id)) return
+
+    const confirmed = window.confirm(
+      `Delete "${title}"?\n\nThis frees space in your list but does not refund credits.`,
+    )
+    if (!confirmed) return
 
     setDeletingIds((prev) => new Set(prev).add(id))
     try {
@@ -810,7 +815,7 @@ export function DashboardView({ token }: { token: string }) {
                     <button
                       type="button"
                       disabled={deletingIds.has(r.id)}
-                      onClick={() => void handleDelete(r.id)}
+                      onClick={() => void handleDelete(r.id, resumeTitle(r))}
                       className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg disabled:opacity-40"
                       aria-label={`Delete ${resumeTitle(r)}`}
                     >

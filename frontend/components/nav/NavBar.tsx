@@ -7,43 +7,30 @@ import { signOut, useSession } from "next-auth/react"
 import {
   ChevronDown,
   CreditCard,
-  FileText,
   LayoutDashboard,
   LogOut,
-  Search,
   Settings,
-  Sparkles,
-  Target,
 } from "lucide-react"
 import { BrandLogo } from "@/components/brand/BrandLogo"
+import {
+  MOBILE_NAV_LINKS,
+  NAV_PILLARS,
+  navPathIsActive,
+  navPillarIsActive,
+} from "@/components/nav/navPillars"
 import { fetchMe, logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
 import { NotificationBell } from "@/components/nav/NotificationBell"
 import { UsageWidget } from "@/components/nav/UsageWidget"
 import { ThemeToggle } from "@/components/theme/ThemeToggle"
 
-const PRIMARY_LINKS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/profile", label: "Master resume", icon: FileText },
-  { href: "/jobs/setup", label: "Job roles", icon: Target },
-  { href: "/jobs", label: "Jobs", icon: Search },
-  { href: "/session/new", label: "Tailor", icon: Sparkles },
-] as const
-
-const MORE_LINKS = [
-  { href: "/tracker", label: "Tracker" },
-  { href: "/fit", label: "Job fit" },
-  { href: "/career-watch", label: "Career Watch" },
-  { href: "/cover-letter/new", label: "Cover letter" },
-] as const
-
 export function NavBar() {
   const pathname = usePathname()
   const { data: session, status } = useSession()
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [openPillarId, setOpenPillarId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const moreRef = useRef<HTMLDivElement>(null)
+  const pillarRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [hadUserMenu, setHadUserMenu] = useState(false)
 
   const accessToken =
@@ -73,15 +60,16 @@ export function NavBar() {
   }, [dropdownOpen])
 
   useEffect(() => {
-    if (!moreOpen) return
+    if (!openPillarId) return
     function handleClick(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false)
+      const root = pillarRefs.current[openPillarId]
+      if (root && !root.contains(e.target as Node)) {
+        setOpenPillarId(null)
       }
     }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
-  }, [moreOpen])
+  }, [openPillarId])
 
   async function handleLogout() {
     setDropdownOpen(false)
@@ -96,9 +84,11 @@ export function NavBar() {
   }
 
   function isActive(href: string) {
-    if (href === "/dashboard") return pathname === "/dashboard"
-    if (href === "/jobs/setup") return pathname.startsWith("/jobs/setup")
-    return pathname === href || pathname.startsWith(`${href}/`)
+    return navPathIsActive(pathname, href)
+  }
+
+  function pillarIsActive(pillar: (typeof NAV_PILLARS)[number]) {
+    return navPillarIsActive(pathname, pillar)
   }
 
   return (
@@ -110,40 +100,82 @@ export function NavBar() {
 
         {renderUserMenu && (
           <div className="hidden md:flex items-center gap-0.5 text-sm text-slate-600 dark:text-slate-400 min-w-0">
-            {PRIMARY_LINKS.map(({ href, label }) => (
-              <NavLink key={href} href={href} active={isActive(href)}>
-                {label}
-              </NavLink>
-            ))}
-            <div className="relative" ref={moreRef}>
-              <button
-                type="button"
-                onClick={() => setMoreOpen((v) => !v)}
-                className={clsx(
-                  "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
-                  moreOpen
-                    ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-200"
-                    : "hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
-                )}
-              >
-                More
-                <ChevronDown className={clsx("w-4 h-4 transition-transform", moreOpen && "rotate-180")} />
-              </button>
-              {moreOpen && (
-                <div className="absolute left-0 mt-2 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
-                  {MORE_LINKS.map(({ href, label }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setMoreOpen(false)}
-                      className="block px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      {label}
-                    </Link>
-                  ))}
+            {NAV_PILLARS.map((pillar) => {
+              const active = pillarIsActive(pillar)
+              const open = openPillarId === pillar.id
+              const singleLink =
+                !pillar.comingSoon && pillar.links.length === 1
+                  ? pillar.links[0]
+                  : null
+
+              if (singleLink) {
+                return (
+                  <NavLink key={pillar.id} href={singleLink.href} active={isActive(singleLink.href)}>
+                    {pillar.label}
+                  </NavLink>
+                )
+              }
+
+              return (
+                <div
+                  key={pillar.id}
+                  className="relative"
+                  ref={(node) => {
+                    pillarRefs.current[pillar.id] = node
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenPillarId((current) =>
+                        current === pillar.id ? null : pillar.id,
+                      )
+                    }
+                    className={clsx(
+                      "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+                      active || open
+                        ? "bg-amber-400/15 text-amber-900 dark:text-amber-200 font-medium"
+                        : "hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
+                      pillar.comingSoon && "opacity-70",
+                    )}
+                    aria-expanded={open}
+                  >
+                    {pillar.label}
+                    <ChevronDown
+                      className={clsx("w-4 h-4 transition-transform", open && "rotate-180")}
+                    />
+                  </button>
+                  {open && (
+                    <div className="absolute left-0 mt-2 min-w-[11rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
+                      {pillar.links.map((link) =>
+                        pillar.comingSoon || link.href === "#" ? (
+                          <span
+                            key={link.label}
+                            className="block px-4 py-2.5 text-sm text-slate-500 dark:text-slate-500 cursor-not-allowed"
+                          >
+                            {link.label}
+                          </span>
+                        ) : (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setOpenPillarId(null)}
+                            className={clsx(
+                              "block px-4 py-2.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
+                              isActive(link.href)
+                                ? "text-amber-800 dark:text-amber-300 font-medium"
+                                : "text-slate-700 dark:text-slate-300",
+                            )}
+                          >
+                            {link.label}
+                          </Link>
+                        ),
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              )
+            })}
           </div>
         )}
 
@@ -199,22 +231,7 @@ export function NavBar() {
 
       {renderUserMenu && (
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex gap-1 overflow-x-auto text-xs">
-          {PRIMARY_LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className={clsx(
-                "px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0",
-                isActive(href)
-                  ? "bg-amber-400/20 text-amber-900 dark:text-amber-200 font-medium"
-                  : "text-slate-600 dark:text-slate-400",
-              )}
-            >
-              {label}
-            </Link>
-          ))}
-          <span className="mx-1 self-center h-4 w-px bg-slate-200 dark:bg-slate-700 shrink-0" aria-hidden />
-          {MORE_LINKS.map(({ href, label }) => (
+          {MOBILE_NAV_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}

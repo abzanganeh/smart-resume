@@ -213,8 +213,10 @@ function ProfilePageContent() {
               <UserCircle className="w-7 h-7 text-amber-700 dark:text-amber-400" />
               Master resume profile
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-sm">
-              Chunked, embedded career history used to tailor every session.
+            <p className="text-slate-600 dark:text-slate-400 text-sm max-w-xl">
+              Your full career inventory — include everything; we pick the strongest
+              matches for each job description. Chunked, embedded history powers every
+              tailor session.
             </p>
           </header>
 
