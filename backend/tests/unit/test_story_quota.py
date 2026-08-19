@@ -111,8 +111,8 @@ async def test_story_whisper_blocked_for_free_tier() -> None:
                 "app.services.billing.tier_limits_lookup", fromlist=["TierLimits"]
             ).TierLimits(
                 plan_code="free",
-                resumes_per_period=3,
-                cover_letters_per_period=3,
+                resumes_per_period=6,
+                cover_letters_per_period=6,
                 searches_per_period=5,
                 fit_analyses_per_period=3,
                 checkups_per_period=3,
@@ -120,6 +120,7 @@ async def test_story_whisper_blocked_for_free_tier() -> None:
                 coached_sessions=1,
                 whisper_enabled=False,
                 whisper_uses_per_period=0,
+                tracker_active_limit=10,
                 soft_cap_message=None,
             ),
             None,

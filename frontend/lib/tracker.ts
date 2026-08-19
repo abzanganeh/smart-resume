@@ -12,8 +12,17 @@ export interface ApplicationSummary {
   status: ApplicationStatus
   applied_date: string | null
   follow_up_date: string | null
+  archived_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ApplicationFunnelResponse {
+  status_counts: Record<ApplicationStatus, number>
+  active_total: number
+  archived_total: number
+  total: number
+  tracker_active_limit: number | null
 }
 
 export interface InterviewRound {
@@ -98,6 +107,33 @@ export const PIPELINE_COLUMNS: { key: ApplicationStatus; label: string }[] = [
   { key: "withdrawn", label: "Withdrawn" },
 ]
 
+/**
+ * Structured error thrown for non-2xx tracker responses.  Callers can
+ * branch on ``code`` (`tracker_limit_reached`, `duplicate_application`,
+ * ...) and read the raw ``detail`` payload without re-parsing the
+ * message string.
+ */
+export class TrackerApiError extends Error {
+  readonly status: number
+  readonly code: string | undefined
+  readonly detail: Record<string, unknown> | undefined
+
+  constructor(
+    message: string,
+    opts: {
+      status: number
+      code?: string
+      detail?: Record<string, unknown>
+    },
+  ) {
+    super(message)
+    this.name = "TrackerApiError"
+    this.status = opts.status
+    this.code = opts.code
+    this.detail = opts.detail
+  }
+}
+
 async function authRequest<T>(
   path: string,
   token: string,
@@ -114,21 +150,57 @@ async function authRequest<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const detail = body?.detail
-    const code = typeof detail === "object" && detail !== null ? detail.code : undefined
+    const isObjectDetail = typeof detail === "object" && detail !== null
+    const code = isObjectDetail ? (detail.code as string | undefined) : undefined
     const message =
-      typeof detail === "object" && detail !== null
-        ? detail.message ?? detail.detail
+      isObjectDetail
+        ? (detail.message as string | undefined) ??
+          (detail.detail as string | undefined)
         : typeof detail === "string"
           ? detail
           : undefined
-    throw new Error(message ?? code ?? `HTTP ${res.status}`)
+    throw new TrackerApiError(message ?? code ?? `HTTP ${res.status}`, {
+      status: res.status,
+      code,
+      detail: isObjectDetail ? (detail as Record<string, unknown>) : undefined,
+    })
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
-export async function listApplications(token: string): Promise<ApplicationSummary[]> {
-  return authRequest("/api/applications", token)
+export async function listApplications(
+  token: string,
+  options: { archived?: "true" | "false" | "all" } = {},
+): Promise<ApplicationSummary[]> {
+  const search = options.archived
+    ? `?archived=${encodeURIComponent(options.archived)}`
+    : ""
+  return authRequest(`/api/applications${search}`, token)
+}
+
+export async function getApplicationFunnel(
+  token: string,
+): Promise<ApplicationFunnelResponse> {
+  return authRequest("/api/applications/funnel", token)
+}
+
+export async function archiveApplication(
+  token: string,
+  id: string,
+): Promise<ApplicationSummary> {
+  return authRequest(`/api/applications/${id}/archive`, token, {
+    method: "POST",
+  })
+}
+
+export async function unarchiveApplication(
+  token: string,
+  id: string,
+): Promise<ApplicationSummary> {
+  return authRequest(`/api/applications/${id}/unarchive`, token, {
+    method: "POST",
+  })
 }
 
 export async function getApplication(
@@ -146,6 +218,8 @@ export async function createApplication(
     jd_company?: string
     job_url?: string
     status?: ApplicationStatus
+    /** Set true to bypass duplicate-application 409 checks. */
+    confirm_add_duplicate?: boolean
   },
 ): Promise<ApplicationSummary> {
   return authRequest("/api/applications", token, {

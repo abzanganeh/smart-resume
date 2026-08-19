@@ -29,8 +29,8 @@ def _limits(
 ) -> TierLimits:
     return TierLimits(
         plan_code=plan_code,
-        resumes_per_period=3,
-        cover_letters_per_period=3,
+        resumes_per_period=6,
+        cover_letters_per_period=6,
         searches_per_period=5,
         fit_analyses_per_period=3,
         checkups_per_period=3,
@@ -38,6 +38,7 @@ def _limits(
         coached_sessions=1,
         whisper_enabled=enabled,
         whisper_uses_per_period=uses,
+        tracker_active_limit=10,
         soft_cap_message=None,
     )
 

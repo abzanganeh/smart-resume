@@ -130,6 +130,12 @@ class Application(Base):
     status_history: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
+    # Archiving frees up an "active slot" for tracker_active_limit without
+    # deleting the row.  ``archived_at IS NULL`` means the application is
+    # active.  Rows never auto-unarchive.
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -164,6 +170,11 @@ class Application(Base):
 
     __table_args__ = (
         Index("ix_applications_user_status", "user_id", "status"),
+        Index(
+            "ix_applications_user_active",
+            "user_id",
+            postgresql_where=text("archived_at IS NULL"),
+        ),
         Index(
             "ix_applications_resume_record_id",
             "resume_record_id",

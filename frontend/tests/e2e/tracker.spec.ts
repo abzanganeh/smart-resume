@@ -19,10 +19,27 @@ const APPLICATIONS_FIXTURE = [
     status: "applied",
     applied_date: "2026-05-28T10:00:00Z",
     follow_up_date: null,
+    archived_at: null,
     created_at: "2026-05-28T10:00:00Z",
     updated_at: "2026-05-28T10:00:00Z",
   },
 ]
+
+const FUNNEL_FIXTURE = {
+  status_counts: {
+    draft: 0,
+    applied: 1,
+    interviewing: 0,
+    offer: 0,
+    accepted: 0,
+    rejected: 0,
+    withdrawn: 0,
+  },
+  active_total: 1,
+  archived_total: 0,
+  total: 1,
+  tracker_active_limit: 10,
+}
 
 const MOCK_ACCESS = "mock-access-token-tracker"
 const MOCK_USER = {
@@ -99,7 +116,28 @@ async function mockTrackerApis(page: Page) {
     }),
   )
 
-  await page.route(`${API}/api/applications`, (route: Route) => {
+  // Funnel is polled by the tracker header alongside the row list; must be
+  // mocked or the page hits the real backend and stalls.
+  await page.route(`${API}/api/applications/funnel`, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...FUNNEL_FIXTURE,
+        status_counts: {
+          ...FUNNEL_FIXTURE.status_counts,
+          ...(patchedStatus
+            ? {
+                applied: patchedStatus === "applied" ? 1 : 0,
+                interviewing: patchedStatus === "interviewing" ? 1 : 0,
+              }
+            : {}),
+        },
+      }),
+    }),
+  )
+
+  await page.route(/\/api\/applications(\?.*)?$/, (route: Route) => {
     if (route.request().method() === "GET") {
       const items = APPLICATIONS_FIXTURE.map((a) =>
         patchedStatus ? { ...a, status: patchedStatus } : a,
