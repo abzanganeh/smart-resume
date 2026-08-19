@@ -61,8 +61,9 @@ export function NavBar() {
 
   useEffect(() => {
     if (!openPillarId) return
+    const activePillarId = openPillarId
     function handleClick(e: MouseEvent) {
-      const root = pillarRefs.current[openPillarId]
+      const root = pillarRefs.current[activePillarId]
       if (root && !root.contains(e.target as Node)) {
         setOpenPillarId(null)
       }
