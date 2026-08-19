@@ -24,6 +24,7 @@ import {
   type JobResult,
 } from "@/lib/jobs"
 import {
+  formatDuplicateApplicationPrompt,
   formatTrackerLimitError,
   trackApplicationWithDuplicatePrompt,
 } from "@/lib/trackApplicationFlow"
@@ -104,7 +105,10 @@ export function JobCard({
           job_url: job.apply_url ?? undefined,
           status: "draft",
         },
-        (err) => window.confirm(`${err.message}\n\nAdd this application anyway?`),
+        (err) =>
+          window.confirm(
+            `${formatDuplicateApplicationPrompt(err)}\n\nAdd this application anyway?`,
+          ),
       )
       router.push(`/tracker/${app.id}`)
     } catch (e) {

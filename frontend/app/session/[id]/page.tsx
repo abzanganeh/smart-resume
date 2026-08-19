@@ -49,6 +49,7 @@ import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/li
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
 import {
+  formatDuplicateApplicationPrompt,
   formatTrackerLimitError,
   trackApplicationWithDuplicatePrompt,
 } from "@/lib/trackApplicationFlow";
@@ -819,7 +820,10 @@ function SessionContent() {
           jd_company: record.jd_company,
           status: "draft",
         },
-        (err) => window.confirm(`${err.message}\n\nAdd this application anyway?`),
+        (err) =>
+          window.confirm(
+            `${formatDuplicateApplicationPrompt(err)}\n\nAdd this application anyway?`,
+          ),
       );
       router.push(`/tracker/${app.id}`);
     } catch (e) {

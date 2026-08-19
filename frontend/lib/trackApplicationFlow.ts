@@ -29,7 +29,12 @@ export async function trackApplicationWithDuplicatePrompt(
   }
 }
 
+export function formatDuplicateApplicationPrompt(err: TrackerApiError): string {
+  // Backend message is user-facing; callers append the confirm question.
+  return err.message
+}
+
 export function formatTrackerLimitError(err: TrackerApiError): string {
-  if (err.code !== "tracker_limit_reached") return err.message
-  return `${err.message} Archive an application on the Applications page or upgrade your plan.`
+  // Backend detail.message already includes archive/upgrade guidance.
+  return err.message
 }

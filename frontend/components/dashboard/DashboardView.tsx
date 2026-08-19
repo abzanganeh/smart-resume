@@ -402,7 +402,7 @@ export function DashboardView({ token }: { token: string }) {
     if (deletingIds.has(id)) return
 
     const confirmed = window.confirm(
-      `Delete "${title}"?\n\nThis frees space in your list but does not refund credits.`,
+      `Delete "${title}"?\n\nThis is permanent. Credits already spent on generation are not refunded.`,
     )
     if (!confirmed) return
 
