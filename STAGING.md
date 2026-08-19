@@ -212,6 +212,8 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 ### Job search & tracker
 
 - [ ] `/jobs` search (subscribed user) → results, stale banner when provider degraded
+- [ ] `/jobs` **Match my resume** tab (subscribed + master resume on profile) → ranked results with match score badge
+- [ ] Match without master resume → error with link to profile
 - [ ] **Track application** on job card → `/tracker/{id}` draft
 - [ ] **Tailor Resume** → session with JD prefilled
 - [ ] `/tracker` kanban drag updates status; detail page loads
@@ -261,6 +263,5 @@ Not blocking first staging deploy:
 
 - RP4 Steps 27–38 (dashboard hardening, notifications platform, admin UI polish, compliance pages)
 - Full app Terraform / managed CI deploy pipeline
-- Job search “Match my resume” UI (`/api/jobs/match` backend exists)
 
 See `docs/IMPLEMENTATION_PLAN.md` for the full RP2–RP4 step list.
