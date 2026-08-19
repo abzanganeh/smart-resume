@@ -779,9 +779,11 @@ _MODEL_INPUT_WINDOW: dict[str, int] = {
     "claude-3-5-sonnet-20241022": 200_000,
     "claude-3-opus-20240229": 200_000,
     "claude-3-haiku-20240307": 200_000,
+    "gemini-3.6-flash": 1_000_000,
+    "gemini-3.5-flash": 1_000_000,
+    "gemini-3.5-flash-lite": 1_000_000,
     "gemini-2.5-flash": 1_000_000,
     "gemini-2.5-flash-lite": 1_000_000,
-    "gemini-3.5-flash": 1_000_000,
 }
 
 _PROMPT_TOKENIZER = tiktoken.get_encoding("cl100k_base")

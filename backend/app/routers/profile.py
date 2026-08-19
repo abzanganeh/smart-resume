@@ -73,7 +73,6 @@ from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
 from app.services.auth.dependencies import get_current_user
 from app.services.billing.quota import (
-    check_quota_for_story,
     check_quota_for_story_coach,
     check_quota_for_story_generate,
     check_quota_for_story_interview,

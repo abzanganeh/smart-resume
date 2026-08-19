@@ -113,7 +113,7 @@ def main() -> None:
 
     print("\n--- Manual checklist (fill in backend/.env) ---")
     print("  LLM (pick one provider):")
-    print("    gemini  → GOOGLE_API_KEY + LLM_PROVIDER=gemini + LLM_MODEL=gemini-2.5-flash")
+    print("    gemini  → GOOGLE_API_KEY + LLM_PROVIDER=gemini + LLM_MODEL=gemini-3.6-flash")
     print("    openai  → OPENAI_API_KEY + LLM_PROVIDER=openai + LLM_MODEL=gpt-4o")
     print("    ollama  → LLM_PROVIDER=ollama + LLM_MODEL=llama3.1:8b (no key; run ollama locally)")
     print("\n--- Then start ---")

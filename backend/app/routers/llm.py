@@ -25,7 +25,7 @@ def _friendly_error(exc: Exception) -> str:
     if "404" in msg and "model" in msg:
         return (
             "Key works, but this model id is not available (it may be retired). "
-            "Try gemini-2.5-flash or gemini-3.5-flash."
+            "Try gemini-3.6-flash or gemini-3.5-flash-lite."
         )
     if "rate" in msg and "limit" in msg:
         return "Key is valid but rate-limited. Wait a moment and try again."

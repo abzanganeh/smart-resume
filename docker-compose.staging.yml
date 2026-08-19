@@ -1,0 +1,42 @@
+# Staging overlay — use with base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+#
+# Default host ports 3001/8001 avoid clashing with `pnpm dev` on :3000.
+# On a VM with TLS, set STAGING_FRONTEND_PORT=3000 STAGING_BACKEND_PORT=8000
+# and point Caddy/nginx at those ports.
+
+services:
+  backend:
+    ports: !override
+      - "${STAGING_BACKEND_PORT:-8001}:8000"
+    environment:
+      - APP_ENV=staging
+      - USE_IN_MEMORY_STORE=false
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://smart_resume:${POSTGRES_PASSWORD:-password}@postgres:5432/smart_resume
+      - ALLOWED_ORIGINS=["http://localhost:${STAGING_FRONTEND_PORT:-3001}","http://frontend:3000"]
+      - FRONTEND_BASE_URL=http://localhost:${STAGING_FRONTEND_PORT:-3001}
+    env_file:
+      - path: ./backend/.env.staging
+        required: true
+
+  frontend:
+    ports: !override
+      - "${STAGING_FRONTEND_PORT:-3001}:3000"
+    env_file:
+      - path: ./.env.staging
+        required: true
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${STAGING_BACKEND_PORT:-8001}
+      - INTERNAL_API_URL=http://backend:8000
+      - NEXTAUTH_URL=http://localhost:${STAGING_FRONTEND_PORT:-3001}
+      - AUTH_TRUST_HOST=true
+      - NEXT_PUBLIC_APP_ENV=staging
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID:-}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET:-}
+      - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-}
+      - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET:-}
