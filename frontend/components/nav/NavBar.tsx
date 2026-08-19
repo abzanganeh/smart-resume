@@ -2,20 +2,48 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
-import { ChevronDown, CreditCard, FileText, LogOut, Settings } from "lucide-react"
+import {
+  ChevronDown,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Search,
+  Settings,
+  Sparkles,
+  Target,
+} from "lucide-react"
 import { BrandLogo } from "@/components/brand/BrandLogo"
 import { fetchMe, logoutUser } from "@/lib/auth/api"
 import { clsx } from "clsx"
-import { JobsNavItem } from "@/components/nav/JobsNavItem"
 import { NotificationBell } from "@/components/nav/NotificationBell"
 import { UsageWidget } from "@/components/nav/UsageWidget"
 import { ThemeToggle } from "@/components/theme/ThemeToggle"
 
+const PRIMARY_LINKS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/profile", label: "Master resume", icon: FileText },
+  { href: "/jobs/setup", label: "Job roles", icon: Target },
+  { href: "/jobs", label: "Jobs", icon: Search },
+  { href: "/session/new", label: "Tailor", icon: Sparkles },
+] as const
+
+const MORE_LINKS = [
+  { href: "/tracker", label: "Tracker" },
+  { href: "/fit", label: "Job fit" },
+  { href: "/career-watch", label: "Career Watch" },
+  { href: "/cover-letter/new", label: "Cover letter" },
+] as const
+
 export function NavBar() {
+  const pathname = usePathname()
   const { data: session, status } = useSession()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
   const [hadUserMenu, setHadUserMenu] = useState(false)
 
   const accessToken =
@@ -33,7 +61,6 @@ export function NavBar() {
   const renderUserMenu =
     showUserMenu || (status === "loading" && hadUserMenu)
 
-  // Close dropdown on outside click — only while open.
   useEffect(() => {
     if (!dropdownOpen) return
     function handleClick(e: MouseEvent) {
@@ -44,6 +71,17 @@ export function NavBar() {
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [dropdownOpen])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    function handleClick(e: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [moreOpen])
 
   async function handleLogout() {
     setDropdownOpen(false)
@@ -57,29 +95,71 @@ export function NavBar() {
     await signOut({ callbackUrl: "/" })
   }
 
+  function isActive(href: string) {
+    if (href === "/dashboard") return pathname === "/dashboard"
+    if (href === "/jobs/setup") return pathname.startsWith("/jobs/setup")
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
+
   return (
     <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-        {/* Brand */}
-        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
-          <BrandLogo className="h-12 w-auto max-w-[260px] sm:max-w-[300px]" />
+      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+        <Link href="/dashboard" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
+          <BrandLogo className="h-10 w-auto max-w-[200px] sm:max-w-[240px]" />
         </Link>
 
-        {/* Nav links (authenticated) */}
         {renderUserMenu && (
-          <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400 overflow-x-auto">
-            <NavLink href="/session/new">New session</NavLink>
-            <NavLink href="/profile">Edit master resume</NavLink>
-            <NavLink href="/fit">Job fit</NavLink>
-            <NavLink href="/dashboard">Dashboard</NavLink>
-            <NavLink href="/tracker">Tracker</NavLink>
-            <NavLink href="/career-watch">Career Watch</NavLink>
-            <JobsNavItem />
+          <div className="hidden md:flex items-center gap-0.5 text-sm text-slate-600 dark:text-slate-400 min-w-0">
+            {PRIMARY_LINKS.map(({ href, label }) => (
+              <NavLink key={href} href={href} active={isActive(href)}>
+                {label}
+              </NavLink>
+            ))}
+            <div className="relative" ref={moreRef}>
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                className={clsx(
+                  "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+                  moreOpen
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-200"
+                    : "hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
+                )}
+              >
+                More
+                <ChevronDown className={clsx("w-4 h-4 transition-transform", moreOpen && "rotate-180")} />
+              </button>
+              {moreOpen && (
+                <div className="absolute left-0 mt-2 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden z-50">
+                  {MORE_LINKS.map(({ href, label }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMoreOpen(false)}
+                      className="block px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Right side */}
-        <div className="flex items-center gap-2 shrink-0">
+        {renderUserMenu && (
+          <div className="md:hidden shrink-0">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/15 text-amber-900 dark:text-amber-200 text-sm font-medium"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </Link>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
           <ThemeToggle />
           {renderUserMenu && (
             <>
@@ -116,17 +196,62 @@ export function NavBar() {
           )}
         </div>
       </div>
+
+      {renderUserMenu && (
+        <div className="md:hidden border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex gap-1 overflow-x-auto text-xs">
+          {PRIMARY_LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0",
+                isActive(href)
+                  ? "bg-amber-400/20 text-amber-900 dark:text-amber-200 font-medium"
+                  : "text-slate-600 dark:text-slate-400",
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+          <span className="mx-1 self-center h-4 w-px bg-slate-200 dark:bg-slate-700 shrink-0" aria-hidden />
+          {MORE_LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0",
+                isActive(href)
+                  ? "bg-amber-400/20 text-amber-900 dark:text-amber-200 font-medium"
+                  : "text-slate-600 dark:text-slate-400",
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
     </nav>
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({
+  href,
+  active,
+  children,
+}: {
+  href: string
+  active?: boolean
+  children: React.ReactNode
+}) {
   return (
     <Link
       href={href}
-      className="px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+      className={clsx(
+        "px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
+        active
+          ? "bg-amber-400/15 text-amber-900 dark:text-amber-200 font-medium"
+          : "hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
+      )}
     >
       {children}
     </Link>
@@ -229,17 +354,14 @@ function UserMenu({
           </div>
 
           <div className="p-1">
+            <DropdownItem href="/dashboard" icon={<LayoutDashboard className="w-4 h-4" />}>
+              Dashboard
+            </DropdownItem>
             <DropdownItem href="/profile" icon={<Settings className="w-4 h-4" />}>
               Profile &amp; settings
             </DropdownItem>
             <DropdownItem href="/billing" icon={<CreditCard className="w-4 h-4" />}>
               Billing
-            </DropdownItem>
-            <DropdownItem href="/settings/notifications" icon={<Settings className="w-4 h-4" />}>
-              Notifications
-            </DropdownItem>
-            <DropdownItem href="/dashboard" icon={<FileText className="w-4 h-4" />}>
-              My resumes
             </DropdownItem>
           </div>
 

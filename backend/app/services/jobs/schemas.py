@@ -82,11 +82,34 @@ class SavedSearchOut(BaseModel):
 class JobPreferencesOut(BaseModel):
     blocked_companies: list[str]
     default_filters: dict[str, Any]
+    preferred_titles: list[str] = Field(default_factory=list)
+    preferred_titles_confirmed: bool = False
+    preferred_titles_stale: bool = False
+    min_preferred_titles: int = 5
 
 
 class JobPreferencesUpdate(BaseModel):
     blocked_companies: list[str] | None = None
     default_filters: dict[str, Any] | None = None
+    preferred_titles: list[str] | None = None
+
+
+class JobTitleSuggestionsOut(BaseModel):
+    suggestions: list[str]
+    held_titles: list[str] = Field(default_factory=list)
+    source: str = "heuristic"
+    source_hash: str | None = None
+
+
+class PreferredTitlesUpdate(BaseModel):
+    titles: list[str] = Field(..., min_length=1, max_length=10)
+
+
+class PreferredTitlesOut(BaseModel):
+    titles: list[str]
+    confirmed: bool
+    stale: bool = False
+    min_required: int = 5
 
 
 __all__ = [
@@ -96,6 +119,9 @@ __all__ = [
     "JobResult",
     "JobSearchRequest",
     "JobSearchResponse",
+    "JobTitleSuggestionsOut",
+    "PreferredTitlesOut",
+    "PreferredTitlesUpdate",
     "SavedSearchCreate",
     "SavedSearchOut",
     "SavedSearchUpdate",

@@ -80,6 +80,23 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* Job discovery reassurance */}
+      <section className="max-w-3xl mx-auto px-6 pb-16">
+        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-700/40 bg-emerald-50/60 dark:bg-emerald-900/20 p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="shrink-0 rounded-full bg-emerald-100 dark:bg-emerald-800/50 p-3">
+            <Sparkles className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Not sure what job to search for? We&rsquo;ll figure it out.
+            </h3>
+            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+              After you build your master resume, TalioCV reads your career story and suggests 10 realistic job titles you&rsquo;re qualified for. Pick your favorites and start applying &mdash; no LinkedIn rabbit-hole, no guesswork.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* How it works */}
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <h2 className="text-center text-2xl font-semibold mb-3 text-slate-800 dark:text-slate-200">How it works</h2>
