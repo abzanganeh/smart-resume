@@ -66,6 +66,10 @@ function runTests() {
   assert(pct(MAX_TOTAL_MS + 1) === 100, "progress capped at 100%")
   assert(pct(15 * 60 * 1000) === 50, "progress 50% at 15 minutes")
 
+  // Segment persistence across navigation lives in lib/storyDraft.ts
+  // (localStorage). Leaving New Session / other menus must not drop committed
+  // segments — see tests/lib/storyDraft.test.ts.
+
   console.log("\nAll StoryRecorder logic tests passed ✓\n")
 }
 
