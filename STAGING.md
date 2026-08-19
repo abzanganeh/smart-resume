@@ -190,6 +190,14 @@ Review dry-run counts before `--apply`.
 
 Run on staging after deploy. Automated CI covers unit/integration tests and e2e smoke (`legal`, `auth`, `jobs`, `tracker`) on every PR.
 
+### Dashboard guided journey (B1–B8)
+
+- [ ] Dashboard step stack shows 6 steps: Master resume → Job roles → Search → Tailor → Applications → Prepare (locked)
+- [ ] Job roles: pick ≥5 titles; regenerate after master resume change is free
+- [ ] Nav pillar labels: **Dashboard**, **Applications** (not Tracker); mobile nav has no duplicate Dashboard link
+- [ ] Delete tailored resume confirms no credit refund
+- [ ] `./scripts/staging-smoke.sh` passes against staging API/frontend URLs
+
 ### Auth
 
 - [ ] Register with email/password → lands on onboarding
@@ -240,10 +248,14 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 
 ### Extension & autofill (manual)
 
-- [ ] `EXTENSION_AUTH_ENABLED=true`; OAuth callback registered for extension
+Requires `EXTENSION_AUTH_ENABLED=true` and a browser with the TalioCV extension loaded.
+
+- [ ] Extension OAuth callback registered; sign-in from extension yields valid backend token
 - [ ] Capture JD on Greenhouse → tailor in web app → return to apply form
-- [ ] Autofill overlay lists recent tailored session for current host
-- [ ] 409 before tailor shows “Resume not tailored yet” in extension
+- [ ] Autofill overlay lists recent tailored session for current host (`GET /api/job-descriptions/recent-tailored`)
+- [ ] Autofill payload for Greenhouse includes `job_application[email]` selectors; LinkedIn/Lever/Ashby return heuristic keys with empty selectors
+- [ ] 409 before tailor shows “Resume not tailored yet” in extension (`resume_not_tailored_yet`)
+- [ ] Autofill payload never includes resume summary text in contact fields
 - [ ] Flint “Open in Flint” handoff (`Flint/docs/STRATEGY_B_E2E_RUNBOOK.md`)
 
 ---

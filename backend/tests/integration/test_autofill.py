@@ -104,6 +104,52 @@ async def test_autofill_payload_returns_greenhouse_fields(
 
 
 @pytest.mark.asyncio
+async def test_autofill_payload_returns_lever_heuristic_fields(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client, "lever")
+
+    save_r = await app_client.post(
+        "/api/job-descriptions",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "url": "https://jobs.lever.co/acme/abc-123",
+            "title": "Staff Engineer",
+            "company": "Acme",
+            "text": "Build platform APIs with Go and Kubernetes for our infrastructure team.",
+            "source": "extension",
+        },
+    )
+    jd_id = save_r.json()["jd_id"]
+
+    session = await create_session()
+    session.user_id = user_id
+    session.phase3_output = TailoredResumeOutput(
+        contact={"name": "Alex Rivera", "email": "alex@example.com"},
+        summary="Tailored resume summary.",
+    )
+    await update_session(session)
+
+    row = (
+        await db_session.execute(select(JobDescription).where(JobDescription.id == uuid.UUID(jd_id)))
+    ).scalar_one()
+    row.session_id = session.session_id
+    await db_session.commit()
+
+    payload_r = await app_client.get(
+        f"/api/job-descriptions/{jd_id}/autofill-payload",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert payload_r.status_code == 200, payload_r.text
+    body = payload_r.json()
+    assert body["platform"] == "lever"
+    assert all(field["selector"] == "" for field in body["fields"])
+    email = next(field for field in body["fields"] if field["key"] == "email")
+    assert email["value"] == "alex@example.com"
+
+
+@pytest.mark.asyncio
 async def test_recent_tailored_sessions_lists_only_completed_tailoring(
     app_client: AsyncClient,
     db_session: AsyncSession,

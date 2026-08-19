@@ -212,3 +212,27 @@ test("phase tabs are clickable after phase 1 without auto-running rewrite", asyn
   await expect(page.getByText("Tailored summary.")).toBeVisible()
   expect(rewriteRunRequested).toBe(false)
 })
+
+test("legacy step=keywords redirects to analysis tab", async ({ page }) => {
+  staleState["3"] = null
+  staleState["4"] = null
+  await mockAuth(page)
+  await mockSessionBackend(page, () => staleState)
+  await login(page)
+
+  await page.goto(`${BASE}/session/${SESSION_ID}?step=keywords`)
+  await expect(page).toHaveURL(/step=analysis/, { timeout: 10_000 })
+  await expect(page.getByRole("heading", { name: "Analysis" })).toBeVisible()
+})
+
+test("legacy step=audit redirects to analysis tab", async ({ page }) => {
+  staleState["3"] = null
+  staleState["4"] = null
+  await mockAuth(page)
+  await mockSessionBackend(page, () => staleState)
+  await login(page)
+
+  await page.goto(`${BASE}/session/${SESSION_ID}?step=audit`)
+  await expect(page).toHaveURL(/step=analysis/, { timeout: 10_000 })
+  await expect(page.getByRole("heading", { name: "Analysis" })).toBeVisible()
+})
