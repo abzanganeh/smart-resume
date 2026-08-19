@@ -77,6 +77,7 @@ from app.services.billing.llm_upgrade import (
     get_phase3_tier_status,
     normalize_llm_upgrade_code,
 )
+from app.services.billing.tier_limits_lookup import registration_grant_credits
 
 log = structlog.get_logger("billing.router")
 
@@ -93,6 +94,10 @@ class BalanceResponse(BaseModel):
     better: int
     best: int
     legacy_credit_balance: int
+
+
+class FreeTierResponse(BaseModel):
+    starting_credits: int
 
 
 class CreditTransactionItem(BaseModel):
@@ -257,6 +262,16 @@ def _billing_error_to_http(exc: BillingError) -> HTTPException:
 # ---------------------------------------------------------------------------
 # Credits
 # ---------------------------------------------------------------------------
+
+
+@router.get("/api/billing/free-tier", response_model=FreeTierResponse)
+@limiter.limit("120/minute")
+async def billing_free_tier(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FreeTierResponse:
+    amount = await registration_grant_credits(db)
+    return FreeTierResponse(starting_credits=amount)
 
 
 @router.get("/api/credits/balance")

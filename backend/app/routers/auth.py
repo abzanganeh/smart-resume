@@ -95,7 +95,6 @@ log = structlog.get_logger("auth.router")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-REGISTRATION_GRANT_CREDITS = registration_grant_credits()
 REFRESH_COOKIE_NAME = "sr_refresh"
 
 
@@ -423,6 +422,7 @@ async def register(
             detail={"code": "email_already_registered"},
         )
 
+    grant_amount = await registration_grant_credits(db)
     user = User(
         id=uuid.uuid4(),
         email=email,
@@ -430,7 +430,7 @@ async def register(
         auth_provider=AuthProvider.email,
         password_hash=hash_password(payload.password),
         tier=UserTier.free,
-        credit_balance=REGISTRATION_GRANT_CREDITS,
+        credit_balance=grant_amount,
         accepted_tos_version=payload.accepted_tos_version,
         marketing_opt_in=payload.marketing_opt_in,
         last_login_ip=_client_ip(request) or None,
@@ -445,7 +445,7 @@ async def register(
         CreditTransaction(
             id=uuid.uuid4(),
             user_id=user.id,
-            delta=REGISTRATION_GRANT_CREDITS,
+            delta=grant_amount,
             action=CreditTransactionAction.registration_grant,
             reason="registration_grant",
             note="initial free credit grant on registration",
@@ -647,6 +647,7 @@ async def oauth_callback(
                     "with_provider": existing.auth_provider.value,
                 },
             )
+        grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),
             email=profile["email"],
@@ -655,7 +656,7 @@ async def oauth_callback(
             provider_id=profile["provider_id"],
             email_verified_at=datetime.now(timezone.utc),  # OAuth provider already verified
             tier=UserTier.free,
-            credit_balance=REGISTRATION_GRANT_CREDITS,
+            credit_balance=grant_amount,
             accepted_tos_version="oauth",  # frontend records ToS on the consent step
             last_login_ip=_client_ip(request) or None,
         )
@@ -665,7 +666,7 @@ async def oauth_callback(
             CreditTransaction(
                 id=uuid.uuid4(),
                 user_id=user.id,
-                delta=REGISTRATION_GRANT_CREDITS,
+                delta=grant_amount,
                 action=CreditTransactionAction.registration_grant,
                 reason="registration_grant",
                 note=f"registration grant via {provider_enum.value}",

@@ -23,11 +23,19 @@ import {
   resumeSubscription,
   pauseSubscription,
   unpauseSubscription,
+  redeemPromoCode,
+  invalidateSubscriptionCache,
+  ApiError,
   type BillingPlan,
   type BillingPricesResponse,
   type SubscriptionCurrentResponse,
 } from "@/lib/api"
 import { isSubscriptionActive } from "@/lib/billing"
+import {
+  promoRedeemErrorMessage,
+  promoRedeemIdempotentMessage,
+  promoRedeemSuccessMessage,
+} from "@/lib/promoRedeem"
 import { clsx } from "clsx"
 
 // ── Feature display labels ─────────────────────────────────────────────────
@@ -221,6 +229,9 @@ export default function BillingPage() {
   const [yearlyToggle, setYearlyToggle] = useState(false)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [promoCode, setPromoCode] = useState("")
+  const [promoMessage, setPromoMessage] = useState<string | null>(null)
+  const [promoError, setPromoError] = useState<string | null>(null)
 
   const token = clientSession?.backendAccessToken ?? session?.backendAccessToken
 
@@ -343,6 +354,30 @@ export default function BillingPage() {
       await loadCurrent()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to resume subscription")
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  async function handlePromoRedeem() {
+    if (!token || !promoCode.trim() || busyAction) return
+    setBusyAction("promo")
+    setPromoMessage(null)
+    setPromoError(null)
+    try {
+      const result = await redeemPromoCode(token, promoCode.trim())
+      invalidateSubscriptionCache()
+      await loadCurrent()
+      if (result.idempotent) {
+        setPromoMessage(promoRedeemIdempotentMessage())
+      } else {
+        const amount = Number((result.payload as { amount?: number }).amount ?? 0)
+        setPromoMessage(promoRedeemSuccessMessage(amount))
+      }
+      setPromoCode("")
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : undefined
+      setPromoError(promoRedeemErrorMessage(code))
     } finally {
       setBusyAction(null)
     }
@@ -530,6 +565,36 @@ export default function BillingPage() {
           <p className="text-xs text-slate-500 max-w-[200px] text-right">
             Subscribe to a plan for unlimited access and job search.
           </p>
+        </section>
+      )}
+
+      {token && (
+        <section className="bg-slate-900 border border-slate-700 rounded-2xl p-5 space-y-3">
+          <h2 className="text-lg font-semibold text-white">Have a promo code?</h2>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              placeholder="Enter code"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400/50"
+            />
+            <button
+              type="button"
+              disabled={!promoCode.trim() || busyAction === "promo"}
+              onClick={() => void handlePromoRedeem()}
+              className="inline-flex items-center justify-center gap-2 bg-amber-400 text-slate-900 font-semibold px-5 py-2.5 rounded-xl hover:bg-amber-300 disabled:opacity-40 transition-colors"
+            >
+              {busyAction === "promo" && <Loader2 className="w-4 h-4 animate-spin" />}
+              Redeem
+            </button>
+          </div>
+          {promoMessage && (
+            <p className="text-sm text-emerald-400">{promoMessage}</p>
+          )}
+          {promoError && (
+            <p className="text-sm text-red-400">{promoError}</p>
+          )}
         </section>
       )}
 

@@ -18,6 +18,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Tag,
   Users,
   Zap,
 } from "lucide-react"
@@ -70,6 +71,7 @@ export function useAdminSession() {
 
 const NAV_LINKS = [
   { href: "/admin/plans", label: "Plans & Pricing", icon: CreditCard },
+  { href: "/admin/promo", label: "Promo & credits", icon: Tag },
   { href: "/admin/llm", label: "LLM Config", icon: Zap },
   { href: "/admin/flags", label: "Feature Flags", icon: Flag },
   { href: "/admin/announcements", label: "Announcements", icon: Bell },
