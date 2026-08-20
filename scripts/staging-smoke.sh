@@ -136,6 +136,22 @@ else
   skip_check "NextAuth providers" "frontend /api/auth/providers unreachable"
 fi
 
+# Closure scheduler (optional — requires INTERNAL_SCHEDULER_SECRET in backend env)
+scheduler_secret=""
+if [[ -f backend/.env.staging ]]; then
+  scheduler_secret="$(grep -E '^INTERNAL_SCHEDULER_SECRET=' backend/.env.staging 2>/dev/null | cut -d= -f2- || true)"
+fi
+scheduler_secret="${INTERNAL_SCHEDULER_SECRET:-$scheduler_secret}"
+if [[ -n "$scheduler_secret" ]]; then
+  scheduler_status="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API_URL/api/account" \
+    -H "X-Scheduler-Secret: $scheduler_secret")"
+  check "DELETE /api/account closure tick returns 200" test "$scheduler_status" = "200"
+  unauth_status="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API_URL/api/account")"
+  check "DELETE /api/account rejects missing scheduler secret (401)" test "$unauth_status" = "401"
+else
+  skip_check "Closure scheduler tick" "INTERNAL_SCHEDULER_SECRET not configured"
+fi
+
 echo
 echo "=== Summary: $pass passed, $fail failed, $skip skipped ==="
 

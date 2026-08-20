@@ -255,6 +255,7 @@ resource "aws_lambda_permission" "alert_weekly" {
 # - dispatch_notifications  (every 5 minutes) — fan out pending outbox rows
 # - grace_tick              (every 15 minutes) — §7.6 state machine
 # - stripe_price_sync       (nightly 03:00 UTC) — §7.8 drift detector
+# - closure_tick            (hourly) — §19.6 account closure reminders + deletions
 # ---------------------------------------------------------------------------
 
 resource "aws_lambda_function" "notification_scheduler" {
@@ -347,6 +348,29 @@ resource "aws_lambda_permission" "billing_price_sync" {
   function_name = aws_lambda_function.notification_scheduler.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.billing_price_sync.arn
+}
+
+# closure_tick — hourly (§19.6)
+resource "aws_cloudwatch_event_rule" "account_closure_tick" {
+  name                = "${local.name_prefix}-account-closure-tick"
+  description         = "Account closure day-23 reminders and due deletions (§19.6)"
+  schedule_expression = "rate(1 hour)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "account_closure_tick" {
+  rule      = aws_cloudwatch_event_rule.account_closure_tick.name
+  target_id = "closure-tick"
+  arn       = aws_lambda_function.notification_scheduler.arn
+  input     = jsonencode({ schedule = "closure_tick" })
+}
+
+resource "aws_lambda_permission" "account_closure_tick" {
+  statement_id  = "AllowEventBridgeClosureTick"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notification_scheduler.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.account_closure_tick.arn
 }
 
 # ---------------------------------------------------------------------------
