@@ -61,6 +61,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/billing/prices") {
+    // MOCK_PRICES_UNSYNCED reproduces a fresh environment where PlanConfig
+    // rows exist but the Stripe price sync has not run, so every amount is 0.
+    const unsynced = process.env.MOCK_PRICES_UNSYNCED === "1"
     return json(res, 200, {
       version: "e2e",
       currency: "USD",
@@ -69,7 +72,7 @@ const server = http.createServer(async (req, res) => {
           code: "monthly_pro",
           display_name: "Pro",
           cycle: "monthly",
-          amount_cents: 1999,
+          amount_cents: unsynced ? 0 : 1999,
           trial_days: 7,
           stripe_price_id: "price_e2e_pro",
           is_active: true,

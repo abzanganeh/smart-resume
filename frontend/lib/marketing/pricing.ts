@@ -81,13 +81,6 @@ export function selectPublicPlans(
     .sort((a, b) => a.amount_cents - b.amount_cents);
 }
 
-/** False when prices have not been synced yet, so the section can defer. */
-export function hasSyncedPricing(
-  payload: BillingPricesResponse | null | undefined,
-): boolean {
-  return payload?.plans?.some(isPlanPriceSynced) ?? false;
-}
-
 /**
  * Formatted amount, or `null` when the price is not known or not usable.
  *

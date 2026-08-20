@@ -34,7 +34,7 @@ export function ComparisonSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl mx-auto">
         <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-6">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-            <X className="w-4 h-4 text-red-600 dark:text-red-400" />
+            <X aria-hidden className="w-4 h-4 text-red-600 dark:text-red-400" />
             On your own
           </h3>
           {/* Preflight strips list markers, so ul is the honest element here —
@@ -56,7 +56,7 @@ export function ComparisonSection() {
 
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-700/50 bg-emerald-50/60 dark:bg-emerald-900/20 p-6">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-4">
-            <Check className="w-4 h-4" />
+            <Check aria-hidden className="w-4 h-4" />
             With TalioCV
           </h3>
           <ul className="space-y-2">

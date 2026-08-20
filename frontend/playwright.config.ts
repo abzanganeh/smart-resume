@@ -17,6 +17,13 @@ const webServerCommand = process.env.CI
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // The unsynced-pricing spec needs its own mock fixture and a cleared fetch
+  // cache, so it cannot share a run with specs that expect synced prices.
+  // `pnpm run test:e2e:pricing-unsynced` sets the flag that opts it in.
+  testIgnore:
+    process.env.MOCK_PRICES_UNSYNCED === "1"
+      ? []
+      : ["**/landing-pricing-unsynced.spec.ts"],
   timeout: 30_000,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",

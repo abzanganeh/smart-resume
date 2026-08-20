@@ -171,9 +171,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
-
       - name: CI gate (lint + unit + build)
         run: pnpm run test:ci
         env:
@@ -215,6 +212,16 @@ jobs:
 
       - name: Run E2E smoke tests
         run: pnpm run test:e2e:smoke
+        env:
+          CI: true
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXTAUTH_SECRET: ci-test-secret-not-for-production
+          NEXTAUTH_URL: http://localhost:3000
+
+      # Separate invocation: Next caches the price response per URL, so the
+      # unsynced fixture needs a fresh server and a cleared fetch cache.
+      - name: Run E2E unsynced-pricing fallback
+        run: pnpm run test:e2e:pricing-unsynced
         env:
           CI: true
           NEXT_PUBLIC_API_URL: http://localhost:8000

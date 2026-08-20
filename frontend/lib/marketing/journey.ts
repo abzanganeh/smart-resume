@@ -1,10 +1,13 @@
 /**
- * Landing-page journey content.
+ * Landing-page journey content and the shared feature-gating vocabulary.
  *
  * Lives outside the section components so the copy can be unit-tested against
  * what the backend actually gates. `access` is not a marketing choice — it
  * mirrors the router gates, and `tests/lib/marketingJourney.test.ts` pins the
  * two stages whose gating is easy to get wrong.
+ *
+ * `FeatureAccess` and `accessBadge` are reused by the capability strip and the
+ * detail disclosure so gating can never drift between the places we state it.
  */
 
 /**
@@ -13,14 +16,14 @@
  * while expanded (Hirebase) search raises 402 in
  * `backend/app/routers/jobs.py::_require_job_search_access`.
  */
-export type JourneyAccess = "free" | "mixed" | "paid";
+export type FeatureAccess = "free" | "mixed" | "paid";
 
 export interface JourneyStep {
   id: string;
   step: number;
   title: string;
   description: string;
-  access: JourneyAccess;
+  access: FeatureAccess;
   /** Shown under the description when free-tier limits need spelling out. */
   accessNote?: string;
   ctaLabel: string;
@@ -98,7 +101,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
 ];
 
 /** Badge text for a stage, or `null` when the stage is fully free. */
-export function journeyBadge(access: JourneyAccess): string | null {
+export function accessBadge(access: FeatureAccess): string | null {
   switch (access) {
     case "free":
       return null;

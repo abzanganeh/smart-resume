@@ -52,7 +52,7 @@ export function PricingSection({
               "Application tracker",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <Check aria-hidden className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <span className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                   {item}
                 </span>
@@ -94,7 +94,7 @@ export function PricingSection({
                 <ul className="mt-4 space-y-2">
                   {planHighlights(plan).map((item) => (
                     <li key={item} className="flex items-start gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <Check aria-hidden className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                       <span className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                         {item}
                       </span>
@@ -117,7 +117,7 @@ export function PricingSection({
             </p>
             <Link href="/auth?mode=register" className={`${INLINE_CTA} mt-4`}>
               See plans and pricing
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight aria-hidden className="w-4 h-4" />
             </Link>
           </div>
         )}

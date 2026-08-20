@@ -8,7 +8,7 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { journeyBadge, type JourneyAccess } from "@/lib/marketing/journey";
+import { accessBadge, type FeatureAccess } from "@/lib/marketing/journey";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 /**
@@ -22,48 +22,48 @@ const CAPABILITIES: {
   icon: React.ReactNode;
   title: string;
   blurb: string;
-  access?: JourneyAccess;
+  access?: FeatureAccess;
 }[] = [
   {
-    icon: <Mic className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />,
+    icon: <Mic aria-hidden className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />,
     title: "Story Mode",
     blurb: "Speak your career, or answer a coached interview.",
   },
   {
-    icon: <Layers className="w-4 h-4 text-amber-700 dark:text-amber-400" />,
+    icon: <Layers aria-hidden className="w-4 h-4 text-amber-700 dark:text-amber-400" />,
     title: "Master Resume",
     blurb: "One permanent record every tailored resume draws from.",
   },
   {
-    icon: <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-400" />,
+    icon: <Sparkles aria-hidden className="w-4 h-4 text-amber-700 dark:text-amber-400" />,
     title: "ATS Optimization",
     blurb: "Keyword extraction, gap audit, and a scored quality check.",
   },
   {
-    icon: <FileText className="w-4 h-4 text-sky-700 dark:text-sky-400" />,
+    icon: <FileText aria-hidden className="w-4 h-4 text-sky-700 dark:text-sky-400" />,
     title: "Cover Letters",
     blurb: "Generated from the same evidence as your resume.",
   },
   {
-    icon: <Search className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />,
+    icon: <Search aria-hidden className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />,
     title: "Job Search",
     blurb: "Search your confirmed titles and block companies you skip.",
     access: "mixed",
   },
   {
-    icon: <Star className="w-4 h-4 text-pink-700 dark:text-pink-400" />,
+    icon: <Star aria-hidden className="w-4 h-4 text-pink-700 dark:text-pink-400" />,
     title: "Job Fit Score",
     blurb: "Check a role against your resume before you invest time.",
     access: "paid",
   },
   {
-    icon: <Briefcase className="w-4 h-4 text-orange-700 dark:text-orange-400" />,
+    icon: <Briefcase aria-hidden className="w-4 h-4 text-orange-700 dark:text-orange-400" />,
     title: "Application Tracker",
     blurb: "Draft through Applied, Interviewing, and Offer.",
   },
   {
     icon: (
-      <MessageSquare className="w-4 h-4 text-violet-700 dark:text-violet-400" />
+      <MessageSquare aria-hidden className="w-4 h-4 text-violet-700 dark:text-violet-400" />
     ),
     title: "AI Chat & Inline Editing",
     blurb: "Per-section regeneration with undo/redo history.",
@@ -81,7 +81,7 @@ export function CapabilityStrip() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {CAPABILITIES.map((item) => {
-          const badge = item.access ? journeyBadge(item.access) : null;
+          const badge = item.access ? accessBadge(item.access) : null;
           return (
             <div
               key={item.title}

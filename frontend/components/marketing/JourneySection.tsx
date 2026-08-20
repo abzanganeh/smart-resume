@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { JOURNEY_STEPS, journeyBadge } from "@/lib/marketing/journey";
+import { JOURNEY_STEPS, accessBadge } from "@/lib/marketing/journey";
 import {
   FINE_PRINT,
   INLINE_CTA,
@@ -18,9 +18,9 @@ export function JourneySection() {
         &mdash; everything else works on the free tier.
       </p>
 
-      <ol className="space-y-4">
+      <ol aria-label="Job search stages" className="space-y-4">
         {JOURNEY_STEPS.map((step) => {
-          const badge = journeyBadge(step.access);
+          const badge = accessBadge(step.access);
           return (
             <li
               key={step.id}
@@ -51,7 +51,7 @@ export function JourneySection() {
                 )}
                 <Link href={step.ctaHref} className={`${INLINE_CTA} mt-3`}>
                   {step.ctaLabel}
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight aria-hidden className="w-4 h-4" />
                 </Link>
               </div>
             </li>

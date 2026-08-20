@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   JOURNEY_STEPS,
-  journeyBadge,
+  accessBadge,
   journeyStepById,
 } from "@/lib/marketing/journey";
 
@@ -59,7 +59,7 @@ describe("journey access accuracy", () => {
     for (const step of JOURNEY_STEPS) {
       if (step.access !== "free") {
         assert.ok(
-          journeyBadge(step.access),
+          accessBadge(step.access),
           `${step.id} is gated and must render a badge`,
         );
       }
@@ -67,19 +67,19 @@ describe("journey access accuracy", () => {
   });
 });
 
-describe("journeyBadge", () => {
+describe("accessBadge", () => {
   it("renders no badge for fully free stages", () => {
-    assert.equal(journeyBadge("free"), null);
+    assert.equal(accessBadge("free"), null);
   });
 
   it("labels subscription-only stages", () => {
-    assert.equal(journeyBadge("paid"), "Paid plans");
+    assert.equal(accessBadge("paid"), "Paid plans");
   });
 
   it("distinguishes partially free stages from fully paid ones", () => {
-    const mixed = journeyBadge("mixed");
+    const mixed = accessBadge("mixed");
     assert.ok(mixed);
-    assert.notEqual(mixed, journeyBadge("paid"));
+    assert.notEqual(mixed, accessBadge("paid"));
     assert.match(mixed, /free/i);
   });
 });

@@ -11,7 +11,7 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
     <section className="max-w-5xl mx-auto px-6 pt-6 pb-16">
       <div className="text-center max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-700 dark:text-slate-300 mb-6">
-          <Sparkles className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+          <Sparkles aria-hidden className="w-4 h-4 text-amber-700 dark:text-amber-400" />
           ATS-optimized · Evidence-based · Never fabricates metrics
         </div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight">
@@ -32,10 +32,10 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href="/auth?mode=register" className={PRIMARY_CTA}>
             Start your career story
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight aria-hidden className="w-5 h-5" />
           </Link>
           <Link href="/checkup" className={SECONDARY_CTA}>
-            <FileSearch className="w-4 h-4" />
+            <FileSearch aria-hidden className="w-4 h-4" />
             Check a resume free
           </Link>
         </div>

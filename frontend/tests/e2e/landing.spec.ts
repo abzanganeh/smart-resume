@@ -74,9 +74,7 @@ test.describe("career discovery", () => {
 test.describe("journey", () => {
   test("renders all six stages in order", async ({ page }) => {
     const headings = page
-      .getByRole("list")
-      .filter({ hasText: /tell your story/i })
-      .first()
+      .getByRole("list", { name: "Job search stages" })
       .getByRole("heading", { level: 3 })
 
     await expect(headings).toHaveText([
@@ -93,8 +91,9 @@ test.describe("journey", () => {
     page,
   }) => {
     // Scoped to the journey stage: the same badge intentionally appears in the
-    // capability strip and the platform detail list too.
+    // capability strip too.
     const jobs = page
+      .getByRole("list", { name: "Job search stages" })
       .getByRole("listitem")
       .filter({ hasText: /find opportunities/i })
     await expect(jobs).toHaveCount(1)
@@ -106,6 +105,7 @@ test.describe("journey", () => {
 
   test("does not badge stages that are fully free", async ({ page }) => {
     const discover = page
+      .getByRole("list", { name: "Job search stages" })
       .getByRole("listitem")
       .filter({ hasText: /discover where you fit/i })
     await expect(discover).toHaveCount(1)

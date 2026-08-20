@@ -26,7 +26,7 @@ export function CareerDiscoverySection() {
     <section className={`${SECTION} pb-24`}>
       <div className="text-center max-w-2xl mx-auto mb-10">
         <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/50 px-4 py-1.5 text-sm text-emerald-800 dark:text-emerald-300 mb-5">
-          <Compass className="w-4 h-4" />
+          <Compass aria-hidden className="w-4 h-4" />
           Included on the free plan
         </div>
         <h2 className="text-3xl font-bold tracking-tight mb-4 text-slate-900 dark:text-white">
@@ -78,7 +78,7 @@ export function CareerDiscoverySection() {
         <div className="mt-6 pt-5 border-t border-slate-300 dark:border-slate-700">
           <Link href="/auth?mode=register" className={INLINE_CTA}>
             Discover my career options
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight aria-hidden className="w-4 h-4" />
           </Link>
         </div>
       </div>

@@ -1,13 +1,13 @@
 import { ChevronRight } from "lucide-react";
 import { VOICE_AVAILABILITY_COPY } from "@/lib/freeTier";
-import { journeyBadge, type JourneyAccess } from "@/lib/marketing/journey";
+import { accessBadge, type FeatureAccess } from "@/lib/marketing/journey";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 interface DetailPoint {
   text: string;
   /** Defaults to free. Gated capability must say so here, not only in the
    * journey section further up the page. */
-  access?: JourneyAccess;
+  access?: FeatureAccess;
 }
 
 interface DetailGroup {
@@ -35,33 +35,15 @@ const DETAILS: DetailGroup[] = [
     ],
   },
   {
-    question: "What exactly is in the platform?",
+    // The capability list lives in CapabilityStrip, as visible headings.
+    // Only genuine *details* belong here.
+    question: "How does voice input work?",
     points: [
       {
-        text: `Story Mode — speak your career, or answer a coached interview. ${VOICE_AVAILABILITY_COPY}`,
+        text: `Story Mode lets you speak your career instead of typing it, or answer a coached interview where the AI asks the questions. ${VOICE_AVAILABILITY_COPY}`,
       },
       {
-        text: "Master Resume — a permanent semantic store every tailored resume draws from.",
-      },
-      {
-        text: "ATS optimization — four-phase tailoring: keyword extraction, gap audit, evidence-based rewrite, ATS quality check.",
-      },
-      {
-        text: "Cover letters generated from the same evidence as the resume.",
-      },
-      {
-        text: "Job search with company blocking, plus Career Watch for monitoring specific employers.",
-        access: "mixed",
-      },
-      {
-        text: "Job Fit Score, comparing your master resume to any job description before you invest time.",
-        access: "paid",
-      },
-      {
-        text: "Application tracker from Draft through Applied, Interviewing, and Offer.",
-      },
-      {
-        text: "AI chat and per-section regeneration with undo/redo version history.",
+        text: "Every segment is transcribed into your master resume, which you can edit before anything is used for tailoring.",
       },
     ],
   },
@@ -102,7 +84,7 @@ export function PlatformDetails() {
             </summary>
             <ul className="mt-3 pl-6 space-y-2 list-disc text-sm text-slate-600 dark:text-slate-400">
               {group.points.map((point) => {
-                const badge = point.access ? journeyBadge(point.access) : null;
+                const badge = point.access ? accessBadge(point.access) : null;
                 return (
                   <li key={point.text} className="leading-relaxed">
                     {point.text}

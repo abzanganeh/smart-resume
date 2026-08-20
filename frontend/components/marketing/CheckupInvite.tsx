@@ -10,7 +10,7 @@ export function CheckupInvite() {
   return (
     <section className="max-w-3xl mx-auto px-6 pb-24">
       <div className="rounded-2xl border border-amber-400/40 bg-amber-500/5 dark:bg-amber-400/5 p-8 text-center">
-        <FileSearch className="w-6 h-6 mx-auto text-amber-700 dark:text-amber-400 mb-4" />
+        <FileSearch aria-hidden className="w-6 h-6 mx-auto text-amber-700 dark:text-amber-400 mb-4" />
         <h2 className="text-2xl font-semibold mb-3 text-slate-900 dark:text-slate-100">
           See it on your own resume first
         </h2>
@@ -22,7 +22,7 @@ export function CheckupInvite() {
         </p>
         <Link href="/checkup" className={PRIMARY_CTA}>
           Run a free resume checkup
-          <ArrowRight className="w-5 h-5" />
+          <ArrowRight aria-hidden className="w-5 h-5" />
         </Link>
       </div>
     </section>

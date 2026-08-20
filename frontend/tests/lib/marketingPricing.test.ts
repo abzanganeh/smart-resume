@@ -4,7 +4,6 @@ import type { BillingPlan, BillingPricesResponse } from "@/lib/api";
 import {
   fetchPublicPricing,
   formatPlanPrice,
-  hasSyncedPricing,
   isPlanPriceSynced,
   planCycleSuffix,
   planHighlights,
@@ -129,24 +128,19 @@ describe("selectPublicPlans", () => {
   });
 });
 
-describe("hasSyncedPricing", () => {
-  it("is false when every plan is unsynced", () => {
-    assert.equal(
-      hasSyncedPricing(payload([plan({ amount_cents: 0 })])),
-      false,
-    );
-  });
-
-  it("is false for a null payload", () => {
-    assert.equal(hasSyncedPricing(null), false);
-  });
-
-  it("is true when at least one plan has a real price", () => {
-    assert.equal(
-      hasSyncedPricing(
-        payload([plan({ amount_cents: 0 }), plan({ amount_cents: 1999 })]),
+describe("selectPublicPlans on an unsynced catalog", () => {
+  it("returns nothing when no plan has a real price", () => {
+    // This is the state of a fresh environment before price_sync runs. The
+    // section must fall back rather than show a grid of $0.00 cards.
+    assert.deepEqual(
+      selectPublicPlans(
+        payload([
+          plan({ code: "monthly_pro", amount_cents: 0 }),
+          plan({ code: "monthly_plus", amount_cents: 0 }),
+        ]),
+        "monthly",
       ),
-      true,
+      [],
     );
   });
 });

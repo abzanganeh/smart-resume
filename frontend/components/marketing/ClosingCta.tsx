@@ -18,7 +18,7 @@ export function ClosingCta({ startingCredits }: { startingCredits: number }) {
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
         <Link href="/auth?mode=register" className={PRIMARY_CTA}>
           Start my job search
-          <ArrowRight className="w-5 h-5" />
+          <ArrowRight aria-hidden className="w-5 h-5" />
         </Link>
         <Link
           href="/auth"
