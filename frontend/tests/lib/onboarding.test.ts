@@ -2,6 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   mustCompleteOnboarding,
+  onboardingStepAfterMasterUpload,
+  ONBOARDING_JOB_TITLES_STEP_INDEX,
+  ONBOARDING_MASTER_STEP_INDEX,
   parseOnboardingStepParam,
   postAuthLandingPath,
   resolveOnboardingStepIndex,
@@ -110,5 +113,19 @@ describe("resolveOnboardingStepIndex", () => {
       resolveOnboardingStepIndex(baseUser, { urlStepIndex: 3, hasMasterResume: false }),
       0,
     );
+  });
+});
+
+describe("onboardingStepAfterMasterUpload", () => {
+  it("advances from master step to job titles", () => {
+    assert.equal(
+      onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX),
+      ONBOARDING_JOB_TITLES_STEP_INDEX,
+    );
+  });
+
+  it("leaves other steps unchanged", () => {
+    assert.equal(onboardingStepAfterMasterUpload(0), 0);
+    assert.equal(onboardingStepAfterMasterUpload(4), 4);
   });
 });
