@@ -1,7 +1,8 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import type { BillingPlan, BillingPricesResponse } from "@/lib/api";
 import {
+  fetchPublicPricing,
   formatPlanPrice,
   hasSyncedPricing,
   isPlanPriceSynced,
@@ -143,5 +144,40 @@ describe("planCycleSuffix", () => {
     assert.equal(planCycleSuffix("weekly"), "/ week");
     assert.equal(planCycleSuffix("monthly"), "/ month");
     assert.equal(planCycleSuffix("yearly"), "/ year");
+  });
+});
+
+describe("fetchPublicPricing", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("returns the payload when the public endpoint responds", async () => {
+    const body = payload([plan()]);
+    mock.method(globalThis, "fetch", async () =>
+      ({ ok: true, json: async () => body }) as Response,
+    );
+
+    const result = await fetchPublicPricing();
+    assert.deepEqual(result, body);
+  });
+
+  it("returns null when the endpoint errors", async () => {
+    mock.method(globalThis, "fetch", async () => ({ ok: false }) as Response);
+    assert.equal(await fetchPublicPricing(), null);
+  });
+
+  it("returns null when the backend is unreachable", async () => {
+    mock.method(globalThis, "fetch", async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    assert.equal(await fetchPublicPricing(), null);
+  });
+
+  it("returns null on a malformed payload rather than trusting it", async () => {
+    mock.method(globalThis, "fetch", async () =>
+      ({ ok: true, json: async () => ({ version: "1" }) }) as Response,
+    );
+    assert.equal(await fetchPublicPricing(), null);
   });
 });

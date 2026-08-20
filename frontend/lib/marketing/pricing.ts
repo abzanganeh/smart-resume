@@ -8,7 +8,37 @@
  */
 import type { BillingPlan, BillingPricesResponse } from "@/lib/api";
 
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 export type BillingCycle = BillingPlan["cycle"];
+
+/**
+ * Read the public price catalog for unauthenticated visitors.
+ *
+ * Returns `null` on any failure so the landing page can fall back to a
+ * "see plans" link instead of rendering a broken or invented price.
+ */
+export async function fetchPublicPricing(): Promise<BillingPricesResponse | null> {
+  try {
+    const res = await fetch(`${BASE}/api/billing/prices`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const data = (await res.json()) as unknown;
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !Array.isArray((data as BillingPricesResponse).plans)
+    ) {
+      return null;
+    }
+    return data as BillingPricesResponse;
+  } catch {
+    return null;
+  }
+}
 
 export function isPlanPriceSynced(plan: BillingPlan): boolean {
   return plan.amount_cents > 0;
