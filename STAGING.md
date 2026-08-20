@@ -273,7 +273,7 @@ Requires `EXTENSION_AUTH_ENABLED=true` and a browser with the TalioCV extension 
 
 Not blocking first staging deploy:
 
-- RP4 Steps 27–38 — **mostly implemented** (dashboard, tracker, notifications, export/closure, admin/compliance). Remaining work is **test coverage and polish** (tracker detail e2e, notification prefs e2e, admin section smoke, closure scheduler wiring in deploy).
+- RP4 Steps 27–38 — **mostly implemented** (dashboard, tracker, notifications, export/closure, admin/compliance). Remaining work is **manual STAGING.md §5** and production Terraform apply for new EventBridge rules.
 - Full app Terraform / managed CI deploy pipeline
 
 See `docs/IMPLEMENTATION_PLAN.md` for the full RP2–RP4 step list.
