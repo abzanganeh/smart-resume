@@ -10,9 +10,126 @@
  *
  * Run: pnpm exec playwright test tests/e2e/admin.spec.ts
  */
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 
 const BASE = "http://localhost:3000"
+const API = "http://localhost:8000"
+
+const ADMIN_SESSION = {
+  access_token: "mock-admin-token",
+  admin: {
+    id: "00000000-0000-0000-0000-000000000001",
+    email: "admin@test.com",
+    display_name: "Test Admin",
+    role: "super-admin",
+  },
+  expires_in: 3600,
+}
+
+async function seedAdminSession(page: Page) {
+  await page.request.post(`${BASE}/api/admin/session`, { data: ADMIN_SESSION })
+}
+
+async function mockAdminSectionApis(page: Page) {
+  await page.route("**/api/admin/plans", async (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      })
+    }
+    return route.continue()
+  })
+  await page.route("**/api/admin/plans/history", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    }),
+  )
+  await page.route("**/api/admin/users**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ users: [], total: 0 }),
+    }),
+  )
+  await page.route("**/api/admin/feature-flags**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ flags: [] }),
+    }),
+  )
+  await page.route("**/api/admin/llm/history", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    }),
+  )
+  await page.route("**/api/admin/llm", async (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ configs: [], similarity_threshold: 0.72 }),
+      })
+    }
+    return route.continue()
+  })
+  await page.route("**/api/admin/announcements**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ announcements: [] }),
+    }),
+  )
+  await page.route("**/api/admin/refunds**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ refunds: [], total: 0 }),
+    }),
+  )
+  await page.route("**/api/admin/reports/system-health", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        checked_at: "2026-05-28T10:00:00Z",
+        stripe_webhook_failed_24h: 0,
+      }),
+    }),
+  )
+  await page.route("**/api/admin/reports/activity**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ metrics: [] }),
+    }),
+  )
+  await page.route("**/api/admin/audit-log**", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [] }),
+    }),
+  )
+}
+
+const ADMIN_SECTIONS = [
+  { path: "/admin/plans", heading: "Plans & Pricing" },
+  { path: "/admin/users", heading: "User Management" },
+  { path: "/admin/flags", heading: "Feature Flags" },
+  { path: "/admin/llm", heading: "LLM Configuration" },
+  { path: "/admin/announcements", heading: "Announcements" },
+  { path: "/admin/refunds", heading: "Refund Requests" },
+  { path: "/admin/system", heading: "System Health" },
+  { path: "/admin/audit", heading: "Audit Log" },
+  { path: "/admin/reports", heading: "Reports" },
+] as const
 
 // ── 1. Unauthenticated redirect ───────────────────────────────────────────────
 
@@ -157,18 +274,7 @@ test.describe("admin login + TOTP flow → /admin/plans", () => {
 
 test.describe("/admin/reports chart rendering", () => {
   test("renders recharts surfaces in visual DOM with mocked data", async ({ page }) => {
-    await page.request.post(`${BASE}/api/admin/session`, {
-      data: {
-        access_token: "mock-admin-token",
-        admin: {
-          id: "00000000-0000-0000-0000-000000000001",
-          email: "admin@test.com",
-          display_name: "Test Admin",
-          role: "super-admin",
-        },
-        expires_in: 3600,
-      },
-    })
+    await seedAdminSession(page)
 
     await page.route("**/api/admin/reports/activity**", async (route) => {
       await route.fulfill({
@@ -187,4 +293,20 @@ test.describe("/admin/reports chart rendering", () => {
     await expect(page.getByText("DAU/WAU/MAU")).toBeVisible()
     await expect(page.locator("svg.recharts-surface").first()).toBeVisible()
   })
+})
+
+test.describe("admin section smoke (mocked API)", () => {
+  test.beforeEach(async ({ page }) => {
+    await seedAdminSession(page)
+    await mockAdminSectionApis(page)
+  })
+
+  for (const { path, heading } of ADMIN_SECTIONS) {
+    test(`${path} loads ${heading}`, async ({ page }) => {
+      await page.goto(`${BASE}${path}`)
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible({
+        timeout: 15_000,
+      })
+    })
+  }
 })
