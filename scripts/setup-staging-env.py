@@ -198,6 +198,7 @@ def main() -> int:
 
     ensure_secret(backend_values, "AUTH_SECRET")
     ensure_secret(backend_values, "BYOK_ENCRYPTION_KEY")
+    ensure_secret(backend_values, "INTERNAL_SCHEDULER_SECRET")
     ensure_secret(root_values, "NEXTAUTH_SECRET")
 
     if is_placeholder(backend_values.get("BOOTSTRAP_SUPER_ADMIN_PASSWORD", "")):

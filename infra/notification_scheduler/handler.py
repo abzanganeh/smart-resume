@@ -12,6 +12,9 @@ payload that selects which workflow to run:
 - ``stripe_price_sync`` — call :func:`run_stripe_price_sync` to
   detect drift between Stripe prices and ``PlanConfig`` rows.
   Cron: nightly (e.g. 03:00 UTC).
+- ``closure_tick`` — call :func:`run_closure_tick` for day-23
+  reminders and due account deletions (§19.6).
+  Cron: hourly.
 
 The handler is intentionally thin — all business logic lives in the
 ``app/services`` modules so the unit / integration tests can exercise
@@ -34,6 +37,7 @@ _SUPPORTED_SCHEDULES = {
     "dispatch_notifications",
     "grace_tick",
     "stripe_price_sync",
+    "closure_tick",
 }
 
 
@@ -107,10 +111,26 @@ async def _run_price_sync() -> dict[str, Any]:
     }
 
 
+async def _run_closure_tick() -> dict[str, Any]:
+    from app.db.engine import async_session_factory  # type: ignore[import-not-found]
+    from app.services.export.closure import run_closure_tick  # type: ignore[import-not-found]
+
+    async with async_session_factory() as session:
+        result = await run_closure_tick(session)
+        await session.commit()
+    return {
+        "schedule": "closure_tick",
+        "inspected": result.inspected,
+        "deleted": [str(uid) for uid in result.deleted],
+        "reminders_sent": result.reminders_sent,
+    }
+
+
 _DISPATCH_TABLE = {
     "dispatch_notifications": _run_dispatch,
     "grace_tick": _run_grace_tick,
     "stripe_price_sync": _run_price_sync,
+    "closure_tick": _run_closure_tick,
 }
 
 

@@ -53,3 +53,28 @@ services:
       - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET:-}
       - AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID:-}
       - AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET:-}
+
+  # Hourly account-closure tick (day-23 reminders + due deletions). Uses the same
+  # INTERNAL_SCHEDULER_SECRET as the backend DELETE /api/account scheduler hook.
+  closure-scheduler:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    env_file:
+      - path: ./backend/.env.staging
+        required: true
+    environment:
+      - API_URL=http://backend:8000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          if [ -n "$$INTERNAL_SCHEDULER_SECRET" ]; then
+            curl -sf -X DELETE \
+              -H "X-Scheduler-Secret: $$INTERNAL_SCHEDULER_SECRET" \
+              "$$API_URL/api/account" || true
+          fi
+          sleep 3600
+        done
