@@ -54,6 +54,58 @@ const server = http.createServer(async (req, res) => {
     })
   }
 
+  // Public, unauthenticated endpoints the landing page renders from on the
+  // server. page.route() cannot intercept these, so they are served here.
+  if (req.method === "GET" && url.pathname === "/api/billing/free-tier") {
+    return json(res, 200, { starting_credits: 6 })
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/billing/prices") {
+    return json(res, 200, {
+      version: "e2e",
+      currency: "USD",
+      plans: [
+        {
+          code: "monthly_pro",
+          display_name: "Pro",
+          cycle: "monthly",
+          amount_cents: 1999,
+          trial_days: 7,
+          stripe_price_id: "price_e2e_pro",
+          is_active: true,
+          features: ["resume_tailor", "job_search"],
+          limits: {
+            resumes_per_period: 50,
+            searches_per_period: 100,
+            fit_analyses_per_period: 50,
+            whisper_uses_per_period: 5,
+            career_watch_companies: 10,
+          },
+        },
+        {
+          // Price not yet synced from Stripe (bootstrap.py seeds 0). The
+          // landing page must never render this as a real amount.
+          code: "monthly_plus",
+          display_name: "Pro+",
+          cycle: "monthly",
+          amount_cents: 0,
+          trial_days: 7,
+          stripe_price_id: "price_e2e_plus",
+          is_active: true,
+          features: ["resume_tailor"],
+          limits: {
+            resumes_per_period: 100,
+            searches_per_period: 200,
+            fit_analyses_per_period: 100,
+            whisper_uses_per_period: 15,
+            career_watch_companies: 30,
+          },
+        },
+      ],
+      addons: [],
+    })
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     return json(res, 200, {
       id: "e2e-user",

@@ -1,9 +1,13 @@
 import { defineConfig, devices } from "@playwright/test"
 
 const nextBin = "node node_modules/next/dist/bin/next"
+// Overridable because host :3000 is not always free on a dev workstation
+// (Trust/Kia claims it). CI keeps 3000.
+const PORT = process.env.PLAYWRIGHT_PORT ?? "3000"
+const BASE_URL = `http://localhost:${PORT}`
 const webServerCommand = process.env.CI
-  ? `${nextBin} start -p 3000`
-  : `${nextBin} dev -p 3000`
+  ? `${nextBin} start -p ${PORT}`
+  : `${nextBin} dev -p ${PORT}`
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -12,7 +16,7 @@ export default defineConfig({
   reporter: "list",
   globalSetup: "./tests/e2e/global-setup.mjs",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
     trace: "on-first-retry",
   },
   projects: [
@@ -23,12 +27,12 @@ export default defineConfig({
   ],
   webServer: {
     command: webServerCommand,
-    url: "http://localhost:3000",
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 120_000 : 60_000,
     env: {
       NEXTAUTH_SECRET: "playwright-local-secret",
-      NEXTAUTH_URL: "http://localhost:3000",
+      NEXTAUTH_URL: BASE_URL,
       NEXT_PUBLIC_API_URL: "http://localhost:8000",
       NEXT_PUBLIC_APP_ENV: "local",
       GOOGLE_CLIENT_ID: "playwright-google-client-id",
