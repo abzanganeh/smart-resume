@@ -1,7 +1,13 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-/** Fallback when the public free-tier endpoint is unreachable. */
-export const FREE_TIER_STARTING_CREDITS = 3;
+/**
+ * Fallback when the public free-tier endpoint is unreachable.
+ *
+ * Must track the backend registration grant (`tier_limits.py` free
+ * `resumes_per_period`) — the landing hero renders this number, so a stale
+ * value advertises an offer we do not honour.
+ */
+export const FREE_TIER_STARTING_CREDITS = 6;
 
 export const VOICE_AVAILABILITY_COPY =
   "Live transcription is free in Chrome and Edge; Firefox and Safari use Whisper (2 credits per story).";
