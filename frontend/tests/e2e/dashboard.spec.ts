@@ -124,7 +124,13 @@ async function mockDashboardApis(page: Page) {
   await page.route(`${API}/api/dashboard/summary`, (route: Route) =>
     route.fulfill({ json: SUMMARY_FIXTURE, status: 200 }),
   )
+  await page.route(`${API}/api/resumes/bulk`, (route: Route) =>
+    route.fulfill({ json: { ok: true, deleted: 2 }, status: 200 }),
+  )
   await page.route(`${API}/api/resumes*`, (route: Route) => {
+    if (route.request().method() !== "GET") {
+      return route.continue()
+    }
     const url = new URL(route.request().url())
     const statuses = url.searchParams.getAll("status")
     const body = statuses.includes("applied")
@@ -170,5 +176,18 @@ test.describe("dashboard page (mocked API)", () => {
     await page.getByRole("button", { name: /Apply filters/i }).click()
     await expect(page.getByRole("heading", { name: "Applied Role" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Backend Engineer" })).not.toBeVisible()
+  })
+
+  test("bulk delete removes selected resumes from the list", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Backend Engineer" })).toBeVisible()
+    await page.getByRole("checkbox", { name: "Select Backend Engineer" }).check()
+    await page.getByRole("checkbox", { name: "Select Applied Role" }).check()
+    await expect(page.getByText("2 selected")).toBeVisible()
+    await page.getByRole("button", { name: "Delete" }).click()
+    await expect(page.getByRole("heading", { name: "Backend Engineer" })).not.toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.getByRole("heading", { name: "Applied Role" })).not.toBeVisible()
+    await expect(page.getByText("2 selected")).not.toBeVisible()
   })
 })
