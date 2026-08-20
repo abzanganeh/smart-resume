@@ -202,6 +202,32 @@ async def test_unread_count_after_in_app_notification(
     assert r.json()["count"] >= 1
 
 
+async def test_notification_preferences_get_and_patch(
+    app_client: AsyncClient,
+) -> None:
+    token, _user_id = await _register(app_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    get_res = await app_client.get("/api/notifications/preferences", headers=headers)
+    assert get_res.status_code == 200, get_res.text
+    body = get_res.json()
+    assert "email_enabled_categories" in body
+    assert "payment" in body["email_enabled_categories"]
+
+    patch_res = await app_client.patch(
+        "/api/notifications/preferences",
+        json={
+            "email_enabled_categories": [
+                c for c in body["email_enabled_categories"] if c != "payment"
+            ],
+        },
+        headers=headers,
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    updated = patch_res.json()
+    assert "payment" not in updated["email_enabled_categories"]
+
+
 async def test_resend_bounce_webhook_sets_email_bounced_at(
     app_client: AsyncClient,
     db_session: AsyncSession,
