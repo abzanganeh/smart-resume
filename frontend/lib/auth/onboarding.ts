@@ -9,6 +9,21 @@ export const ONBOARDING_EXEMPT_PREFIXES = ["/onboarding", "/profile", "/session/
 
 export const ONBOARDING_STEP_COUNT = 5
 
+/** 0-based index of the master-resume step in the onboarding wizard. */
+export const ONBOARDING_MASTER_STEP_INDEX = 2
+
+/** 0-based index of the job-titles step (immediately after master resume). */
+export const ONBOARDING_JOB_TITLES_STEP_INDEX = 3
+
+/**
+ * After a master resume is saved during onboarding, advance to job titles.
+ * Returns the current index unchanged when not on the master step.
+ */
+export function onboardingStepAfterMasterUpload(currentIndex: number): number {
+  if (currentIndex !== ONBOARDING_MASTER_STEP_INDEX) return currentIndex
+  return ONBOARDING_JOB_TITLES_STEP_INDEX
+}
+
 export function isOnboardingExempt(pathname: string): boolean {
   return ONBOARDING_EXEMPT_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),

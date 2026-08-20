@@ -16,7 +16,6 @@ import {
   Mic,
   Search,
   Sparkles,
-  Upload,
   Zap,
 } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
@@ -24,13 +23,16 @@ import { friendlyAuthError } from "@/lib/auth/errors"
 import { fetchMe, patchOnboarding } from "@/lib/auth/api"
 import {
   needsOnboarding,
+  onboardingStepAfterMasterUpload,
+  ONBOARDING_MASTER_STEP_INDEX,
   parseOnboardingStepParam,
   postOnboardingDestination,
   resolveOnboardingStepIndex,
 } from "@/lib/auth/onboarding"
-import { getProfileChunks, liveChunkCount } from "@/lib/profile"
+import { getProfileChunks, liveChunkCount, uploadProfileResume } from "@/lib/profile"
 import { getJobPreferences } from "@/lib/jobs"
 import { JobTitlePicker } from "@/components/jobs/JobTitlePicker"
+import { ProfileUploadZone } from "@/components/profile/ProfileUploadZone"
 import {
   FREE_TIER_CREDIT_ACTIONS,
   FREE_TIER_STARTING_CREDITS,
@@ -111,7 +113,7 @@ const STEPS = [
     subtitle: "Generate it by speaking, or upload an existing file.",
     icon: Mic,
     bodyKey: "master" as const,
-    cta: "Generate or upload resume",
+    cta: "Continue",
   },
   {
     title: "Which roles should we search for?",
@@ -139,8 +141,13 @@ function OnboardingPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [hydrated, setHydrated] = useState(false)
-  const navigatingToProfileRef = useRef(false)
+  const [hasMasterResume, setHasMasterResume] = useState(false)
+  const [uploadingMaster, setUploadingMaster] = useState(false)
+  const stepRef = useRef(step)
   const updateRef = useRef(update)
+  useEffect(() => {
+    stepRef.current = step
+  }, [step])
   useEffect(() => {
     updateRef.current = update
   }, [update])
@@ -197,8 +204,8 @@ function OnboardingPageContent() {
         if (user.onboarding_ai_choice === "platform") {
           setAiChoice("platform")
         }
+        setHasMasterResume(hasMaster)
         setStep(Math.max(0, stepIndex))
-        navigatingToProfileRef.current = false
       } catch (err: unknown) {
         if (!cancelled) {
           setError((err as Error).message || "Could not load onboarding progress.")
@@ -233,6 +240,29 @@ function OnboardingPageContent() {
     window.location.assign(postOnboardingDestination(user))
   }
 
+  async function advanceAfterMasterResume() {
+    setHasMasterResume(true)
+    if (!session?.backendUser?.onboarding_ai_choice) {
+      await saveAiChoice(aiChoice)
+    }
+    if (stepRef.current === ONBOARDING_MASTER_STEP_INDEX) {
+      setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+    }
+  }
+
+  async function handleMasterUpload(payload: { file?: File; text?: string }) {
+    const accessToken = session?.backendAccessToken
+    if (!accessToken) throw new Error("Not signed in")
+    setUploadingMaster(true)
+    setError(null)
+    try {
+      await uploadProfileResume(accessToken, payload)
+      await advanceAfterMasterResume()
+    } finally {
+      setUploadingMaster(false)
+    }
+  }
+
   if (status === "loading" || !session || !hydrated) {
     return (
       <div className="min-h-screen bg-sr-bg flex items-center justify-center">
@@ -258,10 +288,11 @@ function OnboardingPageContent() {
           return
         }
         if (isMasterStep) {
-          if (navigatingToProfileRef.current) return
-          navigatingToProfileRef.current = true
-          await saveAiChoice(aiChoice)
-          router.push("/profile?from=onboarding")
+          if (hasMasterResume) {
+            setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+            return
+          }
+          setError("Upload or paste your master resume above, or skip for now.")
           return
         }
         if (isLast) {
@@ -315,56 +346,19 @@ function OnboardingPageContent() {
       case "ai":
         return <OnboardingAiStep />
       case "master":
-        return (
-          <div className="space-y-4 text-left max-w-md mx-auto">
-            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed text-center">
-              Your master resume is the foundation for every tailored version. Choose whichever
-              path fits you best:
-            </p>
-            <ul className="space-y-3">
-              <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
-                <Upload className="w-4 h-4 text-slate-600 dark:text-slate-400 dark:text-slate-300 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
-                    Upload or paste
-                  </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    PDF, DOCX, or plain text — included on the free plan.
-                  </p>
-                </div>
-              </li>
-              <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
-                <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
-                    Coached interview
-                  </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    AI-guided career Q&amp;A — uses 1 credit on the free plan.
-                  </p>
-                </div>
-              </li>
-              <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
-                <Mic className="w-4 h-4 text-indigo-700 dark:text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
-                    Tell your story (voice)
-                    <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                      Free in Chrome / Edge
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Speak your career and we transcribe live. Optional coaching uses 1 credit per
-                    session. Other browsers fall back to Whisper, which needs a paid plan.
-                  </p>
-                </div>
-              </li>
-            </ul>
-            <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
-              Skip for now — your dashboard will prompt you to build one when you&apos;re ready.
-            </p>
-          </div>
-        )
+        return token ? (
+          <ProfileUploadZone
+            token={token}
+            compact
+            loading={uploadingMaster}
+            onSubmit={handleMasterUpload}
+            onStoryComplete={() => {
+              void advanceAfterMasterResume().catch((err: unknown) => {
+                setError((err as Error).message || "Could not continue after saving your story.")
+              })
+            }}
+          />
+        ) : null
       case "jobTitles":
         return token ? (
           <JobTitlePicker
@@ -441,7 +435,7 @@ function OnboardingPageContent() {
           {step > 0 && (
             <button
               type="button"
-              disabled={isPending}
+              disabled={isPending || (isMasterStep && uploadingMaster)}
               onClick={() => setStep((s) => s - 1)}
               className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 px-4 py-2.5 disabled:opacity-50"
             >
@@ -450,7 +444,7 @@ function OnboardingPageContent() {
           )}
           <button
             type="button"
-            disabled={isPending}
+            disabled={isPending || (isMasterStep && uploadingMaster)}
             onClick={handlePrimary}
             className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-amber-300 transition-colors disabled:opacity-60"
           >
@@ -469,7 +463,7 @@ function OnboardingPageContent() {
           {isMasterStep && (
             <button
               type="button"
-              disabled={isPending}
+              disabled={isPending || uploadingMaster}
               onClick={handleSkipMaster}
               className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 underline underline-offset-4 disabled:opacity-50"
             >
