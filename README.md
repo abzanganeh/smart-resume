@@ -144,7 +144,7 @@ source of truth enforced by the quota layer.
 
 | Plan | Period | Resumes & cover letters | Job searches | Fit analyses | Whisper voice | Career Watch |
 |---------|---------|---:|---:|---:|---:|---:|
-| Free | — | 3 credits at signup | — | — | — | 1 company |
+| Free | — | 6 credits at signup | — | — | — | 1 company |
 | Weekly | week | 10 | 20 | 10 | 2 | 3 companies |
 | Pro | month/year | 50 | 100 | 50 | 5 | 10 companies |
 | Pro+ | month/year | 100 | 200 | 100 | 15 | 30 companies |
@@ -152,8 +152,11 @@ source of truth enforced by the quota layer.
 
 Notes:
 
-- **Job search** and **fit analysis** are subscription-only; the free plan cannot reach them at all.
-- **Whisper** transcription is subscription-only. Browser-native voice (Chrome/Edge) is free everywhere.
+- **Fit analysis** is subscription-only. **Expanded job search** (Hirebase) is too, but free users
+  who have confirmed their preferred titles keep a limited corpus search at no quota cost — see
+  `_require_job_search_access` in `backend/app/routers/jobs.py`.
+- **Whisper** transcription has no per-period allowance on the free tier; free users pay 2 credits
+  per story transcription. Browser-native voice (Chrome/Edge) is free everywhere.
 - Reaching a resume allowance **falls back to credits** rather than blocking the action.
 - Premium has no hard Whisper cap but is subject to a fair-use soft cap.
 

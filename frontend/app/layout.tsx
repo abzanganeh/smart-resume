@@ -10,13 +10,13 @@ import { ThemeScript } from "@/components/theme/ThemeScript";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TalioCV — AI tailoring & job search",
+  title: "TalioCV — AI resume tailoring, ATS optimization & job search",
   description:
-    "Build your master resume, tailor it to every job description, extract company intel, and track applications.",
+    "Discover the job titles you actually fit, then tailor an ATS-optimized resume to every job description. Master resume, cover letters, job search, and application tracking in one place.",
   openGraph: {
     title: "TalioCV",
     description:
-      "AI resume tailoring, company intel, and job search workflow.",
+      "Find the roles you fit, then tailor an ATS-optimized resume for each one.",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "TalioCV" }],
   },
 };
