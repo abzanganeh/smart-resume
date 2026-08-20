@@ -189,3 +189,50 @@ async def test_patch_status_applied_to_interviewing(
     )
     assert r.status_code == 200
     assert r.json()["status"] == "interviewing"
+
+
+async def test_get_application_detail_returns_timeline_and_usage(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, _user_id = await _register(app_client)
+    app_id = await _create_application(app_client, token)
+
+    r = await app_client.get(
+        f"/api/applications/{app_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["id"] == app_id
+    assert body["jd_title"] == "Backend Engineer"
+    assert "timeline" in body
+    assert "attachment_usage" in body
+    assert body["attachment_usage"]["max_count"] == 5
+    assert body["interview_rounds"] == []
+
+
+async def test_patch_application_notes_persist_on_detail(
+    app_client: AsyncClient,
+) -> None:
+    token, _user_id = await _register(app_client)
+    app_id = await _create_application(app_client, token)
+
+    patch = await app_client.patch(
+        f"/api/applications/{app_id}",
+        json={
+            "notes": "Recruiter prefers email follow-up",
+            "contact_name": "Jane Doe",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert patch.status_code == 200, patch.text
+
+    detail = await app_client.get(
+        f"/api/applications/{app_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["notes"] == "Recruiter prefers email follow-up"
+    assert body["contact_name"] == "Jane Doe"

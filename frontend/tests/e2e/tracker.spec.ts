@@ -25,6 +25,49 @@ const APPLICATIONS_FIXTURE = [
   },
 ]
 
+const detailState = {
+  notes: "",
+  contact_name: "",
+  contact_email: "",
+  job_url: "",
+  status: "applied",
+  rejection_reason: null as string | null,
+  rejection_notes: null as string | null,
+}
+
+function buildApplicationDetail() {
+  const base = APPLICATIONS_FIXTURE[0]
+  return {
+    ...base,
+    status: detailState.status,
+    notes: detailState.notes || null,
+    contact_name: detailState.contact_name || null,
+    contact_email: detailState.contact_email || null,
+    job_url: detailState.job_url || null,
+    rejection_reason: detailState.rejection_reason,
+    rejection_notes: detailState.rejection_notes,
+    status_history: [],
+    interview_rounds: [],
+    offer_detail: null,
+    attachments: [],
+    timeline: [],
+    attachment_usage: {
+      count: 0,
+      total_bytes: 0,
+      max_count: 5,
+      max_file_bytes: 5242880,
+      max_total_bytes: 10485760,
+    },
+  }
+}
+
+function buildApplicationSummary() {
+  return {
+    ...APPLICATIONS_FIXTURE[0],
+    status: detailState.status,
+  }
+}
+
 const FUNNEL_FIXTURE = {
   status_counts: {
     draft: 0,
@@ -107,6 +150,13 @@ async function login(page: Page) {
 
 async function mockTrackerApis(page: Page) {
   patchedStatus = null
+  detailState.notes = ""
+  detailState.contact_name = ""
+  detailState.contact_email = ""
+  detailState.job_url = ""
+  detailState.status = "applied"
+  detailState.rejection_reason = null
+  detailState.rejection_notes = null
 
   await page.route(`${API}/api/resumes*`, (route: Route) =>
     route.fulfill({
@@ -130,6 +180,7 @@ async function mockTrackerApis(page: Page) {
             ? {
                 applied: patchedStatus === "applied" ? 1 : 0,
                 interviewing: patchedStatus === "interviewing" ? 1 : 0,
+                rejected: patchedStatus === "rejected" ? 1 : 0,
               }
             : {}),
         },
@@ -139,32 +190,48 @@ async function mockTrackerApis(page: Page) {
 
   await page.route(/\/api\/applications(\?.*)?$/, (route: Route) => {
     if (route.request().method() === "GET") {
-      const items = APPLICATIONS_FIXTURE.map((a) =>
-        patchedStatus ? { ...a, status: patchedStatus } : a,
-      )
+      const items = [buildApplicationSummary()]
       return route.fulfill({ json: items, status: 200 })
     }
     return route.continue()
   })
 
+  await page.route(`${API}/api/applications/${APP_ID}/reminders`, (route: Route) =>
+    route.fulfill({ json: [], status: 200 }),
+  )
+
   await page.route(`${API}/api/applications/${APP_ID}`, (route: Route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: buildApplicationDetail(), status: 200 })
+    }
     if (route.request().method() === "PATCH") {
-      const body = route.request().postDataJSON() as { status?: string }
-      patchedStatus = body.status ?? patchedStatus
-      return route.fulfill({
-        json: { ...APPLICATIONS_FIXTURE[0], status: patchedStatus ?? "applied" },
-        status: 200,
-      })
+      const body = route.request().postDataJSON() as {
+        status?: string
+        notes?: string
+        contact_name?: string
+        contact_email?: string
+        job_url?: string
+        rejection_reason?: string
+        rejection_notes?: string | null
+      }
+      if (body.status !== undefined) {
+        detailState.status = body.status
+        patchedStatus = body.status
+      }
+      if (body.notes !== undefined) detailState.notes = body.notes
+      if (body.contact_name !== undefined) detailState.contact_name = body.contact_name
+      if (body.contact_email !== undefined) detailState.contact_email = body.contact_email
+      if (body.job_url !== undefined) detailState.job_url = body.job_url
+      if (body.rejection_reason !== undefined) {
+        detailState.rejection_reason = body.rejection_reason
+      }
+      if (body.rejection_notes !== undefined) {
+        detailState.rejection_notes = body.rejection_notes
+      }
+      return route.fulfill({ json: buildApplicationSummary(), status: 200 })
     }
     return route.continue()
   })
-
-  await page.route(`${API}/api/resumes*`, (route: Route) =>
-    route.fulfill({
-      json: { items: [], total: 0, page: 1, page_size: 100 },
-      status: 200,
-    }),
-  )
 }
 
 test.describe("tracker route guard", () => {
@@ -209,5 +276,111 @@ test.describe("tracker kanban (mocked API)", () => {
     expect((patchReq.postDataJSON() as { status: string }).status).toBe("interviewing")
 
     await expect(card).toHaveAttribute("data-status", "interviewing")
+  })
+})
+
+test.describe("tracker detail (mocked API)", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAuth(page)
+    await mockTrackerApis(page)
+    await login(page)
+  })
+
+  test("loads application detail from kanban link", async ({ page }) => {
+    await page.goto(`${BASE}/tracker`)
+    await expect(page.getByRole("heading", { name: /Application tracker/i })).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const detailPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/applications/${APP_ID}`) && req.method() === "GET",
+    )
+    const remindersPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/applications/${APP_ID}/reminders`) &&
+        req.method() === "GET",
+    )
+
+    await page.getByRole("link", { name: "Software Engineer" }).click()
+    await page.waitForURL(new RegExp(`/tracker/${APP_ID}`), { timeout: 15_000 })
+    await detailPromise
+    await remindersPromise
+
+    await expect(page.getByRole("heading", { name: "Software Engineer" })).toBeVisible()
+    await expect(page.getByText("Beta Corp")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Contact & notes" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Reminders" })).toBeVisible()
+    await expect(page.getByRole("link", { name: "Back to pipeline" })).toBeVisible()
+  })
+
+  test("save contact details PATCHes notes", async ({ page }) => {
+    await page.goto(`${BASE}/tracker/${APP_ID}`)
+    await expect(page.getByRole("heading", { name: "Software Engineer" })).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const contactForm = page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "Save contact details" }) })
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/applications/${APP_ID}`) &&
+        req.method() === "PATCH" &&
+        (req.postDataJSON() as { notes?: string }).notes ===
+          "Follow up with recruiter next week",
+    )
+
+    await contactForm.getByRole("textbox", { name: "Notes", exact: true }).fill(
+      "Follow up with recruiter next week",
+    )
+    await page.getByRole("button", { name: "Save contact details" }).click()
+    await patchPromise
+
+    await expect(
+      contactForm.getByRole("textbox", { name: "Notes", exact: true }),
+    ).toHaveValue("Follow up with recruiter next week")
+  })
+
+  test("rejection form PATCHes status to rejected", async ({ page }) => {
+    await page.goto(`${BASE}/tracker/${APP_ID}`)
+    await expect(page.getByRole("heading", { name: "Software Engineer" })).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/applications/${APP_ID}`) &&
+        req.method() === "PATCH" &&
+        (req.postDataJSON() as { status?: string }).status === "rejected",
+    )
+
+    await page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "Update rejection / withdrawal" }) })
+      .locator("select")
+      .first()
+      .selectOption("rejected")
+    await page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "Update rejection / withdrawal" }) })
+      .locator("select")
+      .nth(1)
+      .selectOption("ghosted")
+    await page.getByPlaceholder("Optional notes").fill("No response after 3 weeks")
+    await page.getByRole("button", { name: "Update rejection / withdrawal" }).click()
+    const patchReq = await patchPromise
+    const body = patchReq.postDataJSON() as {
+      status: string
+      rejection_reason: string
+      rejection_notes: string
+    }
+    expect(body.status).toBe("rejected")
+    expect(body.rejection_reason).toBe("ghosted")
+    expect(body.rejection_notes).toBe("No response after 3 weeks")
+
+    await expect(page.getByText("rejected", { exact: true })).toBeVisible()
   })
 })

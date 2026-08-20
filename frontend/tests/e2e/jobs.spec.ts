@@ -379,6 +379,10 @@ test("track application creates draft and navigates to tracker detail", async ({
     return route.continue()
   })
 
+  await page.route(`${API}/api/applications/${NEW_APP_ID}/reminders`, (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+  )
+
   await page.route(`${API}/api/applications/${NEW_APP_ID}`, (route: Route) =>
     route.fulfill({
       status: 200,
