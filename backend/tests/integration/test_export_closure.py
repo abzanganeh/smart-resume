@@ -23,6 +23,7 @@ from app.models.export import (
     EXPORT_PRESIGNED_TTL_SECONDS,
 )
 from app.models.master_resume import MasterResume
+from app.models.notifications import Notification
 from app.models.user import AuthProvider, User
 from app.services.export.assembler import build_export_zip, process_export_job
 from app.services.export.closure import cancel_closure, run_closure_tick, schedule_closure
@@ -209,6 +210,53 @@ async def test_run_closure_tick_hard_deletes_user_idempotent(
 
     result2 = await run_closure_tick(db_session, now=datetime.now(timezone.utc))
     assert result2.deleted == []
+
+
+async def test_run_closure_tick_sends_day23_reminder(
+    db_session: AsyncSession,
+) -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email=f"remind-{uuid.uuid4().hex[:6]}@example.com",
+        auth_provider=AuthProvider.email,
+        password_hash="x",
+        display_name="Reminder User",
+        closure_requested_at=datetime.now(timezone.utc) - timedelta(days=23),
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    now = datetime.now(timezone.utc)
+    scheduled = now + timedelta(days=5)
+    db_session.add(
+        ClosureRequest(
+            user_id=user.id,
+            requested_at=now - timedelta(days=23),
+            scheduled_delete_at=scheduled,
+        )
+    )
+    await db_session.flush()
+
+    result = await run_closure_tick(db_session, now=now)
+    assert result.reminders_sent == 1
+    assert result.deleted == []
+
+    closure = (
+        await db_session.execute(
+            select(ClosureRequest).where(ClosureRequest.user_id == user.id)
+        )
+    ).scalar_one()
+    assert closure.day23_reminder_sent_at is not None
+
+    note = (
+        await db_session.execute(
+            select(Notification).where(
+                Notification.user_id == user.id,
+                Notification.type == "account_closure_reminder",
+            )
+        )
+    ).scalar_one()
+    assert "7 days until account deletion" in note.title
 
 
 async def test_cancel_closure_before_grace_restores_access(
