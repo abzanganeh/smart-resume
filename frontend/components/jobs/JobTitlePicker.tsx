@@ -1,11 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, Loader2, Search } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import {
   getJobTitleSuggestions,
   MIN_PREFERRED_JOB_TITLES,
   savePreferredJobTitles,
+  titleFitBar,
+  titleFitLabel,
+  type JobTitleSuggestion,
 } from "@/lib/jobs"
 import { clsx } from "clsx"
 
@@ -22,7 +25,7 @@ export function JobTitlePicker({
   submitLabel = "Continue to job search",
   className,
 }: JobTitlePickerProps) {
-  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<JobTitleSuggestion[]>([])
   const [heldTitles, setHeldTitles] = useState<string[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -37,8 +40,8 @@ export function JobTitlePicker({
       setSuggestions(res.suggestions)
       setHeldTitles(res.held_titles)
       const preselect = new Set<string>()
-      for (const title of res.suggestions.slice(0, MIN_PREFERRED_JOB_TITLES)) {
-        preselect.add(title)
+      for (const row of res.suggestions.slice(0, MIN_PREFERRED_JOB_TITLES)) {
+        preselect.add(row.title)
       }
       setSelected(preselect)
     } catch (e) {
@@ -96,7 +99,7 @@ export function JobTitlePicker({
     <form onSubmit={handleSubmit} className={clsx("space-y-5", className)}>
       <div className="text-center space-y-2">
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-          Based on your master resume, we suggest roles to search for. Pick at least{" "}
+          Based on your master resume, we ranked roles by fit. Pick at least{" "}
           <strong className="text-slate-900 dark:text-slate-200">{MIN_PREFERRED_JOB_TITLES}</strong>{" "}
           — you can refine these anytime on the Jobs page.
         </p>
@@ -108,28 +111,66 @@ export function JobTitlePicker({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 justify-center" data-testid="job-title-suggestions">
-        {suggestions.map((title) => {
-          const isSelected = selected.has(title)
+      <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1" data-testid="job-title-suggestions">
+        {suggestions.map((row) => {
+          const isSelected = selected.has(row.title)
           return (
             <button
-              key={title}
+              key={row.title}
               type="button"
-              onClick={() => toggle(title)}
-              data-testid={`job-title-option-${title}`}
+              onClick={() => toggle(row.title)}
+              data-testid={`job-title-option-${row.title}`}
               className={clsx(
-                "inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm border transition-colors",
+                "w-full text-left rounded-xl border p-4 transition-colors",
                 isSelected
-                  ? "bg-amber-400/20 border-amber-400 text-amber-900 dark:text-amber-200"
-                  : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-400/60",
+                  ? "border-amber-400 bg-amber-400/10 ring-1 ring-amber-400/40"
+                  : "border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 hover:border-amber-400/50",
               )}
             >
-              {isSelected ? (
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              ) : (
-                <Search className="w-3.5 h-3.5 shrink-0 opacity-50" />
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {row.title}
+                </h3>
+                {isSelected ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                ) : null}
+              </div>
+
+              <p
+                className="mt-2 font-mono text-[11px] leading-none tracking-tight text-emerald-700 dark:text-emerald-400"
+                aria-label={titleFitLabel(row.fit_score)}
+              >
+                {titleFitBar(row.fit_score)}{" "}
+                <span className="text-slate-600 dark:text-slate-400">{titleFitLabel(row.fit_score)}</span>
+              </p>
+
+              {row.strengths.length > 0 && (
+                <ul className="mt-3 space-y-1">
+                  {row.strengths.map((line) => (
+                    <li
+                      key={line}
+                      className="text-xs text-emerald-800 dark:text-emerald-300/90 flex gap-2"
+                    >
+                      <span className="shrink-0">+</span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
-              {title}
+
+              {row.weaknesses.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {row.weaknesses.map((line) => (
+                    <li
+                      key={line}
+                      className="text-xs text-amber-800 dark:text-amber-300/90 flex gap-2"
+                    >
+                      <span className="shrink-0">−</span>
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </button>
           )
         })}

@@ -98,6 +98,14 @@ async def test_title_suggestions_from_resume(
     body = r.json()
     assert len(body["suggestions"]) == 10
     assert "Mobile Developer" in body["held_titles"]
+    first = body["suggestions"][0]
+    assert "title" in first
+    assert "fit_score" in first
+    assert isinstance(first["fit_score"], int)
+    assert first["strengths"]
+    assert body["suggestions"] == sorted(
+        body["suggestions"], key=lambda row: row["fit_score"], reverse=True
+    )
 
 
 @pytest.mark.asyncio
