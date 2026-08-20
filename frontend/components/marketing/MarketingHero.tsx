@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, FileSearch, Sparkles } from "lucide-react";
 import { ProductScreenshot } from "@/components/brand/ProductScreenshot";
 import { formatSignupCreditsCopy } from "@/lib/freeTier";
-import { PRIMARY_CTA, SECONDARY_CTA } from "./styles";
+import { FINE_PRINT, PRIMARY_CTA, SECONDARY_CTA } from "./styles";
 
 export function MarketingHero({ startingCredits }: { startingCredits: number }) {
   const creditsLabel = startingCredits === 1 ? "credit" : "credits";
@@ -27,10 +27,7 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
         </p>
       </div>
 
-      <div className="mt-8 max-w-4xl mx-auto">
-        <ProductScreenshot priority />
-      </div>
-
+      {/* CTAs sit above the screenshot so they stay above the fold. */}
       <div className="mt-8 text-center">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href="/auth?mode=register" className={PRIMARY_CTA}>
@@ -45,10 +42,14 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
         <p className="mt-4 text-slate-600 dark:text-slate-400 text-sm">
           {formatSignupCreditsCopy(startingCredits)} · No credit card required
         </p>
-        <p className="mt-1 text-slate-500 dark:text-slate-500 text-xs">
+        <p className={`mt-1 ${FINE_PRINT}`}>
           The resume checkup needs no account at all. Registering takes about a
           minute and includes {startingCredits} AI {creditsLabel}.
         </p>
+      </div>
+
+      <div className="mt-10 max-w-4xl mx-auto">
+        <ProductScreenshot priority />
       </div>
     </section>
   );

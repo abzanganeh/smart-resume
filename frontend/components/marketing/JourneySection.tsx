@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { JOURNEY_STEPS, journeyBadge } from "@/lib/marketing/journey";
 import {
+  FINE_PRINT,
   INLINE_CTA,
   SECTION,
   SECTION_HEADING,
@@ -46,9 +47,7 @@ export function JourneySection() {
                   {step.description}
                 </p>
                 {step.accessNote && (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
-                    {step.accessNote}
-                  </p>
+                  <p className={`mt-2 ${FINE_PRINT}`}>{step.accessNote}</p>
                 )}
                 <Link href={step.ctaHref} className={`${INLINE_CTA} mt-3`}>
                   {step.ctaLabel}

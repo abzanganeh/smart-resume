@@ -7,6 +7,7 @@ import {
   hasSyncedPricing,
   isPlanPriceSynced,
   planCycleSuffix,
+  planHighlights,
   selectPublicPlans,
 } from "@/lib/marketing/pricing";
 
@@ -29,6 +30,19 @@ function payload(plans: BillingPlan[]): BillingPricesResponse {
   return { version: "1", currency: "USD", plans, addons: [] };
 }
 
+function limits(
+  overrides: Partial<NonNullable<BillingPlan["limits"]>> = {},
+): NonNullable<BillingPlan["limits"]> {
+  return {
+    resumes_per_period: 50,
+    searches_per_period: 100,
+    fit_analyses_per_period: 50,
+    whisper_uses_per_period: 5,
+    career_watch_companies: 10,
+    ...overrides,
+  };
+}
+
 describe("isPlanPriceSynced", () => {
   it("treats a positive amount as synced", () => {
     assert.equal(isPlanPriceSynced(plan({ amount_cents: 999 })), true);
@@ -42,6 +56,19 @@ describe("isPlanPriceSynced", () => {
 
   it("treats a negative amount as unsynced", () => {
     assert.equal(isPlanPriceSynced(plan({ amount_cents: -100 })), false);
+  });
+
+  it("rejects a non-numeric amount from a malformed payload", () => {
+    // Without this, a string amount would pass `> 0` by coercion, then sort by
+    // string subtraction and format as "$NaN".
+    const malformed = plan({
+      amount_cents: "1999" as unknown as number,
+    });
+    assert.equal(isPlanPriceSynced(malformed), false);
+    assert.equal(
+      isPlanPriceSynced(plan({ amount_cents: NaN })),
+      false,
+    );
   });
 });
 
@@ -136,6 +163,56 @@ describe("formatPlanPrice", () => {
   it("never renders an unsynced plan as a real price", () => {
     assert.equal(formatPlanPrice(0, "USD"), null);
     assert.equal(formatPlanPrice(-5, "USD"), null);
+    assert.equal(formatPlanPrice(NaN, "USD"), null);
+  });
+
+  it("falls back to USD instead of throwing on a bad currency code", () => {
+    // Intl.NumberFormat raises RangeError on a malformed code, and this value
+    // comes from the API response — throwing here would 500 the public page.
+    assert.equal(formatPlanPrice(1999, "not-a-currency"), "$19.99");
+    assert.equal(formatPlanPrice(1999, ""), "$19.99");
+  });
+});
+
+describe("planHighlights", () => {
+  it("returns nothing when the API omits limits", () => {
+    assert.deepEqual(planHighlights(plan({ limits: null })), []);
+  });
+
+  it("lists the per-period allowances", () => {
+    const out = planHighlights(plan({ limits: limits() }));
+    assert.ok(out.includes("50 tailored resumes & cover letters"));
+    assert.ok(out.includes("100 job searches"));
+    assert.ok(out.includes("50 fit analyses"));
+  });
+
+  it("describes a null Whisper cap as fair use", () => {
+    const out = planHighlights(
+      plan({ limits: limits({ whisper_uses_per_period: null }) }),
+    );
+    assert.ok(out.includes("Whisper voice — fair use"));
+  });
+
+  it("omits Whisper entirely when the tier has none", () => {
+    const out = planHighlights(
+      plan({ limits: limits({ whisper_uses_per_period: 0 }) }),
+    );
+    assert.equal(
+      out.some((line) => line.includes("Whisper")),
+      false,
+    );
+  });
+
+  it("singularises a one-company Career Watch allowance", () => {
+    const single = planHighlights(
+      plan({ limits: limits({ career_watch_companies: 1 }) }),
+    );
+    assert.ok(single.includes("1 Career Watch company"));
+
+    const many = planHighlights(
+      plan({ limits: limits({ career_watch_companies: 30 }) }),
+    );
+    assert.ok(many.includes("30 Career Watch companies"));
   });
 });
 

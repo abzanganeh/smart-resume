@@ -1,8 +1,14 @@
 import { defineConfig, devices } from "@playwright/test"
 
 const nextBin = "node node_modules/next/dist/bin/next"
-// Overridable because host :3000 is not always free on a dev workstation
-// (Trust/Kia claims it). CI keeps 3000.
+// Host :3000 is reserved for Trust/Kia on dev workstations, where
+// `reuseExistingServer` will silently adopt whatever already holds the port.
+// Set PLAYWRIGHT_PORT (e.g. 3100) to work around it.
+//
+// The default stays 3000 because 15 specs still hardcode
+// `const BASE = "http://localhost:3000"`; they need migrating to relative
+// paths before the default can move. landing.spec.ts uses relative paths and
+// honours the override today.
 const PORT = process.env.PLAYWRIGHT_PORT ?? "3000"
 const BASE_URL = `http://localhost:${PORT}`
 const webServerCommand = process.env.CI

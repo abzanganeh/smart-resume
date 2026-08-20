@@ -1,41 +1,19 @@
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
-import type { BillingPlan, BillingPricesResponse } from "@/lib/api";
+import type { BillingPricesResponse } from "@/lib/api";
 import {
   formatPlanPrice,
-  hasSyncedPricing,
   planCycleSuffix,
+  planHighlights,
   selectPublicPlans,
 } from "@/lib/marketing/pricing";
 import {
+  FINE_PRINT,
   INLINE_CTA,
   SECTION,
   SECTION_HEADING,
   SECTION_SUBHEADING,
 } from "./styles";
-
-function planHighlights(plan: BillingPlan): string[] {
-  const limits = plan.limits;
-  if (!limits) {
-    return [];
-  }
-  const out = [
-    `${limits.resumes_per_period} tailored resumes & cover letters`,
-    `${limits.searches_per_period} job searches`,
-    `${limits.fit_analyses_per_period} fit analyses`,
-  ];
-  if (limits.whisper_uses_per_period === null) {
-    out.push("Whisper voice — fair use");
-  } else if (limits.whisper_uses_per_period > 0) {
-    out.push(`${limits.whisper_uses_per_period} Whisper voice sessions`);
-  }
-  out.push(
-    limits.career_watch_companies === 1
-      ? "1 Career Watch company"
-      : `${limits.career_watch_companies} Career Watch companies`,
-  );
-  return out;
-}
 
 export function PricingSection({
   pricing,
@@ -45,8 +23,10 @@ export function PricingSection({
   startingCredits: number;
 }) {
   const currency = pricing?.currency ?? "USD";
+  // selectPublicPlans already drops unsynced plans, so a non-empty list is
+  // exactly the condition for showing real prices.
   const monthly = selectPublicPlans(pricing, "monthly");
-  const showPrices = hasSyncedPricing(pricing) && monthly.length > 0;
+  const showPrices = monthly.length > 0;
 
   return (
     <section className={`${SECTION} pb-24`}>
@@ -62,9 +42,7 @@ export function PricingSection({
           <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
             $0
           </p>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            No credit card
-          </p>
+          <p className={`${FINE_PRINT} mt-1`}>No credit card</p>
           <ul className="mt-4 space-y-2">
             {[
               `${startingCredits} AI credits at signup`,
@@ -86,6 +64,12 @@ export function PricingSection({
         {showPrices ? (
           monthly.map((plan) => {
             const price = formatPlanPrice(plan.amount_cents, currency);
+            // Unreachable while selectPublicPlans filters unsynced plans, but
+            // the invariant lives two functions away — keep it local so a card
+            // can never render a blank price.
+            if (!price) {
+              return null;
+            }
             return (
               <div
                 key={plan.code}
@@ -102,7 +86,7 @@ export function PricingSection({
                     {planCycleSuffix(plan.cycle)}
                   </span>
                 </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                <p className={`${FINE_PRINT} mt-1`}>
                   {plan.trial_days
                     ? `${plan.trial_days}-day trial`
                     : "Billed monthly"}
@@ -140,7 +124,7 @@ export function PricingSection({
       </div>
 
       {showPrices && (
-        <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-500">
+        <p className={`mt-6 text-center ${FINE_PRINT}`}>
           Monthly prices shown. Weekly and discounted yearly billing are
           available on the billing page after you sign in.
         </p>

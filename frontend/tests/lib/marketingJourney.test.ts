@@ -84,8 +84,23 @@ describe("journeyBadge", () => {
   });
 });
 
+describe("credit disclosure", () => {
+  it("notes the credit cost on every stage that spends credits", () => {
+    // Story coaching, tailoring, and cover letters all debit credits on the
+    // free plan (see FREE_TIER_CREDIT_ACTIONS). The journey subheading
+    // promises that everything unbadged "works on the free tier", so each of
+    // these has to say what it costs.
+    for (const id of ["story", "tailor", "apply"]) {
+      assert.ok(
+        journeyStepById(id).accessNote,
+        `${id} must disclose its credit cost`,
+      );
+    }
+  });
+});
+
 describe("journeyStepById", () => {
-  it("throws on an unknown id so dead references fail loudly at build time", () => {
+  it("throws on an unknown id rather than returning undefined", () => {
     assert.throws(() => journeyStepById("nope"), /nope/);
   });
 });

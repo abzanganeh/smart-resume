@@ -8,6 +8,11 @@
  * plan (Pro+, 0 cents) so the no-fabricated-price rule is enforced end to end.
  *
  * Paths are relative so the suite honours `PLAYWRIGHT_PORT`.
+ *
+ * Running locally (host :3000 is usually taken by Trust/Kia):
+ *   E2E_MOCK_API=1 PLAYWRIGHT_PORT=3100 pnpm exec playwright test tests/e2e/landing.spec.ts
+ * Without `E2E_MOCK_API` there is no price catalog, and the pricing
+ * expectations below will fail rather than pass vacuously.
  */
 import { test, expect } from "@playwright/test"
 
@@ -68,16 +73,34 @@ test.describe("career discovery", () => {
 
 test.describe("journey", () => {
   test("renders all six stages in order", async ({ page }) => {
-    const steps = page.getByRole("listitem").filter({ hasText: /^0[1-6]/ })
-    await expect(steps).toHaveCount(6)
+    const headings = page
+      .getByRole("list")
+      .filter({ hasText: /tell your story/i })
+      .first()
+      .getByRole("heading", { level: 3 })
+
+    await expect(headings).toHaveText([
+      "Tell your story",
+      "Discover where you fit",
+      "Find opportunities",
+      "Make every application fit",
+      "Apply without the busywork",
+      "Keep moving",
+    ])
   })
 
   test("badges the partially gated stage instead of hiding the paywall", async ({
     page,
   }) => {
-    await expect(page.getByText("Free · expanded on paid")).toBeVisible()
+    // Scoped to the journey stage: the same badge intentionally appears in the
+    // capability strip and the platform detail list too.
+    const jobs = page
+      .getByRole("listitem")
+      .filter({ hasText: /find opportunities/i })
+    await expect(jobs).toHaveCount(1)
+    await expect(jobs.getByText("Free · expanded on paid")).toBeVisible()
     await expect(
-      page.getByText(/expanded search and fit scoring need a paid plan/i),
+      jobs.getByText(/expanded search and fit scoring need a paid plan/i),
     ).toBeVisible()
   })
 
@@ -111,6 +134,12 @@ test.describe("pricing", () => {
   })
 
   test("never renders an unsynced plan as a price", async ({ page }) => {
+    // Anchor on the positive case first: without this, the absence assertions
+    // below would pass trivially whenever the priced grid failed to render.
+    await expect(
+      page.getByRole("heading", { level: 3, name: "Pro", exact: true }),
+    ).toHaveCount(1)
+
     // Pro+ is served with amount_cents: 0. It must be omitted entirely rather
     // than shown as $0.00, which would read as "free".
     await expect(page.getByText("$0.00")).toHaveCount(0)

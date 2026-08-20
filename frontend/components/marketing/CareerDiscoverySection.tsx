@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, Compass } from "lucide-react";
 import { titleFitBar, titleFitLabel } from "@/lib/jobs";
-import { ILLUSTRATIVE_NOTE, INLINE_CTA, SECTION } from "./styles";
+import {
+  FINE_PRINT,
+  ILLUSTRATIVE_NOTE,
+  INLINE_CTA,
+  SECTION,
+} from "./styles";
 
 /**
  * Illustrative only. Real suggestions come from
@@ -65,7 +70,7 @@ export function CareerDiscoverySection() {
               </span>
             </li>
           ))}
-          <li className="text-xs text-slate-500 dark:text-slate-500 pt-1">
+          <li className={`${FINE_PRINT} pt-1`}>
             …and six more, ranked by fit.
           </li>
         </ul>

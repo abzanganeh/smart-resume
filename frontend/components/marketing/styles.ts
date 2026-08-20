@@ -11,15 +11,19 @@ export const INLINE_CTA =
 
 export const SECTION = "max-w-5xl mx-auto px-6";
 
-export const CARD =
-  "rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40";
-
 export const SECTION_HEADING =
   "text-center text-2xl font-semibold mb-3 text-slate-800 dark:text-slate-200";
 
 export const SECTION_SUBHEADING =
   "text-center text-slate-600 dark:text-slate-400 text-sm mb-12 max-w-2xl mx-auto";
 
-/** Marks example content as illustrative — required by the no-fabrication rule. */
+/**
+ * Marks example content as illustrative — required by the no-fabrication rule.
+ * Deliberately uses the same contrast tier as body copy: this label carries a
+ * correctness claim, so it must not be the least legible text on the page.
+ */
 export const ILLUSTRATIVE_NOTE =
-  "text-xs text-slate-500 dark:text-slate-500 italic";
+  "text-xs text-slate-600 dark:text-slate-400 italic";
+
+/** Secondary note that still has to clear AA at 12px (credit costs, gating). */
+export const FINE_PRINT = "text-xs text-slate-600 dark:text-slate-400";

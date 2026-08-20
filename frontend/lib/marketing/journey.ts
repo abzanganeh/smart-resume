@@ -59,7 +59,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
       "Search live roles against your confirmed titles, block companies you are not interested in, and watch specific employers for new openings.",
     access: "mixed",
     accessNote:
-      "Corpus search is free once you confirm your titles. Expanded search and fit scoring need a paid plan.",
+      "Corpus search is free once you confirm at least five titles. Expanded search and fit scoring need a paid plan.",
     ctaLabel: "Find jobs for me",
     ctaHref: REGISTER,
   },
@@ -81,6 +81,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     description:
       "Export a clean PDF or DOCX, generate a matching cover letter from the same evidence, and send the application the same day.",
     access: "free",
+    accessNote: "One credit per cover letter on the free plan.",
     ctaLabel: "Export and apply",
     ctaHref: REGISTER,
   },

@@ -37,19 +37,21 @@ export function ComparisonSection() {
             <X className="w-4 h-4 text-red-600 dark:text-red-400" />
             On your own
           </h3>
-          <ol className="space-y-2">
+          {/* Preflight strips list markers, so ul is the honest element here —
+              the visible sequence comes from the arrow separators. */}
+          <ul className="space-y-2">
             {WITHOUT.map((line, index) => (
               <li key={line} className="text-sm text-slate-600 dark:text-slate-400">
                 {line}
                 {index < WITHOUT.length - 1 && (
                   <ArrowDown
                     aria-hidden
-                    className="w-3 h-3 mt-1.5 text-slate-400 dark:text-slate-600"
+                    className="w-3 h-3 mt-1.5 text-slate-500 dark:text-slate-500"
                   />
                 )}
               </li>
             ))}
-          </ol>
+          </ul>
         </div>
 
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-700/50 bg-emerald-50/60 dark:bg-emerald-900/20 p-6">
@@ -57,19 +59,19 @@ export function ComparisonSection() {
             <Check className="w-4 h-4" />
             With TalioCV
           </h3>
-          <ol className="space-y-2">
+          <ul className="space-y-2">
             {WITH.map((line, index) => (
               <li key={line} className="text-sm text-slate-700 dark:text-slate-300">
                 {line}
                 {index < WITH.length - 1 && (
                   <ArrowDown
                     aria-hidden
-                    className="w-3 h-3 mt-1.5 text-emerald-500/70 dark:text-emerald-600"
+                    className="w-3 h-3 mt-1.5 text-emerald-600 dark:text-emerald-500"
                   />
                 )}
               </li>
             ))}
-          </ol>
+          </ul>
         </div>
       </div>
     </section>

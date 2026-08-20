@@ -155,7 +155,8 @@ Notes:
 - **Fit analysis** is subscription-only. **Expanded job search** (Hirebase) is too, but free users
   who have confirmed their preferred titles keep a limited corpus search at no quota cost — see
   `_require_job_search_access` in `backend/app/routers/jobs.py`.
-- **Whisper** transcription is subscription-only. Browser-native voice (Chrome/Edge) is free everywhere.
+- **Whisper** transcription has no per-period allowance on the free tier; free users pay 2 credits
+  per story transcription. Browser-native voice (Chrome/Edge) is free everywhere.
 - Reaching a resume allowance **falls back to credits** rather than blocking the action.
 - Premium has no hard Whisper cap but is subject to a fair-use soft cap.
 

@@ -174,10 +174,7 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Unit tests
-        run: pnpm run test:unit
-
-      - name: CI gate (lint + build)
+      - name: CI gate (lint + unit + build)
         run: pnpm run test:ci
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000

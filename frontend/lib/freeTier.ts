@@ -26,6 +26,9 @@ export async function fetchFreeTierStartingCredits(): Promise<number> {
   try {
     const res = await fetch(`${BASE}/api/billing/free-tier`, {
       next: { revalidate: 60 },
+      // Awaited during SSR of the public landing page — a stalled backend
+      // must not hang the request.
+      signal: AbortSignal.timeout(2_000),
     });
     if (!res.ok) {
       return FREE_TIER_STARTING_CREDITS;

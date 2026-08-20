@@ -1,3 +1,4 @@
+import { CapabilityStrip } from "@/components/marketing/CapabilityStrip";
 import { CareerDiscoverySection } from "@/components/marketing/CareerDiscoverySection";
 import { CheckupInvite } from "@/components/marketing/CheckupInvite";
 import { ClosingCta } from "@/components/marketing/ClosingCta";
@@ -22,6 +23,7 @@ export default async function LandingPage() {
       <JourneySection />
       <ComparisonSection />
       <CheckupInvite />
+      <CapabilityStrip />
       <PricingSection pricing={pricing} startingCredits={startingCredits} />
       <PlatformDetails />
       <ClosingCta startingCredits={startingCredits} />

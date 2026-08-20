@@ -16,7 +16,9 @@ async function waitForMockServer(port, attempts = 40) {
 }
 
 export default async function globalSetup() {
-  if (!process.env.CI) return
+  // Opt in locally with E2E_MOCK_API=1. Not unconditional because the mock
+  // binds :8000, which a local backend also wants.
+  if (!process.env.CI && process.env.E2E_MOCK_API !== "1") return
 
   const dir = path.dirname(fileURLToPath(import.meta.url))
   const script = path.join(dir, "mock-api-server.mjs")

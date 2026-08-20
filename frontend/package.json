@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:unit": "node --require tsx/cjs --test tests/**/*.test.ts",
-    "test:ci": "npm run lint && npm run build",
+    "test:ci": "npm run lint && npm run test:unit && npm run build",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/legal.spec.ts tests/e2e/landing.spec.ts tests/e2e/auth.spec.ts tests/e2e/jobs.spec.ts tests/e2e/tracker.spec.ts tests/e2e/onboarding.spec.ts",
     "test:e2e:ui": "playwright test --ui"
