@@ -321,6 +321,10 @@ test.describe("tracker detail (mocked API)", () => {
       timeout: 15_000,
     })
 
+    const contactForm = page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "Save contact details" }) })
+
     const patchPromise = page.waitForRequest(
       (req) =>
         req.url().includes(`/api/applications/${APP_ID}`) &&
@@ -329,13 +333,15 @@ test.describe("tracker detail (mocked API)", () => {
           "Follow up with recruiter next week",
     )
 
-    await page.getByPlaceholder("Notes").fill("Follow up with recruiter next week")
+    await contactForm.getByRole("textbox", { name: "Notes", exact: true }).fill(
+      "Follow up with recruiter next week",
+    )
     await page.getByRole("button", { name: "Save contact details" }).click()
     await patchPromise
 
-    await expect(page.getByPlaceholder("Notes")).toHaveValue(
-      "Follow up with recruiter next week",
-    )
+    await expect(
+      contactForm.getByRole("textbox", { name: "Notes", exact: true }),
+    ).toHaveValue("Follow up with recruiter next week")
   })
 
   test("rejection form PATCHes status to rejected", async ({ page }) => {
