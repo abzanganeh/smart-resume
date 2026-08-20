@@ -106,11 +106,29 @@ export interface JobPreferences {
   min_preferred_titles?: number
 }
 
+export interface JobTitleSuggestion {
+  title: string
+  fit_score: number
+  strengths: string[]
+  weaknesses: string[]
+}
+
 export interface JobTitleSuggestionsResponse {
-  suggestions: string[]
+  suggestions: JobTitleSuggestion[]
   held_titles: string[]
   source: string
   source_hash?: string | null
+}
+
+/** Render a monospace fit bar (█ filled, ░ empty). */
+export function titleFitBar(score: number, width = 18): string {
+  const clamped = Math.max(0, Math.min(100, Math.round(score)))
+  const filled = Math.round((clamped / 100) * width)
+  return `${"█".repeat(filled)}${"░".repeat(Math.max(0, width - filled))}`
+}
+
+export function titleFitLabel(score: number): string {
+  return `${Math.round(score)}% fit`
 }
 
 export interface PreferredTitlesResponse {

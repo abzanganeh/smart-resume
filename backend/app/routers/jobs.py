@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import job_fit as job_fit_agent
 from app.agent import job_title_suggestions
+from app.agent.title_fit_insights import enrich_title_suggestions
+from app.agent.title_fit_insights import enrich_title_suggestions
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
@@ -302,8 +304,22 @@ async def get_title_suggestions(
         parsed_sections=resume.parsed_sections,
         llm_client=llm_client,
     )
+    enriched = enrich_title_suggestions(
+        suggestions,
+        resume_text=resume.raw_text or "",
+        held_titles=held,
+        parsed_sections=resume.parsed_sections,
+    )
     return JobTitleSuggestionsOut(
-        suggestions=suggestions,
+        suggestions=[
+            {
+                "title": row.title,
+                "fit_score": row.fit_score,
+                "strengths": row.strengths,
+                "weaknesses": row.weaknesses,
+            }
+            for row in enriched
+        ],
         held_titles=held,
         source=source,
         source_hash=compute_master_resume_hash(resume.raw_text),
