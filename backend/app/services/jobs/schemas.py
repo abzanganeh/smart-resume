@@ -94,8 +94,15 @@ class JobPreferencesUpdate(BaseModel):
     preferred_titles: list[str] | None = None
 
 
+class JobTitleSuggestionItem(BaseModel):
+    title: str
+    fit_score: int = Field(ge=0, le=100)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+
+
 class JobTitleSuggestionsOut(BaseModel):
-    suggestions: list[str]
+    suggestions: list[JobTitleSuggestionItem]
     held_titles: list[str] = Field(default_factory=list)
     source: str = "heuristic"
     source_hash: str | None = None
@@ -119,6 +126,7 @@ __all__ = [
     "JobResult",
     "JobSearchRequest",
     "JobSearchResponse",
+    "JobTitleSuggestionItem",
     "JobTitleSuggestionsOut",
     "PreferredTitlesOut",
     "PreferredTitlesUpdate",
