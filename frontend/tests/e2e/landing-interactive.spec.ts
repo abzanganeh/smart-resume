@@ -10,9 +10,32 @@
  * Running locally (host :3000 is usually taken by Trust/Kia):
  *   E2E_MOCK_API=1 PLAYWRIGHT_PORT=3100 pnpm exec playwright test tests/e2e/landing-interactive.spec.ts
  */
-import { test, expect } from "@playwright/test"
+import { test, expect, type Locator, type Page } from "@playwright/test"
 
 const CAPABILITY_COUNT = 8
+
+/**
+ * Move the pointer onto a capability card deterministically.
+ *
+ * Not `locator.hover()`: that scrolls as part of the same action, and the
+ * pointer can settle at coordinates measured before the scroll finished with no
+ * subsequent move to correct it. The result was an intermittent failure to
+ * register the hover at all. Scrolling first, then measuring, then moving
+ * removes the race.
+ */
+async function hoverCapability(page: Page, id: string): Promise<Locator> {
+  await page.locator("[data-spotlight-panel]").scrollIntoViewIfNeeded()
+  const card = page.locator(`[data-capability="${id}"]`)
+  const box = await card.boundingBox()
+  if (!box) throw new Error(`capability card ${id} has no bounding box`)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  return card
+}
+
+/** Park the pointer in the viewport corner, well clear of any panel. */
+async function movePointerAway(page: Page): Promise<void> {
+  await page.mouse.move(2, 2)
+}
 
 test.describe("capability spotlight", () => {
   test.beforeEach(async ({ page }) => {
@@ -46,8 +69,7 @@ test.describe("capability spotlight", () => {
   })
 
   test("emphasises the card under the cursor", async ({ page }) => {
-    const target = page.locator('[data-capability="ats"]')
-    await target.hover()
+    const target = await hoverCapability(page, "ats")
 
     await expect(target).toHaveAttribute("data-active", "true")
     // Exactly one card is emphasised, so the effect cannot smear across the grid.
@@ -57,13 +79,10 @@ test.describe("capability spotlight", () => {
   })
 
   test("moves the emphasis with the cursor", async ({ page }) => {
-    const first = page.locator('[data-capability="story"]')
-    const later = page.locator('[data-capability="tracker"]')
-
-    await first.hover()
+    const first = await hoverCapability(page, "story")
     await expect(first).toHaveAttribute("data-active", "true")
 
-    await later.hover()
+    const later = await hoverCapability(page, "tracker")
     await expect(later).toHaveAttribute("data-active", "true")
     await expect(first).toHaveAttribute("data-active", "false")
   })
@@ -71,19 +90,17 @@ test.describe("capability spotlight", () => {
   test("drops the emphasis when the pointer leaves the panel", async ({
     page,
   }) => {
-    const target = page.locator('[data-capability="ats"]')
-    await target.hover()
+    const target = await hoverCapability(page, "ats")
     await expect(target).toHaveAttribute("data-active", "true")
 
-    await page.getByRole("heading", { level: 1 }).hover()
+    await movePointerAway(page)
     await expect(
       page.locator('[data-capability][data-active="true"]'),
     ).toHaveCount(0)
   })
 
   test("applies a transform to the emphasised card", async ({ page }) => {
-    const target = page.locator('[data-capability="ats"]')
-    await target.hover()
+    const target = await hoverCapability(page, "ats")
     await expect(target).toHaveAttribute("data-active", "true")
 
     // Polled rather than read once: `transform` is transitioned over 160ms, so
@@ -94,6 +111,24 @@ test.describe("capability spotlight", () => {
         target.evaluate((node) => getComputedStyle(node).transform),
       )
       .not.toBe("none")
+  })
+
+  test("reveals the spotlight gradient while the pointer is inside", async ({
+    page,
+  }) => {
+    // The gradient's visibility comes from a CSS :hover rule, which synthetic
+    // events cannot trigger — only real pointer input does. Asserting it here
+    // means a refactor that drops the hover rule cannot pass silently.
+    const overlay = page.locator(".sr-spotlight")
+    expect(await overlay.evaluate((node) => getComputedStyle(node).opacity)).toBe(
+      "0",
+    )
+
+    await hoverCapability(page, "ats")
+
+    await expect
+      .poll(() => overlay.evaluate((node) => getComputedStyle(node).opacity))
+      .toBe("1")
   })
 })
 
@@ -111,8 +146,7 @@ test.describe("capability spotlight with reduced motion", () => {
       page.getByRole("heading", { level: 3, name: "ATS Optimization" }),
     ).toBeVisible()
 
-    const target = page.locator('[data-capability="ats"]')
-    await target.hover()
+    const target = await hoverCapability(page, "ats")
 
     // Two independent guarantees: the component refuses to mark a card active,
     // and the stylesheet neutralises the transform even if it did.
@@ -134,6 +168,7 @@ test.describe("capability spotlight with reduced motion", () => {
 
     // Nothing is dimmed, because the sweep never runs.
     const surface = page.locator("[data-scan-surface]")
+    await surface.scrollIntoViewIfNeeded()
     const box = await surface.boundingBox()
     if (!box) throw new Error("scan surface has no box")
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -189,6 +224,60 @@ test.describe("keyword scan demo", () => {
     ).toBeVisible()
   })
 
+  test("sweeps a visible line and dims only what it has not reached", async ({
+    page,
+  }) => {
+    const sweep = page.locator(".sr-scan-sweep")
+    const surface = page.locator("[data-scan-surface]")
+    // boundingBox() is viewport-relative, so the panel has to be scrolled into
+    // view before mouse.move can land on it. Without this the pointer goes to a
+    // coordinate below the fold and hovers nothing.
+    await surface.scrollIntoViewIfNeeded()
+    const box = await surface.boundingBox()
+    if (!box) throw new Error("scan surface has no box")
+
+    // At rest the sweep is hidden and nothing is dimmed.
+    expect(await sweep.evaluate((node) => getComputedStyle(node).opacity)).toBe(
+      "0",
+    )
+
+    await page.mouse.move(box.x + box.width * 0.55, box.y + box.height / 2)
+
+    await expect
+      .poll(() => sweep.evaluate((node) => getComputedStyle(node).opacity))
+      .toBe("1")
+
+    // Partway through the sweep, some keywords are dimmed and some are not.
+    // Asserting both halves is what makes this a test of the sweep rather than
+    // of the panel merely existing. Polled because chip opacity is transitioned
+    // over 150ms, so a single read lands on interpolated values.
+    await expect
+      .poll(async () => {
+        const opacities = await page
+          .locator("[data-keyword]")
+          .evaluateAll((nodes) =>
+            nodes.map((node) => getComputedStyle(node).opacity),
+          )
+        return (
+          opacities.some((value) => value === "1") &&
+          opacities.some((value) => value !== "1")
+        )
+      })
+      .toBe(true)
+
+    // Leaving restores every keyword to full opacity.
+    await movePointerAway(page)
+    await expect
+      .poll(() =>
+        page
+          .locator("[data-keyword]")
+          .evaluateAll((nodes) =>
+            nodes.every((node) => getComputedStyle(node).opacity === "1"),
+          ),
+      )
+      .toBe(true)
+  })
+
   test("issues no network request while scanning", async ({ page }) => {
     // The landing page must never drive /api/checkup: it costs two LLM passes
     // per call and is capped at 12/hour per IP.
@@ -196,8 +285,20 @@ test.describe("keyword scan demo", () => {
     page.on("request", (request) => requests.push(request.url()))
 
     const surface = page.locator("[data-scan-surface]")
+    await surface.scrollIntoViewIfNeeded()
     const box = await surface.boundingBox()
     if (!box) throw new Error("scan surface has no box")
+
+    // Confirm the sweep really runs, otherwise "made no requests" would hold
+    // trivially for a pointer that never touched the panel.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await expect
+      .poll(() =>
+        page
+          .locator(".sr-scan-sweep")
+          .evaluate((node) => getComputedStyle(node).opacity),
+      )
+      .toBe("1")
 
     for (let step = 0; step <= 10; step += 1) {
       await page.mouse.move(
