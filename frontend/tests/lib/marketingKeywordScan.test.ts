@@ -19,6 +19,14 @@ describe("classifyKeywords", () => {
     assert.equal(result.status, "missing");
   });
 
+  it("keeps searching past a substring hit to find a real token", () => {
+    const [result] = classifyKeywords(
+      "Shipped JavaScript, then Java services",
+      ["Java"],
+    );
+    assert.equal(result.status, "matched");
+  });
+
   it("requires a whole-token match so 'Java' does not match 'JavaScript'", () => {
     // The demo claims to show an ATS keyword audit. Substring matching would
     // overstate coverage and make the illustration dishonest.
@@ -82,6 +90,12 @@ describe("revealedCount", () => {
   it("clamps progress outside the unit interval", () => {
     assert.equal(revealedCount(-3, 5), 0);
     assert.equal(revealedCount(42, 5), 5);
+  });
+
+  it("returns zero for non-finite progress or total", () => {
+    assert.equal(revealedCount(Number.NaN, 5), 0);
+    assert.equal(revealedCount(0.5, Number.NaN), 0);
+    assert.equal(revealedCount(0, Number.POSITIVE_INFINITY), 0);
   });
 
   it("handles an empty keyword set without returning a negative count", () => {

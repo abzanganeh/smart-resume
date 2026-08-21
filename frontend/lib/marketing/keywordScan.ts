@@ -94,7 +94,9 @@ export function classifyKeywords(
 
 /** How many keywords the sweep has passed, given normalized progress. */
 export function revealedCount(progress: number, total: number): number {
-  if (!Number.isFinite(progress) || total <= 0) return 0;
+  if (!Number.isFinite(progress) || !Number.isFinite(total) || total <= 0) {
+    return 0;
+  }
   const clamped = Math.min(1, Math.max(0, progress));
   return Math.round(clamped * total);
 }

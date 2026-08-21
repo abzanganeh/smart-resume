@@ -1,4 +1,4 @@
-import { faqEntries, faqJsonLd } from "@/lib/marketing/faq";
+import { faqEntries, faqJsonLdScript } from "@/lib/marketing/faq";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 /**
@@ -11,13 +11,7 @@ import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
  */
 export function FaqSection({ startingCredits }: { startingCredits: number }) {
   const entries = faqEntries(startingCredits);
-
-  // Our own static strings, but `</script>` inside a JSON string literal would
-  // still close the tag early, so escape `<` on the way out.
-  const structuredData = JSON.stringify(faqJsonLd(entries)).replace(
-    /</g,
-    "\\u003c",
-  );
+  const structuredData = faqJsonLdScript(entries);
 
   return (
     <section className={`${SECTION} pb-24`}>

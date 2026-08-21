@@ -32,6 +32,9 @@ import {
  * pointer is inside the panel, and never while it is outside. That ordering is
  * what avoids a hydration flicker: the server and the resting client agree that
  * everything is fully visible.
+ *
+ * Sweep progress is measured against the keyword column, not the full two-column
+ * surface, so the line and the dimming stay aligned.
  */
 export function KeywordScanDemo() {
   const [animate, setAnimate] = useState(false);
@@ -46,6 +49,7 @@ export function KeywordScanDemo() {
   const [passed, setPassed] = useState(results.length);
 
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const keywordsRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const pendingRef = useRef<number | null>(null);
 
@@ -80,9 +84,9 @@ export function KeywordScanDemo() {
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (!animate) return;
       const surface = surfaceRef.current;
-      if (!surface) return;
+      const keywords = keywordsRef.current;
+      if (!surface || !keywords) return;
 
-      const bounds = surface.getBoundingClientRect();
       pendingRef.current = event.clientX;
 
       if (frameRef.current !== null) return;
@@ -90,21 +94,26 @@ export function KeywordScanDemo() {
         frameRef.current = null;
         const clientX = pendingRef.current;
         const node = surfaceRef.current;
-        if (clientX === null || !node) return;
+        const keywordNode = keywordsRef.current;
+        if (clientX === null || !node || !keywordNode) return;
+
+        const surfaceBounds = node.getBoundingClientRect();
+        const keywordBounds = keywordNode.getBoundingClientRect();
+        if (keywordBounds.width <= 0) return;
 
         const { x } = normalizedPosition(
-          { x: clientX, y: bounds.top },
+          { x: clientX, y: keywordBounds.top },
           {
-            left: bounds.left,
-            top: bounds.top,
-            width: bounds.width,
-            height: bounds.height,
+            left: keywordBounds.left,
+            top: keywordBounds.top,
+            width: keywordBounds.width,
+            height: keywordBounds.height,
           },
         );
 
-        node.style.setProperty("--scan-x", `${x * bounds.width}px`);
-        // Small integer, so React bails out on every frame that does not cross
-        // a keyword boundary — at most one re-render per keyword per sweep.
+        const scanX =
+          keywordBounds.left - surfaceBounds.left + x * keywordBounds.width;
+        node.style.setProperty("--scan-x", `${scanX}px`);
         const next = revealedCount(x, results.length);
         setPassed((current) => (current === next ? current : next));
       });
@@ -117,6 +126,12 @@ export function KeywordScanDemo() {
   }, [animate]);
 
   const handlePointerLeave = useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingRef.current = null;
+
     setScanning(false);
     setPassed(results.length);
     surfaceRef.current?.style.removeProperty("--scan-x");
@@ -159,7 +174,7 @@ export function KeywordScanDemo() {
           </ul>
         </div>
 
-        <div>
+        <div ref={keywordsRef}>
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">
             Job description must-haves
           </h3>

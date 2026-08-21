@@ -13,8 +13,7 @@ describe("CAPABILITIES", () => {
   });
 
   it("gives every capability a title, a blurb, and a detail", () => {
-    // The detail is what the spotlight's detail pane renders. A capability
-    // without one would make the pane collapse on selection.
+    // Detail copy is rendered in every card — a missing string would leave a gap.
     for (const capability of CAPABILITIES) {
       assert.ok(capability.title.length > 0, `${capability.id} has a title`);
       assert.ok(capability.blurb.length > 0, `${capability.id} has a blurb`);

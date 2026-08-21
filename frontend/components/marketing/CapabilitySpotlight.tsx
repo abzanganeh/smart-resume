@@ -65,7 +65,7 @@ export function CapabilitySpotlight() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [animate, setAnimate] = useState(false);
 
-  const panelRef = useRef<HTMLUListElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLLIElement | null)[]>([]);
   const layoutRef = useRef<SpotlightRect[]>([]);
   const frameRef = useRef<number | null>(null);
@@ -128,7 +128,7 @@ export function CapabilitySpotlight() {
   );
 
   const handlePointerMove = useCallback(
-    (event: React.PointerEvent<HTMLUListElement>) => {
+    (event: React.PointerEvent<HTMLDivElement>) => {
       if (!animate) return;
       const panel = panelRef.current;
       if (!panel) return;
@@ -166,6 +166,12 @@ export function CapabilitySpotlight() {
   }, [animate, measure]);
 
   const handlePointerLeave = useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingRef.current = null;
+
     const node = panelRef.current;
     if (node) {
       node.style.removeProperty("--tilt-x");
@@ -182,16 +188,17 @@ export function CapabilitySpotlight() {
         spreadsheet.
       </p>
 
-      <ul
+      <div
         ref={panelRef}
         onPointerMove={handlePointerMove}
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
         data-spotlight-panel
-        className="sr-spotlight-panel relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        className="sr-spotlight-panel relative"
       >
         <span aria-hidden className="sr-spotlight" />
 
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {CAPABILITIES.map((capability, index) => {
           const badge = capability.access ? accessBadge(capability.access) : null;
           const isActive = animate && activeIndex === index;
@@ -226,7 +233,8 @@ export function CapabilitySpotlight() {
             </li>
           );
         })}
-      </ul>
+        </ul>
+      </div>
     </section>
   );
 }

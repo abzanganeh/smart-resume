@@ -14,7 +14,7 @@ export interface Capability {
   title: string;
   /** One line, always rendered — never hidden behind hover. */
   blurb: string;
-  /** Expanded copy shown in the spotlight detail pane on hover or focus. */
+  /** Expanded copy rendered in every card — always visible, not hover-gated. */
   detail: string;
   access?: FeatureAccess;
 }

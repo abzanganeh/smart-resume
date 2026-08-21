@@ -82,3 +82,8 @@ export function faqJsonLd(entries: readonly FaqEntry[]): Record<string, unknown>
     }),
   };
 }
+
+/** Safe string for inline `<script type="application/ld+json">` injection. */
+export function faqJsonLdScript(entries: readonly FaqEntry[]): string {
+  return JSON.stringify(faqJsonLd(entries)).replace(/</g, "\\u003c");
+}

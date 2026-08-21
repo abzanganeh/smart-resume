@@ -35,7 +35,7 @@ const DETAILS: DetailGroup[] = [
     ],
   },
   {
-    // The capability list lives in CapabilityStrip, as visible headings.
+    // The capability grid lives in CapabilitySpotlight, as visible headings.
     // Only genuine *details* belong here.
     question: "How does voice input work?",
     points: [

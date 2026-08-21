@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { faqEntries, faqJsonLd } from "@/lib/marketing/faq";
+import { faqEntries, faqJsonLd, faqJsonLdScript } from "@/lib/marketing/faq";
 
 describe("faqEntries", () => {
   it("gives every entry a question and an answer", () => {
@@ -24,13 +24,20 @@ describe("faqEntries", () => {
   });
 
   it("takes the credit count from the caller rather than hardcoding it", () => {
-    // The free-tier grant is API-sourced (GET /api/billing/free-tier). Baking a
-    // number into FAQ prose would drift the moment the backend seed changes.
-    const six = faqEntries(6).map((e) => e.answer).join(" ");
-    const nine = faqEntries(9).map((e) => e.answer).join(" ");
-    assert.ok(six.includes("6"), "renders the count it was given");
-    assert.ok(nine.includes("9"), "renders a different count when given one");
-    assert.notEqual(six, nine);
+    const sixEntry = faqEntries(6).find((e) =>
+      e.question.includes("free plan"),
+    );
+    const nineEntry = faqEntries(9).find((e) =>
+      e.question.includes("free plan"),
+    );
+    assert.ok(sixEntry?.answer.includes("Registering grants 6 AI credits"));
+    assert.ok(nineEntry?.answer.includes("Registering grants 9 AI credits"));
+  });
+
+  it("uses singular credit wording for a grant of one", () => {
+    const entry = faqEntries(1).find((e) => e.question.includes("free plan"));
+    assert.ok(entry?.answer.includes("1 AI credit"));
+    assert.ok(!entry?.answer.includes("credits"));
   });
 
   it("tells visitors the checkup needs no account", () => {
@@ -106,5 +113,18 @@ describe("faqJsonLd", () => {
 
   it("produces valid markup for the real FAQ content", () => {
     assert.doesNotThrow(() => faqJsonLd(faqEntries(6)));
+  });
+});
+
+describe("faqJsonLdScript", () => {
+  it("escapes angle brackets so a script tag cannot break out", () => {
+    const script = faqJsonLdScript([
+      {
+        question: "Safe?",
+        answer: '</script><img onerror=alert(1) src=x>',
+      },
+    ]);
+    assert.ok(!script.includes("</script>"));
+    assert.ok(script.includes("\\u003c/script"));
   });
 });

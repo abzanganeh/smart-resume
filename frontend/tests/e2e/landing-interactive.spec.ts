@@ -99,6 +99,27 @@ test.describe("capability spotlight", () => {
     ).toHaveCount(0)
   })
 
+  test("does not re-emphasise a card after a fast exit off the panel", async ({
+    page,
+  }) => {
+    const panel = page.locator("[data-spotlight-panel]")
+    await panel.scrollIntoViewIfNeeded()
+    const box = await panel.boundingBox()
+    if (!box) throw new Error("spotlight panel has no bounding box")
+
+    // Continuous motion off the edge can schedule a frame after pointerleave.
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5, {
+      steps: 8,
+    })
+    await page.mouse.move(box.x + box.width + 40, box.y + box.height * 0.5, {
+      steps: 12,
+    })
+
+    await expect(
+      page.locator('[data-capability][data-active="true"]'),
+    ).toHaveCount(0)
+  })
+
   test("applies a transform to the emphasised card", async ({ page }) => {
     const target = await hoverCapability(page, "ats")
     await expect(target).toHaveAttribute("data-active", "true")
@@ -312,26 +333,32 @@ test.describe("keyword scan demo", () => {
 })
 
 test.describe("crawler assets", () => {
-  test("serves robots.txt pointing at the sitemap", async ({ request }) => {
+  test("serves robots.txt pointing at the sitemap", async ({ page, request }) => {
+    await page.goto("/")
+    const origin = new URL(page.url()).origin
+
     const response = await request.get("/robots.txt")
     expect(response.status()).toBe(200)
 
     const body = await response.text()
-    expect(body).toMatch(/sitemap:/i)
-    // Guarded prefixes must stay out of the index — crawling them only yields
-    // redirects to /auth.
+    expect(body).toContain(`Sitemap: ${origin}/sitemap.xml`)
     expect(body).toMatch(/disallow: \/dashboard/i)
+    expect(body).toMatch(/disallow: \/career-watch/i)
   })
 
-  test("serves a sitemap that includes the public pages", async ({ request }) => {
+  test("serves a sitemap that includes the public pages", async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/")
+    const origin = new URL(page.url()).origin
+
     const response = await request.get("/sitemap.xml")
     expect(response.status()).toBe(200)
 
     const body = await response.text()
     expect(body).toContain("<urlset")
-    expect(body).toContain("/checkup")
-    // The one public, no-auth, high-intent page must be crawlable, and the
-    // guarded areas must not be advertised.
+    expect(body).toContain(`<loc>${origin}/checkup</loc>`)
     expect(body).not.toContain("/dashboard")
   })
 
@@ -346,15 +373,15 @@ test.describe("crawler assets", () => {
     request,
   }) => {
     await page.goto("/")
+    const origin = new URL(page.url()).origin
 
     const content = await page
       .locator('meta[property="og:image"]')
       .first()
       .getAttribute("content")
     expect(content).toBeTruthy()
+    expect(content).toMatch(new RegExp(`^${origin}/opengraph-image`))
 
-    // The previous metadata advertised an extension-less path that did not
-    // serve the image, so assert the advertised URL rather than a known-good one.
     const response = await request.get(new URL(content as string).pathname)
     expect(response.status()).toBe(200)
   })

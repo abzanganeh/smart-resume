@@ -1,16 +1,17 @@
 import type { MetadataRoute } from "next";
-import { absoluteUrl } from "@/lib/siteUrl";
+import { absoluteUrl, siteUrl } from "@/lib/siteUrl";
 
 /**
- * Mirrors the guarded prefixes in `proxy.ts`. Crawling them produces a redirect
- * to `/auth` rather than content, so the only thing indexing them achieves is
- * wasted budget and a pile of duplicate sign-in pages in the index.
+ * Pages with no public search value. Several are session-gated in the app; others
+ * are client-guarded only. Blocking them here saves crawl budget — it is not
+ * access control.
  */
 const PRIVATE_PREFIXES = [
   "/admin",
   "/api/",
   "/auth",
   "/billing",
+  "/career-watch",
   "/cover-letter",
   "/dashboard",
   "/fit",
@@ -33,6 +34,6 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     sitemap: absoluteUrl("/sitemap.xml"),
-    host: absoluteUrl("/"),
+    host: new URL(siteUrl()).host,
   };
 }
