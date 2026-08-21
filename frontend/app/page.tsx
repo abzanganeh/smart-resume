@@ -3,7 +3,9 @@ import { CareerDiscoverySection } from "@/components/marketing/CareerDiscoverySe
 import { CheckupInvite } from "@/components/marketing/CheckupInvite";
 import { ClosingCta } from "@/components/marketing/ClosingCta";
 import { ComparisonSection } from "@/components/marketing/ComparisonSection";
+import { FaqSection } from "@/components/marketing/FaqSection";
 import { JourneySection } from "@/components/marketing/JourneySection";
+import { KeywordScanDemo } from "@/components/marketing/KeywordScanDemo";
 import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { PlatformDetails } from "@/components/marketing/PlatformDetails";
 import { PricingSection } from "@/components/marketing/PricingSection";
@@ -22,10 +24,13 @@ export default async function LandingPage() {
       <CareerDiscoverySection />
       <JourneySection />
       <ComparisonSection />
+      {/* Demo the audit, then invite the visitor to run the real one. */}
+      <KeywordScanDemo />
       <CheckupInvite />
       <CapabilitySpotlight />
       <PricingSection pricing={pricing} startingCredits={startingCredits} />
       <PlatformDetails />
+      <FaqSection startingCredits={startingCredits} />
       <ClosingCta startingCredits={startingCredits} />
     </main>
   );
