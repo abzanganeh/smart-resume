@@ -11,6 +11,11 @@
  * fixture that `landing.spec.ts` already primed:
  *
  *   pnpm run test:e2e:pricing-unsynced
+ *
+ * The npm script clears both cache locations. CI runs `next start`, which caches
+ * under `.next/cache`, while a local run uses `next dev`, which caches under
+ * `.next/dev/cache` — clearing only the first makes this spec pass in CI and
+ * fail locally with a stale synced fixture.
  */
 import { test, expect } from "@playwright/test"
 
