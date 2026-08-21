@@ -15,7 +15,9 @@ Both flows mint single-purpose JWTs:
 from __future__ import annotations
 
 import asyncio
+import smtplib
 import uuid
+from email.message import EmailMessage
 from typing import Any
 
 import structlog
@@ -149,6 +151,36 @@ def _wrap_html(inner: str) -> str:
     )
 
 
+def _smtp_message(
+    to_email: str,
+    subject: str,
+    body_text: str,
+    body_html: str,
+) -> EmailMessage:
+    msg = EmailMessage()
+    msg["From"] = settings.RESEND_FROM_EMAIL
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+    return msg
+
+
+def _send_smtp(
+    to_email: str,
+    subject: str,
+    body_text: str,
+    body_html: str,
+) -> None:
+    msg = _smtp_message(to_email, subject, body_text, body_html)
+    with smtplib.SMTP(
+        settings.SMTP_HOST,
+        settings.SMTP_PORT,
+        timeout=5,
+    ) as client:
+        client.send_message(msg)
+
+
 async def _send(
     to_email: str,
     subject: str,
@@ -165,6 +197,32 @@ async def _send(
             subject=subject,
             preview=body_text[:200],
         )
+        if settings.SMTP_HOST:
+            try:
+                await asyncio.to_thread(
+                    _send_smtp, to_email, subject, body_text, body_html
+                )
+            except Exception as exc:  # pragma: no cover - inbox down
+                log.warning(
+                    "auth.email.smtp_failed",
+                    to=to_email,
+                    host=settings.SMTP_HOST,
+                    error=str(exc),
+                )
+                return {
+                    "sent": False,
+                    "provider": "smtp",
+                    "error": str(exc),
+                    "token": token,
+                }
+            log.info(
+                "auth.email.sent",
+                to=to_email,
+                subject=subject,
+                provider="smtp",
+                host=settings.SMTP_HOST,
+            )
+            return {"sent": True, "provider": "smtp", "token": token}
         return {"sent": False, "provider": "dev-log", "token": token}
 
     try:

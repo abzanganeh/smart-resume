@@ -5,7 +5,13 @@ import {
 } from "@/lib/extensionHandoff"
 
 /** Paths reachable while onboarding is incomplete (AI choice not finished). */
-export const ONBOARDING_EXEMPT_PREFIXES = ["/onboarding", "/profile", "/session/new", "/jobs/setup"]
+export const ONBOARDING_EXEMPT_PREFIXES = [
+  "/onboarding",
+  "/profile",
+  "/session/new",
+  "/jobs/setup",
+  "/auth/reset",
+]
 
 export const ONBOARDING_STEP_COUNT = 5
 

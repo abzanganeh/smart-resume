@@ -26,6 +26,13 @@ services:
     volumes:
       - redis_data:/data
 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-31025}:1025"
+      - "${MAILPIT_UI_PORT:-38025}:8025"
+
   backend:
     build:
       context: ./backend
@@ -39,6 +46,8 @@ services:
       - ALLOWED_ORIGINS=["http://localhost:3000","http://frontend:3000"]
       - DATABASE_URL=postgresql+asyncpg://smart_resume:${POSTGRES_PASSWORD:-password}@postgres:5432/smart_resume
       - APP_ENV=development
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
       # OAuth — root .env overrides backend/.env so web + extension share one secret.
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
@@ -47,6 +56,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - mailpit
 
   frontend:
     build:
