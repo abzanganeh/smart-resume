@@ -4,13 +4,23 @@ import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.engine import get_db
+from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client
 from app.llm.structured import complete_structured
@@ -68,7 +78,9 @@ async def _structure_resume(raw_text: str, llm) -> ParsedResume:
 
 
 @router.post("/{session_id}/resume")
+@limiter.limit("10/minute")
 async def upload_resume(
+    request: Request,
     session_id: str,
     file: UploadFile = File(...),
     x_provider: str | None = Header(default=None, alias="X-Provider"),
@@ -114,7 +126,9 @@ async def upload_resume(
 
 
 @router.post("/{session_id}/resume/text")
+@limiter.limit("10/minute")
 async def paste_resume(
+    request: Request,
     session_id: str,
     body: ResumeTextRequest,
     x_provider: str | None = Header(default=None, alias="X-Provider"),
@@ -196,7 +210,9 @@ class SuggestBulletFixesResponse(BaseModel):
 
 
 @router.post("/{session_id}/audit/suggest-bullet-fixes", response_model=SuggestBulletFixesResponse)
+@limiter.limit("20/minute")
 async def suggest_audit_bullet_fixes(
+    request: Request,
     session_id: str,
     body: SuggestBulletFixesRequest,
     x_provider: str | None = Header(default=None, alias="X-Provider"),

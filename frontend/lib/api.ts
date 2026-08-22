@@ -329,12 +329,10 @@ export async function verifyLLMKey(payload: {
   model: string;
   api_key?: string;
 }): Promise<{ valid: boolean; message: string; provider: string; model: string }> {
-  const res = await fetch(`${BASE}/api/llm/verify`, {
+  return request("/api/llm/verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return res.json() as Promise<{ valid: boolean; message: string; provider: string; model: string }>;
 }
 
 // ── Export ───────────────────────────────────────────────────────────────────

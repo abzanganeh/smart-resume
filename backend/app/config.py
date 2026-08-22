@@ -293,7 +293,16 @@ def is_production_grade() -> bool:
 
 
 def should_skip_billing_quota() -> bool:
-    """Return True when quota checks should be bypassed (local dev by default)."""
+    """Return True when quota checks should be bypassed (local dev by default).
+
+    ``BILLING_SKIP_QUOTA`` exists so a local loop does not 402 on every run.
+    It is ignored in production-grade environments: honouring it there would
+    let a single environment variable disable every credit and plan-limit
+    check, which is a fail-open by config rather than a development
+    convenience.
+    """
+    if is_production_grade():
+        return False
     if settings.BILLING_SKIP_QUOTA is True:
         return True
     if settings.BILLING_SKIP_QUOTA is False:

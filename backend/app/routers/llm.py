@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client
+from app.models.user import User
+from app.services.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -35,10 +40,19 @@ def _friendly_error(exc: Exception) -> str:
 
 
 @router.post("/verify")
-async def verify_llm_key(body: VerifyRequest):
+@limiter.limit("5/minute")
+async def verify_llm_key(
+    request: Request,
+    body: VerifyRequest,
+    user: Annotated[User, Depends(get_current_user)],
+):
     """
     Make a tiny LLM call to verify provider + model using platform keys.
     Always returns 200 with { valid: bool, message: str } — never throws for bad keys.
+
+    The caller chooses the provider and model, and the always-200 contract
+    gives no signal that would slow an abusive caller down, so this needs an
+    account to bill as well as a limit to trip.
     """
     try:
         llm = get_llm_client(body.provider, body.model)
