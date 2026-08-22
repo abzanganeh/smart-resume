@@ -167,6 +167,7 @@ async def test_resolve_checkout_discount_rejects_prior_user_redemption(
     db_session: AsyncSession,
 ) -> None:
     user = _user()
+    db_session.add(user)
     promo = await _seed_discount_promo(db_session)
     db_session.add(
         PromoRedemption(

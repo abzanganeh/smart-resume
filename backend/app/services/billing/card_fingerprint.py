@@ -171,7 +171,6 @@ async def record_payment_card_fingerprint(
             session.add(row)
             await session.flush()
     except IntegrityError:
-        session.expunge(row)
         log.debug(
             "billing.card_fingerprint.duplicate_noop",
             stripe_event_id=stripe_event_id,
