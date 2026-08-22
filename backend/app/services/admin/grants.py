@@ -72,6 +72,14 @@ def validate_grant_payload(
                     raise InvalidGrantPayloadError(
                         "applicable_plan_codes entries must be non-empty strings"
                     )
+        for optional_key in ("display_name", "headline"):
+            value = payload.get(optional_key)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip()
+            ):
+                raise InvalidGrantPayloadError(
+                    f"{optional_key} must be a non-empty string when provided"
+                )
         return
 
     raise InvalidGrantPayloadError(f"unsupported grant_type: {grant_type.value}")

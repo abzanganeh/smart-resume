@@ -51,6 +51,7 @@ from app.models.user import User
 from app.services.billing.credits import grant_credit
 from app.services.billing.exceptions import WebhookPayloadError
 from app.services.billing.price_resolver import reverse_lookup_code
+from app.services.billing.promo_offers import record_checkout_promo_redemption
 
 log = structlog.get_logger("billing.webhook")
 
@@ -186,6 +187,28 @@ def _is_out_of_order(
 # ---------------------------------------------------------------------------
 
 
+async def _record_checkout_promo_if_present(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    metadata: dict[str, Any],
+) -> None:
+    promo_code = metadata.get("checkout_promo_code")
+    if not isinstance(promo_code, str) or not promo_code.strip():
+        return
+    recorded = await record_checkout_promo_redemption(
+        session,
+        user_id=user_id,
+        promo_code=promo_code,
+    )
+    if recorded:
+        log.info(
+            "billing.webhook.checkout_promo_redeemed",
+            user_id=str(user_id),
+            promo_code=promo_code,
+        )
+
+
 async def handle_checkout_completed(
     session: AsyncSession, event: dict[str, Any]
 ) -> None:
@@ -227,7 +250,10 @@ async def handle_checkout_completed(
                 event_id=event["id"],
                 code=code,
             )
+        await _record_checkout_promo_if_present(session, user_id=user.id, metadata=metadata)
         return
+
+    await _record_checkout_promo_if_present(session, user_id=user.id, metadata=metadata)
 
     # Recurring base plan or add-on subscription — Stripe will fire
     # ``customer.subscription.created`` next which is the authoritative
