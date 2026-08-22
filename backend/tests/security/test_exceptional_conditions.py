@@ -18,19 +18,19 @@ return 400 or 500 after it has already granted something.
 Scope
 -----
 
-This slice is **test-only by construction**. ``webhook_handler.py`` and
-``billing/subscription.py`` belong to M21, and ``llm/`` and ``agent/``
-belong to M18, so nothing here edits production code. Where a test
-documents a gap rather than a control, it is an ``xfail(strict=True)``
-so the marker fails loudly when the owning milestone fixes it.
+``webhook_handler.py`` and ``billing/subscription.py`` belong to M21,
+and ``llm/`` and ``agent/`` belong to M18, so the fail-open coverage
+here stays at the boundary those milestones expose rather than
+reimplementing their internals.
 
 CI note
 -------
 
-These tests need Postgres and are marked ``integration``, so they skip
-in the ``backend-security`` job (which runs no database service) and
-run locally or anywhere ``DATABASE_URL`` is exported. The two
-configuration tests at the end need neither and always run.
+Most tests here need Postgres and are marked ``integration``. The
+``backend-security`` job runs a pgvector service and exports
+``DATABASE_URL``, so they execute there as well as locally; they skip
+only where no database is configured. The configuration tests at the
+end need neither and always run.
 """
 
 from __future__ import annotations

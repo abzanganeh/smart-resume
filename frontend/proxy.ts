@@ -6,8 +6,12 @@
  * Authenticated visitors with incomplete onboarding go to /onboarding.
  */
 import { auth } from "@/auth"
-import { NextResponse } from "next/server"
 import { decodeSignedAdminSession } from "@/lib/admin/token"
+import {
+  createCspNonce,
+  nextWithContentSecurityPolicy,
+  redirectWithContentSecurityPolicy,
+} from "@/lib/csp"
 import {
   isOnboardingExempt,
   mustCompleteOnboarding,
@@ -33,6 +37,7 @@ const ADMIN_AUTH_PATH = "/admin/auth"
 const ADMIN_COOKIE = "sr_admin"
 
 export default auth(async function proxy(req) {
+  const nonce = createCspNonce()
   const { pathname } = req.nextUrl
   const session = req.auth
 
@@ -40,11 +45,11 @@ export default auth(async function proxy(req) {
   if (pathname.startsWith("/admin") && !pathname.startsWith(ADMIN_AUTH_PATH)) {
     const cookie = req.cookies.get(ADMIN_COOKIE)?.value
     if (!cookie) {
-      return NextResponse.redirect(new URL(ADMIN_AUTH_PATH, req.url))
+      return redirectWithContentSecurityPolicy(new URL(ADMIN_AUTH_PATH, req.url), nonce)
     }
     const adminSession = await decodeSignedAdminSession(cookie)
     if (!adminSession || Date.now() > adminSession.expires_at) {
-      return NextResponse.redirect(new URL(ADMIN_AUTH_PATH, req.url))
+      return redirectWithContentSecurityPolicy(new URL(ADMIN_AUTH_PATH, req.url), nonce)
     }
   }
 
@@ -66,11 +71,11 @@ export default auth(async function proxy(req) {
       const jdReview = req.nextUrl.searchParams.get("jd_review")
       if (jdReview) url.searchParams.set("jd_review", jdReview)
     }
-    return NextResponse.redirect(url)
+    return redirectWithContentSecurityPolicy(url, nonce)
   }
 
   if (session && mustCompleteOnboarding(session) && !isOnboardingExempt(pathname)) {
-    return NextResponse.redirect(new URL("/onboarding", req.url))
+    return redirectWithContentSecurityPolicy(new URL("/onboarding", req.url), nonce)
   }
 
   // Only bounce away from /auth when the backend token is present — a bare NextAuth
@@ -79,10 +84,13 @@ export default auth(async function proxy(req) {
     AUTH_ONLY_PATHS.some((p) => pathname === p) &&
     session?.backendAccessToken
   ) {
-    return NextResponse.redirect(new URL(postAuthLandingPath(session), req.url))
+    return redirectWithContentSecurityPolicy(
+      new URL(postAuthLandingPath(session), req.url),
+      nonce,
+    )
   }
 
-  return NextResponse.next()
+  return nextWithContentSecurityPolicy(req, nonce)
 })
 
 export const config = {

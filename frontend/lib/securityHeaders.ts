@@ -1,8 +1,9 @@
 /**
- * OWASP A02 baseline response headers (M23 slice A2, enforced E3 ratchet).
+ * OWASP A02 baseline response headers (M23 slice A2, E5 nonce ratchet).
  *
- * CSP is enforcing on production builds; ``style-src 'unsafe-inline'`` remains
- * an accepted risk for M16 landing motion until nonce/hash migration.
+ * CSP is generated per request in proxy.ts with a cryptographic nonce.
+ * ``style-src 'unsafe-inline'`` remains for React ``style={{}}`` attributes
+ * (CSS nonces do not cover inline style properties — see SECURITY.md).
  */
 
 const API_ORIGIN = (() => {
@@ -14,23 +15,58 @@ const API_ORIGIN = (() => {
   }
 })();
 
-/** Build the enforcing CSP directive string. */
-export function buildContentSecurityPolicy(): string {
-  const isDev = process.env.NODE_ENV !== "production";
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
-  const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'";
+export type CspOptions = {
+  nonce?: string;
+  /** Override NODE_ENV detection (unit tests). */
+  production?: boolean;
+};
+
+/** Build the enforcing CSP directive string. */
+export function buildContentSecurityPolicy(options: CspOptions = {}): string {
+  const isDev =
+    options.production === true
+      ? false
+      : options.production === false
+        ? true
+        : process.env.NODE_ENV !== "production";
+  const nonce = options.nonce;
+
+  let scriptSrc: string;
+  if (nonce && !isDev) {
+    scriptSrc = [
+      "script-src 'self'",
+      `'nonce-${nonce}'`,
+      "'strict-dynamic'",
+      TURNSTILE_ORIGIN,
+    ].join(" ");
+  } else if (nonce && isDev) {
+    scriptSrc = [
+      "script-src 'self'",
+      `'nonce-${nonce}'`,
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      TURNSTILE_ORIGIN,
+    ].join(" ");
+  } else {
+    scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
+  }
+
+  const styleSrc = nonce
+    ? `style-src 'self' 'nonce-${nonce}' 'unsafe-inline'`
+    : "style-src 'self' 'unsafe-inline'";
 
   const directives = [
     "default-src 'self'",
     scriptSrc,
-    // M16 landing motion sets CSS custom properties inline; nonce/hash is the
-    // enforce-phase goal (see SECURITY.md accepted-risk row).
-    "style-src 'self' 'unsafe-inline'",
+    styleSrc,
     "img-src 'self' data: blob: https://api.qrserver.com",
     "font-src 'self'",
     `connect-src 'self' ${API_ORIGIN}`,
+    `frame-src 'self' ${TURNSTILE_ORIGIN}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -47,13 +83,9 @@ export function buildContentSecurityPolicy(): string {
 const PERMISSIONS_POLICY =
   "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(self), usb=()";
 
-/** Header pairs applied to every public and authenticated route. */
+/** Non-CSP security headers (CSP is set per request in proxy.ts). */
 export function securityResponseHeaders(): { key: string; value: string }[] {
   const headers: { key: string; value: string }[] = [
-    {
-      key: "Content-Security-Policy",
-      value: buildContentSecurityPolicy(),
-    },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "X-Frame-Options", value: "DENY" },

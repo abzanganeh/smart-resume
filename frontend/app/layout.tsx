@@ -9,7 +9,9 @@ import {
 } from "@/lib/brand";
 import { siteUrl } from "@/lib/siteUrl";
 import { auth } from "@/auth";
+import { headers } from "next/headers";
 import { AppChrome } from "@/components/nav/AppChrome";
+import { NonceProvider } from "@/components/NonceProvider";
 import { SessionProvider } from "@/components/nav/SessionProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
@@ -34,6 +36,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -43,11 +46,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body
         className={`${inter.className} bg-sr-bg text-sr-fg antialiased flex min-h-screen flex-col`}
       >
-        <ThemeProvider>
-          <SessionProvider session={session}>
-            <AppChrome>{children}</AppChrome>
-          </SessionProvider>
-        </ThemeProvider>
+        <NonceProvider nonce={nonce}>
+          <ThemeProvider>
+            <SessionProvider session={session}>
+              <AppChrome>{children}</AppChrome>
+            </SessionProvider>
+          </ThemeProvider>
+        </NonceProvider>
       </body>
     </html>
   );

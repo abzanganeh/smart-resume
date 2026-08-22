@@ -19,6 +19,7 @@ from app.models.admin_grant import AdminGrantType
 from app.models.promo_code import PromoCode, PromoRedemption
 from app.models.user import User
 from app.services.admin.grants import InvalidGrantPayloadError, validate_grant_payload
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.billing.promo import normalize_promo_code
 
@@ -248,7 +249,7 @@ async def admin_promo_codes_create(
             if row.restricted_user_id
             else None,
         },
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )
@@ -300,7 +301,7 @@ async def admin_promo_codes_update(
         target_id=str(row.id),
         before=before_snap,
         after=updates,
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )

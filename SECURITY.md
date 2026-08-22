@@ -100,21 +100,23 @@ Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
 **Milestone:** M23 slice A2 (`feature/owasp-2026-baseline`)
 
 Flint Apply emits baseline browser security headers from the Next.js app
-(`frontend/next.config.ts` → `frontend/lib/securityHeaders.ts`) on every route.
+(`frontend/proxy.ts` → `frontend/lib/securityHeaders.ts` for CSP nonces;
+`frontend/next.config.ts` for transport headers) on every route.
 Production and staging TLS VMs add the same transport headers at the Caddy edge
 (`infra/caddy/Caddyfile.*.example`).
 
 | Header | Where | Notes |
 |---|---|---|
-| `Content-Security-Policy` | Next.js (frontend); Caddy API vhost uses `default-src 'none'` | Enforced 2026-08-22 after landing e2e smoke; `style-src 'unsafe-inline'` accepted risk for M16 motion |
+| `Content-Security-Policy` | Next.js proxy (per-request nonce); Caddy API vhost uses `default-src 'none'` | Enforced 2026-08-22; production `script-src` uses `'nonce-*'` + `'strict-dynamic'` (no `'unsafe-inline'`); `style-src` keeps `'unsafe-inline'` for React `style={{}}` attributes (M16 motion) |
 | `Strict-Transport-Security` | Next.js (production build only); Caddy (TLS vhosts) | Omitted on local HTTP dev (`:3100`) |
 | `X-Content-Type-Options: nosniff` | Next.js + Caddy | — |
 | `Referrer-Policy: strict-origin-when-cross-origin` | Next.js + Caddy | — |
 | `X-Frame-Options: DENY` + `frame-ancestors 'none'` | Next.js CSP + Caddy | Clickjacking defense |
 | `Permissions-Policy` | Next.js + Caddy | Disables unused device APIs; `payment=(self)` for Stripe checkout |
 
-Regression coverage: `frontend/tests/lib/securityHeaders.test.ts` (config) and
-`tests/e2e/landing.spec.ts` (public `/` response headers).
+Regression coverage: `frontend/tests/lib/securityHeaders.test.ts`,
+`frontend/tests/lib/csp.test.ts` (policy), and `tests/e2e/landing.spec.ts`
+(public `/` response headers via proxy nonce CSP).
 
 Before flipping CSP to enforcing mode, run the landing smoke suite:
 

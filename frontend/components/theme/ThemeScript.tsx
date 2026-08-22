@@ -1,9 +1,12 @@
-import Script from "next/script"
+import { headers } from "next/headers";
+import Script from "next/script";
 
 /** Applies saved theme before paint. Must use next/script — a React <script> in layout is not executed on the client. */
-export function ThemeScript() {
+export async function ThemeScript() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
-    <Script id="sr-theme-init" strategy="beforeInteractive">
+    <Script id="sr-theme-init" strategy="beforeInteractive" nonce={nonce}>
       {`(function () {
   try {
     var key = "sr-theme";
@@ -19,5 +22,5 @@ export function ThemeScript() {
   } catch (e) {}
 })();`}
     </Script>
-  )
+  );
 }
