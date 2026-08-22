@@ -150,7 +150,11 @@ class Settings(BaseSettings):
     STRIPE_PRICE_MONTHLY_PREMIUM: str = ""
     STRIPE_PRICE_YEARLY_PREMIUM: str = ""
 
-    STRIPE_PRICE_BETTER_PACK: str = ""        # better_5pack (legacy add-on)
+    STRIPE_PRICE_CREDITS_5: str = ""
+    STRIPE_PRICE_CREDITS_15: str = ""
+
+    # Retired one-time LLM packs — env kept for webhook reverse-lookup only.
+    STRIPE_PRICE_BETTER_PACK: str = ""
     STRIPE_PRICE_BETTER_MONTHLY: str = ""
     STRIPE_PRICE_BETTER_YEARLY: str = ""
 

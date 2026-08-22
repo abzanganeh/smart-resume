@@ -31,7 +31,8 @@ log = structlog.get_logger("billing.price_resolver")
 
 
 # Pricing restructure (2026-08): weekly + Pro / Pro+ / Premium tiers.
-# Legacy LLM add-on codes remain until quota-rewrite / byok-removal slices.
+# Legacy LLM add-on subscription codes remain for webhook fulfilment.
+# One-time LLM packs (better_pack, best_per_resume) are retired — see credit_packs.
 CANONICAL_CODES: tuple[str, ...] = (
     "weekly",
     "monthly_pro",
@@ -40,13 +41,19 @@ CANONICAL_CODES: tuple[str, ...] = (
     "yearly_plus",
     "monthly_premium",
     "yearly_premium",
-    "better_pack",
+    "credits_5",
+    "credits_15",
     "better_monthly",
     "better_yearly",
-    "best_per_resume",
     "best_monthly",
     "best_yearly",
 )
+
+# Retired codes kept for reverse-lookup of in-flight Stripe checkouts only.
+LEGACY_ONE_TIME_ENV_BY_CODE: dict[str, str] = {
+    "better_pack": "STRIPE_PRICE_BETTER_PACK",
+    "best_per_resume": "STRIPE_PRICE_BEST_PER_RESUME",
+}
 
 
 ENV_VAR_BY_CODE: dict[str, str] = {
@@ -57,12 +64,13 @@ ENV_VAR_BY_CODE: dict[str, str] = {
     "yearly_plus": "STRIPE_PRICE_YEARLY_PLUS",
     "monthly_premium": "STRIPE_PRICE_MONTHLY_PREMIUM",
     "yearly_premium": "STRIPE_PRICE_YEARLY_PREMIUM",
-    "better_pack": "STRIPE_PRICE_BETTER_PACK",
+    "credits_5": "STRIPE_PRICE_CREDITS_5",
+    "credits_15": "STRIPE_PRICE_CREDITS_15",
     "better_monthly": "STRIPE_PRICE_BETTER_MONTHLY",
     "better_yearly": "STRIPE_PRICE_BETTER_YEARLY",
-    "best_per_resume": "STRIPE_PRICE_BEST_PER_RESUME",
     "best_monthly": "STRIPE_PRICE_BEST_MONTHLY",
     "best_yearly": "STRIPE_PRICE_BEST_YEARLY",
+    **LEGACY_ONE_TIME_ENV_BY_CODE,
 }
 
 
@@ -154,6 +162,7 @@ async def assert_all_codes_resolve(session: AsyncSession) -> list[str]:
 __all__ = [
     "CANONICAL_CODES",
     "ENV_VAR_BY_CODE",
+    "LEGACY_ONE_TIME_ENV_BY_CODE",
     "assert_all_codes_resolve",
     "resolve_price_id",
     "reverse_lookup_code",

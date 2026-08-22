@@ -151,7 +151,7 @@ test.describe("billing page (mocked backend)", () => {
 
     await mockBillingApis(page, SUB_CURRENT_FREE_FIXTURE)
     await page.route(`${API}/api/subscriptions/checkout`, (route: Route) =>
-      route.fulfill({ json: { checkout_url: MOCK_CHECKOUT_URL }, status: 200 }),
+      route.fulfill({ json: { url: MOCK_CHECKOUT_URL, id: "cs_test_mock" }, status: 200 }),
     )
 
     await page.goto(`${BASE}/billing`)

@@ -20,7 +20,7 @@ the row processed without mutation and log ``out_of_order_skip`` —
 Stripe is the source of truth and retransmits, but we never let an
 older event overwrite a newer state.
 
-One-time grants (better_5pack, best_per_resume) write a
+One-time grants (``credits_5``, ``credits_15``, plus retired LLM packs) write a
 ``CreditTransaction`` keyed by ``(stripe_event_id, credit_kind)`` so
 double delivery becomes a no-op via the partial UNIQUE index from §7.5.
 """
@@ -48,6 +48,10 @@ from app.models.billing import (
 from app.models.notifications import NotificationChannel
 from app.services.notifications.factory import build_notification
 from app.models.user import User
+from app.services.billing.credit_packs import (
+    grant_for_one_time_code,
+    is_one_time_purchase_code,
+)
 from app.services.billing.credits import grant_credit
 from app.services.billing.exceptions import WebhookPayloadError
 from app.services.billing.price_resolver import reverse_lookup_code
@@ -78,16 +82,11 @@ _CODE_TO_PLAN_CYCLE: dict[
 
 
 def _is_one_time_credit_code(code: str | None) -> bool:
-    return code in {"better_pack", "best_per_resume"}
+    return is_one_time_purchase_code(code)
 
 
 def _credit_kind_for_one_time(code: str) -> tuple[CreditKind, int]:
-    """Return (kind, delta) for a one-time credit purchase code."""
-    if code == "better_pack":
-        return CreditKind.better, 5
-    if code == "best_per_resume":
-        return CreditKind.best, 1
-    raise WebhookPayloadError(f"unknown credit-pack code: {code!r}")
+    return grant_for_one_time_code(code)
 
 
 def _is_addon_subscription_code(code: str | None) -> bool:

@@ -32,6 +32,7 @@ from app.models.billing import (
 )
 from app.models.user import User
 from app.services.billing.checkout_discount import resolve_checkout_discount
+from app.services.billing.credit_packs import is_one_time_purchase_code
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     SubscriptionPauseNotAllowedError,
@@ -90,11 +91,7 @@ async def create_checkout_session(
     # ``payment``, recurring codes use ``subscription``.  The caller
     # may force a mode for tests / future product types.
     if mode is None:
-        mode = (
-            "payment"
-            if code in {"better_pack", "best_per_resume"}
-            else "subscription"
-        )
+        mode = "payment" if is_one_time_purchase_code(code) else "subscription"
 
     metadata = {
         "user_id": str(user.id),
