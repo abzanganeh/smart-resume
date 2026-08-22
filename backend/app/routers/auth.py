@@ -60,6 +60,7 @@ from app.services.auth.maintenance import run_unverified_cleanup_tick
 from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.disposable_domains import is_disposable_email
 from app.services.auth.signup_fingerprint import derive_signup_device_fingerprint_hash
+from app.services.auth.signup_link_analysis import analyze_signup_links
 from app.services.auth.signup_rate_limit import (
     SignupRateLimitError,
     assert_signup_rate_limit_allowed,
@@ -572,6 +573,14 @@ async def register(
     )
     db.add(user)
     await db.flush()
+    abuse_flag = await analyze_signup_links(
+        db,
+        signup_ip=signup_ip,
+        device_fingerprint_hash=signup_device_fingerprint_hash,
+    )
+    if abuse_flag:
+        user.signup_abuse_review_flag = abuse_flag
+        await db.flush()
 
     # §18.3 — record the registration grant on the credit ledger in
     # the same transaction as the user row.  ``delta`` is the §7.5
@@ -831,6 +840,14 @@ async def oauth_callback(
         )
         db.add(user)
         await db.flush()
+        abuse_flag = await analyze_signup_links(
+            db,
+            signup_ip=signup_ip,
+            device_fingerprint_hash=signup_device_fingerprint_hash,
+        )
+        if abuse_flag:
+            user.signup_abuse_review_flag = abuse_flag
+            await db.flush()
         db.add(
             CreditTransaction(
                 id=uuid.uuid4(),
