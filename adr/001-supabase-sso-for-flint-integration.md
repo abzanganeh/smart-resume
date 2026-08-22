@@ -1,4 +1,4 @@
-# ADR-001: Supabase SSO for TalioCV + Flint
+# ADR-001: Supabase SSO for Flint Apply + Flint Live
 
 | Field | Value |
 |-------|-------|
@@ -9,29 +9,29 @@
 
 ## Context
 
-Flint and TalioCV serve the same job-seeker journey but today use **different auth systems**:
+Flint Live (desktop interview co-pilot) and **Flint Apply** (web job-search platform at [flintapply.com](https://flintapply.com)) serve the same job-seeker journey but today use **different auth systems**:
 
 | Product | Auth today | Identity store |
 |---------|------------|----------------|
-| **Flint** (desktop) | Supabase GoTrue | `auth.users` via Supabase |
-| **TalioCV** (web) | Custom HS256 JWT (`AUTH_SECRET`, python-jose) | Postgres `users` + `refresh_tokens` |
+| **Flint Live** (desktop) | Supabase GoTrue | `auth.users` via Supabase |
+| **Flint Apply** (web) | Custom HS256 JWT (`AUTH_SECRET`, python-jose) | Postgres `users` + `refresh_tokens` |
 
 Strategy B Phase 3 requires:
 
 - One subscription (`flint_access`) gates both products
 - Extension, web, and desktop must resolve the **same user id**
-- Post-interview digest sync must attach to the correct TalioCV account
+- Post-interview digest sync must attach to the correct Flint Apply account
 - No permanent dual-auth bridge (Redis handoff tokens are for Phase 1 import only, not identity)
 
 Three options were considered:
 
-1. **Token exchange** — TalioCV issues short-lived cross-product tokens; Flint redeems for a session. Lower migration cost; permanent integration surface.
-2. **Supabase SSO for both** — TalioCV migrates to GoTrue; Flint unchanged. Single identity; higher upfront migration cost.
+1. **Token exchange** — Flint Apply issues short-lived cross-product tokens; Flint Live redeems for a session. Lower migration cost; permanent integration surface.
+2. **Supabase SSO for both** — Flint Apply migrates to GoTrue; Flint Live unchanged. Single identity; higher upfront migration cost.
 3. **Dual independent auth** — Phase 1 Redis bridge only. Blocks shared billing and creates long-term ops debt.
 
 ## Decision
 
-**Migrate TalioCV to Supabase GoTrue.** Flint keeps its existing Supabase auth implementation.
+**Migrate Flint Apply to Supabase GoTrue.** Flint Live keeps its existing Supabase auth implementation.
 
 Both products authenticate against the **same Supabase project** (or linked projects with identical `auth.users` if multi-tenant separation is required later).
 
@@ -49,10 +49,10 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 
 ### Negative
 
-- TalioCV must migrate off HS256 JWT + `refresh_tokens` table (2–3 weeks in Phase 3)
+- Flint Apply must migrate off HS256 JWT + `refresh_tokens` table (2–3 weeks in Phase 3)
 - NextAuth v5 config in `frontend/auth.ts` must be rewired to Supabase provider
 - Existing users need a one-time migration (email match → `auth.users`)
-- Local dev requires Supabase CLI (or shared dev project) for TalioCV, not only `AUTH_SECRET`
+- Local dev requires Supabase CLI (or shared dev project) for Flint Apply, not only `AUTH_SECRET`
 
 ### Neutral
 
@@ -61,7 +61,7 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 
 ## Implementation outline (Phase 3)
 
-### TalioCV backend
+### Flint Apply backend
 
 1. Add `supabase-py` / GoTrue client; validate Supabase JWT on protected routes.
 2. Feature flag `USE_SUPABASE_AUTH` (default `false` in dev until migration complete).
@@ -70,7 +70,7 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 5. Migration script: for each `users.email`, create or link `auth.users` row; store `supabase_user_id` on `users` table.
 6. Refresh-token rotation in `refresh_tokens` table retired for Supabase sessions (GoTrue handles refresh).
 
-### TalioCV frontend
+### Flint Apply frontend
 
 1. Replace NextAuth credentials provider with Supabase Auth (or Supabase-backed NextAuth adapter).
 2. Session cookie carries Supabase access token instead of `backendAccessToken` HS256 JWT.
@@ -79,11 +79,11 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 ### Flint
 
 - No auth migration — already Supabase.
-- Phase 3 adds `EntitlementChecker` calling TalioCV `GET /api/user/entitlements` with the Supabase JWT.
+- Phase 3 adds `EntitlementChecker` calling Flint Apply `GET /api/user/entitlements` with the Supabase JWT.
 
 ### Chrome extension (Phase 2 → 3 transition)
 
-- **Phase 2 MVP:** may use existing TalioCV `/api/auth/login` JWT until Phase 3 lands.
+- **Phase 2 MVP:** may use existing Flint Apply `/api/auth/login` JWT until Phase 3 lands.
 - **Phase 3:** migrate extension to Supabase OAuth PKCE flow (recommended for MV3 + public client).
 
 ## Rollback
@@ -95,7 +95,7 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 ## Security requirements
 
 - Supabase anon key in frontend only; service role key **never** in browser or extension bundle
-- RLS on all TalioCV Postgres tables unchanged; `auth.uid()` becomes canonical user reference
+- RLS on all Flint Apply Postgres tables unchanged; `auth.uid()` becomes canonical user reference
 - No session content (JD, resume text) in handoff or entitlement logs at INFO+
 - API keys remain in OS keychain (Flint) — unchanged
 
@@ -113,7 +113,7 @@ Phase 1 cross-product handoff (`POST /api/sessions/{id}/flint-handoff` → `flin
 
 ## Acceptance criteria (Phase 3 gate)
 
-- [ ] New TalioCV signup creates `auth.users` row
+- [ ] New Flint Apply signup creates `auth.users` row
 - [ ] Existing user login resolves same `user_id` on web and Flint
 - [ ] `GET /api/user/entitlements` returns `flint_access` for Supabase JWT
 - [ ] Extension auth uses Supabase flow

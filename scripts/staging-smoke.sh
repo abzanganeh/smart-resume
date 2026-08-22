@@ -45,9 +45,25 @@ http_json_field() {
   curl -sf "$@" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('$2',''))"
 }
 
-echo "=== TalioCV staging smoke ==="
+echo "=== Flint Apply staging smoke ==="
 echo "API:      $API_URL"
 echo "Frontend: $FRONTEND_URL"
+echo
+
+echo "Waiting for backend (migrations can take ~30s on first boot)..."
+ready=0
+for i in $(seq 1 40); do
+  if [ "$(http_status "$API_URL/health" 2>/dev/null || echo 000)" = "200" ]; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+if [ "$ready" -ne 1 ]; then
+  red "Backend not ready at $API_URL/health after 80s — run: docker logs smart-resume-backend-1"
+  exit 1
+fi
+echo "Backend ready."
 echo
 
 check "Backend /health returns 200" test "$(http_status "$API_URL/health")" = "200"

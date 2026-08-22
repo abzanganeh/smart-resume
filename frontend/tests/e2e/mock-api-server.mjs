@@ -69,6 +69,23 @@ const server = http.createServer(async (req, res) => {
       currency: "USD",
       plans: [
         {
+          code: "weekly",
+          display_name: "Weekly",
+          cycle: "weekly",
+          amount_cents: unsynced ? 0 : 999,
+          trial_days: null,
+          stripe_price_id: "price_e2e_weekly",
+          is_active: true,
+          features: ["resume_tailor", "job_search"],
+          limits: {
+            resumes_per_period: 10,
+            searches_per_period: 20,
+            fit_analyses_per_period: 10,
+            whisper_uses_per_period: 2,
+            career_watch_companies: 3,
+          },
+        },
+        {
           code: "monthly_pro",
           display_name: "Pro",
           cycle: "monthly",
@@ -86,12 +103,10 @@ const server = http.createServer(async (req, res) => {
           },
         },
         {
-          // Price not yet synced from Stripe (bootstrap.py seeds 0). The
-          // landing page must never render this as a real amount.
           code: "monthly_plus",
           display_name: "Pro+",
           cycle: "monthly",
-          amount_cents: 0,
+          amount_cents: unsynced ? 0 : 2999,
           trial_days: 7,
           stripe_price_id: "price_e2e_plus",
           is_active: true,
@@ -102,6 +117,23 @@ const server = http.createServer(async (req, res) => {
             fit_analyses_per_period: 100,
             whisper_uses_per_period: 15,
             career_watch_companies: 30,
+          },
+        },
+        {
+          code: "monthly_premium",
+          display_name: "Premium",
+          cycle: "monthly",
+          amount_cents: unsynced ? 0 : 4999,
+          trial_days: 7,
+          stripe_price_id: "price_e2e_premium",
+          is_active: true,
+          features: ["resume_tailor"],
+          limits: {
+            resumes_per_period: 300,
+            searches_per_period: 300,
+            fit_analyses_per_period: 300,
+            whisper_uses_per_period: null,
+            career_watch_companies: 50,
           },
         },
       ],

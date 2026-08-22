@@ -115,37 +115,46 @@ test.describe("journey", () => {
   test("uses a contextual CTA per stage", async ({ page }) => {
     await expect(
       page.getByRole("link", { name: /see my career options/i }),
-    ).toBeVisible()
+    ).toHaveCount(1)
     await expect(
       page.getByRole("link", { name: /track my applications/i }),
-    ).toBeVisible()
+    ).toHaveCount(1)
+  })
+
+  test("highlights one stage panel at a time while scrolling", async ({
+    page,
+  }) => {
+    const panel = page.locator("#journey-panel")
+    await expect(panel).toHaveAttribute("data-active-stage", "story")
+    await expect(panel.getByRole("heading", { level: 3 })).toHaveText(
+      /tell your story/i,
+    )
+
+    await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
+    await expect(panel).toHaveAttribute("data-active-stage", "jobs")
+    await expect(panel).toContainText(/find opportunities/i)
   })
 })
 
 test.describe("pricing", () => {
-  test("shows the free tier and a real synced price", async ({ page }) => {
+  test("shows the free tier and every public paid tier", async ({ page }) => {
     await expect(
       page.getByRole("heading", { level: 2, name: /start free, upgrade only/i }),
     ).toBeVisible()
     await expect(
       page.getByRole("heading", { level: 3, name: "Free", exact: true }),
     ).toBeVisible()
+    for (const tier of ["Weekly", "Pro", "Pro+", "Premium"]) {
+      await expect(
+        page.getByRole("heading", { level: 3, name: tier, exact: true }),
+      ).toBeVisible()
+    }
+    await expect(page.getByText("$9.99")).toBeVisible()
     await expect(page.getByText("$19.99")).toBeVisible()
   })
 
-  test("never renders an unsynced plan as a price", async ({ page }) => {
-    // Anchor on the positive case first: without this, the absence assertions
-    // below would pass trivially whenever the priced grid failed to render.
-    await expect(
-      page.getByRole("heading", { level: 3, name: "Pro", exact: true }),
-    ).toHaveCount(1)
-
-    // Pro+ is served with amount_cents: 0. It must be omitted entirely rather
-    // than shown as $0.00, which would read as "free".
+  test("never renders an unsynced plan as $0.00", async ({ page }) => {
     await expect(page.getByText("$0.00")).toHaveCount(0)
-    await expect(
-      page.getByRole("heading", { level: 3, name: "Pro+", exact: true }),
-    ).toHaveCount(0)
   })
 })
 
@@ -157,8 +166,8 @@ test.describe("progressive disclosure", () => {
     await expect(answer).toBeHidden()
 
     await page
-      .getByRole("group")
-      .filter({ hasText: /how does TalioCV avoid inventing things/i })
+      .locator("details")
+      .filter({ hasText: /how does FlintApply avoid inventing things/i })
       .locator("summary")
       .click()
 

@@ -131,6 +131,36 @@ export function railProgress(rect: RailRect, viewportHeight: number): number {
   return travelled;
 }
 
+/**
+ * Progress through a pinned scrollytelling track, from 0 to 1.
+ *
+ * `railProgress` measures a normal-flow section against the viewport midpoint,
+ * which is wrong for a track holding a sticky child: by the time the child
+ * pins, the midpoint has already travelled half a viewport into the track, so
+ * the first stage is partly consumed before the visitor has scrolled at all.
+ *
+ * This maps the exact window during which the child stays pinned — 0 when the
+ * track top reaches the viewport top, 1 when its bottom reaches the viewport
+ * bottom — so the first and last stages both get their full share.
+ *
+ * Total, like every function here: a track shorter than the viewport has no
+ * travel to divide by, and resolves by which side of the fold it sits on.
+ */
+export function pinnedProgress(rect: RailRect, viewportHeight: number): number {
+  if (!Number.isFinite(rect.top) || !Number.isFinite(rect.height)) return 0;
+  if (!Number.isFinite(viewportHeight)) return 0;
+
+  const travel = rect.height - viewportHeight;
+  if (travel <= 0) return rect.top <= 0 ? 1 : 0;
+
+  const moved = -rect.top / travel;
+  // `<= 0` rather than `< 0` so a track flush with the viewport top returns a
+  // normalized 0 instead of the -0 that negating a zero `top` produces.
+  if (moved <= 0) return 0;
+  if (moved > 1) return 1;
+  return moved;
+}
+
 /** Stage the read line currently sits on, or `null` when there are none. */
 export function activeStageFromProgress(
   progress: number,

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   STAGE_LETTERS,
   activeStageFromProgress,
+  pinnedProgress,
   railProgress,
   stageLetter,
   stageTheme,
@@ -72,6 +73,47 @@ describe("railProgress", () => {
   it("returns zero for non-finite input", () => {
     assert.equal(railProgress({ top: Number.NaN, height: 100 }, VIEWPORT), 0);
     assert.equal(railProgress({ top: 0, height: 100 }, Number.NaN), 0);
+  });
+});
+
+describe("pinnedProgress", () => {
+  const VIEWPORT = 800;
+  // A 3x-viewport track, so 1600px of travel while the child stays pinned.
+  const HEIGHT = 2400;
+
+  it("is zero until the track reaches the top of the viewport", () => {
+    // The bug this replaces: railProgress already reads ~0.29 here, so the
+    // first stage was partly consumed before the visitor scrolled at all.
+    assert.equal(pinnedProgress({ top: VIEWPORT, height: HEIGHT }, VIEWPORT), 0);
+    assert.equal(pinnedProgress({ top: 0, height: HEIGHT }, VIEWPORT), 0);
+  });
+
+  it("is one when the track bottom reaches the viewport bottom", () => {
+    assert.equal(
+      pinnedProgress({ top: -(HEIGHT - VIEWPORT), height: HEIGHT }, VIEWPORT),
+      1,
+    );
+  });
+
+  it("is a half at the midpoint of the pinned travel", () => {
+    assert.equal(pinnedProgress({ top: -800, height: HEIGHT }, VIEWPORT), 0.5);
+  });
+
+  it("clamps past the end of the track", () => {
+    assert.equal(pinnedProgress({ top: -9000, height: HEIGHT }, VIEWPORT), 1);
+  });
+
+  it("resolves a track shorter than the viewport by which side of the fold it is on", () => {
+    assert.equal(pinnedProgress({ top: 10, height: 200 }, VIEWPORT), 0);
+    assert.equal(pinnedProgress({ top: -10, height: 200 }, VIEWPORT), 1);
+  });
+
+  it("returns zero for non-finite input rather than NaN", () => {
+    assert.equal(
+      pinnedProgress({ top: Number.NaN, height: HEIGHT }, VIEWPORT),
+      0,
+    );
+    assert.equal(pinnedProgress({ top: 0, height: HEIGHT }, Number.NaN), 0);
   });
 });
 

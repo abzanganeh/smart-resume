@@ -1,0 +1,34 @@
+# Production TLS reverse proxy for Flint Apply (Caddy 2)
+# Copy to /etc/caddy/Caddyfile on the deployment VM.
+#
+# Prerequisites:
+#   - docker compose staging stack on localhost:3000 (frontend) and :8000 (backend)
+#     Set STAGING_FRONTEND_PORT=3000 and STAGING_BACKEND_PORT=8000 in .env.staging
+#   - DNS A/AAAA records:
+#       flintapply.com  → VM
+#       api.flintapply.com → VM (or use flintapply.com/api via path routing — not shown here)
+#
+# Backend (backend/.env.staging):
+#   FRONTEND_BASE_URL=https://flintapply.com
+#   ALLOWED_ORIGINS=["https://flintapply.com"]
+#
+# Frontend (.env.staging):
+#   NEXTAUTH_URL=https://flintapply.com
+#   NEXT_PUBLIC_SITE_URL=https://flintapply.com
+#   NEXT_PUBLIC_API_URL=https://api.flintapply.com
+#
+# OAuth redirect URIs (Google, GitHub, LinkedIn, etc.):
+#   https://flintapply.com/api/auth/callback/<provider>
+#
+# Stripe webhook:
+#   https://api.flintapply.com/api/billing/webhook
+
+flintapply.com {
+	encode gzip
+	reverse_proxy localhost:3000
+}
+
+api.flintapply.com {
+	encode gzip
+	reverse_proxy localhost:8000
+}

@@ -13,9 +13,33 @@
  *     so the marketing page must not invent one.
  */
 
+import { PRODUCT_NAME } from "@/lib/brand";
+import { VOICE_AVAILABILITY_COPY } from "@/lib/freeTier";
+import { type FeatureAccess } from "@/lib/marketing/journey";
+
+export interface FaqPoint {
+  text: string;
+  /** Defaults to free. Gated capability must say so here, not only in the journey. */
+  access?: FeatureAccess;
+}
+
 export interface FaqEntry {
   question: string;
+  /** Plain-text answer for JSON-LD and no-JS visibility inside `<details>`. */
   answer: string;
+  /** Optional bullet list rendered when the entry is expanded. */
+  points?: FaqPoint[];
+}
+
+function entryFromPoints(
+  question: string,
+  points: FaqPoint[],
+): FaqEntry {
+  return {
+    question,
+    answer: points.map((point) => point.text).join(" "),
+    points,
+  };
 }
 
 export function faqEntries(startingCredits: number): FaqEntry[] {
@@ -33,10 +57,42 @@ export function faqEntries(startingCredits: number): FaqEntry[] {
         "An applicant tracking system is the software most employers use to store and filter applications. It reads your resume as text, so wording that does not reflect the job description can keep a qualified application from ever reaching a person.",
     },
     {
-      question: "Does TalioCV invent achievements to make me look better?",
+      question: `Does ${PRODUCT_NAME} invent achievements to make me look better?`,
       answer:
         "Never. Every rewrite is drawn from experience you supplied, and the quality score is computed in code rather than produced by a language model, so the same resume always scores the same. When a job description asks for something you have not done, it is reported as a gap instead of being invented.",
     },
+    entryFromPoints(`How does ${PRODUCT_NAME} avoid inventing things about me?`, [
+      {
+        text: "Every rewrite draws from your master resume, which is the only source of truth for your experience.",
+      },
+      {
+        text: "If a bullet has no metric, the gap is reported for you to fill instead of being filled in for you.",
+      },
+      {
+        text: "An 8-point QA checklist runs before every export, and the ATS score is computed deterministically in the backend — never assigned by a language model.",
+      },
+      { text: "Job titles, company names, and dates are never rewritten." },
+      {
+        text: "You see a before and after ATS score, so the improvement is measurable rather than asserted.",
+      },
+    ]),
+    entryFromPoints("How does voice input work?", [
+      {
+        text: `Story Mode lets you speak your career instead of typing it, or answer a coached interview where the AI asks the questions. ${VOICE_AVAILABILITY_COPY}`,
+      },
+      {
+        text: "Every segment is transcribed into your master resume, which you can edit before anything is used for tailoring.",
+      },
+    ]),
+    entryFromPoints("Which AI model runs my rewrites?", [
+      {
+        text: "Platform AI is included on every plan — there are no API keys to configure.",
+      },
+      {
+        text: "Free through Pro+ use Gemini for rewrites; Premium adds Claude Sonnet for the rewrite phase.",
+      },
+      { text: "Model quality scales with your subscription tier." },
+    ]),
     {
       question: "What does the free plan include?",
       answer: `Registering grants ${startingCredits} AI ${creditWord}, which cover actions like tailoring a resume or writing a cover letter. Career discovery, your master resume, and the application tracker are not credit-gated.`,

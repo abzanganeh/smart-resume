@@ -1,6 +1,6 @@
-# TalioCV — Backend
+# Flint Apply — Backend
 
-FastAPI API for the TalioCV.
+FastAPI API for [Flint Apply](https://flintapply.com) (a product of The Flint AI).
 
 ## Run locally
 

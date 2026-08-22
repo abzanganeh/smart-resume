@@ -1,6 +1,7 @@
 "use client"
 
 import { Briefcase, FileText, MessageSquare, Search, Sparkles, Target } from "lucide-react"
+import { PRODUCT_NAME } from "@/lib/brand"
 import { DashboardStepCard } from "@/components/dashboard/DashboardStepCard"
 import {
   computeStepStates,
@@ -163,7 +164,7 @@ export function DashboardStepStack({
           tailorReady
             ? ""
             : hasMasterResume
-              ? "Paste a job description and TalioCV rewrites your resume against every ATS keyword — evidence-based, no fabricated metrics."
+              ? `Paste a job description and ${PRODUCT_NAME} rewrites your resume against every ATS keyword — evidence-based, no fabricated metrics.`
               : "Available after your master resume is ready."
         }
         ready={tailorReady}

@@ -63,6 +63,7 @@ import {
   SummaryHighlight,
 } from "./SuggestionHighlight";
 import { EntryIssueBadgePill } from "./EntryIssueBadge";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { entryAnchorKey, resumeAnchorDomId, type EntryIssueBadge } from "@/lib/issueAnchors";
 
 interface Props {
@@ -2473,7 +2474,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       {/* ── Rewrite notes ────────────────────────────────────────────────── */}
       {data.rewrite_notes.length > 0 && hasGuardRewriteNotes(data.rewrite_notes) && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-          TalioCV auto-corrected parts of the AI draft for accuracy (metrics, titles, or
+          {PRODUCT_NAME} auto-corrected parts of the AI draft for accuracy (metrics, titles, or
           missing sections). Review the rewrite notes below.
         </div>
       )}

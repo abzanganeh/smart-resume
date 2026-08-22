@@ -10,6 +10,8 @@
  * detail disclosure so gating can never drift between the places we state it.
  */
 
+import { PRODUCT_NAME } from "@/lib/brand";
+
 /**
  * `mixed` means partially usable on the free tier. Job search is the only such
  * stage today: free users with confirmed preferred titles get corpus search,
@@ -38,7 +40,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 1,
     title: "Tell your story",
     description:
-      "Speak your career out loud, upload an existing resume, or answer a coached interview. TalioCV turns it into a master resume you only build once.",
+      `Speak your career out loud, upload an existing resume, or answer a coached interview. ${PRODUCT_NAME} turns it into a master resume you only build once.`,
     access: "free",
     accessNote: "Story coaching and rewrites spend signup credits.",
     ctaLabel: "Start your career story",
@@ -49,7 +51,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 2,
     title: "Discover where you fit",
     description:
-      "TalioCV reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. You do not have to know what to search for.",
+      `${PRODUCT_NAME} reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. You do not have to know what to search for.`,
     access: "free",
     ctaLabel: "See my career options",
     ctaHref: REGISTER,
@@ -71,7 +73,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 4,
     title: "Make every application fit",
     description:
-      "Paste the job description. TalioCV extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.",
+      `Paste the job description. ${PRODUCT_NAME} extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.`,
     access: "free",
     accessNote: "One credit per tailored resume on the free plan.",
     ctaLabel: "Check my resume free",

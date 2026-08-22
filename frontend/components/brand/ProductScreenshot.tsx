@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { productScreenshotAlt } from "@/lib/brand";
 
 type ProductScreenshotProps = {
   className?: string;
@@ -23,7 +24,7 @@ export function ProductScreenshot({
   return (
     <Image
       src="/marketing/taliocv-hero.jpg?v=3"
-      alt="TalioCV — AI resume tailoring and ATS optimization, framed brand mockup"
+      alt={productScreenshotAlt()}
       width={1536}
       height={1024}
       className={className}

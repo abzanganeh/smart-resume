@@ -12,6 +12,7 @@ import {
   normalizedPosition,
   shouldAnimate,
 } from "@/lib/marketing/spotlight";
+import { PRODUCT_NAME } from "@/lib/brand";
 import {
   ILLUSTRATIVE_NOTE,
   SECTION,
@@ -144,7 +145,7 @@ export function KeywordScanDemo() {
       </h2>
       <p className={SECTION_SUBHEADING}>
         Every job description carries must-haves an applicant tracking system
-        looks for. TalioCV pulls them out and tells you which ones your
+        looks for. {PRODUCT_NAME} pulls them out and tells you which ones your
         experience actually backs up.
       </p>
 
@@ -213,7 +214,7 @@ export function KeywordScanDemo() {
             {matched} of {results.length} must-haves covered
           </p>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            The gaps are the point. TalioCV reports what a posting asks for and
+            The gaps are the point. {PRODUCT_NAME} reports what a posting asks for and
             your history does not support, instead of inventing it.
           </p>
         </div>

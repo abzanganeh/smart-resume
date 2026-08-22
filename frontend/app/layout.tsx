@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import {
+  METADATA_DESCRIPTION,
+  METADATA_OG_DESCRIPTION,
+  METADATA_OG_TITLE,
+  METADATA_TITLE,
+} from "@/lib/brand";
 import { siteUrl } from "@/lib/siteUrl";
 import { auth } from "@/auth";
 import { AppChrome } from "@/components/nav/AppChrome";
@@ -14,13 +20,11 @@ export const metadata: Metadata = {
   // Without this, Next resolves relative OG URLs against http://localhost:3000
   // and warns on every build.
   metadataBase: new URL(siteUrl()),
-  title: "TalioCV — AI resume tailoring, ATS optimization & job search",
-  description:
-    "Discover the job titles you actually fit, then tailor an ATS-optimized resume to every job description. Master resume, cover letters, job search, and application tracking in one place.",
+  title: METADATA_TITLE,
+  description: METADATA_DESCRIPTION,
   openGraph: {
-    title: "TalioCV",
-    description:
-      "Find the roles you fit, then tailor an ATS-optimized resume for each one.",
+    title: METADATA_OG_TITLE,
+    description: METADATA_OG_DESCRIPTION,
     // No `images` here on purpose. `app/opengraph-image.png` is picked up by
     // file convention and emitted with a cache-busting hash; the previous
     // hand-written entry pointed at an extension-less `/opengraph-image`, which
