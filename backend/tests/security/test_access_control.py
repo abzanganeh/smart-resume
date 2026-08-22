@@ -202,8 +202,6 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/api/interview-questions"): "public marketing content",
     ("GET", "/api/interview-questions/stats"): "public marketing content",
     ("POST", "/api/checkup"): "public try-before-signup checkup; IP rate limited",
-    # --- LLM connectivity probe -----------------------------------------
-    ("POST", "/api/llm/verify"): "provider reachability probe; see test_consumption_limits",
     # --- Flint handoff (redeems a single-use handoff token) --------------
     ("POST", "/api/flint/context"): "authenticated by the single-use handoff token",
     # --- anonymous tailoring flow (session_id is the capability) --------

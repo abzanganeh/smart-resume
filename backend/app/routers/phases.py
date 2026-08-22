@@ -257,8 +257,9 @@ async def trigger_phase(
 
 
 @router.get("/{session_id}/phases/{phase}/events")
-async def phase_events(session_id: str, phase: int):
-    """SSE stream. Triggers the phase and streams events to the client."""
+@limiter.limit("20/minute")
+async def phase_events(request: Request, session_id: str, phase: int):
+    """SSE stream for a run that ``phases/{phase}/run`` already authorised."""
     if phase not in (1, 2, 3, 4):
         raise HTTPException(status_code=400, detail="Phase must be 1, 2, 3, or 4.")
 
@@ -288,9 +289,18 @@ async def phase_events(session_id: str, phase: int):
 
             return StreamingResponse(replay(), media_type="text/event-stream")
 
-    if run_requested:
-        session.phase_run_requested = None
-        await update_session(session)
+    # Only ``phases/{phase}/run`` may authorise a pipeline run: it holds the
+    # rate limit, the phase-ordering checks and the credit deduction. Starting
+    # a run from here would let a caller reach the provider without passing any
+    # of them (OWASP LLM06).
+    if not run_requested:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Phase {phase} has not been started. Trigger it first.",
+        )
+
+    session.phase_run_requested = None
+    await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
     llm = get_llm_client(session.provider, session.model)

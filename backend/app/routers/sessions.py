@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import chat as chat_agent
 from app.db.engine import get_db
+from app.limiter import limiter
 from app.llm.factory import get_llm_client
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.dashboard import ResumeRecord
@@ -37,7 +38,9 @@ class SessionResumeRecordResponse(BaseModel):
 
 
 @router.post("", status_code=201)
+@limiter.limit("20/minute")
 async def new_session(
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     session = await create_session()
@@ -182,7 +185,10 @@ async def commit_tailored_edits(
 
 
 @router.post("/{session_id}/chat", response_model=ChatResponse)
-async def chat_with_resume(session_id: str, body: ChatRequest) -> ChatResponse:
+@limiter.limit("20/minute")
+async def chat_with_resume(
+    request: Request, session_id: str, body: ChatRequest
+) -> ChatResponse:
     """Free-form chat to request targeted resume edits. Returns a reply and structured patches."""
     session = await get_session(session_id)
     if not session:

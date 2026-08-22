@@ -37,10 +37,9 @@ fails this suite immediately.
 Documented gaps — not covered here, and why
 -------------------------------------------
 
-This slice is test-only: ``llm/`` and ``agent/`` belong to M18, so
-nothing below edits production code. Three LLM06 controls are therefore
-absent rather than failing, and are recorded here so the gap matrix
-(slice A9) has a source:
+``llm/`` and ``agent/`` belong to M18. Three LLM06 controls therefore
+remain absent rather than failing, and are recorded here so the gap
+matrix (slice A9) has a source:
 
 - **No per-user token budget.** Nothing meters *tokens*; credits are
   charged per action, so one action with a 15 000-character résumé costs
@@ -53,8 +52,10 @@ absent rather than failing, and are recorded here so the gap matrix
   counts, but no aggregate is persisted, so the first signal of a
   denial-of-wallet attack would be the provider invoice. Owner: M18.
 
-The unmetered entry points found by the inventory *are* asserted, as
-strict xfails, so they fail loudly the moment M18 closes them.
+Those three are budget and observability controls, not entry-point
+controls: every route the inventory finds is now either authenticated
+or rate limited, so an anonymous caller is bounded even though a
+per-user token budget does not yet exist.
 
 CI note
 -------
@@ -187,32 +188,11 @@ def _llm_entry_points() -> list[tuple[str, str, bool, bool]]:
     return sorted(rows)
 
 
-# Entry points that today reach a paid provider with neither an
-# authenticated principal nor a rate limit.  Each is a live LLM06
-# exposure, recorded as a strict xfail below rather than silently
-# tolerated.
-#
-# ``/api/llm/verify`` is the cheapest to abuse and the worst shaped: it
-# takes an arbitrary provider and model, needs no session at all, and
-# catches every exception to return HTTP 200, so a caller gets no
-# feedback that would slow them down.
-#
-# The five ``/api/sessions/*`` entries are the anonymous tailoring flow.
-# They are guarded only by a session id, and ``POST /api/sessions``
-# mints those without a limit either, so the guard costs an attacker one
-# extra request.  ``phases/{phase}/events`` is the most expensive of
-# them: it runs a full phase pipeline, and the credit check lives on the
-# separate ``phases/{phase}/run`` trigger rather than here.
-KNOWN_UNMETERED_ENTRY_POINTS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("POST", "/api/llm/verify"),
-        ("POST", "/api/sessions/{session_id}/audit/suggest-bullet-fixes"),
-        ("POST", "/api/sessions/{session_id}/chat"),
-        ("GET", "/api/sessions/{session_id}/phases/{phase}/events"),
-        ("POST", "/api/sessions/{session_id}/resume"),
-        ("POST", "/api/sessions/{session_id}/resume/text"),
-    }
-)
+# Entry points that reach a paid provider with neither an authenticated
+# principal nor a rate limit.  Empty is the correct state: every entry
+# here is a live LLM06 exposure, and the parametrised test below turns
+# each one into a strict xfail so it fails the moment it is closed.
+KNOWN_UNMETERED_ENTRY_POINTS: frozenset[tuple[str, str]] = frozenset()
 
 
 def test_llm_entry_point_inventory_is_not_empty() -> None:
@@ -256,9 +236,8 @@ def _entry_point_params() -> list:
                     strict=True,
                     reason=(
                         "known LLM06 gap: reaches a paid provider with no "
-                        "authenticated principal and no rate limit. Owner: "
-                        "M18 unified-LLM. Remove from "
-                        "KNOWN_UNMETERED_ENTRY_POINTS once metered."
+                        "authenticated principal and no rate limit. Remove "
+                        "from KNOWN_UNMETERED_ENTRY_POINTS once metered."
                     ),
                 )
             )
