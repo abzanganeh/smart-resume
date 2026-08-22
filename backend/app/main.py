@@ -114,6 +114,10 @@ async def lifespan(app: FastAPI):
     from app.services.auth.turnstile import assert_turnstile_production_keys
 
     assert_turnstile_production_keys()
+    if settings.BILLING_SKIP_QUOTA is True and is_production_grade():
+        log.warning(
+            "startup.billing_skip_quota_ignored", app_env=settings.APP_ENV
+        )
     blocklist = disposable_domains()
     log.info("startup.disposable_domains_loaded", count=len(blocklist))
     log.info("startup", provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL)

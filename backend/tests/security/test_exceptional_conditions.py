@@ -634,29 +634,12 @@ def test_quota_enforcement_is_on_by_default_in_production_grade_envs(
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "should_skip_billing_quota() honours BILLING_SKIP_QUOTA=true in "
-        "every environment, including production. A single environment "
-        "variable therefore disables all credit and plan-limit "
-        "enforcement with no startup error and no log line at the call "
-        "sites, which check it per request. is_production_grade() should "
-        "override the flag the way BYOK_ENCRYPTION_KEY does (see "
-        "test_encryption_production_gate.py). Owner: M18/M21 billing."
-    ),
-)
+@pytest.mark.parametrize("env", ["ci", "staging", "production"])
 def test_quota_enforcement_cannot_be_disabled_in_production(
     monkeypatch: pytest.MonkeyPatch,
+    env: str,
 ) -> None:
-    """A kill-switch that works in production is a fail-open by config.
-
-    ``BILLING_SKIP_QUOTA`` exists so local development does not 402 on
-    every loop. That is reasonable; what is not is that the same flag is
-    obeyed under ``APP_ENV=production``, where it turns every metered
-    endpoint into an unmetered one. Recorded as a strict xfail so this
-    fails the moment the gate lands and the marker can be deleted.
-    """
+    """``BILLING_SKIP_QUOTA`` is a local-dev convenience only — ignored in production-grade envs."""
     monkeypatch.setattr(settings, "BILLING_SKIP_QUOTA", True)
-    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "APP_ENV", env)
     assert should_skip_billing_quota() is False
