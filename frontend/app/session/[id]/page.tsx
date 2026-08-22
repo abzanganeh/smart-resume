@@ -55,6 +55,7 @@ import {
   trackApplicationWithDuplicatePrompt,
 } from "@/lib/trackApplicationFlow";
 import { TrackerApiError } from "@/lib/tracker";
+import { dispatchCreditsExhausted } from "@/lib/offerPopup";
 
 type Step = "analysis" | "rewrite" | "export";
 
@@ -355,6 +356,7 @@ function SessionContent() {
           errorCode === "insufficient_credits" ||
           (e instanceof ApiError && e.status === 402)
         ) {
+          dispatchCreditsExhausted();
           void refreshBackendSession(updateAuthSession);
         }
         if (phase === 3 && tailoredBackupRef.current) {

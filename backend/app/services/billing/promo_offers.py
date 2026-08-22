@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.admin_grant import AdminGrantType
 from app.models.promo_code import PromoCode, PromoRedemption
 from app.services.billing.promo import _lookup_promo_for_compare, normalize_promo_code
+
+PopupTrigger = Literal["exit_intent", "post_exhaustion"]
+POPUP_TRIGGERS: frozenset[str] = frozenset({"exit_intent", "post_exhaustion"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +29,19 @@ class PublicOfferView:
     headline: str | None
     redemption_count: int
     max_redemptions: int | None
+    popup_enabled: bool
+    popup_triggers: list[str]
+
+    @property
+    def is_redeemable(self) -> bool:
+        now = datetime.now(timezone.utc)
+        if not self.is_active:
+            return False
+        if self.expires_at is not None and self.expires_at <= now:
+            return False
+        if self.max_redemptions is not None and self.redemption_count >= self.max_redemptions:
+            return False
+        return True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,19 +49,14 @@ class PublicOfferView:
             "grant_type": self.grant_type.value,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "is_active": self.is_active,
-            "is_redeemable": self.is_active
-            and (
-                self.expires_at is None or self.expires_at > datetime.now(timezone.utc)
-            )
-            and (
-                self.max_redemptions is None
-                or self.redemption_count < self.max_redemptions
-            ),
+            "is_redeemable": self.is_redeemable,
             "applicable_plan_codes": self.applicable_plan_codes,
             "display_name": self.display_name,
             "headline": self.headline,
             "redemption_count": self.redemption_count,
             "max_redemptions": self.max_redemptions,
+            "popup_enabled": self.popup_enabled,
+            "popup_triggers": self.popup_triggers,
         }
 
 
@@ -55,6 +66,8 @@ def build_price_discount_payload(
     applicable_plan_codes: list[str] | None = None,
     display_name: str | None = None,
     headline: str | None = None,
+    popup_enabled: bool = False,
+    popup_triggers: list[str] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "stripe_promotion_code_id": stripe_promotion_code_id.strip(),
@@ -64,7 +77,24 @@ def build_price_discount_payload(
         payload["display_name"] = display_name.strip()
     if headline and headline.strip():
         payload["headline"] = headline.strip()
+    if popup_enabled:
+        payload["popup_enabled"] = True
+        triggers = popup_triggers or ["exit_intent", "post_exhaustion"]
+        payload["popup_triggers"] = [
+            trigger for trigger in triggers if trigger in POPUP_TRIGGERS
+        ]
     return payload
+
+
+def _popup_fields_from_payload(payload: dict[str, Any]) -> tuple[bool, list[str]]:
+    enabled = bool(payload.get("popup_enabled"))
+    raw_triggers = payload.get("popup_triggers") or []
+    if not isinstance(raw_triggers, list):
+        return enabled, []
+    triggers = [str(item) for item in raw_triggers if str(item) in POPUP_TRIGGERS]
+    if enabled and not triggers:
+        triggers = ["exit_intent", "post_exhaustion"]
+    return enabled, triggers
 
 
 def offer_summary_for_promo(promo: PromoCode) -> str:
@@ -102,6 +132,7 @@ def public_offer_view(promo: PromoCode) -> PublicOfferView:
         applicable = []
     display_name = payload.get("display_name")
     headline = payload.get("headline")
+    popup_enabled, popup_triggers = _popup_fields_from_payload(payload)
     return PublicOfferView(
         code=promo.code,
         grant_type=promo.grant_type,
@@ -112,6 +143,8 @@ def public_offer_view(promo: PromoCode) -> PublicOfferView:
         headline=headline if isinstance(headline, str) else None,
         redemption_count=promo.redemption_count,
         max_redemptions=promo.max_redemptions,
+        popup_enabled=popup_enabled,
+        popup_triggers=popup_triggers,
     )
 
 
@@ -127,6 +160,31 @@ async def lookup_public_offer(
     if promo is None or promo.grant_type != AdminGrantType.price_discount:
         return None
     return public_offer_view(promo)
+
+
+async def list_popup_offers(session: AsyncSession) -> list[PublicOfferView]:
+    """Active checkout offers configured for in-app popup triggers."""
+    rows = list(
+        (
+            await session.execute(
+                select(PromoCode)
+                .where(PromoCode.is_active.is_(True))
+                .where(PromoCode.grant_type == AdminGrantType.price_discount)
+                .order_by(PromoCode.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    offers: list[PublicOfferView] = []
+    for promo in rows:
+        view = public_offer_view(promo)
+        if not view.popup_enabled or not view.is_redeemable:
+            continue
+        if not view.popup_triggers:
+            continue
+        offers.append(view)
+    return offers
 
 
 async def record_checkout_promo_redemption(
@@ -178,8 +236,10 @@ async def record_checkout_promo_redemption(
 
 
 __all__ = [
+    "POPUP_TRIGGERS",
     "PublicOfferView",
     "build_price_discount_payload",
+    "list_popup_offers",
     "lookup_public_offer",
     "offer_summary_for_promo",
     "public_offer_view",

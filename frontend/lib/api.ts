@@ -486,6 +486,27 @@ export async function getExhaustionPaywall(token: string): Promise<ExhaustionPay
   })
 }
 
+export interface BillingPopupOfferResponse {
+  offers: Array<{
+    code: string;
+    grant_type: string;
+    expires_at: string | null;
+    is_active: boolean;
+    is_redeemable: boolean;
+    applicable_plan_codes: string[];
+    display_name: string | null;
+    headline: string | null;
+    popup_enabled: boolean;
+    popup_triggers: Array<"exit_intent" | "post_exhaustion">;
+  }>;
+}
+
+export async function getPopupOffers(token: string): Promise<BillingPopupOfferResponse> {
+  return request("/api/billing/popup-offers", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 const SUBSCRIPTION_CACHE_TTL_MS = 60_000
 let subscriptionCache: {
   token: string

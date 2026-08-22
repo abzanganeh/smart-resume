@@ -80,6 +80,18 @@ def validate_grant_payload(
                 raise InvalidGrantPayloadError(
                     f"{optional_key} must be a non-empty string when provided"
                 )
+        popup_enabled = payload.get("popup_enabled", False)
+        if popup_enabled is not None and not isinstance(popup_enabled, bool):
+            raise InvalidGrantPayloadError("popup_enabled must be a boolean when provided")
+        popup_triggers = payload.get("popup_triggers")
+        if popup_triggers is not None:
+            if not isinstance(popup_triggers, list):
+                raise InvalidGrantPayloadError("popup_triggers must be a list when provided")
+            for trigger in popup_triggers:
+                if trigger not in {"exit_intent", "post_exhaustion"}:
+                    raise InvalidGrantPayloadError(
+                        "popup_triggers entries must be exit_intent or post_exhaustion"
+                    )
         return
 
     raise InvalidGrantPayloadError(f"unsupported grant_type: {grant_type.value}")

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { NavBar } from "@/components/nav/NavBar"
 import { SiteFooter } from "@/components/nav/SiteFooter"
+import { OfferPopupHost } from "@/components/billing/OfferPopupHost"
 
 /** Hides chrome on /admin/* and /auth (auth has its own centered brand). */
 export function AppChrome({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       {showPublicChrome && <NavBar />}
       <div className="flex-1">{children}</div>
       {showPublicChrome && <SiteFooter />}
+      {showPublicChrome && <OfferPopupHost />}
     </>
   )
 }

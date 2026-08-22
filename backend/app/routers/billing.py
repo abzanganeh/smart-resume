@@ -70,6 +70,7 @@ from app.services.billing.exhaustion_top_up import (
     get_exhaustion_top_up_eligibility,
     grant_exhaustion_top_up,
 )
+from app.services.billing.promo_offers import list_popup_offers
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
@@ -339,6 +340,18 @@ async def billing_exhaustion_paywall(
 ) -> dict[str, Any]:
     """Contextual upgrade options when free credits are exhausted."""
     return await build_exhaustion_paywall(db, user=user)
+
+
+@router.get("/api/billing/popup-offers")
+@limiter.limit("120/minute")
+async def billing_popup_offers(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """Checkout discount offers eligible for exit-intent / post-exhaustion popups."""
+    offers = await list_popup_offers(db)
+    return {"offers": [offer.to_dict() for offer in offers]}
 
 
 @router.get("/api/credits/balance")

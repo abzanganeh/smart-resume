@@ -38,6 +38,7 @@ export default function AdminPromoPage() {
   const [offerPlans, setOfferPlans] = useState("monthly_pro,yearly_pro")
   const [offerMax, setOfferMax] = useState("")
   const [offerExpiresAt, setOfferExpiresAt] = useState("")
+  const [offerPopupEnabled, setOfferPopupEnabled] = useState(true)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -329,6 +330,15 @@ export default function AdminPromoPage() {
             onChange={(e) => setOfferExpiresAt(e.target.value)}
             className={inputCls}
           />
+          <label className="flex items-center gap-2 text-sm text-slate-300 col-span-full">
+            <input
+              type="checkbox"
+              checked={offerPopupEnabled}
+              onChange={(e) => setOfferPopupEnabled(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            Show in exit-intent and post-exhaustion popups (once per session)
+          </label>
         </div>
         <button
           disabled={isPending || !offerStripePromoId.trim()}
@@ -346,6 +356,10 @@ export default function AdminPromoPage() {
                   stripe_promotion_code_id: offerStripePromoId.trim(),
                   applicable_plan_codes,
                   display_name: offerDisplayName.trim() || undefined,
+                  popup_enabled: offerPopupEnabled,
+                  popup_triggers: offerPopupEnabled
+                    ? ["exit_intent", "post_exhaustion"]
+                    : undefined,
                 },
                 max_redemptions: offerMax ? parseInt(offerMax, 10) : null,
                 expires_at: offerExpiresAt

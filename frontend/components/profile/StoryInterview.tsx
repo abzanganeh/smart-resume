@@ -39,6 +39,7 @@ import { clearStoryDraft, loadStoryDraft, patchStoryDraft } from "@/lib/storyDra
 import { StorySaveConfirmDialog } from "./StorySaveConfirmDialog";
 import { StoryVerifyPanel } from "./StoryVerifyPanel";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { dispatchCreditsExhausted } from "@/lib/offerPopup";
 
 const MAX_QUESTIONS = 15;
 
@@ -163,6 +164,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         if (e.code === "insufficient_credits") {
           setError("You need at least 1 credit to start a coached interview.");
           setShowExhaustionPaywall(true);
+          dispatchCreditsExhausted();
           setPhase("credit-disclosure");
         } else {
           setError(e.message ?? "Failed to get next question. Please try again.");

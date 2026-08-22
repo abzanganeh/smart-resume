@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2, Mic, MicOff, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dispatchCreditsExhausted } from "@/lib/offerPopup";
 import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall";
 import { type CoachMessage, streamCoach } from "@/lib/story";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
@@ -129,6 +130,7 @@ export function StoryCoach({
         if (e.code === "insufficient_credits") {
           setError("You need at least 1 credit to start a coaching session.");
           setShowExhaustionPaywall(true);
+          dispatchCreditsExhausted();
         } else {
           setError(e.message ?? "Coach request failed. Please try again.");
           setShowExhaustionPaywall(false);

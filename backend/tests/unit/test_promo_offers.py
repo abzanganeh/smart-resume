@@ -71,6 +71,8 @@ def test_public_offer_view_omits_stripe_secret() -> None:
             "display_name": "Summer sale",
             "headline": "40% off Pro",
             "applicable_plan_codes": ["monthly_pro"],
+            "popup_enabled": True,
+            "popup_triggers": ["exit_intent", "post_exhaustion"],
         },
         expires_at=expires,
         max_redemptions=100,
@@ -82,6 +84,18 @@ def test_public_offer_view_omits_stripe_secret() -> None:
     assert view["display_name"] == "Summer sale"
     assert view["applicable_plan_codes"] == ["monthly_pro"]
     assert view["is_redeemable"] is True
+    assert view["popup_enabled"] is True
+    assert view["popup_triggers"] == ["exit_intent", "post_exhaustion"]
+
+
+def test_build_price_discount_payload_popup_fields() -> None:
+    payload = build_price_discount_payload(
+        stripe_promotion_code_id="promo_abc",
+        popup_enabled=True,
+        popup_triggers=["post_exhaustion"],
+    )
+    assert payload["popup_enabled"] is True
+    assert payload["popup_triggers"] == ["post_exhaustion"]
 
 
 def test_remaining_redemptions() -> None:
