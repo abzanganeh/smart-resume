@@ -35,7 +35,7 @@ staging.example.com {
 
 staging-api.example.com {
 	import security_headers
-	header Content-Security-Policy-Report-Only "default-src 'none'; frame-ancestors 'none'"
+	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 	encode gzip
 	reverse_proxy localhost:8001
 }

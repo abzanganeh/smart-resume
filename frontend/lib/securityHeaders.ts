@@ -1,8 +1,8 @@
 /**
- * OWASP A02 baseline response headers (M23 slice A2).
+ * OWASP A02 baseline response headers (M23 slice A2, enforced E3 ratchet).
  *
- * CSP ships as Report-Only first so landing motion (M16) violations surface
- * without breaking production. See SECURITY.md for the style-src ratchet plan.
+ * CSP is enforcing on production builds; ``style-src 'unsafe-inline'`` remains
+ * an accepted risk for M16 landing motion until nonce/hash migration.
  */
 
 const API_ORIGIN = (() => {
@@ -14,8 +14,8 @@ const API_ORIGIN = (() => {
   }
 })();
 
-/** Build the Report-Only CSP directive string. */
-export function buildContentSecurityPolicyReportOnly(): string {
+/** Build the enforcing CSP directive string. */
+export function buildContentSecurityPolicy(): string {
   const isDev = process.env.NODE_ENV !== "production";
 
   const scriptSrc = isDev
@@ -51,8 +51,8 @@ const PERMISSIONS_POLICY =
 export function securityResponseHeaders(): { key: string; value: string }[] {
   const headers: { key: string; value: string }[] = [
     {
-      key: "Content-Security-Policy-Report-Only",
-      value: buildContentSecurityPolicyReportOnly(),
+      key: "Content-Security-Policy",
+      value: buildContentSecurityPolicy(),
     },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
