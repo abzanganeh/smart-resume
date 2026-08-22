@@ -1,0 +1,26 @@
+# M23 A1 — weekly grouped dependency updates (OWASP A03 / LLM04).
+# See SECURITY.md § Supply chain scanning for CI gate baseline and ratchet plan.
+
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      backend-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      frontend-dependencies:
+        patterns:
+          - "*"

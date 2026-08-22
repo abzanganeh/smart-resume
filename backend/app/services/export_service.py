@@ -17,6 +17,22 @@ from app.services.contact_authority import authoritative_contact
 
 log = structlog.get_logger()
 
+_RESUME_PDF_CSS = """
+    @page { size: Letter; margin: 0.6in 0.65in; }
+    body { font-family: Georgia, serif; font-size: 10.5pt; color: #111; line-height: 1.45; }
+    h1 { font-size: 18pt; margin: 0 0 2pt; }
+    h2 { font-size: 11pt; border-bottom: 1px solid #555; padding-bottom: 2pt; margin: 12pt 0 4pt; }
+    ul { margin: 2pt 0; padding-left: 14pt; }
+    li { margin-bottom: 2pt; }
+    p  { margin: 2pt 0; }
+"""
+
+_COVER_LETTER_PDF_CSS = """
+    @page { size: Letter; margin: 0.75in; }
+    body { font-family: Georgia, serif; font-size: 11pt; color: #111; line-height: 1.55; }
+    p { margin-bottom: 12pt; text-align: justify; }
+"""
+
 _TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -72,18 +88,11 @@ def _resume_to_html(session: Session) -> str:
 
 async def render_pdf(session: Session) -> bytes:
     """Render the tailored resume to PDF via WeasyPrint (pure Python, no browser needed)."""
-    from weasyprint import HTML, CSS
-    html = _resume_to_html(session)
-    css = CSS(string="""
-        @page { size: Letter; margin: 0.6in 0.65in; }
-        body { font-family: Georgia, serif; font-size: 10.5pt; color: #111; line-height: 1.45; }
-        h1 { font-size: 18pt; margin: 0 0 2pt; }
-        h2 { font-size: 11pt; border-bottom: 1px solid #555; padding-bottom: 2pt; margin: 12pt 0 4pt; }
-        ul { margin: 2pt 0; padding-left: 14pt; }
-        li { margin-bottom: 2pt; }
-        p  { margin: 2pt 0; }
-    """)
-    return HTML(string=html).write_pdf(stylesheets=[css])
+    # Imported lazily: ``app.services.export`` pulls in the assembler, which
+    # imports this module back.
+    from app.services.export.weasyprint_safe import render_pdf_bytes
+
+    return render_pdf_bytes(_resume_to_html(session), css=[_RESUME_PDF_CSS])
 
 
 def render_docx(session: Session) -> bytes:
@@ -241,15 +250,11 @@ def _cover_letter_to_html(session: Session) -> str:
 
 async def render_cover_letter_pdf(session: Session) -> bytes:
     """Render the cover letter to PDF via WeasyPrint."""
-    from weasyprint import CSS, HTML
+    from app.services.export.weasyprint_safe import render_pdf_bytes
 
-    html = _cover_letter_to_html(session)
-    css = CSS(string="""
-        @page { size: Letter; margin: 0.75in; }
-        body { font-family: Georgia, serif; font-size: 11pt; color: #111; line-height: 1.55; }
-        p { margin-bottom: 12pt; text-align: justify; }
-    """)
-    return HTML(string=html).write_pdf(stylesheets=[css])
+    return render_pdf_bytes(
+        _cover_letter_to_html(session), css=[_COVER_LETTER_PDF_CSS]
+    )
 
 
 def render_cover_letter_docx(session: Session) -> bytes:
