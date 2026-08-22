@@ -10,15 +10,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Pinned third-party Actions for supply-chain jobs (OWASP A03). Refresh SHAs when bumping tags.
-env:
-  ACTIONS_CHECKOUT_SHA: 11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
-  SETUP_UV_SHA: 0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # astral-sh/setup-uv@v5.4.1
-  PNPM_ACTION_SETUP_SHA: 7088e561eb65bb68695d245aa206f005ef30921d # pnpm/action-setup@v4.1.0
-  SETUP_NODE_SHA: 49933ea5288caeca8642d1e84afbd3f7d6820020 # actions/setup-node@v4.4.0
-  GITLEAKS_ACTION_SHA: ff98106e4c7b2bc287b24eaf42907196329070c7 # gitleaks/gitleaks-action@v2
-  # Ratchet: set false once SECURITY.md baseline is clean (M23 A1).
-  SUPPLY_CHAIN_CONTINUE_ON_ERROR: "true"
+# Supply-chain jobs pin Actions to full SHAs (OWASP A03). Refresh when bumping tags.
+# actions/checkout@v4.2.2 → 11bd71901bbe5b1630ceea73d27597364c9af683
+# astral-sh/setup-uv@v5.4.1 → 0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
+# pnpm/action-setup@v4.1.0 → 7088e561eb65bb68695d245aa206f005ef30921d
+# actions/setup-node@v4.4.0 → 49933ea5288caeca8642d1e84afbd3f7d6820020
+# gitleaks/gitleaks-action@v2 → ff98106e4c7b2bc287b24eaf42907196329070c7
+# Ratchet: remove continue-on-error on security-supply-chain once SECURITY.md baseline is clean.
 
 jobs:
   backend-unit:
@@ -245,15 +243,15 @@ jobs:
   security-supply-chain:
     name: Security supply chain (A03)
     runs-on: ubuntu-latest
-    continue-on-error: ${{ env.SUPPLY_CHAIN_CONTINUE_ON_ERROR == 'true' }}
+    continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@${{ env.ACTIONS_CHECKOUT_SHA }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@${{ env.SETUP_UV_SHA }}
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
         with:
           enable-cache: true
 
@@ -271,11 +269,11 @@ jobs:
           uv export --frozen --format requirements.txt -o /tmp/requirements-audit.txt
           uv tool run pip-audit -r /tmp/requirements-audit.txt
 
-      - uses: pnpm/action-setup@${{ env.PNPM_ACTION_SETUP_SHA }}
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
         with:
           version: 9
 
-      - uses: actions/setup-node@${{ env.SETUP_NODE_SHA }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "20"
           cache: pnpm
@@ -291,7 +289,7 @@ jobs:
 
       - name: gitleaks detect (PR)
         if: github.event_name == 'pull_request'
-        uses: gitleaks/gitleaks-action@${{ env.GITLEAKS_ACTION_SHA }}
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -317,10 +315,10 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout
-        uses: actions/checkout@${{ env.ACTIONS_CHECKOUT_SHA }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Install uv
-        uses: astral-sh/setup-uv@${{ env.SETUP_UV_SHA }}
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
         with:
           enable-cache: true
 
