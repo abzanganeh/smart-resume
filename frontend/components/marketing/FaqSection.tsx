@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { accessBadge } from "@/lib/marketing/journey";
-import { faqEntries, faqJsonLdScript } from "@/lib/marketing/faq";
+import { faqEntries } from "@/lib/marketing/faq";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 /**
@@ -13,7 +13,6 @@ import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
  */
 export function FaqSection({ startingCredits }: { startingCredits: number }) {
   const entries = faqEntries(startingCredits);
-  const structuredData = faqJsonLdScript(entries);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -51,11 +50,6 @@ export function FaqSection({ startingCredits }: { startingCredits: number }) {
 
   return (
     <section ref={sectionRef} className={`${SECTION} pb-24`}>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: structuredData }}
-      />
-
       <h2 className={SECTION_HEADING}>Questions people ask first</h2>
       <p className={SECTION_SUBHEADING}>
         Short answers, and nothing the product cannot back up.

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Script from "next/script"
+import { useNonce } from "@/components/NonceProvider"
 
 declare global {
   interface Window {
@@ -28,6 +29,7 @@ type TurnstileFieldProps = {
 }
 
 export function TurnstileField({ siteKey, onToken }: TurnstileFieldProps) {
+  const nonce = useNonce()
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef<string | null>(null)
   const [scriptReady, setScriptReady] = useState(false)
@@ -60,6 +62,7 @@ export function TurnstileField({ siteKey, onToken }: TurnstileFieldProps) {
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
+        nonce={nonce}
         onLoad={() => setScriptReady(true)}
       />
       <div ref={containerRef} className="min-h-[65px]" aria-label="Human verification" />
