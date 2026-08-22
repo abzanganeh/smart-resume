@@ -55,6 +55,45 @@ def validate_grant_payload(
             )
         return
 
+    if grant_type == AdminGrantType.price_discount:
+        promo_id = payload.get("stripe_promotion_code_id")
+        if not isinstance(promo_id, str) or not promo_id.strip():
+            raise InvalidGrantPayloadError(
+                "price_discount payload requires stripe_promotion_code_id"
+            )
+        applicable = payload.get("applicable_plan_codes", [])
+        if applicable is not None and not isinstance(applicable, list):
+            raise InvalidGrantPayloadError(
+                "applicable_plan_codes must be a list when provided"
+            )
+        if isinstance(applicable, list):
+            for code in applicable:
+                if not isinstance(code, str) or not code.strip():
+                    raise InvalidGrantPayloadError(
+                        "applicable_plan_codes entries must be non-empty strings"
+                    )
+        for optional_key in ("display_name", "headline"):
+            value = payload.get(optional_key)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip()
+            ):
+                raise InvalidGrantPayloadError(
+                    f"{optional_key} must be a non-empty string when provided"
+                )
+        popup_enabled = payload.get("popup_enabled", False)
+        if popup_enabled is not None and not isinstance(popup_enabled, bool):
+            raise InvalidGrantPayloadError("popup_enabled must be a boolean when provided")
+        popup_triggers = payload.get("popup_triggers")
+        if popup_triggers is not None:
+            if not isinstance(popup_triggers, list):
+                raise InvalidGrantPayloadError("popup_triggers must be a list when provided")
+            for trigger in popup_triggers:
+                if trigger not in {"exit_intent", "post_exhaustion"}:
+                    raise InvalidGrantPayloadError(
+                        "popup_triggers entries must be exit_intent or post_exhaustion"
+                    )
+        return
+
     raise InvalidGrantPayloadError(f"unsupported grant_type: {grant_type.value}")
 
 

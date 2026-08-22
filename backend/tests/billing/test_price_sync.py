@@ -74,10 +74,10 @@ async def test_price_sync_no_drift_writes_no_audit(
         "yearly_plus": ("price_yearly_plus", 24000),
         "monthly_premium": ("price_monthly_premium", 5000),
         "yearly_premium": ("price_yearly_premium", 40000),
-        "better_pack": ("price_better_pack", 999),
+        "credits_5": ("price_credits_5", 500),
+        "credits_15": ("price_credits_15", 1200),
         "better_monthly": ("price_better_monthly", 1499),
         "better_yearly": ("price_better_yearly", 13499),
-        "best_per_resume": ("price_best_per_resume", 499),
         "best_monthly": ("price_best_monthly", 2499),
         "best_yearly": ("price_best_yearly", 22499),
     }

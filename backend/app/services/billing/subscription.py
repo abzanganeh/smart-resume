@@ -14,6 +14,7 @@ Python SDK.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -30,13 +31,24 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.user import User
+from app.services.billing.checkout_discount import resolve_checkout_discount
+from app.services.billing.checkout_wallets import checkout_wallet_kwargs
+from app.services.billing.credit_packs import is_one_time_purchase_code
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     SubscriptionPauseNotAllowedError,
 )
 from app.services.billing.price_resolver import resolve_price_id
+from app.services.billing.promo import normalize_promo_code
 
 log = structlog.get_logger("billing.subscription")
+
+
+@dataclass(frozen=True, slots=True)
+class CheckoutSessionResult:
+    session: dict[str, Any]
+    discount_applied: bool = False
+    discount_message: str | None = None
 
 
 def _configure_stripe() -> None:
@@ -65,7 +77,8 @@ async def create_checkout_session(
     success_url: str,
     cancel_url: str,
     mode: str | None = None,
-) -> dict[str, Any]:
+    promo_code: str | None = None,
+) -> CheckoutSessionResult:
     """Create a Stripe Checkout session for ``code``.
 
     Returns the dict-form of ``stripe.checkout.Session`` (we keep the
@@ -79,32 +92,51 @@ async def create_checkout_session(
     # ``payment``, recurring codes use ``subscription``.  The caller
     # may force a mode for tests / future product types.
     if mode is None:
-        mode = (
-            "payment"
-            if code in {"better_pack", "best_per_resume"}
-            else "subscription"
-        )
+        mode = "payment" if is_one_time_purchase_code(code) else "subscription"
 
     metadata = {
         "user_id": str(user.id),
         "code": code,
     }
 
-    checkout = await _run_in_thread(
-        stripe.checkout.Session.create,
-        mode=mode,
-        line_items=[{"price": price_id, "quantity": 1}],
-        success_url=success_url,
-        cancel_url=cancel_url,
-        client_reference_id=str(user.id),
-        customer_email=user.email,
-        metadata=metadata,
-        subscription_data=({"metadata": metadata} if mode == "subscription" else None),
-        payment_intent_data=(
+    discount = await resolve_checkout_discount(
+        session,
+        user_id=user.id,
+        promo_code=promo_code,
+        plan_code=code,
+    )
+    if discount.applied and discount.stripe_promotion_code_id:
+        metadata["checkout_promo_code"] = normalize_promo_code(promo_code or "")
+
+    checkout_kwargs: dict[str, Any] = {
+        "mode": mode,
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "client_reference_id": str(user.id),
+        "customer_email": user.email,
+        "metadata": metadata,
+        "subscription_data": ({"metadata": metadata} if mode == "subscription" else None),
+        "payment_intent_data": (
             {"metadata": metadata} if mode == "payment" else None
         ),
+    }
+    if discount.stripe_promotion_code_id:
+        checkout_kwargs["discounts"] = [
+            {"promotion_code": discount.stripe_promotion_code_id}
+        ]
+
+    checkout_kwargs.update(checkout_wallet_kwargs())
+
+    checkout = await _run_in_thread(
+        stripe.checkout.Session.create,
+        **checkout_kwargs,
     )
-    return _to_dict(checkout)
+    return CheckoutSessionResult(
+        session=_to_dict(checkout),
+        discount_applied=discount.applied,
+        discount_message=discount.message,
+    )
 
 
 async def create_portal_session(
@@ -425,6 +457,7 @@ async def _run_in_thread(fn, *args, **kwargs):
 
 
 __all__ = [
+    "CheckoutSessionResult",
     "assert_yearly_addon_alignment",
     "cancel_at_period_end",
     "change_plan",

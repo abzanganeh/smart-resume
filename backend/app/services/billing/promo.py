@@ -107,6 +107,9 @@ async def redeem_promo_code(
         )
     ).scalar_one()
 
+    if promo.grant_type == AdminGrantType.price_discount:
+        raise PromoCodeInvalidError()
+
     if (
         promo.restricted_user_id is not None
         and promo.restricted_user_id != user_id

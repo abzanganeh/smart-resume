@@ -22,6 +22,10 @@ from app.services.admin.grants import InvalidGrantPayloadError, validate_grant_p
 from app.services.auth.client_ip import resolve_client_ip
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.billing.promo import normalize_promo_code
+from app.services.billing.promo_offers import (
+    offer_summary_for_promo,
+    remaining_redemptions,
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -43,6 +47,9 @@ class PromoCodeOut(BaseModel):
     redemption_count: int
     expires_at: datetime | None = None
     is_active: bool
+    is_redeemable: bool
+    offer_summary: str
+    remaining_redemptions: int | None = None
     created_by_admin_id: uuid.UUID | None = None
     restricted_user_id: uuid.UUID | None = None
     created_at: datetime
@@ -85,7 +92,22 @@ class PromoRedemptionOut(BaseModel):
 
 
 def _serialize(row: PromoCode) -> PromoCodeOut:
-    return PromoCodeOut.model_validate(row)
+    return PromoCodeOut(
+        id=row.id,
+        code=row.code,
+        grant_type=row.grant_type,
+        payload=dict(row.payload or {}),
+        max_redemptions=row.max_redemptions,
+        redemption_count=row.redemption_count,
+        expires_at=row.expires_at,
+        is_active=row.is_active,
+        is_redeemable=row.is_redeemable,
+        offer_summary=offer_summary_for_promo(row),
+        remaining_redemptions=remaining_redemptions(row),
+        created_by_admin_id=row.created_by_admin_id,
+        restricted_user_id=row.restricted_user_id,
+        created_at=row.created_at,
+    )
 
 
 @router.get("/promo-codes", response_model=list[PromoCodeOut])
@@ -95,12 +117,27 @@ async def admin_promo_codes_list(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[AdminUser, Depends(require_admin_role(*_PROMO_READ_ROLES))],
     include_inactive: bool = False,
+    grant_type: AdminGrantType | None = None,
 ) -> list[PromoCodeOut]:
     stmt = select(PromoCode).order_by(desc(PromoCode.created_at))
     if not include_inactive:
         stmt = stmt.where(PromoCode.is_active.is_(True))
+    if grant_type is not None:
+        stmt = stmt.where(PromoCode.grant_type == grant_type)
     rows = list((await db.execute(stmt)).scalars().all())
     return [_serialize(r) for r in rows]
+
+
+@router.get("/promo-codes/{promo_code_id}", response_model=PromoCodeOut)
+@limiter.limit("120/minute")
+async def admin_promo_codes_get(
+    request: Request,
+    promo_code_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[AdminUser, Depends(require_admin_role(*_PROMO_READ_ROLES))],
+) -> PromoCodeOut:
+    row = await _load_promo_or_404(db, promo_code_id)
+    return _serialize(row)
 
 
 async def _load_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:

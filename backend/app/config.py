@@ -150,7 +150,11 @@ class Settings(BaseSettings):
     STRIPE_PRICE_MONTHLY_PREMIUM: str = ""
     STRIPE_PRICE_YEARLY_PREMIUM: str = ""
 
-    STRIPE_PRICE_BETTER_PACK: str = ""        # better_5pack (legacy add-on)
+    STRIPE_PRICE_CREDITS_5: str = ""
+    STRIPE_PRICE_CREDITS_15: str = ""
+
+    # Retired one-time LLM packs — env kept for webhook reverse-lookup only.
+    STRIPE_PRICE_BETTER_PACK: str = ""
     STRIPE_PRICE_BETTER_MONTHLY: str = ""
     STRIPE_PRICE_BETTER_YEARLY: str = ""
 
@@ -160,6 +164,8 @@ class Settings(BaseSettings):
 
     # Default currency code surfaced by /api/billing/prices (Step 7).
     BILLING_CURRENCY: str = "USD"
+    # Apple Pay / Google Pay on Stripe Checkout (M21). Disable only for tests.
+    STRIPE_CHECKOUT_WALLETS_ENABLED: bool = True
     # When true, phase runs and other quota-gated actions skip credit checks.
     # In ``local`` / ``development`` this defaults to enabled unless explicitly false.
     BILLING_SKIP_QUOTA: bool | None = None

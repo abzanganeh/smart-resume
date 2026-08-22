@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.billing import PlanConfig, PlanConfigInterval
+from app.services.billing.credit_packs import (
+    CREDIT_PACK_CODES,
+    credit_pack_addon_payload,
+)
 from app.services.billing.tier_limits import seed_row_for_plan
 
 # Base subscription codes exposed on /billing (legacy LLM add-ons excluded).
@@ -128,11 +132,16 @@ async def build_public_billing_prices(session: AsyncSession) -> dict[str, Any]:
         .all()
     )
     seen: set[str] = set()
+    pack_rows: dict[str, PlanConfig] = {}
     plans: list[dict[str, Any]] = []
     latest = datetime(1970, 1, 1, tzinfo=timezone.utc)
     currency = settings.BILLING_CURRENCY or "USD"
 
     for row in rows:
+        if row.code in CREDIT_PACK_CODES and row.code not in pack_rows:
+            pack_rows[row.code] = row
+            if row.created_at > latest:
+                latest = row.created_at
         if row.code not in PUBLIC_PLAN_CODES or row.code in seen:
             continue
         seen.add(row.code)
@@ -153,11 +162,21 @@ async def build_public_billing_prices(session: AsyncSession) -> dict[str, Any]:
             }
         )
 
+    addons = [
+        credit_pack_addon_payload(
+            code=code,
+            amount_cents=pack_rows[code].amount_cents,
+            stripe_price_id=pack_rows[code].stripe_price_id,
+        )
+        for code in CREDIT_PACK_CODES
+        if code in pack_rows
+    ]
+
     return {
         "version": f"plans-{latest.isoformat()}",
         "currency": currency,
         "plans": plans,
-        "addons": [],
+        "addons": addons,
     }
 
 

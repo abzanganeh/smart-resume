@@ -82,6 +82,7 @@ class CreditTransactionAction(str, enum.Enum):
     admin_revoke = "admin_revoke"
     refund_reverse = "refund_reverse"
     exhaustion_top_up = "exhaustion_top_up"
+    credit_pack_purchase = "credit_pack_purchase"
 
 
 _AUTH_PROVIDER_PG = PGEnum(

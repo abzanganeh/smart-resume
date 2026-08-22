@@ -62,10 +62,15 @@ from app.services.billing.credit_spend import (
     credits_locked_until_verification,
     spendable_free_credits,
 )
+from app.services.billing.exhaustion_paywall import (
+    build_exhaustion_paywall,
+    insufficient_credits_detail,
+)
 from app.services.billing.exhaustion_top_up import (
     get_exhaustion_top_up_eligibility,
     grant_exhaustion_top_up,
 )
+from app.services.billing.promo_offers import list_popup_offers
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
@@ -164,11 +169,14 @@ class CheckoutRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=64)
     success_url: str = Field(..., max_length=2048)
     cancel_url: str = Field(..., max_length=2048)
+    promo_code: str | None = Field(default=None, max_length=64)
 
 
 class CheckoutResponse(BaseModel):
     url: str
     id: str
+    discount_applied: bool = False
+    discount_message: str | None = None
 
 
 class PortalRequest(BaseModel):
@@ -323,6 +331,29 @@ async def billing_free_tier(
     return FreeTierResponse(starting_credits=amount)
 
 
+@router.get("/api/billing/exhaustion-paywall")
+@limiter.limit("120/minute")
+async def billing_exhaustion_paywall(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """Contextual upgrade options when free credits are exhausted."""
+    return await build_exhaustion_paywall(db, user=user)
+
+
+@router.get("/api/billing/popup-offers")
+@limiter.limit("120/minute")
+async def billing_popup_offers(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """Checkout discount offers eligible for exit-intent / post-exhaustion popups."""
+    offers = await list_popup_offers(db, user_id=user.id)
+    return {"offers": [offer.to_dict() for offer in offers]}
+
+
 @router.get("/api/credits/balance")
 @limiter.limit("120/minute")
 async def credits_balance(
@@ -431,11 +462,7 @@ async def credits_deduct(
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "code": "insufficient_credits",
-                "credit_kind": exc.credit_kind,
-                "balance": exc.balance,
-            },
+            detail=await insufficient_credits_detail(db, user=user, exc=exc),
         ) from exc
     except ValueError as exc:
         raise HTTPException(
@@ -513,12 +540,16 @@ async def subscriptions_checkout(
             code=payload.code,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,
+            promo_code=payload.promo_code,
         )
     except BillingError as exc:
         raise _billing_error_to_http(exc) from exc
+    session = result.session
     return CheckoutResponse(
-        url=str(result.get("url", "")),
-        id=str(result.get("id", "")),
+        url=str(session.get("url", "")),
+        id=str(session.get("id", "")),
+        discount_applied=result.discount_applied,
+        discount_message=result.discount_message,
     )
 
 

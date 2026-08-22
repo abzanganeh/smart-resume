@@ -28,9 +28,17 @@ export default function AdminPromoPage() {
   const [freeGrant, setFreeGrant] = useState(3)
   const [grantDraft, setGrantDraft] = useState("3")
   const [promos, setPromos] = useState<PromoCode[]>([])
+  const [discountOffers, setDiscountOffers] = useState<PromoCode[]>([])
   const [campaignCode, setCampaignCode] = useState("")
   const [campaignAmount, setCampaignAmount] = useState("5")
   const [campaignMax, setCampaignMax] = useState("")
+  const [offerCode, setOfferCode] = useState("")
+  const [offerStripePromoId, setOfferStripePromoId] = useState("")
+  const [offerDisplayName, setOfferDisplayName] = useState("")
+  const [offerPlans, setOfferPlans] = useState("monthly_pro,yearly_pro")
+  const [offerMax, setOfferMax] = useState("")
+  const [offerExpiresAt, setOfferExpiresAt] = useState("")
+  const [offerPopupEnabled, setOfferPopupEnabled] = useState(true)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -48,7 +56,10 @@ export default function AdminPromoPage() {
       ])
       setFreeGrant(grant.amount)
       setGrantDraft(String(grant.amount))
-      setPromos(codes.filter((p) => p.restricted_user_id == null))
+      setPromos(codes.filter((p) => p.restricted_user_id == null && p.grant_type === "extra_credits"))
+      setDiscountOffers(
+        codes.filter((p) => p.restricted_user_id == null && p.grant_type === "price_discount"),
+      )
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load promo settings"
       if (msg === "admin_setup_incomplete") {
@@ -251,6 +262,189 @@ export default function AdminPromoPage() {
                             })
                             showAuditToast(res.audit_log_id)
                             setPromos((prev) =>
+                              prev.map((p) =>
+                                p.id === promo.id ? res.promo_code : p,
+                              ),
+                            )
+                          })
+                        }
+                        className="text-xs text-red-300 hover:text-red-200"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h2 className="text-lg font-medium text-white">Checkout discount offers</h2>
+        <p className="text-sm text-slate-400">
+          Pre-applied Stripe promotion codes for upgrade checkout. Deadlines and redemption
+          limits are enforced server-side.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input
+            type="text"
+            value={offerCode}
+            onChange={(e) => setOfferCode(e.target.value.toUpperCase())}
+            placeholder="Offer code (optional — auto-generated)"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            value={offerStripePromoId}
+            onChange={(e) => setOfferStripePromoId(e.target.value)}
+            placeholder="Stripe promotion code ID (promo_…)"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            value={offerDisplayName}
+            onChange={(e) => setOfferDisplayName(e.target.value)}
+            placeholder="Display name"
+            className={inputCls}
+          />
+          <input
+            type="text"
+            value={offerPlans}
+            onChange={(e) => setOfferPlans(e.target.value)}
+            placeholder="Plan codes (comma-separated)"
+            className={inputCls}
+          />
+          <input
+            type="number"
+            min={1}
+            value={offerMax}
+            onChange={(e) => setOfferMax(e.target.value)}
+            placeholder="Max redemptions (optional)"
+            className={inputCls}
+          />
+          <input
+            type="datetime-local"
+            value={offerExpiresAt}
+            onChange={(e) => setOfferExpiresAt(e.target.value)}
+            className={inputCls}
+          />
+          <label className="flex items-center gap-2 text-sm text-slate-300 col-span-full">
+            <input
+              type="checkbox"
+              checked={offerPopupEnabled}
+              onChange={(e) => setOfferPopupEnabled(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            Show in exit-intent and post-exhaustion popups (once per session)
+          </label>
+        </div>
+        <button
+          disabled={isPending || !offerStripePromoId.trim()}
+          onClick={() =>
+            runAction(async () => {
+              const code = offerCode.trim() || generatePromoCode()
+              const applicable_plan_codes = offerPlans
+                .split(",")
+                .map((part) => part.trim())
+                .filter(Boolean)
+              const res = await createAdminPromoCode(token, {
+                code,
+                grant_type: "price_discount",
+                payload: {
+                  stripe_promotion_code_id: offerStripePromoId.trim(),
+                  applicable_plan_codes,
+                  display_name: offerDisplayName.trim() || undefined,
+                  popup_enabled: offerPopupEnabled,
+                  popup_triggers: offerPopupEnabled
+                    ? ["exit_intent", "post_exhaustion"]
+                    : undefined,
+                },
+                max_redemptions: offerMax ? parseInt(offerMax, 10) : null,
+                expires_at: offerExpiresAt
+                  ? new Date(offerExpiresAt).toISOString()
+                  : null,
+              })
+              showAuditToast(res.audit_log_id)
+              setDiscountOffers((prev) => [res.promo_code, ...prev])
+              setOfferCode("")
+              setOfferStripePromoId("")
+              setOfferDisplayName("")
+              setOfferMax("")
+              setOfferExpiresAt("")
+            })
+          }
+          className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Create checkout offer
+        </button>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-800">
+                <th className="py-2 pr-4">Code</th>
+                <th className="py-2 pr-4">Offer</th>
+                <th className="py-2 pr-4">Expires</th>
+                <th className="py-2 pr-4">Redemptions</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {discountOffers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-slate-500">
+                    No checkout offers yet.
+                  </td>
+                </tr>
+              )}
+              {discountOffers.map((promo) => (
+                <tr key={promo.id}>
+                  <td className="py-3 pr-4 font-mono text-white">{promo.code}</td>
+                  <td className="py-3 pr-4 text-slate-300">{promo.offer_summary}</td>
+                  <td className="py-3 pr-4 text-slate-300">
+                    {promo.expires_at
+                      ? new Date(promo.expires_at).toLocaleString()
+                      : "—"}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-300">
+                    {promo.redemption_count}
+                    {promo.max_redemptions != null ? ` / ${promo.max_redemptions}` : ""}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={clsx(
+                        "text-xs px-2 py-0.5 rounded-full border",
+                        promo.is_redeemable
+                          ? "border-emerald-700/40 text-emerald-300 bg-emerald-900/20"
+                          : "border-slate-700 text-slate-400 bg-slate-800/50",
+                      )}
+                    >
+                      {promo.is_redeemable ? "Active" : "Unavailable"}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard.writeText(promo.code)}
+                      className="text-slate-400 hover:text-white"
+                      title="Copy code"
+                    >
+                      <Copy className="w-4 h-4 inline" />
+                    </button>
+                    {promo.is_active && (
+                      <button
+                        disabled={isPending}
+                        onClick={() =>
+                          runAction(async () => {
+                            const res = await patchAdminPromoCode(token, promo.id, {
+                              is_active: false,
+                            })
+                            showAuditToast(res.audit_log_id)
+                            setDiscountOffers((prev) =>
                               prev.map((p) =>
                                 p.id === promo.id ? res.promo_code : p,
                               ),

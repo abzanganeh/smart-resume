@@ -19,6 +19,7 @@ class AdminGrantType(str, enum.Enum):
     extra_credits = "extra_credits"
     tier_override = "tier_override"
     feature_unlock = "feature_unlock"
+    price_discount = "price_discount"
 
 
 def _utcnow() -> datetime:

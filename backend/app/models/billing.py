@@ -495,6 +495,42 @@ class PlanConfig(Base):
     )
 
 
+class PaymentCardFingerprint(Base):
+    """Stripe ``payment_method.card.fingerprint`` observed on a successful charge.
+
+    Stores only the one-way Stripe fingerprint — never PAN or card numbers.
+    Used to flag shared cards across unrelated accounts for manual review (M21).
+    """
+
+    __tablename__ = "payment_card_fingerprints"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    card_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    stripe_event_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=text("now()"),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "card_fingerprint",
+            name="uq_payment_card_fingerprints_user_card",
+        ),
+    )
+
+
 # Notification platform models live in app.models.notifications (Step 31).
 from app.models.notifications import (  # noqa: F401
     Notification,
@@ -552,6 +588,7 @@ __all__ = [
     "Notification",
     "NotificationChannel",
     "NotificationStatus",
+    "PaymentCardFingerprint",
     "PlanConfig",
     "PlanConfigInterval",
     "RefundInitiator",
