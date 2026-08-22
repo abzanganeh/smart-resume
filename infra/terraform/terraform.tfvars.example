@@ -2,8 +2,12 @@
 aws_region   = "us-east-1"
 environment  = "staging"
 
-postgres_url   = "postgresql://smart_resume:password@localhost:5432/smart_resume"
-apify_api_token = "apify_api_..."
+postgres_url = "postgresql://smart_resume:password@localhost:5432/smart_resume"
+
+# The hourly Apify refresh is redundant with the free ATS corpus poller and
+# every run is billable. Leave disabled unless you have a specific reason.
+apify_cache_enabled = false
+# apify_api_token   = "apify_api_..."
 
 lambda_apify_cache_worker_zip = "build/apify_cache_worker.zip"
 lambda_job_cache_writer_zip   = "build/job_cache_writer.zip"

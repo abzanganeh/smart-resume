@@ -119,7 +119,11 @@ cp terraform.tfvars.example terraform.tfvars   # environment = "staging"
 terraform init && terraform apply
 ```
 
-Requires `APIFY_API_TOKEN`, `POSTGRES_URL`, and Lambda zip artifacts (`infra/terraform/build.sh`).
+Requires `POSTGRES_URL` and Lambda zip artifacts (`infra/terraform/build.sh`).
+
+The hourly Apify cache refresh is disabled by default (`apify_cache_enabled = false`),
+so `APIFY_API_TOKEN` is only needed if you deliberately turn it on. The free ATS
+corpus poller fills `job_cache` without it.
 
 ---
 

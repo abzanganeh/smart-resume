@@ -109,8 +109,22 @@ def _send_to_sqs(
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
 
 
+def _is_enabled() -> bool:
+    return os.environ.get("APIFY_CACHE_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """EventBridge hourly entrypoint."""
+    # Each invocation can start up to TOP_QUERY_LIMIT paid actor runs, so a
+    # stray or manual invocation is billable. Refuse unless explicitly enabled.
+    if not _is_enabled():
+        log.info("apify_cache_worker disabled; set APIFY_CACHE_ENABLED=true to run")
+        return {"skipped": True, "reason": "disabled"}
+
     token = os.environ["APIFY_API_TOKEN"]
     actor_id = os.environ.get("APIFY_ACTOR_ID", "automation-lab/google-jobs-scraper")
     queue_url = os.environ["JOB_CACHE_SQS_URL"]

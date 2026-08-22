@@ -24,8 +24,8 @@ output "alert_dispatcher_lambda_arn" {
 }
 
 output "eventbridge_hourly_rule_arn" {
-  description = "EventBridge rule ARN for the hourly Apify cache schedule."
-  value       = aws_cloudwatch_event_rule.apify_cache_hourly.arn
+  description = "EventBridge rule ARN for the hourly Apify cache schedule, or null when disabled."
+  value       = one(aws_cloudwatch_event_rule.apify_cache_hourly[*].arn)
 }
 
 output "eventbridge_daily_alert_rule_arn" {

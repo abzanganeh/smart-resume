@@ -114,18 +114,23 @@ resource "aws_lambda_function" "apify_cache_worker" {
 
   environment {
     variables = {
-      POSTGRES_URL      = var.postgres_url
-      APIFY_API_TOKEN   = var.apify_api_token
-      APIFY_ACTOR_ID    = var.apify_actor_id
-      JOB_CACHE_SQS_URL = aws_sqs_queue.job_cache.url
-      AWS_REGION        = var.aws_region
+      POSTGRES_URL        = var.postgres_url
+      APIFY_CACHE_ENABLED = tostring(var.apify_cache_enabled)
+      APIFY_API_TOKEN     = var.apify_api_token
+      APIFY_ACTOR_ID      = var.apify_actor_id
+      JOB_CACHE_SQS_URL   = aws_sqs_queue.job_cache.url
+      AWS_REGION          = var.aws_region
     }
   }
 
   tags = local.common_tags
 }
 
+# The schedule is created only when apify_cache_enabled is true. The function
+# itself is always deployed so it stays available for a deliberate manual run,
+# but nothing invokes it on a timer by default.
 resource "aws_cloudwatch_event_rule" "apify_cache_hourly" {
+  count               = var.apify_cache_enabled ? 1 : 0
   name                = "${local.name_prefix}-apify-hourly"
   description         = "Hourly Apify Google Jobs cache refresh"
   schedule_expression = "rate(1 hour)"
@@ -133,17 +138,19 @@ resource "aws_cloudwatch_event_rule" "apify_cache_hourly" {
 }
 
 resource "aws_cloudwatch_event_target" "apify_cache_hourly" {
-  rule      = aws_cloudwatch_event_rule.apify_cache_hourly.name
+  count     = var.apify_cache_enabled ? 1 : 0
+  rule      = aws_cloudwatch_event_rule.apify_cache_hourly[0].name
   target_id = "apify-cache-worker"
   arn       = aws_lambda_function.apify_cache_worker.arn
 }
 
 resource "aws_lambda_permission" "apify_cache_hourly" {
+  count         = var.apify_cache_enabled ? 1 : 0
   statement_id  = "AllowEventBridgeApifyHourly"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.apify_cache_worker.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.apify_cache_hourly.arn
+  source_arn    = aws_cloudwatch_event_rule.apify_cache_hourly[0].arn
 }
 
 # ---------------------------------------------------------------------------

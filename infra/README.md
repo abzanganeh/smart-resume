@@ -17,7 +17,7 @@ Steps 21–22.
 ## Data flow
 
 ```
-EventBridge (hourly)
+EventBridge (hourly) — DISABLED by default, see apify_cache_enabled
   → apify_cache_worker Lambda
       → Apify API (Google Jobs scraper)
       → SQS (job-cache queue)
@@ -30,6 +30,21 @@ EventBridge (daily / weekly)
       → PostgreSQL notifications (pending)
 ```
 
+## Apify cache worker is off by default
+
+`apify_cache_enabled` defaults to `false`, so no EventBridge schedule is
+created and the Lambda is never invoked on a timer.
+
+The worker was redundant. `career_watch/corpus_sync.py` already writes every
+polled ATS job into `job_cache` with the same `dedup_key` scheme, sourced from
+the free public Greenhouse, Lever and Ashby feeds behind the 500-company seed
+corpus in `backend/data/job_corpus/seed_500.json`. Apify duplicated that at a
+cost, and each invocation could start up to 100 billable actor runs.
+
+To turn it back on, set `apify_cache_enabled = true` and supply
+`apify_api_token`. Two independent gates must both be open: the Terraform flag
+creates the schedule, and `APIFY_CACHE_ENABLED` lets the handler proceed.
+
 ## Environment variables
 
 Lambda functions expect:
@@ -37,7 +52,8 @@ Lambda functions expect:
 | Variable | Used by | Description |
 |---|---|---|
 | `POSTGRES_URL` | all | Sync Postgres URL (`postgresql://…`) |
-| `APIFY_API_TOKEN` | apify_cache_worker | Apify API token |
+| `APIFY_CACHE_ENABLED` | apify_cache_worker | Default `false`; the handler exits without spending unless this is true |
+| `APIFY_API_TOKEN` | apify_cache_worker | Apify API token, only needed when enabled |
 | `APIFY_ACTOR_ID` | apify_cache_worker | Default `automation-lab/google-jobs-scraper` |
 | `JOB_CACHE_SQS_URL` | apify_cache_worker | Output of Terraform `job_cache_queue_url` |
 | `JOB_CACHE_TTL_COMMON_SECONDS` | job_cache_writer | Cache TTL (default 3600) |

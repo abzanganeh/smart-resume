@@ -16,10 +16,21 @@ variable "postgres_url" {
   sensitive   = true
 }
 
+variable "apify_cache_enabled" {
+  description = <<-EOT
+    Enable the hourly Apify Google Jobs cache refresh. Off by default: the free
+    ATS corpus poller already fills job_cache from public Greenhouse, Lever and
+    Ashby feeds, so Apify is redundant and each run is billable.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "apify_api_token" {
-  description = "Apify API token for the Google Jobs scraper actor."
+  description = "Apify API token. Only required when apify_cache_enabled is true."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "apify_actor_id" {
