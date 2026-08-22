@@ -15,6 +15,9 @@ payload that selects which workflow to run:
 - ``closure_tick`` — call :func:`run_closure_tick` for day-23
   reminders and due account deletions (§19.6).
   Cron: hourly.
+- ``unverified_cleanup`` — suspend email accounts unverified after
+  ``UNVERIFIED_ACCOUNT_CLEANUP_DAYS`` (§18.2).
+  Cron: daily (e.g. 04:00 UTC).
 
 The handler is intentionally thin — all business logic lives in the
 ``app/services`` modules so the unit / integration tests can exercise
@@ -38,6 +41,7 @@ _SUPPORTED_SCHEDULES = {
     "grace_tick",
     "stripe_price_sync",
     "closure_tick",
+    "unverified_cleanup",
 }
 
 
@@ -126,11 +130,30 @@ async def _run_closure_tick() -> dict[str, Any]:
     }
 
 
+async def _run_unverified_cleanup() -> dict[str, Any]:
+    from app.db.engine import async_session_factory  # type: ignore[import-not-found]
+    from app.services.auth.maintenance import (  # type: ignore[import-not-found]
+        run_unverified_cleanup_tick,
+    )
+
+    async with async_session_factory() as session:
+        result = await run_unverified_cleanup_tick(session)
+        if not result.dry_run:
+            await session.commit()
+    return {
+        "schedule": "unverified_cleanup",
+        "dry_run": result.dry_run,
+        "inspected": result.inspected,
+        "suspended": result.suspended,
+    }
+
+
 _DISPATCH_TABLE = {
     "dispatch_notifications": _run_dispatch,
     "grace_tick": _run_grace_tick,
     "stripe_price_sync": _run_price_sync,
     "closure_tick": _run_closure_tick,
+    "unverified_cleanup": _run_unverified_cleanup,
 }
 
 

@@ -229,6 +229,10 @@ class Settings(BaseSettings):
     SIGNUP_IP_DEVICE_DAILY_LIMIT: int = 3
     SIGNUP_FINGERPRINT_COLLISION_THRESHOLD: int = 5
 
+    # Unverified email-account cleanup (M20 §11j slice 7).
+    UNVERIFIED_ACCOUNT_CLEANUP_DAYS: int = 7
+    UNVERIFIED_ACCOUNT_CLEANUP_DRY_RUN: bool = True
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:

@@ -29,3 +29,14 @@ def test_resolve_schedule_closure_tick_from_payload() -> None:
 def test_supported_schedules_includes_closure_tick() -> None:
     handler = _load_handler()
     assert "closure_tick" in handler._SUPPORTED_SCHEDULES
+
+
+def test_supported_schedules_includes_unverified_cleanup() -> None:
+    handler = _load_handler()
+    assert "unverified_cleanup" in handler._SUPPORTED_SCHEDULES
+
+
+def test_resolve_schedule_unverified_cleanup_from_payload() -> None:
+    handler = _load_handler()
+    schedule = handler._resolve_schedule({"schedule": "unverified_cleanup"})
+    assert schedule == "unverified_cleanup"

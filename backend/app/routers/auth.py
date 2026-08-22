@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, Security, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +56,7 @@ from app.services.auth.email import (
     send_verification_email,
 )
 from app.services.auth.email_canonical import canonicalize_email
+from app.services.auth.maintenance import run_unverified_cleanup_tick
 from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.disposable_domains import is_disposable_email
 from app.services.auth.signup_fingerprint import derive_signup_device_fingerprint_hash
@@ -115,6 +117,8 @@ from app.services.auth.totp import (
 log = structlog.get_logger("auth.router")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+_scheduler_header = APIKeyHeader(name="X-Scheduler-Secret", auto_error=False)
 
 REFRESH_COOKIE_NAME = "sr_refresh"
 
@@ -446,6 +450,24 @@ async def _auth_session_id_for_refresh_token(
 @limiter.limit("120/minute")
 async def register_config(request: Request) -> RegisterConfigResponse:
     return RegisterConfigResponse(turnstile_site_key=settings.TURNSTILE_SITE_KEY)
+
+
+@router.post("/scheduler/unverified-cleanup")
+async def scheduler_unverified_cleanup(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_scheduler_secret: Annotated[str | None, Security(_scheduler_header)] = None,
+) -> dict[str, Any]:
+    """Internal endpoint for EventBridge unverified-account cleanup tick."""
+    secret = settings.INTERNAL_SCHEDULER_SECRET
+    if not secret or x_scheduler_secret != secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    result = await run_unverified_cleanup_tick(db)
+    return {
+        "ok": True,
+        "dry_run": result.dry_run,
+        "inspected": result.inspected,
+        "suspended": result.suspended,
+    }
 
 
 # 2. POST /register --------------------------------------------------------
