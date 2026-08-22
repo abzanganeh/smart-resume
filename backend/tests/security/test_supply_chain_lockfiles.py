@@ -60,6 +60,18 @@ def test_supply_chain_job_is_blocking_and_uses_pip_audit_script() -> None:
     assert allowlist.is_file()
 
 
+def test_supply_chain_pnpm_audit_step_is_blocking() -> None:
+    workflow = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    job = _supply_chain_job_yaml(workflow.read_text(encoding="utf-8"))
+    pnpm_step = job.split("pnpm audit", 1)[1].split("- name:", 1)[0]
+    assert "continue-on-error" not in pnpm_step
+
+    package_json = REPO_ROOT / "frontend" / "package.json"
+    text = package_json.read_text(encoding="utf-8")
+    assert "5.0.0-beta.32" in text
+    assert '"pnpm"' in text
+
+
 def test_pip_audit_allowlist_entries_are_documented() -> None:
     allowlist = REPO_ROOT / "backend" / "ci" / "pip-audit-allowlist.txt"
     security_md = (REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
