@@ -46,3 +46,84 @@ If you act in good faith, avoid privacy violations and service disruption,
 and provide us a reasonable time to remediate before public disclosure, we
 will not pursue legal action for your research activity.
 
+## Supply Chain Scanning (OWASP A03 / LLM04)
+
+**Last verified:** 2026-08-21  
+**Milestone:** M23 slice A1 (`feature/owasp-2026-baseline`)
+
+Flint Apply ships a Python backend (`uv` + `uv.lock`) and a Next.js frontend
+(`pnpm` + `pnpm-lock.yaml`). CI enforces reproducible installs and runs
+dependency and secret scans on every push/PR to `main`.
+
+### CI gates
+
+| Gate | Job | Tool | Lockfile enforcement |
+|---|---|---|---|
+| Python dependency audit | `Security supply chain (A03)` | `uv tool run pip-audit` | `uv sync --frozen` |
+| Node dependency audit | `Security supply chain (A03)` | `pnpm audit --audit-level=high` | `pnpm install --frozen-lockfile` |
+| Secret scanning (PRs) | `Security supply chain (A03)` | `gitleaks/gitleaks-action` (SHA-pinned) | — |
+| Security regression tests | `Backend security tests` | `pytest tests/security` | `uv sync --frozen` |
+
+Dependabot (`.github/dependabot.yml`) opens **weekly grouped** update PRs for
+`backend/` (`uv`) and `frontend/` (`npm`).
+
+Third-party GitHub Actions in the supply-chain job are pinned to full commit
+SHAs. To ratchet a gate from advisory to blocking, set
+`SUPPLY_CHAIN_CONTINUE_ON_ERROR: "false"` in `.github/workflows/ci.yml` after
+the accepted-risk row for that gate is cleared.
+
+### Accepted-risk baseline (ratchet start)
+
+These gates run with `continue-on-error: true` until findings are remediated or
+formally accepted. Re-verify this table on each dependency bump.
+
+| Scanner | Baseline (2026-08-21) | Owner action | Target blocking date |
+|---|---|---|---|
+| `pip-audit` (backend) | 0 known CVEs in locked deps | Keep `uv.lock` current via Dependabot | Next clean CI run |
+| `pnpm audit --audit-level=high` (frontend) | Advisory until first high+ triage | Triage any high/critical; patch or document | TBD after first PR scan |
+| `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately | Next clean PR |
+| Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates | Ongoing |
+
+When a row is cleared, remove it from this table and flip the corresponding CI
+gate to blocking.
+
+## Security Headers (OWASP A02)
+
+**Last verified:** 2026-08-21  
+**Milestone:** M23 slice A2 (`feature/owasp-2026-baseline`)
+
+Flint Apply emits baseline browser security headers from the Next.js app
+(`frontend/next.config.ts` → `frontend/lib/securityHeaders.ts`) on every route.
+Production and staging TLS VMs add the same transport headers at the Caddy edge
+(`infra/caddy/Caddyfile.*.example`).
+
+| Header | Where | Notes |
+|---|---|---|
+| `Content-Security-Policy-Report-Only` | Next.js (frontend); Caddy (API vhost) | Report-only first; enforce after e2e proves landing motion still works |
+| `Strict-Transport-Security` | Next.js (production build only); Caddy (TLS vhosts) | Omitted on local HTTP dev (`:3100`) |
+| `X-Content-Type-Options: nosniff` | Next.js + Caddy | — |
+| `Referrer-Policy: strict-origin-when-cross-origin` | Next.js + Caddy | — |
+| `X-Frame-Options: DENY` + `frame-ancestors 'none'` | Next.js CSP + Caddy | Clickjacking defense |
+| `Permissions-Policy` | Next.js + Caddy | Disables unused device APIs; `payment=(self)` for Stripe checkout |
+
+Regression coverage: `frontend/tests/lib/securityHeaders.test.ts` (config) and
+`tests/e2e/landing.spec.ts` (public `/` response headers).
+
+Before flipping CSP to enforcing mode, run the landing smoke suite:
+
+```bash
+cd frontend
+PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
+```
+
+### Accepted-risk baseline (A02 ratchet start)
+
+| Control | Baseline (2026-08-21) | Owner action | Target blocking date |
+|---|---|---|---|
+| CSP `style-src 'unsafe-inline'` | Required for M16 landing motion (intro overlay, spotlight, journey rail CSS custom properties) | Prefer nonce/hash per inline block; remove `'unsafe-inline'` before enforce | Before CSP enforce (post e2e green) |
+| CSP `script-src 'unsafe-inline'` | Next.js `ThemeScript` + framework chunks | Audit for hash/nonce during enforce phase | Before CSP enforce |
+| CSP report-only mode | Violations logged in browser devtools only | Collect reports; fix violations; switch to `Content-Security-Policy` | TBD after smoke + staging soak |
+
+When report-only is clean on staging, rename the header to enforcing and remove
+the corresponding row from this table.
+

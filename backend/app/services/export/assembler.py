@@ -25,6 +25,7 @@ from app.models.notifications import Notification, NotificationPreference
 from app.models.tracker import Application
 from app.models.user import AuthAuditLog, User
 from app.services.export.storage import generate_export_download_url, upload_export_zip
+from app.services.export.weasyprint_safe import render_pdf_bytes
 from app.services.export_service import (
     render_cover_letter_docx,
     render_cover_letter_pdf,
@@ -60,12 +61,9 @@ def _master_resume_docx(raw: str) -> bytes:
 
 
 async def _master_resume_pdf(raw: str) -> bytes:
-    from weasyprint import CSS, HTML
-
     escaped = raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     html = f"<pre style='white-space:pre-wrap;font-family:Georgia,serif'>{escaped}</pre>"
-    css = CSS(string="@page { size: Letter; margin: 0.75in; }")
-    return HTML(string=html).write_pdf(stylesheets=[css])
+    return render_pdf_bytes(html, css=["@page { size: Letter; margin: 0.75in; }"])
 
 
 def _write_csv(zf: zipfile.ZipFile, name: str, headers: list[str], rows: list[list[Any]]) -> None:
