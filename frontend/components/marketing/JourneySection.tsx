@@ -85,7 +85,7 @@ export function JourneySection() {
     const travel = rect.height - window.innerHeight;
     const share = (index + 0.5) / JOURNEY_STEPS.length;
     const target = travel <= 0 ? absoluteTop : absoluteTop + share * travel;
-    window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    window.scrollTo({ top: Math.max(0, target), behavior: "instant" });
   }, []);
 
   const step = JOURNEY_STEPS[activeIndex];
