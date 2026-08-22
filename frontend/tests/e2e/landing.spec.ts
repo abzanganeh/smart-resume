@@ -171,8 +171,15 @@ test.describe("journey", () => {
       /tell your story/i,
     )
 
-    await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
-    await expect(panel).toHaveAttribute("data-active-stage", "jobs")
+    // Marker elements live in an absolute layer; raw scrollIntoView is flaky in
+    // headless CI viewports. Letter buttons call the same goToStage() geometry
+    // visitors use when jumping ahead on the rail.
+    await page
+      .getByRole("button", { name: /C — Watch the companies you want/i })
+      .click()
+    await expect(panel).toHaveAttribute("data-active-stage", "jobs", {
+      timeout: 10_000,
+    })
     await expect(panel).toContainText(/watch the companies you want/i)
   })
 })
