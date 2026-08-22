@@ -74,6 +74,7 @@ from app.services.admin_auth.totp import (
     admin_enroll_totp,
     admin_verify_totp,
 )
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.password import (
     check_strength,
     hash_password,
@@ -96,10 +97,12 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else ""
+    """Client IP recorded in admin audit rows and bound to admin sessions.
+
+    Trusting ``X-Forwarded-For`` unconditionally would let a caller forge
+    both the audit trail and the address its own session is pinned to.
+    """
+    return resolve_client_ip(request)
 
 
 def _request_user_agent(request: Request) -> str:

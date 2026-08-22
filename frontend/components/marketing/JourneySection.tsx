@@ -101,11 +101,11 @@ export function JourneySection() {
       </p>
 
       <div
+        id="journey-track"
         ref={trackRef}
-        className="relative mx-auto max-w-4xl"
+        className="relative mx-auto max-w-4xl h-[348vh]"
         style={
           {
-            height: `${JOURNEY_STEPS.length * SEGMENT_VH}vh`,
             "--rail-progress": railProgressValue,
           } as CSSProperties
         }

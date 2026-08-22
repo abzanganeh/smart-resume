@@ -22,6 +22,7 @@ from app.services.admin.grants import (
     apply_grant_side_effects,
     validate_grant_payload,
 )
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.admin_auth.audit import write_admin_audit
 
 router = APIRouter(tags=["admin"])
@@ -134,7 +135,7 @@ async def admin_grants_create(
             "grant_type": grant.grant_type.value,
             "payload": grant.payload,
         },
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )
@@ -204,7 +205,7 @@ async def admin_grants_revoke(
         target_id=str(grant.id),
         before={"revoked_at": None},
         after={"revoked_at": now.isoformat()},
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )

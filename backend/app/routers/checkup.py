@@ -6,10 +6,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
-from slowapi.util import get_remote_address
 
 from app.config import settings
-from app.limiter import limiter
+from app.limiter import limiter, rate_limit_key
 from app.llm.factory import get_llm_client
 from app.models.qa import QAOutput
 from app.parsers.docx_parser import extract_text_from_docx
@@ -63,7 +62,7 @@ async def _extract_resume_text(
 
 
 @router.post("", response_model=CheckupResponse)
-@limiter.limit("12/hour", key_func=get_remote_address)
+@limiter.limit("12/hour", key_func=rate_limit_key)
 async def run_checkup(
     request: Request,  # noqa: ARG001
     jd_text: Annotated[str, Form(..., min_length=20)],

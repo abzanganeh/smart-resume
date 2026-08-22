@@ -33,6 +33,8 @@ test("emits OWASP A02 security headers on the public landing route", async ({
   expect(headers["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   )
+  expect(headers["content-security-policy"]).toMatch(/'nonce-[-A-Za-z0-9+/=]+'/)
+  expect(headers["content-security-policy"]).toContain("'strict-dynamic'")
   expect(headers["content-security-policy-report-only"]).toBeUndefined()
   expect(headers["x-content-type-options"]).toBe("nosniff")
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin")

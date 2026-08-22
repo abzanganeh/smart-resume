@@ -9,7 +9,6 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,10 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent import job_fit as job_fit_agent
 from app.agent import job_title_suggestions
 from app.agent.title_fit_insights import enrich_title_suggestions
-from app.agent.title_fit_insights import enrich_title_suggestions
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
-from app.limiter import limiter
+from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
 from app.models.billing import Subscription, SubscriptionStatus
@@ -176,7 +174,7 @@ def _rate_limit_user_key(request: Request) -> str:
         except Exception:  # noqa: BLE001
             pass
         return f"token:{token[:64]}"
-    return get_remote_address(request)
+    return rate_limit_key(request)
 
 
 def _merge_filters(

@@ -47,6 +47,7 @@ from app.services.admin_auth.tokens import (
     decode_admin_session_token,
     make_ua_fingerprint,
 )
+from app.services.auth.client_ip import resolve_client_ip
 
 log = structlog.get_logger("admin.auth_deps")
 
@@ -63,15 +64,13 @@ ADMIN_PUBLIC_MARKER = "__admin_public__"
 
 
 def _client_ip(request: Request) -> str:
-    """Best-effort client IP for session binding.
+    """Client IP used to bind an admin session.
 
-    Honours ``X-Forwarded-For`` first hop when present (set by the
-    reverse proxy) and falls back to ``request.client.host``.
+    Must go through ``resolve_client_ip``: reading ``X-Forwarded-For``
+    without checking the peer would let any caller choose the address the
+    session is bound to, which makes the binding decorative.
     """
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else ""
+    return resolve_client_ip(request)
 
 
 def _request_ua_fingerprint(request: Request) -> str:

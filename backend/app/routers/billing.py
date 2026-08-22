@@ -51,6 +51,7 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.user import CreditTransaction, User
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.dependencies import get_current_user
 from app.services.billing import refund as refund_service
 from app.services.billing import subscription as sub_service
@@ -854,7 +855,7 @@ async def subscriptions_refund_request(
                 reason_note=payload.note or "self-service 24h",
                 payment_intent=payload.payment_intent,
                 charge=payload.charge,
-                request_ip=request.client.host if request.client else "",
+                request_ip=resolve_client_ip(request),
                 request_user_agent=request.headers.get("user-agent", ""),
             )
         except RefundError as exc:

@@ -6,7 +6,8 @@ These tests verify that contract without editing ``agent/`` or ``llm/``
 (M18 owns production hardening there).
 
 Complements ``test_llm_injection_and_output.py`` (LLM01) and
-``test_consumption_limits.py`` (LLM06 inventory).
+``test_consumption_limits.py``, which owns the LLM06 entry-point
+inventory and the phase SSE trigger gate.
 """
 
 from __future__ import annotations
@@ -18,11 +19,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
 from app.agent.orchestrator import run_phase
 from app.llm.base import LLMClient
-from app.main import app
 from app.models.session import Session
 from app.services.retrieval.exceptions import PromptBudgetExceededError
 
@@ -159,19 +158,3 @@ def test_orchestrator_prompt_budget_handler_is_wired() -> None:
     source = inspect.getsource(run_phase)
     assert "PromptBudgetExceededError" in source
     assert "prompt_budget_exceeded" in source
-
-
-@pytest.mark.asyncio
-async def test_phase_events_cannot_start_a_pipeline_run() -> None:
-    """LLM06 — SSE stream must not reach the provider without ``phases/run``."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        created = await client.post("/api/sessions")
-        assert created.status_code == 201, created.text
-        session_id = created.json()["session_id"]
-
-        events = await client.get(f"/api/sessions/{session_id}/phases/1/events")
-        assert events.status_code == 409, (
-            "phase events must not start a run without phases/{phase}/run, "
-            f"got {events.status_code} {events.text[:200]}"
-        )

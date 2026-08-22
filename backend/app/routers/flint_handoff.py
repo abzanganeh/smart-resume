@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.limiter import limiter
 from app.models.user import User
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.dependencies import get_current_user
 from app.services.flint_handoff import (
     assert_session_owned,
@@ -72,6 +73,6 @@ async def redeem_flint_context(
     body: FlintContextRequest,
 ) -> FlintContextResponse:
     """Redeem a handoff token (single-use). No auth — token is the credential."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = resolve_client_ip(request) or "unknown"
     payload = await redeem_handoff_token(body.token, client_ip=client_ip)
     return FlintContextResponse.model_validate(payload)

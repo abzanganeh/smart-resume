@@ -12,7 +12,6 @@ import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from slowapi.util import get_remote_address
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +19,7 @@ from app.agent import job_fit as job_fit_agent
 from app.config import settings
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client
-from app.limiter import limiter
+from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
 from app.models.billing import Subscription, SubscriptionStatus
@@ -62,7 +61,7 @@ def _rate_limit_user_key(request: Request) -> str:
         except Exception:  # noqa: BLE001 - fallback to token-prefix/IP keying
             pass
         return f"token:{token[:64]}"
-    return get_remote_address(request)
+    return rate_limit_key(request)
 
 
 async def _fetch_jd_from_url(url: str) -> str:

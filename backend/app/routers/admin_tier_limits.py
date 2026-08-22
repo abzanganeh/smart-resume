@@ -16,6 +16,7 @@ from app.dependencies.admin_auth import require_admin_role
 from app.limiter import limiter
 from app.models.admin import AdminRole, AdminUser
 from app.models.tier_limits import TierLimitsConfig
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.billing.tier_limits import CANONICAL_PLAN_CODES
 
@@ -220,7 +221,7 @@ async def admin_tier_limits_create(
         target_id=str(new_row.id),
         before=before_snap or {},
         after={"plan_code": plan_code, "id": str(new_row.id)},
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )
@@ -272,7 +273,7 @@ async def admin_tier_limits_update(
         target_id=str(row.id),
         before=before_snap,
         after=updates,
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )

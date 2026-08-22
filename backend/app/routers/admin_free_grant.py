@@ -16,6 +16,7 @@ from app.dependencies.admin_auth import require_admin_role
 from app.limiter import limiter
 from app.models.admin import AdminRole, AdminUser
 from app.models.tier_limits import TierLimitsConfig
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.billing.tier_limits import seed_row_for_plan
 from app.services.billing.tier_limits_lookup import registration_grant_credits
@@ -152,7 +153,7 @@ async def admin_free_grant_patch(
         target_id=str(new_row.id),
         before={"amount": before_amount},
         after={"amount": body.amount},
-        ip=request.client.host if request.client else "",
+        ip=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent", ""),
         request_id=request.headers.get("x-request-id", ""),
     )

@@ -82,6 +82,9 @@ from app.limiter import limiter
 from app.llm.base import LLMClient, LLMMessage, LLMResponse
 from app.llm.structured import LLMParseError, complete_structured
 from app.main import app
+from app.models.keywords import Keyword, KeywordExtractionOutput
+from app.models.session import PhaseStatus
+from app.services.session_store import create_session, update_session
 
 ROUTERS_DIR = pathlib.Path(__file__).resolve().parents[2] / "app" / "routers"
 AGENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "app" / "agent"
@@ -542,10 +545,11 @@ async def test_retry_bound_is_identical_for_native_structured_providers() -> Non
 
 @pytest_asyncio.fixture()
 async def public_client() -> AsyncGenerator[AsyncClient, None]:
-    """Client for the unauthenticated checkup endpoint.
+    """Client for the anonymous endpoints exercised below.
 
-    ``/api/checkup`` takes no database dependency, so no override is
-    needed and this fixture works in the ``backend-security`` CI job.
+    Neither ``/api/checkup`` nor the phase SSE stream takes a database
+    dependency, so no ``get_db`` override is needed and these tests run
+    wherever no Postgres is configured.
     """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -641,6 +645,77 @@ async def test_checkup_rejects_empty_resume_before_reaching_the_provider(
 
     assert response.status_code == 422, response.text
     assert llm_factory_spy.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# The SSE stream must not be a second, unmetered way to start a phase
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def phase_llm_factory_spy(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Fail the test if the SSE handler constructs an LLM client."""
+    spy = MagicMock(side_effect=AssertionError("the LLM provider was reached"))
+    monkeypatch.setattr("app.routers.phases.get_llm_client", spy)
+    return spy
+
+
+@pytest.mark.parametrize("phase", [1, 2, 3, 4])
+async def test_phase_events_refuses_a_run_the_trigger_never_authorised(
+    public_client: AsyncClient, phase_llm_factory_spy: MagicMock, phase: int
+) -> None:
+    """``/events`` must not be a way around the ``/run`` trigger.
+
+    ``phases/{phase}/run`` carries the rate limit, the phase-ordering
+    checks and the credit deduction. The SSE endpoint used to start the
+    pipeline on its own, so a caller who skipped ``/run`` reached a paid
+    provider having passed none of them — for the price of one extra
+    ``POST /api/sessions`` to mint a session id. Asserting the status
+    code alone would not catch a regression that spends the money and
+    then fails, so the provider spy carries the real assertion.
+    """
+    session = await create_session()
+    await update_session(session)
+
+    response = await public_client.get(
+        f"/api/sessions/{session.session_id}/phases/{phase}/events"
+    )
+
+    assert response.status_code == 409, response.text
+    assert phase_llm_factory_spy.call_count == 0
+
+
+async def test_phase_events_still_replays_a_completed_phase(
+    public_client: AsyncClient, phase_llm_factory_spy: MagicMock
+) -> None:
+    """The gate must not break cache replay, which costs nothing.
+
+    Replaying a finished phase involves no provider call, so it stays
+    open without a run request. Asserting it here keeps a future
+    tightening of the gate from silently turning page reloads into 409s.
+    """
+    session = await create_session()
+    session.phase1_status = PhaseStatus.done
+    session.phase1_output = KeywordExtractionOutput(
+        must_have_keywords=[
+            Keyword(
+                term="Python",
+                source_sentence="Five years of Python.",
+                category="language",
+                tier="must_have",
+                reason="named as a requirement",
+            )
+        ]
+    )
+    await update_session(session)
+
+    response = await public_client.get(
+        f"/api/sessions/{session.session_id}/phases/1/events"
+    )
+
+    assert response.status_code == 200, response.text
+    assert "Python" in response.text
+    assert phase_llm_factory_spy.call_count == 0
 
 
 def test_checkup_input_caps_are_configured_below_the_upload_limit() -> None:

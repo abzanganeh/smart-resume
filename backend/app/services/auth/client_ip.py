@@ -20,9 +20,35 @@ def _normalize_ip(value: str) -> str:
     return text
 
 
-def _trusted_proxy_set() -> frozenset[str]:
-    values = settings.TRUSTED_PROXY_IPS or ["127.0.0.1", "::1"]
-    return frozenset(_normalize_ip(item) for item in values if item.strip())
+def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Parse ``TRUSTED_PROXY_IPS`` into networks.
+
+    CIDR entries are accepted because a containerised reverse proxy has no
+    stable address: traffic published through Docker arrives from whatever
+    gateway address the bridge network happens to hold, so pinning exact
+    IPs would silently stop trusting the proxy after a network recreate.
+    Bare addresses stay supported and become single-host networks.
+    """
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for item in settings.TRUSTED_PROXY_IPS or ["127.0.0.1", "::1"]:
+        text = item.strip()
+        if not text:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(_normalize_ip(text), strict=False))
+        except ValueError:
+            continue
+    return tuple(networks)
+
+
+def _is_trusted_proxy(
+    value: str, networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]
+) -> bool:
+    try:
+        addr = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return any(addr in network for network in networks)
 
 
 def resolve_client_ip(request: Request) -> str:
@@ -36,8 +62,8 @@ def resolve_client_ip(request: Request) -> str:
     if not peer:
         return ""
 
-    trusted = _trusted_proxy_set()
-    if peer not in trusted:
+    networks = _trusted_proxy_networks()
+    if not _is_trusted_proxy(peer, networks):
         return peer
 
     forwarded = request.headers.get("x-forwarded-for", "")
@@ -46,7 +72,7 @@ def resolve_client_ip(request: Request) -> str:
 
     hops = [_normalize_ip(part) for part in forwarded.split(",") if part.strip()]
     for hop in reversed(hops):
-        if hop and hop not in trusted:
+        if hop and not _is_trusted_proxy(hop, networks):
             return hop
     return hops[0] if hops else peer
 

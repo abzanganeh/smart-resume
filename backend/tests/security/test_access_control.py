@@ -41,10 +41,10 @@ CI note
 -------
 
 The inventory and anonymous-rejection tests deliberately avoid the
-database so they run in the ``backend-security`` CI job, which has no
-Postgres service.  The IDOR and admin-role tests are marked
-``integration`` and **skip** in that job; they run locally and in any
-job that exports ``DATABASE_URL``.
+database, so they still run wherever no Postgres is configured.  The
+IDOR and admin-role tests are marked ``integration`` and need one; the
+``backend-security`` CI job runs a pgvector service and exports
+``DATABASE_URL``, so both groups execute there.
 """
 
 from __future__ import annotations
