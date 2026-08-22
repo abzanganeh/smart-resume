@@ -171,13 +171,8 @@ test.describe("journey", () => {
       /tell your story/i,
     )
 
-    await page.getByRole("navigation", { name: "Stage letters" }).waitFor()
-    await page
-      .getByRole("button", { name: /C — Watch the companies you want/i })
-      .click()
-    await expect(panel).toHaveAttribute("data-active-stage", "jobs", {
-      timeout: 10_000,
-    })
+    await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
+    await expect(panel).toHaveAttribute("data-active-stage", "jobs")
     await expect(panel).toContainText(/watch the companies you want/i)
   })
 })

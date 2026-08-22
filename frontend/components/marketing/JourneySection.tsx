@@ -85,7 +85,7 @@ export function JourneySection() {
     const travel = rect.height - window.innerHeight;
     const share = (index + 0.5) / JOURNEY_STEPS.length;
     const target = travel <= 0 ? absoluteTop : absoluteTop + share * travel;
-    window.scrollTo({ top: Math.max(0, target), behavior: "instant" });
+    window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
   }, []);
 
   const step = JOURNEY_STEPS[activeIndex];
@@ -101,11 +101,11 @@ export function JourneySection() {
       </p>
 
       <div
+        id="journey-track"
         ref={trackRef}
-        className="relative mx-auto max-w-4xl"
+        className="relative mx-auto max-w-4xl h-[348vh]"
         style={
           {
-            height: `${JOURNEY_STEPS.length * SEGMENT_VH}vh`,
             "--rail-progress": railProgressValue,
           } as CSSProperties
         }
