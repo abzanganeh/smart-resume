@@ -50,6 +50,7 @@ from app.services.billing.bootstrap import (
     seed_plan_configs_if_empty,
 )
 from app.services.billing.llm_upgrade import seed_llm_configs_if_empty
+from app.services.security.logging import redact_sensitive
 from app.services.session_store import close_redis, health_check, init_redis
 
 # ---------------------------------------------------------------------------
@@ -61,6 +62,9 @@ structlog.configure(
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
+        # Last before the renderer so it also covers contextvars and the
+        # fields the processors above add (M23 A3 — A09 / LLM02).
+        redact_sensitive,
         structlog.processors.JSONRenderer(),
     ],
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),

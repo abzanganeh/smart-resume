@@ -10,6 +10,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Supply-chain jobs pin Actions to full SHAs (OWASP A03). Refresh when bumping tags.
+# actions/checkout@v4.2.2 → 11bd71901bbe5b1630ceea73d27597364c9af683
+# astral-sh/setup-uv@v5.4.1 → 0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
+# pnpm/action-setup@v4.1.0 → 7088e561eb65bb68695d245aa206f005ef30921d
+# actions/setup-node@v4.4.0 → 49933ea5288caeca8642d1e84afbd3f7d6820020
+# gitleaks/gitleaks-action@v2 → ff98106e4c7b2bc287b24eaf42907196329070c7
+# Ratchet: remove continue-on-error on security-supply-chain once SECURITY.md baseline is clean.
+
 jobs:
   backend-unit:
     name: Backend unit tests
@@ -231,3 +239,108 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
           NEXTAUTH_SECRET: ci-test-secret-not-for-production
           NEXTAUTH_URL: http://localhost:3000
+
+  security-supply-chain:
+    name: Security supply chain (A03)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        working-directory: backend
+        run: uv python install 3.12
+
+      - name: Enforce frozen backend lockfile
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: pip-audit (backend, uv.lock)
+        working-directory: backend
+        run: |
+          uv export --frozen --format requirements.txt --no-hashes --no-emit-project -o /tmp/requirements-audit.txt
+          uv tool run pip-audit -r /tmp/requirements-audit.txt
+
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
+        with:
+          version: 9
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Enforce frozen frontend lockfile
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: npm audit (frontend, pnpm)
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
+
+      - name: gitleaks detect (PR)
+        if: github.event_name == 'pull_request'
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-security:
+    name: Backend security tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: smart_resume_test
+          POSTGRES_USER: smart_resume
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smart_resume -d smart_resume_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run migrations
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
+
+      - name: Run security tests
+        run: uv run pytest tests/security -v --tb=short
+        env:
+          APP_ENV: ci
+          AUTH_DISABLE: "false"
+          AUTH_SECRET: ci-test-auth-secret-not-for-production
+          BYOK_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
+          REDIS_URL: redis://localhost:6379
+          GEMINI_API_KEY: ci-test-gemini-key
+          OPENAI_API_KEY: ci-test-openai-key
