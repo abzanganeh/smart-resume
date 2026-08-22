@@ -1,11 +1,11 @@
 import Image from "next/image";
+import { PRODUCT_NAME, WORDMARK_LIGHT_SRC } from "@/lib/brand";
 
 const MARK_SRC = "/brand/mark.png";
-/** Cropped transparent lockup from `/brand/taliocv-2.svg`. */
-const LOCKUP_SRC = "/brand/taliocv-2-lockup.png";
 const MARK_SIZE = 512;
-const LOCKUP_W = 672;
-const LOCKUP_H = 264;
+/** Intrinsic size of `flintapply-wordmark-light.png` (2172×724). */
+const WORDMARK_W = 2172;
+const WORDMARK_H = 724;
 
 type BrandLogoProps = {
   className?: string;
@@ -15,7 +15,7 @@ type BrandLogoProps = {
   showWordmark?: boolean;
 };
 
-/** TalioCV lockup from taliocv-2.svg or icon-only `/brand/mark.png`. */
+/** FlintApply icon + text wordmark, or icon-only `/brand/mark.png`. */
 export function BrandLogo({
   className = "h-10 w-auto",
   priority = false,
@@ -24,10 +24,10 @@ export function BrandLogo({
   if (showWordmark) {
     return (
       <Image
-        src={LOCKUP_SRC}
-        alt="TalioCV"
-        width={LOCKUP_W}
-        height={LOCKUP_H}
+        src={WORDMARK_LIGHT_SRC}
+        alt={PRODUCT_NAME}
+        width={WORDMARK_W}
+        height={WORDMARK_H}
         className={className}
         priority={priority}
         unoptimized
@@ -38,7 +38,7 @@ export function BrandLogo({
   return (
     <Image
       src={MARK_SRC}
-      alt="TalioCV"
+      alt={PRODUCT_NAME}
       width={MARK_SIZE}
       height={MARK_SIZE}
       className={className}

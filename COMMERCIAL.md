@@ -1,6 +1,6 @@
 # Commercial Licensing
 
-TalioCV is distributed under the Business Source License 1.1
+Flint Apply is distributed under the Business Source License 1.1
 (`LICENSE` at repo root).
 
 Under this license, personal, non-commercial, and internal evaluation use
@@ -11,7 +11,7 @@ requires a commercial license from the Licensor.
 
 You need a commercial license if you:
 
-- offer TalioCV as a paid or revenue-generating service
+- offer Flint Apply as a paid or revenue-generating service
 - include it in a hosted offering for customers or clients
 - embed it in a commercial SaaS workflow for third-party users
 - redistribute a commercial derivative in production

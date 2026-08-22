@@ -152,7 +152,7 @@ def validate(values: dict[str, str]) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prepare TalioCV staging env files")
+    parser = argparse.ArgumentParser(description="Prepare Flint Apply staging env files")
     parser.add_argument(
         "--check",
         action="store_true",

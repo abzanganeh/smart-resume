@@ -1,11 +1,13 @@
 "use client"
 
 import { Suspense, useEffect, useRef, useState, useTransition, type ReactElement } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn, signOut, useSession, getProviders } from "next-auth/react"
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react"
 import zxcvbn from "zxcvbn"
 import { BrandLogo } from "@/components/brand/BrandLogo"
+import { PRODUCT_NAME } from "@/lib/brand"
 import { ThemeToggle } from "@/components/theme/ThemeToggle"
 import {
   fetchMe,
@@ -587,6 +589,21 @@ function AuthPageContent() {
                   )}
                 </div>
 
+                {view === "login" && (
+                  <div className="flex justify-end -mt-1">
+                    <Link
+                      href={
+                        email.trim()
+                          ? `/auth/reset?email=${encodeURIComponent(email.trim())}`
+                          : "/auth/reset"
+                      }
+                      className="text-sm text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline underline-offset-2"
+                    >
+                      Forgot your password?
+                    </Link>
+                  </div>
+                )}
+
                 {/* Register: consent checkboxes */}
                 {view === "register" && (
                   <div className="space-y-3 pt-1">
@@ -650,7 +667,7 @@ function AuthPageContent() {
         </div>
 
         <p className="text-center text-slate-600 dark:text-slate-400 text-xs mt-6">
-          By using TalioCV you agree to our{" "}
+          By using {PRODUCT_NAME} you agree to our{" "}
           <a href="/legal/terms" className="hover:text-slate-800 dark:hover:text-slate-300 underline underline-offset-2">
             Terms
           </a>{" "}

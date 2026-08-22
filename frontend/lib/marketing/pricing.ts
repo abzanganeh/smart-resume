@@ -22,6 +22,16 @@ const CURRENCY_CODE = /^[A-Za-z]{3}$/;
 
 export type BillingCycle = BillingPlan["cycle"];
 
+/** Canonical paid tiers on the public landing page (matches `/billing`). */
+export const LANDING_PLAN_CODES = [
+  "weekly",
+  "monthly_pro",
+  "monthly_plus",
+  "monthly_premium",
+] as const;
+
+export type LandingPlanCode = (typeof LANDING_PLAN_CODES)[number];
+
 /**
  * Read the public price catalog for unauthenticated visitors.
  *
@@ -63,6 +73,28 @@ export async function fetchPublicPricing(): Promise<BillingPricesResponse | null
  */
 export function isPlanPriceSynced(plan: BillingPlan): boolean {
   return Number.isFinite(plan.amount_cents) && plan.amount_cents > 0;
+}
+
+/** Active landing tiers in display order, whether or not Stripe has synced yet. */
+export function selectLandingPlans(
+  payload: BillingPricesResponse | null | undefined,
+): BillingPlan[] {
+  if (!payload?.plans) {
+    return [];
+  }
+  const byCode = new Map(
+    payload.plans
+      .filter((plan) => plan.is_active)
+      .map((plan) => [plan.code, plan] as const),
+  );
+  return LANDING_PLAN_CODES.map((code) => byCode.get(code)).filter(
+    (plan): plan is BillingPlan => plan !== undefined,
+  );
+}
+
+/** True when at least one landing tier carries a real Stripe-synced price. */
+export function landingPlansHaveSyncedPrice(plans: readonly BillingPlan[]): boolean {
+  return plans.some(isPlanPriceSynced);
 }
 
 /** Active, price-synced plans for one billing cycle, cheapest first. */

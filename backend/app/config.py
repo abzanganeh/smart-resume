@@ -102,9 +102,11 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_ID: str = ""
     LINKEDIN_CLIENT_SECRET: str = ""
 
-    # Transactional email (Resend)
+    # Transactional email (Resend in staging/production; Mailpit SMTP locally)
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "noreply@zanganehai.com"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 1025
 
     # Web push (VAPID) — §19.5 / IMPLEMENTATION_PLAN §6b
     WEB_PUSH_VAPID_PUBLIC_KEY: str = ""

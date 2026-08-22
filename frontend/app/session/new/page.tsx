@@ -12,6 +12,7 @@ import {
 } from "@/lib/extensionHandoff";
 import { clearCheckupHandoff, getCheckupHandoff } from "@/lib/checkupHandoff";
 import { shouldReviewExtensionJd } from "@/lib/jdCompleteness";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { getJob } from "@/lib/jobs";
 import { ResumeUploader } from "@/components/wizard/ResumeUploader";
 import { UserInfoForm } from "@/components/wizard/UserInfoForm";
@@ -519,7 +520,7 @@ function NewSessionContent() {
             <div>
               <h1 className="text-xl font-bold mb-1">Job description</h1>
               <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
-                Paste the full job posting. TalioCV uses platform AI to extract ATS keywords
+                Paste the full job posting. {PRODUCT_NAME} uses platform AI to extract ATS keywords
                 and pre-fill your info from your resume.
               </p>
               <JDInput

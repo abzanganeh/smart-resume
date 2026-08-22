@@ -12,8 +12,8 @@
     "test:unit": "node --require tsx/cjs --test tests/*/*.test.ts tests/*/*.test.tsx",
     "test:ci": "npm run lint && npm run test:unit && npm run build",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "rm -rf .next/cache/fetch-cache && playwright test tests/e2e/legal.spec.ts tests/e2e/landing.spec.ts tests/e2e/auth.spec.ts tests/e2e/jobs.spec.ts tests/e2e/tracker.spec.ts tests/e2e/onboarding.spec.ts",
-    "test:e2e:pricing-unsynced": "rm -rf .next/cache/fetch-cache && MOCK_PRICES_UNSYNCED=1 playwright test tests/e2e/landing-pricing-unsynced.spec.ts",
+    "test:e2e:smoke": "rm -rf .next/cache/fetch-cache .next/dev/cache/fetch-cache && playwright test tests/e2e/legal.spec.ts tests/e2e/landing.spec.ts tests/e2e/landing-interactive.spec.ts tests/e2e/auth.spec.ts tests/e2e/jobs.spec.ts tests/e2e/tracker.spec.ts tests/e2e/onboarding.spec.ts",
+    "test:e2e:pricing-unsynced": "rm -rf .next/cache/fetch-cache .next/dev/cache/fetch-cache && MOCK_PRICES_UNSYNCED=1 playwright test tests/e2e/landing-pricing-unsynced.spec.ts",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {

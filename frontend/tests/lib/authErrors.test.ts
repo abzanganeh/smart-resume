@@ -12,3 +12,14 @@ test("OAuthBackendSyncPending mentions API reachability", () => {
   const msg = friendlyAuthError("OAuthBackendSyncPending")
   assert.match(msg, /API/i)
 })
+
+test("reset_token_expired tells the user to request a new link", () => {
+  const msg = friendlyAuthError("reset_token_expired")
+  assert.match(msg, /expired/i)
+  assert.match(msg, /new one/i)
+})
+
+test("reset_token_invalid tells the user to request a new link", () => {
+  const msg = friendlyAuthError("reset_token_invalid")
+  assert.match(msg, /invalid/i)
+})

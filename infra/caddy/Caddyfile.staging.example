@@ -1,4 +1,5 @@
 # Example TLS reverse proxy for staging VM (Caddy 2)
+# Production (flintapply.com): see Caddyfile.production.example in this directory.
 # Copy to /etc/caddy/Caddyfile and set domain names + upstream ports.
 #
 # Prerequisites:

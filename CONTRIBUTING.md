@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to TalioCV.
+Thanks for your interest in contributing to Flint Apply.
 
 ## Before You Start
 

@@ -28,6 +28,14 @@ export function friendlyAuthError(code: string): string {
       "Account temporarily locked after too many failed attempts. Try again in 15 minutes.",
     account_suspended: "This account has been suspended. Contact support.",
     weak_password: "Password is too weak. Try a longer or more complex password.",
+    reset_token_expired:
+      "This reset link has expired. Request a new one to change your password.",
+    reset_token_invalid:
+      "This reset link is invalid. Request a new one to change your password.",
+    user_not_found: "This reset link is no longer valid. Request a new one.",
+    "not found":
+      "The API did not recognize this request. Point NEXT_PUBLIC_API_URL at the FastAPI backend, not the Playwright mock.",
+    "Failed to fetch": "Could not reach the API. Is the backend running?",
     tfa_invalid: "Invalid TOTP code or recovery code.",
     challenge_token_invalid: "Your 2FA session has expired. Please log in again.",
     OAuthBackendSyncPending:

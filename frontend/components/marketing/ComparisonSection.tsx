@@ -1,78 +1,184 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, Check, X } from "lucide-react";
+import { PRODUCT_NAME } from "@/lib/brand";
+import { pinnedProgress } from "@/lib/marketing/stageRail";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 const WITHOUT = [
-  "\u201cI need a job.\u201d",
-  "Scroll a job board",
-  "Hundreds of listings",
-  "Guess which ones fit",
-  "Open Word",
+  "Check a job board when you remember",
+  "The role went up three days ago",
+  "You are applicant 200",
   "Rewrite the resume by hand",
-  "Apply",
-  "Log it in a spreadsheet",
+  "Apply late",
+  "Never hear back",
 ];
 
 const WITH = [
-  "Tell your story once",
-  "Get the roles you fit",
-  "Search those roles",
-  "Paste the job description",
-  "Tailor and check the ATS score",
-  "Apply",
+  "Name the companies you want",
+  "Their careers pages are read every few minutes",
+  "You hear the moment a role opens",
+  "Tailor from your real experience",
+  "Apply the same hour",
   "Track it automatically",
 ];
 
-export function ComparisonSection() {
+/**
+ * Crossfade midpoint. Below this the "on your own" flow is authoritative for
+ * the discrete styling (border, heading emphasis); above it, the product flow.
+ */
+const FLIP_AT = 0.5;
+
+function FlowList({
+  lines,
+  tone,
+}: {
+  lines: readonly string[];
+  tone: "without" | "with";
+}) {
+  const arrowClass =
+    tone === "with"
+      ? "text-emerald-600 dark:text-emerald-500"
+      : "text-slate-500 dark:text-slate-500";
+  const textClass =
+    tone === "with"
+      ? "text-slate-700 dark:text-slate-300"
+      : "text-slate-600 dark:text-slate-400";
+
   return (
-    <section className={`${SECTION} pb-24`}>
-      <h2 className={SECTION_HEADING}>Same goal, fewer dead ends</h2>
+    <ul className="space-y-1.5">
+      {lines.map((line, index) => (
+        <li key={line} className={`text-sm leading-snug ${textClass}`}>
+          {line}
+          {index < lines.length - 1 && (
+            <ArrowDown aria-hidden className={`mt-1 h-3 w-3 ${arrowClass}`} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Pinned crossfade: the card reads "On your own" when the track pins and
+ * becomes "With FlintApply" by the time it releases.
+ *
+ * Opacity is driven straight from a scroll-derived custom property with no CSS
+ * transition on it — a transition on a value that changes every frame lags
+ * behind the scroll and never settles on the target.
+ */
+export function ComparisonSection() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const [compareProgress, setCompareProgress] = useState(0);
+  const flipped = compareProgress >= FLIP_AT;
+
+  useEffect(() => {
+    const sync = () => {
+      if (frameRef.current !== null) return;
+      frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = null;
+        const track = trackRef.current;
+        if (!track) return;
+
+        const rect = track.getBoundingClientRect();
+        const progress = pinnedProgress(
+          { top: rect.top, height: rect.height },
+          window.innerHeight,
+        );
+        setCompareProgress(progress);
+      });
+    };
+
+    sync();
+    window.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  return (
+    <section className={`${SECTION} pb-16`}>
+      <h2 className={SECTION_HEADING}>Same goal, days earlier</h2>
       <p className={SECTION_SUBHEADING}>
-        The hard part of a job search usually is not writing the resume. It is
-        deciding what to apply for, over and over.
+        Scroll to compare doing it alone versus using {PRODUCT_NAME}.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl mx-auto">
-        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 p-6">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-            <X aria-hidden className="w-4 h-4 text-red-600 dark:text-red-400" />
-            On your own
-          </h3>
-          {/* Preflight strips list markers, so ul is the honest element here —
-              the visible sequence comes from the arrow separators. */}
-          <ul className="space-y-2">
-            {WITHOUT.map((line, index) => (
-              <li key={line} className="text-sm text-slate-600 dark:text-slate-400">
-                {line}
-                {index < WITHOUT.length - 1 && (
-                  <ArrowDown
-                    aria-hidden
-                    className="w-3 h-3 mt-1.5 text-slate-500 dark:text-slate-500"
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div
+        ref={trackRef}
+        className="relative mx-auto h-[180vh] max-w-md"
+      >
+        <div className="sticky top-24">
+          <div
+            className={`rounded-2xl border p-6 transition-colors duration-500 motion-reduce:transition-none sm:p-8 ${
+              flipped
+                ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-700/60 dark:bg-emerald-950/30"
+                : "border-slate-300 bg-slate-100/60 dark:border-slate-700 dark:bg-slate-800/50"
+            }`}
+          >
+            <div aria-hidden className="relative mb-5 h-6">
+              <span
+                className="absolute inset-0 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300"
+                style={{ opacity: 1 - compareProgress }}
+              >
+                <X className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+                On your own
+              </span>
+              <span
+                className="absolute inset-0 flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300"
+                style={{ opacity: compareProgress }}
+              >
+                <Check className="h-4 w-4 shrink-0" />
+                With {PRODUCT_NAME}
+              </span>
+            </div>
 
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-700/50 bg-emerald-50/60 dark:bg-emerald-900/20 p-6">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-4">
-            <Check aria-hidden className="w-4 h-4" />
-            With TalioCV
-          </h3>
-          <ul className="space-y-2">
-            {WITH.map((line, index) => (
-              <li key={line} className="text-sm text-slate-700 dark:text-slate-300">
-                {line}
-                {index < WITH.length - 1 && (
-                  <ArrowDown
-                    aria-hidden
-                    className="w-3 h-3 mt-1.5 text-emerald-600 dark:text-emerald-500"
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+            {/* Sized for the longer of the two flows so neither list clips. */}
+            <div aria-hidden className="relative min-h-[17rem]">
+              <div
+                className="absolute inset-0"
+                style={{ opacity: 1 - compareProgress }}
+              >
+                <FlowList lines={WITHOUT} tone="without" />
+              </div>
+              <div
+                className="absolute inset-0"
+                style={{ opacity: compareProgress }}
+              >
+                <FlowList lines={WITH} tone="with" />
+              </div>
+            </div>
+
+            <div
+              aria-hidden
+              className="mt-4 h-0.5 w-full overflow-hidden rounded-full bg-slate-300 dark:bg-slate-700"
+            >
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${compareProgress * 100}%` }}
+              />
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="sr-only">
+        <h3>On your own</h3>
+        <ul>
+          {WITHOUT.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <h3>With {PRODUCT_NAME}</h3>
+        <ul>
+          {WITH.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
       </div>
     </section>
   );

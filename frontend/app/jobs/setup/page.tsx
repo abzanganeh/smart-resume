@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Search } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useRequireAuth } from "@/lib/auth/guards"
+import { PRODUCT_NAME } from "@/lib/brand"
 import { JobTitlePicker } from "@/components/jobs/JobTitlePicker"
 
 /** Exported for unit tests. Reject anything that isn't a same-origin path. */
@@ -52,7 +53,7 @@ function SetupContent() {
             Choose roles to search for
           </h1>
           <p className="text-slate-600 dark:text-slate-400 text-sm mt-2">
-            TalioCV matches your story to real openings from our company job corpus.
+            {PRODUCT_NAME} matches your story to real openings from our company job corpus.
           </p>
         </div>
 

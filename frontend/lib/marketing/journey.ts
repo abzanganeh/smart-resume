@@ -10,6 +10,8 @@
  * detail disclosure so gating can never drift between the places we state it.
  */
 
+import { PRODUCT_NAME } from "@/lib/brand";
+
 /**
  * `mixed` means partially usable on the free tier. Job search is the only such
  * stage today: free users with confirmed preferred titles get corpus search,
@@ -38,7 +40,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 1,
     title: "Tell your story",
     description:
-      "Speak your career out loud, upload an existing resume, or answer a coached interview. TalioCV turns it into a master resume you only build once.",
+      `Speak your career out loud, upload an existing resume, or answer a coached interview. ${PRODUCT_NAME} turns it into a master resume you only build once.`,
     access: "free",
     accessNote: "Story coaching and rewrites spend signup credits.",
     ctaLabel: "Start your career story",
@@ -49,7 +51,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 2,
     title: "Discover where you fit",
     description:
-      "TalioCV reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. You do not have to know what to search for.",
+      `${PRODUCT_NAME} reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. You do not have to know what to search for.`,
     access: "free",
     ctaLabel: "See my career options",
     ctaHref: REGISTER,
@@ -57,13 +59,13 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   {
     id: "jobs",
     step: 3,
-    title: "Find opportunities",
+    title: "Watch the companies you want",
     description:
-      "Search live roles against your confirmed titles, block companies you are not interested in, and watch specific employers for new openings.",
+      `Name the employers you care about. ${PRODUCT_NAME} reads their careers pages directly, every 15 to 45 minutes, and tells you when a role opens — usually before it reaches the big job boards. Search the wider corpus any time.`,
     access: "mixed",
     accessNote:
-      "Corpus search is free once you confirm at least five titles. Expanded search and fit scoring need a paid plan.",
-    ctaLabel: "Find jobs for me",
+      "Free plans watch one company every 30 minutes and search the corpus once you confirm five titles. Paid plans watch more companies, check more often, and add expanded search and fit scoring.",
+    ctaLabel: "Watch a company",
     ctaHref: REGISTER,
   },
   {
@@ -71,7 +73,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
     step: 4,
     title: "Make every application fit",
     description:
-      "Paste the job description. TalioCV extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.",
+      `Paste the job description. ${PRODUCT_NAME} extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.`,
     access: "free",
     accessNote: "One credit per tailored resume on the free plan.",
     ctaLabel: "Check my resume free",

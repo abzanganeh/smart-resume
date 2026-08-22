@@ -239,6 +239,24 @@ async def test_me_requires_bearer_token(app_client: AsyncClient) -> None:
     assert "WWW-Authenticate" in r.headers
 
 
+async def test_password_forgot_does_not_reveal_whether_email_exists(
+    app_client: AsyncClient,
+) -> None:
+    await _register(app_client)
+    known = await app_client.post(
+        "/api/auth/password/forgot",
+        json={"email": REGISTER_PAYLOAD["email"]},
+    )
+    unknown = await app_client.post(
+        "/api/auth/password/forgot",
+        json={"email": "nobody-here@example.com"},
+    )
+    assert known.status_code == 200, known.text
+    assert unknown.status_code == 200, unknown.text
+    assert known.json() == {"ok": True}
+    assert unknown.json() == {"ok": True}
+
+
 async def test_password_reset_invalidates_all_refresh_tokens(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:

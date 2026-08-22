@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useRequireAuth } from "@/lib/auth/guards"
+import { PRODUCT_NAME } from "@/lib/brand"
 import { friendlyAuthError } from "@/lib/auth/errors"
 import { fetchMe, patchOnboarding } from "@/lib/auth/api"
 import {
@@ -46,7 +47,7 @@ function OnboardingAiStep() {
   return (
     <div className="space-y-5 text-left max-w-md mx-auto">
       <p className="text-slate-600 dark:text-slate-400 text-sm text-center leading-relaxed">
-        TalioCV runs the AI for you. Free accounts start with{" "}
+        {PRODUCT_NAME} runs the AI for you. Free accounts start with{" "}
         <strong className="text-slate-900 dark:text-slate-200">
           {FREE_TIER_STARTING_CREDITS} credits
         </strong>
@@ -57,7 +58,7 @@ function OnboardingAiStep() {
         <div className="flex items-center gap-2 mb-2">
           <Zap className="w-4 h-4 text-amber-700 dark:text-amber-400" />
           <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
-            TalioCV AI
+            {PRODUCT_NAME} AI
           </span>
           <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">
             Included
@@ -85,7 +86,7 @@ function OnboardingAiStep() {
         </ul>
         <p className="text-xs text-slate-600 dark:text-slate-400 pt-1">
           {VOICE_AVAILABILITY_COPY} You can also just upload or paste a resume. After your master
-          resume, TalioCV suggests job titles to search our company job corpus. Fit analysis and
+          resume, {PRODUCT_NAME} suggests job titles to search our company job corpus. Fit analysis and
           expanded search need a paid plan.
         </p>
       </div>
@@ -95,7 +96,7 @@ function OnboardingAiStep() {
 
 const STEPS = [
   {
-    title: "Welcome to TalioCV",
+    title: `Welcome to ${PRODUCT_NAME}`,
     subtitle: "Let's get your account ready in a few quick steps.",
     icon: Sparkles,
     bodyKey: "welcome" as const,
@@ -323,7 +324,7 @@ function OnboardingPageContent() {
         return (
           <>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-              TalioCV tailors your master resume to every job description with ATS keyword
+              {PRODUCT_NAME} tailors your master resume to every job description with ATS keyword
               analysis and evidence-based quality rules. Upload an existing resume or paste text
               to get started on the free plan.
             </p>

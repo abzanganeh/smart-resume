@@ -9,7 +9,8 @@
  */
 import { test, expect } from "@playwright/test"
 
-const BASE = "http://localhost:3000"
+const PORT = process.env.PLAYWRIGHT_PORT ?? "3000"
+const BASE = `http://localhost:${PORT}`
 
 // ── Guard redirect ────────────────────────────────────────────────────────────
 
@@ -71,6 +72,83 @@ test.describe("/auth page", () => {
     await passwordInput.fill("abc")
     // Strength bar appears after first characters
     await expect(page.getByText(/Strength:/)).toBeVisible()
+  })
+
+  test("Sign in shows a forgot-password link to /auth/reset", async ({ page }) => {
+    await page.goto(`${BASE}/auth`)
+    const link = page.getByRole("link", { name: "Forgot your password?" })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute("href", "/auth/reset")
+  })
+
+  test("forgot-password link carries the typed email", async ({ page }) => {
+    await page.goto(`${BASE}/auth`)
+    await page.getByPlaceholder("you@example.com").fill("reset-me@example.com")
+    await expect(page.getByRole("link", { name: "Forgot your password?" })).toHaveAttribute(
+      "href",
+      "/auth/reset?email=reset-me%40example.com",
+    )
+  })
+})
+
+// ── Forgot / reset password ───────────────────────────────────────────────────
+
+test.describe("/auth/reset", () => {
+  test("request form sends a reset email and hides the address", async ({ page }) => {
+    let forgotBody: string | null = null
+    await page.route("**/api/auth/password/forgot", async (route) => {
+      forgotBody = route.request().postData()
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await page.goto(`${BASE}/auth/reset?email=reset-me@example.com`)
+    await expect(page.getByPlaceholder("you@example.com")).toHaveValue("reset-me@example.com")
+    await page.getByRole("button", { name: "Send reset link" }).click()
+    await expect(page.getByText(/If an account exists/i)).toBeVisible()
+    expect(forgotBody).toContain("reset-me@example.com")
+  })
+
+  test("token form updates the password", async ({ page }) => {
+    let resetPayload: string | null = null
+    await page.route("**/api/auth/password/reset", async (route) => {
+      resetPayload = route.request().postData()
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await page.goto(`${BASE}/auth/reset?token=test-reset-token`)
+    await expect(page.getByText("Choose a new password", { exact: true })).toBeVisible()
+    const newPassword = "9X!verbatim-marsupial^tetrahedron"
+    await page.locator("#reset-password").fill(newPassword)
+    await page.locator("#reset-password-confirm").fill(newPassword)
+    await page.getByRole("button", { name: "Update password" }).click()
+    await expect(page.getByText(/Your password has been updated/)).toBeVisible()
+    expect(resetPayload).toContain("test-reset-token")
+    expect(resetPayload).toContain(newPassword)
+  })
+
+  test("expired reset token shows a request-again path", async ({ page }) => {
+    await page.route("**/api/auth/password/reset", async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: { code: "reset_token_expired" } }),
+      })
+    })
+
+    await page.goto(`${BASE}/auth/reset?token=expired-token`)
+    await page.locator("#reset-password").fill("9X!verbatim-marsupial^tetrahedron")
+    await page.locator("#reset-password-confirm").fill("9X!verbatim-marsupial^tetrahedron")
+    await page.getByRole("button", { name: "Update password" }).click()
+    await expect(page.getByText(/reset link has expired/i)).toBeVisible()
+    await expect(page.getByRole("link", { name: "Request a new reset link" })).toBeVisible()
   })
 })
 

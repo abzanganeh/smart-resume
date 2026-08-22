@@ -46,6 +46,7 @@ from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
 from app.services.auth.dependencies import CLOSURE_HEADER, get_current_user
 from app.services.auth.email import (
+    password_reset_link,
     send_password_reset_email,
     send_verification_email,
 )
@@ -1033,17 +1034,25 @@ async def password_forgot(
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     # Idempotent: always pretend it worked so we never reveal which
-    # emails are registered.
+    # emails are registered. Local/dev also returns the reset URL so
+    # engineers can open it without a mail provider.
+    debug_reset_url: str | None = None
     if user is not None and user.auth_provider == AuthProvider.email:
         try:
-            await send_password_reset_email(
+            result = await send_password_reset_email(
                 to_email=user.email,
                 user_id=user.id,
                 display_name=user.display_name,
             )
+            token = result.get("token")
+            if token and not is_production_grade():
+                debug_reset_url = password_reset_link(str(token))
         except Exception as exc:  # pragma: no cover
             log.warning("auth.password_forgot.send_failed", error=str(exc))
-    return {"ok": True}
+    payload: dict[str, Any] = {"ok": True}
+    if debug_reset_url:
+        payload["debug_reset_url"] = debug_reset_url
+    return payload
 
 
 # 13. POST /password/reset -------------------------------------------------

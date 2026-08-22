@@ -1,12 +1,16 @@
 
 
 <p align="center">
-  <img src="docs/assets/marketing/taliocv-hero.png" alt="TalioCV — AI tailoring and company intel" width="720" />
+  <img src="docs/assets/marketing/taliocv-hero.png" alt="Flint Apply — AI resume tailoring and job applications" width="720" />
 </p>
 
-# TalioCV
+# Flint Apply
+
+**A product of [The Flint AI](https://theflintai.com)** · Production: [flintapply.com](https://flintapply.com)
 
 An AI-powered job-search platform. Build your master resume by speaking or uploading, tailor it to any job description in minutes, find matching jobs, write cover letters, and track every application — all in one place.
+
+> **Rebrand note:** User-facing UI may still show the legacy name *TalioCV* until the UX refresh lands. Docs and deployment targets use **Flint Apply** / `flintapply.com`.
 
 ---
 

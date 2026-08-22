@@ -217,7 +217,9 @@ export async function sendVerificationEmail(accessToken: string): Promise<{ ok: 
 
 // ── Password reset ────────────────────────────────────────────────────────────
 
-export async function forgotPassword(email: string): Promise<{ ok: boolean }> {
+export async function forgotPassword(
+  email: string,
+): Promise<{ ok: boolean; debug_reset_url?: string }> {
   const res = await fetch(`${BASE}/api/auth/password/forgot`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
