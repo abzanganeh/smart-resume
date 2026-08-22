@@ -254,7 +254,7 @@ class Settings(BaseSettings):
             and self.ACCESS_TOKEN_TTL_SECONDS == 15 * 60
         ):
             object.__setattr__(self, "ACCESS_TOKEN_TTL_SECONDS", 24 * 3600)
-        if self.APP_ENV != "production":
+        if self.APP_ENV in {"local", "development", "ci"}:
             if not self.TURNSTILE_SITE_KEY:
                 object.__setattr__(
                     self,

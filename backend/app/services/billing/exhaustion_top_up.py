@@ -92,6 +92,10 @@ async def grant_exhaustion_top_up(
     *,
     user: User,
 ) -> int:
+    await session.execute(
+        select(User.id).where(User.id == user.id).with_for_update()
+    )
+
     eligibility = await get_exhaustion_top_up_eligibility(session, user=user)
     if not eligibility.eligible:
         raise ValueError(eligibility.reason or "not_eligible")

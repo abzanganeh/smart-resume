@@ -799,19 +799,28 @@ async def oauth_callback(
         )
     ).scalar_one_or_none()
     if user is None:
+        email = profile["email"].lower().strip()
+        email_canonical = canonicalize_email(email)
         # Also reject if the email already belongs to a different provider.
         existing = (
-            await db.execute(select(User).where(User.email == profile["email"]))
+            await db.execute(select(User).where(User.email == email))
         ).scalar_one_or_none()
-        if existing is not None:
+        canonical_owner = (
+            await db.execute(select(User).where(User.email_canonical == email_canonical))
+        ).scalar_one_or_none()
+        if existing is not None or (
+            canonical_owner is not None and canonical_owner.email != email
+        ):
+            conflict = existing or canonical_owner
+            assert conflict is not None
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "code": "email_already_registered",
-                    "with_provider": existing.auth_provider.value,
+                    "with_provider": conflict.auth_provider.value,
                 },
             )
-        if is_disposable_email(profile["email"]):
+        if is_disposable_email(email):
             raise _disposable_email_http()
         signup_ip = _client_ip(request) or None
         signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(request)
@@ -826,8 +835,9 @@ async def oauth_callback(
         grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),
-            email=profile["email"],
-            display_name=profile["display_name"] or profile["email"].split("@", 1)[0],
+            email=email,
+            email_canonical=email_canonical,
+            display_name=profile["display_name"] or email.split("@", 1)[0],
             auth_provider=provider_enum,
             provider_id=profile["provider_id"],
             email_verified_at=datetime.now(timezone.utc),  # OAuth provider already verified

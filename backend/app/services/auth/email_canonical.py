@@ -49,6 +49,7 @@ def canonicalize_email(email: str) -> str:
 
     if domain in _GMAIL_DOMAINS:
         local = _strip_plus_suffix(local).replace(".", "")
+        domain = "gmail.com"
     elif domain in _PLUS_SUFFIX_ALLOWLIST:
         local = _strip_plus_suffix(local)
 
