@@ -81,6 +81,7 @@ class CreditTransactionAction(str, enum.Enum):
     admin_grant = "admin_grant"
     admin_revoke = "admin_revoke"
     refund_reverse = "refund_reverse"
+    exhaustion_top_up = "exhaustion_top_up"
 
 
 _AUTH_PROVIDER_PG = PGEnum(
@@ -197,6 +198,9 @@ class User(Base):
     signup_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     signup_device_fingerprint_hash: Mapped[Optional[str]] = mapped_column(
         String(64), nullable=True
+    )
+    signup_abuse_review_flag: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
     )
     blocked_companies: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")

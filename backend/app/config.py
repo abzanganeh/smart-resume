@@ -233,6 +233,9 @@ class Settings(BaseSettings):
     UNVERIFIED_ACCOUNT_CLEANUP_DAYS: int = 7
     UNVERIFIED_ACCOUNT_CLEANUP_DRY_RUN: bool = True
 
+    # Free-tier exhaustion top-up (M20 §11j slice 8).
+    EXHAUSTION_TOP_UP_CREDITS: int = 3
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:

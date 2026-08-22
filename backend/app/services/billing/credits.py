@@ -57,6 +57,7 @@ _REASON_TO_ACTION: dict[str, CreditTransactionAction] = {
     "admin_revoke": CreditTransactionAction.admin_revoke,
     "pricing_restructure_expire_addon": CreditTransactionAction.admin_revoke,
     "refund": CreditTransactionAction.refund_reverse,
+    "exhaustion_top_up": CreditTransactionAction.exhaustion_top_up,
     "backfill_legacy_balance": CreditTransactionAction.admin_grant,
 }
 
