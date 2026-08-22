@@ -975,7 +975,7 @@ async def test_authenticated_session_rejects_a_different_bearer(
     """Once a session is claimed, another user's token must not drive it.
 
     Sessions start anonymous and become owned the first time an
-    authenticated caller touches one (``_resolve_bearer_user_id``).
+    authenticated caller touches one (``resolve_bearer_user_id``).
     Without the mismatch check, a leaked session id would let a second
     account take over an in-flight tailoring session — and, because
     Phase 3 retrieval keys off ``session.user_id``, pull the original
@@ -994,6 +994,40 @@ async def test_authenticated_session_rejects_a_different_bearer(
     )
     assert hijack.status_code == 403, (
         "a different user's bearer token must not be accepted for a "
+        f"claimed session, got {hijack.status_code} {hijack.text[:300]}"
+    )
+
+
+@pytest.mark.integration
+async def test_commit_tailored_rejects_a_different_bearer(
+    app_client: AsyncClient,
+    two_users: tuple[tuple[str, uuid.UUID], tuple[str, uuid.UUID]],
+) -> None:
+    """``commit_tailored`` must not overwrite ``user_id`` from a mismatched bearer.
+
+    Before B2 this route read ``claims['sub']`` directly, bypassing the
+    session ownership check that ``resolve_bearer_user_id`` enforces.
+    """
+    (victim_token, _), (attacker_token, _) = two_users
+    minimal_tailored = {
+        "contact": {"name": "Jane Doe"},
+        "summary": "Engineer.",
+        "skills": [],
+        "experience": [],
+        "education": [],
+    }
+
+    created = await app_client.post("/api/sessions", headers=_auth(victim_token))
+    assert created.status_code == 201, created.text
+    session_id = created.json()["session_id"]
+
+    hijack = await app_client.post(
+        f"/api/sessions/{session_id}/tailored/commit",
+        json={"tailored_output": minimal_tailored},
+        headers=_auth(attacker_token),
+    )
+    assert hijack.status_code == 403, (
+        "commit_tailored must reject a bearer that does not match the "
         f"claimed session, got {hijack.status_code} {hijack.text[:300]}"
     )
 
