@@ -56,6 +56,7 @@ from app.routers.auth import (
 from app.services.billing.tier_limits_lookup import registration_grant_credits
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.exceptions import (
     OAuthError,
     RefreshTokenReuseError,
@@ -138,7 +139,13 @@ class ExtensionAuthResponse(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else ""
+    """Client IP for extension device fingerprints and login records.
+
+    Reading the socket peer directly would record the reverse proxy for
+    every extension user, collapsing distinct devices onto one
+    fingerprint.
+    """
+    return resolve_client_ip(request)
 
 
 def _user_agent(request: Request) -> str:

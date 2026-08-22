@@ -10,13 +10,12 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
-from slowapi.util import get_remote_address
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.engine import async_session_factory, get_db
-from app.limiter import limiter
+from app.limiter import limiter, rate_limit_key
 from app.models.export import ExportJob, ExportJobStatus
 from app.models.export import ClosureRequest
 from app.models.user import User
@@ -44,7 +43,7 @@ def _rate_limit_user_key(request: Request) -> str:
         except Exception:  # noqa: BLE001
             pass
         return f"token:{token[:64]}"
-    return get_remote_address(request)
+    return rate_limit_key(request)
 
 
 class ExportCreateResponse(BaseModel):
