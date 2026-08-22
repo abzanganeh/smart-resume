@@ -103,13 +103,13 @@ resource "aws_iam_role_policy" "job_lambda_sqs" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lambda_function" "apify_cache_worker" {
-  function_name = "${local.name_prefix}-apify-cache"
-  role          = aws_iam_role.job_lambda.arn
-  handler       = "handler.handler"
-  runtime       = var.lambda_runtime
-  timeout       = var.lambda_timeout_seconds
-  memory_size   = var.lambda_memory_mb
-  filename      = var.lambda_apify_cache_worker_zip
+  function_name    = "${local.name_prefix}-apify-cache"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_apify_cache_worker_zip
   source_code_hash = filebase64sha256(var.lambda_apify_cache_worker_zip)
 
   environment {
@@ -151,20 +151,20 @@ resource "aws_lambda_permission" "apify_cache_hourly" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lambda_function" "job_cache_writer" {
-  function_name = "${local.name_prefix}-cache-writer"
-  role          = aws_iam_role.job_lambda.arn
-  handler       = "handler.handler"
-  runtime       = var.lambda_runtime
-  timeout       = var.lambda_timeout_seconds
-  memory_size   = var.lambda_memory_mb
-  filename      = var.lambda_job_cache_writer_zip
+  function_name    = "${local.name_prefix}-cache-writer"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout_seconds
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_job_cache_writer_zip
   source_code_hash = filebase64sha256(var.lambda_job_cache_writer_zip)
 
   environment {
     variables = {
-      POSTGRES_URL                  = var.postgres_url
-      JOB_CACHE_TTL_COMMON_SECONDS  = tostring(var.job_cache_ttl_common_seconds)
-      AWS_REGION                    = var.aws_region
+      POSTGRES_URL                 = var.postgres_url
+      JOB_CACHE_TTL_COMMON_SECONDS = tostring(var.job_cache_ttl_common_seconds)
+      AWS_REGION                   = var.aws_region
     }
   }
 
@@ -172,9 +172,9 @@ resource "aws_lambda_function" "job_cache_writer" {
 }
 
 resource "aws_lambda_event_source_mapping" "job_cache_sqs" {
-  event_source_arn = aws_sqs_queue.job_cache.arn
-  function_name    = aws_lambda_function.job_cache_writer.arn
-  batch_size       = 5
+  event_source_arn        = aws_sqs_queue.job_cache.arn
+  function_name           = aws_lambda_function.job_cache_writer.arn
+  batch_size              = 5
   function_response_types = ["ReportBatchItemFailures"]
 }
 
@@ -183,13 +183,13 @@ resource "aws_lambda_event_source_mapping" "job_cache_sqs" {
 # ---------------------------------------------------------------------------
 
 resource "aws_lambda_function" "alert_dispatcher" {
-  function_name = "${local.name_prefix}-alert-dispatcher"
-  role          = aws_iam_role.job_lambda.arn
-  handler       = "handler.handler"
-  runtime       = var.lambda_runtime
-  timeout       = 120
-  memory_size   = var.lambda_memory_mb
-  filename      = var.lambda_alert_dispatcher_zip
+  function_name    = "${local.name_prefix}-alert-dispatcher"
+  role             = aws_iam_role.job_lambda.arn
+  handler          = "handler.handler"
+  runtime          = var.lambda_runtime
+  timeout          = 120
+  memory_size      = var.lambda_memory_mb
+  filename         = var.lambda_alert_dispatcher_zip
   source_code_hash = filebase64sha256(var.lambda_alert_dispatcher_zip)
 
   environment {
@@ -270,11 +270,11 @@ resource "aws_lambda_function" "notification_scheduler" {
 
   environment {
     variables = {
-      DATABASE_URL          = var.postgres_url
-      STRIPE_SECRET_KEY     = var.stripe_secret_key
-      RESEND_API_KEY        = var.resend_api_key
-      AWS_REGION            = var.aws_region
-      APP_ENV               = var.environment
+      DATABASE_URL      = var.postgres_url
+      STRIPE_SECRET_KEY = var.stripe_secret_key
+      RESEND_API_KEY    = var.resend_api_key
+      AWS_REGION        = var.aws_region
+      APP_ENV           = var.environment
     }
   }
 
@@ -429,13 +429,13 @@ resource "aws_lambda_function" "career_page_poller" {
 
   environment {
     variables = {
-      DATABASE_URL                      = var.postgres_url
-      CAREER_WATCH_SCHEDULER_BATCH      = "200"
-      CAREER_WATCH_SQS_URL              = aws_sqs_queue.career_watch.url
+      DATABASE_URL                        = var.postgres_url
+      CAREER_WATCH_SCHEDULER_BATCH        = "200"
+      CAREER_WATCH_SQS_URL                = aws_sqs_queue.career_watch.url
       GLOBAL_POLL_INTERVAL_TIER_1_MINUTES = "15"
       GLOBAL_POLL_INTERVAL_TIER_2_MINUTES = "30"
       GLOBAL_POLL_INTERVAL_TIER_3_MINUTES = "45"
-      AWS_REGION                        = var.aws_region
+      AWS_REGION                          = var.aws_region
     }
   }
 
@@ -443,15 +443,15 @@ resource "aws_lambda_function" "career_page_poller" {
 }
 
 resource "aws_lambda_function" "career_poll_worker" {
-  function_name                    = "${local.name_prefix}-career-poll-worker"
-  role                             = aws_iam_role.job_lambda.arn
-  handler                          = "handler.handler"
-  runtime                          = var.lambda_runtime
-  timeout                          = 60
-  memory_size                      = var.lambda_memory_mb
-  filename                         = var.lambda_career_poll_worker_zip
-  source_code_hash                 = filebase64sha256(var.lambda_career_poll_worker_zip)
-  reserved_concurrent_executions   = var.career_poll_worker_concurrency
+  function_name                  = "${local.name_prefix}-career-poll-worker"
+  role                           = aws_iam_role.job_lambda.arn
+  handler                        = "handler.handler"
+  runtime                        = var.lambda_runtime
+  timeout                        = 60
+  memory_size                    = var.lambda_memory_mb
+  filename                       = var.lambda_career_poll_worker_zip
+  source_code_hash               = filebase64sha256(var.lambda_career_poll_worker_zip)
+  reserved_concurrent_executions = var.career_poll_worker_concurrency
 
   environment {
     variables = {
@@ -464,9 +464,9 @@ resource "aws_lambda_function" "career_poll_worker" {
 }
 
 resource "aws_lambda_event_source_mapping" "career_poll_worker_sqs" {
-  event_source_arn = aws_sqs_queue.career_watch.arn
-  function_name    = aws_lambda_function.career_poll_worker.arn
-  batch_size       = 1
+  event_source_arn        = aws_sqs_queue.career_watch.arn
+  function_name           = aws_lambda_function.career_poll_worker.arn
+  batch_size              = 1
   function_response_types = ["ReportBatchItemFailures"]
 }
 
@@ -482,9 +482,9 @@ resource "aws_lambda_function" "career_matcher" {
 
   environment {
     variables = {
-      DATABASE_URL              = var.postgres_url
-      CAREER_WATCH_MIN_SCORE    = "0.25"
-      CAREER_WATCH_MATCH_BATCH  = "200"
+      DATABASE_URL             = var.postgres_url
+      CAREER_WATCH_MIN_SCORE   = "0.25"
+      CAREER_WATCH_MATCH_BATCH = "200"
     }
   }
 
