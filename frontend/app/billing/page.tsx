@@ -152,14 +152,6 @@ function PlanCard({
         </div>
       )}
 
-      {plan.trial_days && plan.trial_days > 0 && (
-        <div className="absolute top-4 right-4">
-          <span className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-500/30">
-            {plan.trial_days}-day free trial
-          </span>
-        </div>
-      )}
-
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.display_name}</h3>
         <div className="flex items-end gap-1.5 mt-2">
