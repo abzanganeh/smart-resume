@@ -1,4 +1,10 @@
-"""Sync polled ATS jobs into career_job_cache and job_cache (unified corpus path)."""
+"""Sync polled ATS jobs into career_job_cache and job_cache (unified corpus path).
+
+Every successful company poll — global seed or user-initiated watch — upserts the
+same public ``job_cache`` rows keyed by ``dedup_key``. User watchlists only
+control poll priority via ``UserWatchedCompany``; they never write user ids,
+keywords, or per-user source tags into shared search results.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.career_watch import CareerJobCache, WatchedCompany
 from app.models.jobs import JobCache
+from app.services.career_watch.corpus_privacy import (
+    assert_corpus_sources,
+    sanitize_parsed_job_for_corpus,
+)
 from app.services.career_watch.types import ParsedJob
 from app.services.jobs.normalization import (
     compute_dedup_key_v2,
@@ -31,6 +41,7 @@ def _job_cache_record_from_poll(
     *,
     now: datetime,
 ) -> dict:
+    job = sanitize_parsed_job_for_corpus(job)
     city, country = normalize_location(job.location)
     posted_date = job.posted_at or now
     apply_url_norm = normalize_apply_url(job.apply_url)
@@ -46,7 +57,7 @@ def _job_cache_record_from_poll(
     )
     ttl = settings.JOB_CACHE_TTL_UNIQUE_SECONDS
     return {
-        "sources": ["corpus"],
+        "sources": assert_corpus_sources(["corpus"]),
         "external_ids": {ats_type or "corpus": job.external_job_id},
         "title": job.title,
         "company": company.name,
@@ -160,8 +171,9 @@ async def _upsert_job_cache_from_poll(
     if existing.first_seen_at is None:
         existing.first_seen_at = now
     sources = list(existing.sources or [])
-    if "corpus" not in sources:
-        sources.append("corpus")
+    for src in assert_corpus_sources(["corpus"]):
+        if src not in sources:
+            sources.append(src)
     existing.sources = sources
     await session.flush()
 

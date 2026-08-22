@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.jobs import JobCache
+from app.services.career_watch.corpus_privacy import (
+    assert_corpus_sources,
+    sanitize_parsed_job_for_corpus,
+)
 from app.services.career_watch.types import ParsedJob
 from app.services.jobs.cache_writer import upsert_job_cache
 from app.services.jobs.normalization import (
@@ -32,6 +36,7 @@ def _aggregator_record(
     *,
     now: datetime,
 ) -> dict:
+    job = sanitize_parsed_job_for_corpus(job)
     company = _company_name(job)
     city, country = normalize_location(job.location)
     posted_date = job.posted_at or now
@@ -46,8 +51,9 @@ def _aggregator_record(
         posted_date=posted_date,
     )
     ttl = settings.JOB_CACHE_TTL_UNIQUE_SECONDS
+    aggregator_source = f"aggregator:{source}"
     return {
-        "sources": ["corpus", f"aggregator:{source}"],
+        "sources": assert_corpus_sources(["corpus", aggregator_source]),
         "external_ids": {source: job.external_job_id},
         "title": job.title,
         "company": company,
@@ -120,7 +126,7 @@ async def sync_aggregator_jobs_to_cache(
         for src in record["sources"]:
             if src not in sources:
                 sources.append(src)
-        existing.sources = sources
+        existing.sources = assert_corpus_sources(sources)
         await session.flush()
     return upserted
 
