@@ -55,6 +55,40 @@ async def test_list_popup_offers_filters_non_popup_and_expired() -> None:
     assert offers[0].popup_triggers == ["exit_intent", "post_exhaustion"]
 
 
+@pytest.mark.asyncio
+async def test_list_popup_offers_excludes_user_redemptions() -> None:
+    user_id = uuid.uuid4()
+    redeemed = _popup_promo(code="USED", popup_enabled=True)
+    available = _popup_promo(code="FRESH", popup_enabled=True)
+
+    class FakeScalars:
+        def __init__(self, rows: list) -> None:
+            self._rows = rows
+
+        def all(self) -> list:
+            return self._rows
+
+    class FakeResult:
+        def __init__(self, rows: list) -> None:
+            self._rows = rows
+
+        def scalars(self) -> FakeScalars:
+            return FakeScalars(self._rows)
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            FakeResult([redeemed, available]),
+            FakeResult([redeemed.id]),
+        ]
+    )
+
+    offers = await list_popup_offers(mock_session, user_id=user_id)
+
+    assert len(offers) == 1
+    assert offers[0].code == "FRESH"
+
+
 def test_public_offer_view_defaults_popup_disabled() -> None:
     promo = PromoCode(
         id=uuid.uuid4(),

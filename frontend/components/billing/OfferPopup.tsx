@@ -27,6 +27,8 @@ export function OfferPopup({ offer, trigger, token, onDismiss }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [discountWarning, setDiscountWarning] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const reducedMotion =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -54,24 +56,35 @@ export function OfferPopup({ offer, trigger, token, onDismiss }: Props) {
 
   const handleClaim = useCallback(async () => {
     if (busy) return;
+    if (checkoutUrl) {
+      markOfferPopupShown();
+      window.location.assign(checkoutUrl);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const planCode = defaultCheckoutPlanCode(offer);
       const origin = window.location.origin;
-      const { url } = await createCheckoutSessionByCode(token, {
+      const result = await createCheckoutSessionByCode(token, {
         code: planCode,
         success_url: `${origin}/billing?checkout=success&offer=${encodeURIComponent(offer.code)}`,
         cancel_url: `${origin}/billing?checkout=cancel`,
         promo_code: offer.code,
       });
+      if (!result.discount_applied && result.discount_message) {
+        setDiscountWarning(result.discount_message);
+        setCheckoutUrl(result.url);
+        setBusy(false);
+        return;
+      }
       markOfferPopupShown();
-      window.location.assign(url);
+      window.location.assign(result.url);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not start checkout.");
       setBusy(false);
     }
-  }, [busy, offer, token]);
+  }, [busy, checkoutUrl, offer, token]);
 
   return (
     <div
@@ -127,6 +140,12 @@ export function OfferPopup({ offer, trigger, token, onDismiss }: Props) {
           </p>
         )}
 
+        {discountWarning && (
+          <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 border border-amber-500/20 rounded-lg px-3 py-2">
+            {discountWarning} You can still continue to checkout at the regular price.
+          </p>
+        )}
+
         <div className="flex flex-col sm:flex-row gap-2 pt-1">
           <button
             type="button"
@@ -139,7 +158,7 @@ export function OfferPopup({ offer, trigger, token, onDismiss }: Props) {
             ) : (
               <>
                 <Zap className="w-4 h-4" />
-                Claim offer
+                {checkoutUrl ? "Continue to checkout" : "Claim offer"}
               </>
             )}
           </button>

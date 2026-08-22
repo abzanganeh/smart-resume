@@ -11,9 +11,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_grant import AdminGrantType
-from app.models.promo_code import PromoCode
+from app.models.promo_code import PromoCode, PromoRedemption
 from app.models.user import AuthProvider, User, UserTier
 from app.services.billing.checkout_discount import resolve_checkout_discount
+from app.services.billing.promo import PromoCodeInvalidError, redeem_promo_code
 from app.services.billing.subscription import CheckoutSessionResult, create_checkout_session
 
 pytestmark = pytest.mark.unit
@@ -158,6 +159,49 @@ async def test_resolve_checkout_discount_wrong_plan_falls_back(
     )
     assert result.applied is False
     assert "doesn't apply" in (result.message or "").lower()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_resolve_checkout_discount_rejects_prior_user_redemption(
+    db_session: AsyncSession,
+) -> None:
+    user = _user()
+    promo = await _seed_discount_promo(db_session)
+    db_session.add(
+        PromoRedemption(
+            id=uuid.uuid4(),
+            promo_code_id=promo.id,
+            user_id=user.id,
+            redeemed_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+    result = await resolve_checkout_discount(
+        db_session,
+        user_id=user.id,
+        promo_code="SAVE40",
+        plan_code="monthly_pro",
+    )
+    assert result.applied is False
+    assert "already" in (result.message or "").lower()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_redeem_price_discount_is_checkout_only(
+    db_session: AsyncSession,
+) -> None:
+    user = _user()
+    db_session.add(user)
+    await _seed_discount_promo(db_session)
+    await db_session.flush()
+    with pytest.raises(PromoCodeInvalidError):
+        await redeem_promo_code(
+            db_session,
+            user_id=user.id,
+            code="SAVE40",
+        )
 
 
 @pytest.mark.asyncio

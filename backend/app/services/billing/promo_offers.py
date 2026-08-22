@@ -162,7 +162,11 @@ async def lookup_public_offer(
     return public_offer_view(promo)
 
 
-async def list_popup_offers(session: AsyncSession) -> list[PublicOfferView]:
+async def list_popup_offers(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID | None = None,
+) -> list[PublicOfferView]:
     """Active checkout offers configured for in-app popup triggers."""
     rows = list(
         (
@@ -176,8 +180,21 @@ async def list_popup_offers(session: AsyncSession) -> list[PublicOfferView]:
         .scalars()
         .all()
     )
+    redeemed_ids: set[uuid.UUID] = set()
+    if user_id is not None:
+        redeemed_ids = set(
+            (
+                await session.execute(
+                    select(PromoRedemption.promo_code_id).where(
+                        PromoRedemption.user_id == user_id
+                    )
+                )
+            ).scalars().all()
+        )
     offers: list[PublicOfferView] = []
     for promo in rows:
+        if promo.id in redeemed_ids:
+            continue
         view = public_offer_view(promo)
         if not view.popup_enabled or not view.is_redeemable:
             continue

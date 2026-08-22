@@ -350,7 +350,7 @@ async def billing_popup_offers(
     user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
     """Checkout discount offers eligible for exit-intent / post-exhaustion popups."""
-    offers = await list_popup_offers(db)
+    offers = await list_popup_offers(db, user_id=user.id)
     return {"offers": [offer.to_dict() for offer in offers]}
 
 

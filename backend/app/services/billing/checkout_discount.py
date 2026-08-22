@@ -6,9 +6,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_grant import AdminGrantType
+from app.models.promo_code import PromoCode, PromoRedemption
 from app.services.billing.promo import _lookup_promo_for_compare, normalize_promo_code
 
 
@@ -46,6 +48,12 @@ async def resolve_checkout_discount(
             "This promo code isn't valid.",
         )
 
+    promo = (
+        await session.execute(
+            select(PromoCode).where(PromoCode.id == promo.id).with_for_update()
+        )
+    ).scalar_one()
+
     if (
         promo.restricted_user_id is not None
         and promo.restricted_user_id != user_id
@@ -54,6 +62,20 @@ async def resolve_checkout_discount(
             None,
             False,
             "This promo code isn't valid.",
+        )
+
+    existing_redemption = (
+        await session.execute(
+            select(PromoRedemption)
+            .where(PromoRedemption.promo_code_id == promo.id)
+            .where(PromoRedemption.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if existing_redemption is not None:
+        return CheckoutDiscountResolution(
+            None,
+            False,
+            "You've already used this offer.",
         )
 
     now = datetime.now(timezone.utc)
