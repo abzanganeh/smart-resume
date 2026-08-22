@@ -23,6 +23,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    event,
     Index,
     Integer,
     LargeBinary,
@@ -124,6 +125,9 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(
+        String(320), nullable=False, unique=True, index=True
+    )
+    email_canonical: Mapped[str] = mapped_column(
         String(320), nullable=False, unique=True, index=True
     )
     email_verified_at: Mapped[Optional[datetime]] = mapped_column(
@@ -417,6 +421,14 @@ class CreditTransaction(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="credit_transactions")
+
+
+@event.listens_for(User, "before_insert")
+def _populate_email_canonical(_mapper, _connection, target: User) -> None:
+    if not target.email_canonical and target.email:
+        from app.services.auth.email_canonical import canonicalize_email
+
+        target.email_canonical = canonicalize_email(target.email)
 
 
 __all__ = [

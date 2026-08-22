@@ -54,6 +54,7 @@ from app.services.auth.email import (
     send_password_reset_email,
     send_verification_email,
 )
+from app.services.auth.email_canonical import canonicalize_email
 from app.services.auth.exceptions import (
     AccountLockedError,
     OAuthError,
@@ -410,6 +411,7 @@ async def register(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthSuccessResponse:
     email = payload.email.lower().strip()
+    email_canonical = canonicalize_email(email)
 
     # Reject weak passwords up-front using zxcvbn (§18.2).
     try:
@@ -427,24 +429,38 @@ async def register(
     existing = (
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
-    if existing is not None:
-        if existing.auth_provider != AuthProvider.email and not existing.password_hash:
+    canonical_owner = (
+        await db.execute(select(User).where(User.email_canonical == email_canonical))
+    ).scalar_one_or_none()
+    if existing is not None or (
+        canonical_owner is not None and canonical_owner.email != email
+    ):
+        conflict = existing or canonical_owner
+        assert conflict is not None
+        if conflict.auth_provider != AuthProvider.email and not conflict.password_hash:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "code": "email_registered_with_sso",
-                    "provider": existing.auth_provider.value,
+                    "provider": conflict.auth_provider.value,
                 },
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "email_already_registered"},
+            detail={
+                "code": "email_already_registered",
+                "message": (
+                    "An account already exists for this address — "
+                    "sign in or reset your password."
+                ),
+            },
         )
 
     grant_amount = await registration_grant_credits(db)
     user = User(
         id=uuid.uuid4(),
         email=email,
+        email_canonical=email_canonical,
         display_name=payload.display_name or email.split("@", 1)[0],
         auth_provider=AuthProvider.email,
         password_hash=hash_password(payload.password),
