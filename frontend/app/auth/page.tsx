@@ -21,6 +21,7 @@ import { TurnstileField } from "@/components/auth/TurnstileField"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
 import { friendlyAuthError } from "@/lib/auth/errors"
+import { getSignupDeviceFingerprint } from "@/lib/auth/deviceFingerprint"
 import {
   captureExtensionHandoffFromParams,
   captureExtensionHandoffFromUrl,
@@ -232,6 +233,7 @@ function AuthPageContent() {
           accepted_tos_version: TOS_VERSION,
           marketing_opt_in: marketingOptIn,
           turnstile_token: turnstileToken,
+          device_fingerprint: getSignupDeviceFingerprint(),
         })
         // Create NextAuth session from the backend tokens
         await signIn("token", {
