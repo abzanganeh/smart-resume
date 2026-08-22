@@ -33,3 +33,165 @@ body {
   background: var(--sr-bg);
   color: var(--sr-fg);
 }
+
+/*
+ * Landing-page pointer effects.
+ *
+ * The custom properties below are written by CapabilitySpotlight and
+ * KeywordScanDemo from inside a single requestAnimationFrame. Every rule has a
+ * static fallback value so the markup is correct before the first pointer event
+ * and when JavaScript never runs.
+ *
+ * Deliberately plain rgba rather than color-mix(): color-mix needs Safari 16.4+
+ * and this is the first paint of a public page.
+ */
+
+.sr-spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0.75rem;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  background: radial-gradient(
+    240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    rgba(245, 158, 11, 0.16),
+    transparent 72%
+  );
+}
+
+.dark .sr-spotlight {
+  background: radial-gradient(
+    240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    rgba(251, 191, 36, 0.14),
+    transparent 72%
+  );
+}
+
+.sr-spotlight-panel:hover .sr-spotlight {
+  opacity: 1;
+}
+
+.sr-spotlight-card {
+  z-index: 1;
+  transform-style: preserve-3d;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+.sr-spotlight-card[data-active="true"] {
+  transform: perspective(700px) rotateX(var(--tilt-x, 0deg))
+    rotateY(var(--tilt-y, 0deg)) scale(1.015);
+}
+
+/* Sweep highlight for the hero keyword scan. */
+.sr-scan-sweep {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(var(--scan-x, 0px));
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(245, 158, 11, 0.85),
+    transparent
+  );
+  box-shadow: 0 0 18px 6px rgba(245, 158, 11, 0.22);
+  transition: opacity 160ms ease;
+}
+
+.sr-scan-surface:hover .sr-scan-sweep {
+  opacity: 1;
+}
+
+/*
+ * Honour an explicit reduced-motion request. The components also refuse to set
+ * the custom properties in this case, so this block is the second of two
+ * independent guarantees rather than the only one. Selection and content stay
+ * intact; only movement stops.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .sr-spotlight,
+  .sr-scan-sweep {
+    display: none;
+  }
+
+  .sr-spotlight-card,
+  .sr-spotlight-card[data-active="true"] {
+    transform: none;
+    transition: none;
+  }
+
+  .marketing-hero-orb,
+  .sr-scroll-reveal {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Hero ambient orbs — decorative, CSS-only. */
+.marketing-hero-ambient {
+  position: relative;
+  isolation: isolate;
+}
+
+.marketing-hero-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: blur(64px);
+  opacity: 0.45;
+  z-index: 0;
+  animation: sr-hero-drift 18s ease-in-out infinite alternate;
+}
+
+.marketing-hero-orb--amber {
+  width: min(42vw, 22rem);
+  height: min(42vw, 22rem);
+  top: -2rem;
+  right: 8%;
+  background: rgba(245, 158, 11, 0.35);
+}
+
+.marketing-hero-orb--indigo {
+  width: min(36vw, 18rem);
+  height: min(36vw, 18rem);
+  bottom: 2rem;
+  left: 4%;
+  background: rgba(99, 102, 241, 0.28);
+  animation-duration: 22s;
+  animation-delay: -4s;
+}
+
+.dark .marketing-hero-orb--amber {
+  background: rgba(251, 191, 36, 0.22);
+}
+
+.dark .marketing-hero-orb--indigo {
+  background: rgba(129, 140, 248, 0.2);
+}
+
+@keyframes sr-hero-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, -18px, 0) scale(1.06);
+  }
+}
+
+/* Scroll reveal — visible before observe; motion is optional polish. */
+.sr-scroll-reveal {
+  transform: translate3d(0, 12px, 0);
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sr-scroll-reveal[data-revealed="true"] {
+  transform: translate3d(0, 0, 0);
+}

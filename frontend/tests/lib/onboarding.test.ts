@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isOnboardingExempt,
   mustCompleteOnboarding,
   onboardingStepAfterMasterUpload,
   ONBOARDING_JOB_TITLES_STEP_INDEX,
@@ -25,6 +26,14 @@ const baseUser: BackendUser = {
   onboarding_completed_at: null,
   onboarding_ai_choice: null,
 };
+
+describe("isOnboardingExempt", () => {
+  it("lets password reset complete before onboarding", () => {
+    assert.equal(isOnboardingExempt("/auth/reset"), true);
+    assert.equal(isOnboardingExempt("/auth"), false);
+    assert.equal(isOnboardingExempt("/dashboard"), false);
+  });
+});
 
 describe("mustCompleteOnboarding", () => {
   it("treats missing backendUser as incomplete", () => {

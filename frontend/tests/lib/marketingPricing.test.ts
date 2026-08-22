@@ -5,8 +5,10 @@ import {
   fetchPublicPricing,
   formatPlanPrice,
   isPlanPriceSynced,
+  landingPlansHaveSyncedPrice,
   planCycleSuffix,
   planHighlights,
+  selectLandingPlans,
   selectPublicPlans,
 } from "@/lib/marketing/pricing";
 
@@ -67,6 +69,65 @@ describe("isPlanPriceSynced", () => {
     assert.equal(
       isPlanPriceSynced(plan({ amount_cents: NaN })),
       false,
+    );
+  });
+});
+
+describe("selectLandingPlans", () => {
+  it("returns weekly and monthly tiers in billing-page order", () => {
+    const selected = selectLandingPlans(
+      payload([
+        plan({ code: "monthly_premium", amount_cents: 4999 }),
+        plan({ code: "weekly", display_name: "Weekly", cycle: "weekly", amount_cents: 999 }),
+        plan({ code: "monthly_pro", amount_cents: 1999 }),
+        plan({ code: "monthly_plus", amount_cents: 2999 }),
+      ]),
+    );
+    assert.deepEqual(
+      selected.map((p) => p.code),
+      ["weekly", "monthly_pro", "monthly_plus", "monthly_premium"],
+    );
+  });
+
+  it("includes unsynced tiers so the landing page can show the name without a price", () => {
+    const selected = selectLandingPlans(
+      payload([
+        plan({ code: "weekly", cycle: "weekly", amount_cents: 0 }),
+        plan({ code: "monthly_premium", amount_cents: 0 }),
+      ]),
+    );
+    assert.deepEqual(
+      selected.map((p) => p.code),
+      ["weekly", "monthly_premium"],
+    );
+  });
+
+  it("drops inactive tiers", () => {
+    const selected = selectLandingPlans(
+      payload([plan({ code: "weekly", cycle: "weekly", is_active: false })]),
+    );
+    assert.deepEqual(selected, []);
+  });
+});
+
+describe("landingPlansHaveSyncedPrice", () => {
+  it("is false when every landing tier is unsynced", () => {
+    assert.equal(
+      landingPlansHaveSyncedPrice([
+        plan({ amount_cents: 0 }),
+        plan({ amount_cents: 0 }),
+      ]),
+      false,
+    );
+  });
+
+  it("is true when at least one tier is synced", () => {
+    assert.equal(
+      landingPlansHaveSyncedPrice([
+        plan({ amount_cents: 0 }),
+        plan({ amount_cents: 1999 }),
+      ]),
+      true,
     );
   });
 });

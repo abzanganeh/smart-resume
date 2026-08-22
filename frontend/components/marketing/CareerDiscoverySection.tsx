@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Compass } from "lucide-react";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { titleFitBar, titleFitLabel } from "@/lib/jobs";
 import {
   FINE_PRINT,
@@ -33,7 +34,7 @@ export function CareerDiscoverySection() {
           You don&rsquo;t have to know what to search for.
         </h2>
         <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-          Once your master resume exists, TalioCV reads it and proposes ten
+          Once your master resume exists, {PRODUCT_NAME} reads it and proposes ten
           realistic job titles &mdash; each with a fit score and the specific
           strengths and gaps behind that score. Confirm the ones you want and
           they become your search.

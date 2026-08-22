@@ -23,7 +23,7 @@ Do not open public GitHub issues for undisclosed vulnerabilities.
 
 ## Scope
 
-This policy covers the TalioCV repository and official releases.
+This policy covers the Flint Apply repository and official releases at [flintapply.com](https://flintapply.com).
 
 Out of scope:
 

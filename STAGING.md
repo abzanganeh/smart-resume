@@ -1,8 +1,9 @@
-# Staging deployment runbook
+# Staging & production deployment runbook
 
-Last updated: 2026-08-19 (post PR #76 — tracker active-limit enforcement, duplicate detection, funnel counts).
+Last updated: 2026-08-20 (Flint Apply rebrand — docs/env; UI rename in progress).
 
-This is the operator checklist for the **first staging deploy** of TalioCV.
+This is the operator checklist for deploying **Flint Apply** ([flintapply.com](https://flintapply.com)),
+a product of **The Flint AI** ([theflintai.com](https://theflintai.com)).
 Code readiness is tracked in `docs/IMPLEMENTATION_PLAN.md` §11 (Release Phase 2).
 Local design docs under `docs/` are gitignored; this file is the tracked operator guide.
 
@@ -10,7 +11,7 @@ Local design docs under `docs/` are gitignored; this file is the tracked operato
 
 ## 1. Identity and auth (already implemented)
 
-TalioCV does **not** use an external IdP product (no Supabase Auth for the main app).
+Flint Apply does **not** use an external IdP product (no Supabase Auth for the main app).
 
 | Layer | Technology | Canonical user id |
 |-------|------------|-------------------|
@@ -93,7 +94,7 @@ cp .env.staging.example .env.staging
 cp backend/.env.staging.example backend/.env.staging
 # Set STAGING_FRONTEND_PORT=3000 STAGING_BACKEND_PORT=8000 in .env.staging
 # Set FRONTEND_BASE_URL / NEXTAUTH_URL to https://your-staging-domain
-# See infra/caddy/Caddyfile.staging.example
+# See infra/caddy/Caddyfile.staging.example (staging) or Caddyfile.production.example (flintapply.com)
 
 docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
 ./scripts/staging-smoke.sh   # with API_URL / FRONTEND_URL env overrides
@@ -248,7 +249,7 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 
 ### Extension & autofill (manual)
 
-Requires `EXTENSION_AUTH_ENABLED=true` and a browser with the TalioCV extension loaded.
+Requires `EXTENSION_AUTH_ENABLED=true` and a browser with the Flint Apply browser extension loaded.
 
 - [ ] Extension OAuth callback registered; sign-in from extension yields valid backend token
 - [ ] Capture JD on Greenhouse → tailor in web app → return to apply form
@@ -277,3 +278,146 @@ Not blocking first staging deploy:
 - Full app Terraform / managed CI deploy pipeline
 
 See `docs/IMPLEMENTATION_PLAN.md` for the full RP2–RP4 step list.
+
+---
+
+## 8. Production (flintapply.com)
+
+Use the same Docker Compose stack as staging; bind **3000/8000** on the VM and terminate TLS with Caddy.
+
+### DNS
+
+| Host | Purpose |
+|------|---------|
+| `flintapply.com` | Next.js frontend |
+| `api.flintapply.com` | FastAPI backend |
+
+### Environment (production)
+
+**`backend/.env.staging`** (or a dedicated production env file on the server):
+
+```bash
+APP_ENV=staging   # or production when APP_ENV=production gates are added
+FRONTEND_BASE_URL=https://flintapply.com
+ALLOWED_ORIGINS=["https://flintapply.com"]
+```
+
+**`.env.staging`** (frontend / compose):
+
+```bash
+STAGING_FRONTEND_PORT=3000
+STAGING_BACKEND_PORT=8000
+NEXTAUTH_URL=https://flintapply.com
+NEXT_PUBLIC_SITE_URL=https://flintapply.com
+NEXT_PUBLIC_API_URL=https://api.flintapply.com
+```
+
+Set OAuth provider redirect URIs to `https://flintapply.com/api/auth/callback/<provider>`.
+
+Stripe webhook endpoint: `https://api.flintapply.com/api/billing/webhook`.
+
+Reverse proxy template: `infra/caddy/Caddyfile.production.example`.
+
+### Deploy
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+API_URL=https://api.flintapply.com FRONTEND_URL=https://flintapply.com ./scripts/staging-smoke.sh
+```
+
+Then run manual checklist §5 on https://flintapply.com.
+
+---
+
+## 9. Company & legal entity migration (The Flint AI)
+
+**Product:** Flint Apply · **Company:** The Flint AI · **Domains:** [flintapply.com](https://flintapply.com), [theflintai.com](https://theflintai.com)
+
+This section is the operator checklist for moving from the current **personal**
+licensor/controller (`Alireza Barzin Zanganeh`, `privacy@zanganeai.com`) to
+**The Flint AI** as the published company. It is intentionally separate from
+code deploy: UI can rebrand before the entity exists; legal pages must not claim
+a company that is not yet registered.
+
+Cross-reference: `docs/IMPLEMENTATION_PLAN.md` §11g (engineering slices) and
+M16 task file `.cursor/skills/resume-loop-engineering/tasks/marketing-motion-and-intro.md`.
+
+### Phase A — UI & marketing rebrand (no entity required)
+
+Can ship on staging while entity work is in progress.
+
+- [ ] Centralise names in `frontend/lib/brand.ts` (`FlintApply`, `by The Flint AI`, copyright line)
+- [ ] Replace user-facing **TalioCV** strings in frontend + backend copy (≈47 files)
+- [ ] Footer marketing line: `© {year} The Flint AI` (not personal name)
+- [ ] Intro overlay greeting uses **FlintApply** (see `lib/marketing/intro.ts`)
+- [ ] Replace brand assets under `frontend/public/brand/` and app icons (`favicon.ico`, `icon.png`, `opengraph-image.png`)
+- [ ] Re-capture `ProductScreenshot` after UI shows FlintApply (generated screenshots are not acceptable)
+- [ ] `NEXT_PUBLIC_SITE_URL` / OAuth app display names updated to Flint Apply where provider consoles allow
+- [ ] **Do not** change BSL licensor, privacy controller, or DPO contact yet — see Phase C
+
+### Phase B — Register The Flint AI (operator / legal, not code)
+
+Blockers for Phase C. Record completion dates here when done.
+
+- [ ] Choose jurisdiction and entity type (LLC, corp, etc.) — **legal counsel**
+- [ ] Register **The Flint AI** (or exact legal name, e.g. *The Flint AI, LLC*)
+- [ ] Obtain EIN / tax ID
+- [ ] Open business bank account
+- [ ] Register domains if not already owned: `flintapply.com`, `theflintai.com`
+- [ ] Create company email mailboxes (minimum):
+  - `privacy@theflintai.com` (DPO / privacy contact)
+  - `licensing@theflintai.com` (BSL commercial requests)
+  - `security@theflintai.com` (SECURITY.md contact, if split from privacy)
+  - `hello@` or `support@` for general product contact (optional but recommended)
+- [ ] Stripe account: business profile → **The Flint AI**, linked bank, live keys for production
+- [ ] Google Cloud / GitHub OAuth apps: publisher name → The Flint AI; redirect URIs → `flintapply.com`
+
+### Phase C — Legal & compliance document migration (after Phase B)
+
+Only merge when the entity in Phase B matches what the documents claim.
+
+| File / surface | Current | Target |
+|---|---|---|
+| `LICENSE` BSL Licensor | Alireza Barzin Zanganeh | The Flint AI (exact legal name) |
+| `COMMERCIAL.md` contact | `licensing@zanganehai.com` | `licensing@theflintai.com` |
+| `SECURITY.md` | personal / zanganeh domain | The Flint AI + company security contact |
+| `app/legal/privacy/page.tsx` | personal data controller | The Flint AI as controller |
+| `app/legal/terms/page.tsx` | personal licensor references | The Flint AI |
+| `app/legal/contact/page.tsx` | DPO personal routing | The Flint AI DPO |
+| `app/legal/ccpa/page.tsx` | personal business name | The Flint AI |
+| `app/legal/sub-processors/page.tsx` | verify controller name | The Flint AI |
+| `backend/app/config.py` / email templates | `FRONTEND_BASE_URL`, from-address | company domain |
+| `frontend/tests/e2e/legal.spec.ts` | asserts personal copyright + DPO email | update to company assertions |
+| `backend/tests/unit/test_contact_authority.py` | DPO routing tests | update fixtures |
+
+Checklist:
+
+- [ ] Counsel reviews privacy policy + terms for controller/licensor change
+- [ ] All five `/legal/*` pages updated and cross-linked
+- [ ] Footer DPO link → `privacy@theflintai.com` (or dedicated DPO address)
+- [ ] Transactional email `From:` uses company domain (SPF/DKIM on theflintai.com)
+- [ ] Sub-processor list still accurate after any vendor re-contracting
+- [ ] Re-run `legal.spec.ts` and backend legal integration tests
+
+### Phase D — Production cutover (after Phase C + §8 deploy)
+
+- [ ] Production env vars (§8) use `https://flintapply.com` and company emails
+- [ ] OAuth consent screens show **Flint Apply** by **The Flint AI**
+- [ ] Stripe Checkout / Customer Portal show registered business name
+- [ ] Manual smoke §5 on production with legal footer assertions
+- [ ] Optional: cookie/consent banner vendor updated if controller ID changed
+
+### Phase E — Deferred (post-launch)
+
+- [ ] Customer logo / testimonial section on landing (only when real customers exist)
+- [ ] Press / “As seen on” row (only with verifiable citations)
+- [ ] Per-capability marketing subpages (`/product/story-mode`, etc.)
+- [ ] `/learn` content hub (writing project)
+
+### Naming note — two different “Flint” products
+
+The codebase already integrates with the **Flint desktop interview app**
+(`OpenInFlintButton`, `createFlintHandoff`). After rebrand, user-facing copy must
+keep that distinction clear, e.g. **“Open in Flint Live”** or **“Open in Flint
+(desktop)”** so it is not confused with **Flint Apply** (this web product).
+

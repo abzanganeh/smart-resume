@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, Mail } from "lucide-react";
 import { useRequireAuth } from "@/lib/auth/guards";
-import { fetchMe } from "@/lib/auth/api";
+import { fetchMe, forgotPassword } from "@/lib/auth/api";
 import { patchDisplayName, sendEmailVerification } from "@/lib/account";
+import { friendlyAuthError } from "@/lib/auth/errors";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
@@ -17,6 +18,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [verifySent, setVerifySent] = useState(false);
+  const [authProvider, setAuthProvider] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -28,6 +32,7 @@ export default function SettingsPage() {
       setDisplayName(me.display_name);
       setEmail(me.email);
       setVerified(Boolean(me.email_verified_at));
+      setAuthProvider(me.auth_provider);
     } finally {
       setLoading(false);
     }
@@ -134,6 +139,44 @@ export default function SettingsPage() {
               {verifySent ? "Verification email sent" : "Send verification email"}
             </button>
           </div>
+        )}
+      </section>
+
+      <section className="mb-8 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3">
+        <h2 className="font-medium text-slate-800 dark:text-slate-200">Password</h2>
+        {authProvider === "email" ? (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              We will email you a link to choose a new password. The link expires
+              in one hour and signs you out of other devices when you use it.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setResetSending(true);
+                void forgotPassword(email)
+                  .then(() => setResetSent(true))
+                  .catch((e) =>
+                    setError(
+                      e instanceof Error
+                        ? friendlyAuthError(e.message)
+                        : "Could not send reset email",
+                    ),
+                  )
+                  .finally(() => setResetSending(false));
+              }}
+              disabled={resetSending || resetSent}
+              className="inline-flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 disabled:opacity-60"
+            >
+              {resetSent ? "Reset email sent" : "Email me a password reset link"}
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            You sign in with {authProvider || "SSO"}, so there is no password to
+            change here.
+          </p>
         )}
       </section>
 

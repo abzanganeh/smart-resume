@@ -87,6 +87,10 @@ export default auth(async function proxy(req) {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|otf|eot|css|js)$).*)",
+    // `sitemap.xml` and `robots.txt` are excluded explicitly: neither ends in an
+    // extension this pattern already skips, so without them every crawler hit
+    // would run auth() to reach a file that is public by definition.
+    // `opengraph-image.png` is already covered by the `.png` case.
+    "/((?!api/auth|_next/static|_next/image|favicon\\.ico|sitemap\\.xml|robots\\.txt|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|otf|eot|css|js)$).*)",
   ],
 }

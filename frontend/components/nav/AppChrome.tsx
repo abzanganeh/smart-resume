@@ -8,7 +8,8 @@ import { SiteFooter } from "@/components/nav/SiteFooter"
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isAdminRoute = pathname?.startsWith("/admin") ?? false
-  const isAuthRoute = pathname === "/auth"
+  const isAuthRoute =
+    pathname === "/auth" || Boolean(pathname?.startsWith("/auth/"))
 
   const showPublicChrome = !isAdminRoute && !isAuthRoute
 
