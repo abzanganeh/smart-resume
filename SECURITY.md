@@ -59,7 +59,7 @@ dependency and secret scans on every push/PR to `main`.
 
 | Gate | Job | Tool | Lockfile enforcement |
 |---|---|---|---|
-| Python dependency audit | `Security supply chain (A03)` | `uv tool run pip-audit` | `uv sync --frozen` |
+| Python dependency audit | `Security supply chain (A03)` | `uv export` + `pip-audit -r` on `uv.lock` | `uv sync --frozen` |
 | Node dependency audit | `Security supply chain (A03)` | `pnpm audit --audit-level=high` | `pnpm install --frozen-lockfile` |
 | Secret scanning (PRs) | `Security supply chain (A03)` | `gitleaks/gitleaks-action` (SHA-pinned) | — |
 | Security regression tests | `Backend security tests` | `pytest tests/security` | `uv sync --frozen` |
@@ -79,7 +79,7 @@ formally accepted. Re-verify this table on each dependency bump.
 
 | Scanner | Baseline (2026-08-21) | Owner action | Target blocking date |
 |---|---|---|---|
-| `pip-audit` (backend) | 0 known CVEs in locked deps | Keep `uv.lock` current via Dependabot | Next clean CI run |
+| `pip-audit` (backend) | Known: `weasyprint` PYSEC-2026-3412; `starlette` PYSEC-2026-248/249; `python-multipart` PYSEC-2026-3036/3037/3040; `pydantic-settings` GHSA-4xgf-cpjx-pc3j — mitigations tracked in M23; upgrade via Dependabot | Patch or document each CVE; WeasyPrint SSRF mitigated by `weasyprint_safe.py` (LLM10) | TBD after triage |
 | `pnpm audit --audit-level=high` (frontend) | Advisory until first high+ triage | Triage any high/critical; patch or document | TBD after first PR scan |
 | `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately | Next clean PR |
 | Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates | Ongoing |
