@@ -11,8 +11,16 @@
  *   E2E_MOCK_API=1 PLAYWRIGHT_PORT=3100 pnpm exec playwright test tests/e2e/landing-interactive.spec.ts
  */
 import { test, expect, type Locator, type Page } from "@playwright/test"
+import { suppressIntro } from "./helpers/intro"
 
 const CAPABILITY_COUNT = 8
+
+// Runs before every describe-level hook in this file. The intro overlay covers
+// the viewport and eats pointer events, which breaks every `page.mouse.move`
+// below.
+test.beforeEach(async ({ page }) => {
+  await suppressIntro(page)
+})
 
 /**
  * Move the pointer onto a capability card deterministically.
@@ -392,13 +400,32 @@ test.describe("FAQ structured data", () => {
     await page.goto("/")
   })
 
-  test("renders answers visibly rather than collapsed", async ({ page }) => {
+  test("ships every answer in the HTML rather than injecting it on open", async ({
+    page,
+  }) => {
+    const answer = page.getByText(
+      /the resume checkup runs the real analyzer with no account/i,
+    )
+
     await expect(
       page.getByRole("heading", { level: 2, name: /questions people ask first/i }),
     ).toBeVisible()
-    await expect(
-      page.getByText(/the resume checkup runs the real analyzer with no account/i),
-    ).toBeVisible()
+
+    // The FAQ is a `<details>` accordion, so answers are collapsed at rest.
+    // What matters for crawlers and answer engines is that the prose is present
+    // in the served HTML rather than appearing only after a click — which is
+    // why this asserts attachment, not visibility.
+    await expect(answer).toBeAttached()
+
+    // And opening the question genuinely reveals it, so the content is
+    // reachable. Located by tag: Chromium does not expose `<summary>` with a
+    // stable `button` role.
+    await page
+      .locator("summary", {
+        hasText: /do i need an account to check my resume/i,
+      })
+      .click()
+    await expect(answer).toBeVisible()
   })
 
   test("emits parseable FAQPage JSON-LD", async ({ page }) => {
@@ -429,7 +456,8 @@ test.describe("FAQ structured data", () => {
 
   test("states the real signup credit grant in the answer", async ({ page }) => {
     // The count comes from GET /api/billing/free-tier (6 in the mock fixture),
-    // so a hardcoded number in the FAQ prose would fail here.
-    await expect(page.getByText(/registering grants 6 AI credits/i)).toBeVisible()
+    // so a hardcoded number in the FAQ prose would fail here. Attached rather
+    // than visible: the accordion is collapsed at rest.
+    await expect(page.getByText(/registering grants 6 AI credits/i)).toBeAttached()
   })
 })

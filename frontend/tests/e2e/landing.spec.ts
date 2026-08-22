@@ -15,8 +15,12 @@
  * expectations below will fail rather than pass vacuously.
  */
 import { test, expect } from "@playwright/test"
+import { suppressIntro } from "./helpers/intro"
 
 test.beforeEach(async ({ page }) => {
+  // Scrolling dismisses the intro, so the scroll-driven specs below pass by
+  // accident today. Suppress it up front so they pass on purpose.
+  await suppressIntro(page)
   await page.goto("/")
 })
 
