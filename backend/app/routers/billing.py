@@ -56,9 +56,19 @@ from app.services.billing import refund as refund_service
 from app.services.billing import subscription as sub_service
 from app.services.billing import webhook_handler
 from app.services.billing.credits import get_balance
+from app.services.billing.credit_spend import (
+    credits_locked_detail,
+    credits_locked_until_verification,
+    spendable_free_credits,
+)
+from app.services.billing.exhaustion_top_up import (
+    get_exhaustion_top_up_eligibility,
+    grant_exhaustion_top_up,
+)
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
     BillingError,
+    CreditsLockedUntilVerificationError,
     InsufficientCreditsError,
     PriceUnresolvedError,
     RefundError,
@@ -228,6 +238,15 @@ class SubscriptionView(BaseModel):
 class SubscriptionCurrentResponse(BaseModel):
     subscription: SubscriptionView | None
     credit_balance: int
+    spendable_credit_balance: int
+    credits_locked_until_verification: bool
+    exhaustion_top_up_eligible: bool = False
+    exhaustion_top_up_amount: int = 0
+    free_tier_usage_note: str = (
+        "Credits pay for resume tailoring, cover letters, and similar AI actions. "
+        "Job search, checkups, fit analysis, story sessions, and tracker rows use "
+        "separate monthly counters on the free plan."
+    )
 
 
 class RefundRequestPayload(BaseModel):
@@ -255,6 +274,20 @@ class RefundRequestPayload(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _subscription_credit_fields(
+    user: User, *, free_credits: int, exhaustion_top_up_eligible: bool = False
+) -> dict[str, int | bool | str]:
+    return {
+        "credit_balance": free_credits,
+        "spendable_credit_balance": spendable_free_credits(user, balance=free_credits),
+        "credits_locked_until_verification": credits_locked_until_verification(
+            user, balance=free_credits
+        ),
+        "exhaustion_top_up_eligible": exhaustion_top_up_eligible,
+        "exhaustion_top_up_amount": settings.EXHAUSTION_TOP_UP_CREDITS,
+    }
 
 
 def _billing_error_to_http(exc: BillingError) -> HTTPException:
@@ -305,6 +338,32 @@ async def credits_balance(
         best=best,
         legacy_credit_balance=user.credit_balance,
     )
+
+
+@router.post("/api/credits/exhaustion-top-up")
+@limiter.limit("5/minute")
+async def claim_exhaustion_top_up(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, int | bool]:
+    eligibility = await get_exhaustion_top_up_eligibility(session=db, user=user)
+    if not eligibility.eligible:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "exhaustion_top_up_unavailable",
+                "reason": eligibility.reason or "not_eligible",
+            },
+        )
+    try:
+        granted = await grant_exhaustion_top_up(db, user=user)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "exhaustion_top_up_unavailable", "reason": str(exc)},
+        ) from exc
+    return {"ok": True, "granted": granted}
 
 
 @router.get("/api/credits/transactions")
@@ -363,6 +422,11 @@ async def credits_deduct(
             product=payload.product,
             session_id=payload.session_id,
         )
+    except CreditsLockedUntilVerificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=credits_locked_detail(balance=exc.balance),
+        ) from exc
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -633,7 +697,15 @@ async def subscriptions_current(
         )
     ).scalar_one_or_none()
     if sub is None:
-        return SubscriptionCurrentResponse(subscription=None, credit_balance=free_credits)
+        top_up = await get_exhaustion_top_up_eligibility(session=db, user=user)
+        return SubscriptionCurrentResponse(
+            subscription=None,
+            **_subscription_credit_fields(
+                user,
+                free_credits=free_credits,
+                exhaustion_top_up_eligible=top_up.eligible,
+            ),
+        )
 
     plan_code = resolve_plan_code_for_subscription(
         sub, plan_config_code=await reverse_lookup_code(db, sub.stripe_price_id)
@@ -670,7 +742,7 @@ async def subscriptions_current(
             paused_at=sub.paused_at,
             pause_resumes_at=sub.pause_resumes_at,
         ),
-        credit_balance=free_credits,
+        **_subscription_credit_fields(user, free_credits=free_credits),
     )
 
 

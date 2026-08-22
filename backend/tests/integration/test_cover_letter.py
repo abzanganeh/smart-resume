@@ -55,10 +55,15 @@ def _sample_tailored() -> TailoredResumeOutput:
     )
 
 
-async def _register(client: AsyncClient) -> str:
+async def _register(client: AsyncClient, db_session: AsyncSession) -> str:
     payload = {**REGISTER_PAYLOAD, "email": f"cover-{uuid.uuid4().hex[:8]}@example.com"}
     r = await client.post("/api/auth/register", json=payload)
     assert r.status_code == 201, r.text
+    user_id = uuid.UUID(r.json()["user"]["id"])
+    from tests.conftest import verify_user_email
+
+    await verify_user_email(db_session, user_id)
+    await db_session.commit()
     return r.json()["access_token"]
 
 
@@ -88,10 +93,11 @@ async def _parse_sse_events(raw: str) -> list[dict]:
 
 async def test_generate_cover_letter_and_export_pdf(
     app_client: AsyncClient,
+    db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = await _seed_session_with_resume()
-    token = await _register(app_client)
+    token = await _register(app_client, db_session)
 
     async def fake_run(session, llm, event_queue, *, tone="balanced", custom_hook=None):
         await event_queue.put({"event": "progress", "message": "Drafting…"})
@@ -132,6 +138,10 @@ async def test_free_user_zero_credits_returns_402(
 
     user = await db_session.get(User, uuid.UUID(user_id))
     assert user is not None
+    from tests.conftest import verify_user_email
+
+    await verify_user_email(db_session, user.id)
+    await db_session.flush()
     while True:
         balance = await get_balance(
             db_session, user_id=user.id, credit_kind=CreditKind.free
@@ -161,9 +171,11 @@ async def test_free_user_zero_credits_returns_402(
     assert body["detail"]["code"] == "insufficient_credits"
 
 
-async def test_cover_letter_requires_tailored_resume(app_client: AsyncClient) -> None:
+async def test_cover_letter_requires_tailored_resume(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
     session = await create_session()
-    token = await _register(app_client)
+    token = await _register(app_client, db_session)
 
     res = await app_client.post(
         f"/api/sessions/{session.session_id}/cover-letter",

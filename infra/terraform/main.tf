@@ -373,6 +373,29 @@ resource "aws_lambda_permission" "account_closure_tick" {
   source_arn    = aws_cloudwatch_event_rule.account_closure_tick.arn
 }
 
+# unverified_cleanup — daily (§18.2)
+resource "aws_cloudwatch_event_rule" "unverified_account_cleanup" {
+  name                = "${local.name_prefix}-unverified-account-cleanup"
+  description         = "Suspend email accounts unverified after cleanup window (§18.2)"
+  schedule_expression = "cron(0 4 * * ? *)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "unverified_account_cleanup" {
+  rule      = aws_cloudwatch_event_rule.unverified_account_cleanup.name
+  target_id = "unverified-cleanup"
+  arn       = aws_lambda_function.notification_scheduler.arn
+  input     = jsonencode({ schedule = "unverified_cleanup" })
+}
+
+resource "aws_lambda_permission" "unverified_account_cleanup" {
+  statement_id  = "AllowEventBridgeUnverifiedCleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.notification_scheduler.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.unverified_account_cleanup.arn
+}
+
 # ---------------------------------------------------------------------------
 # Career Watch — page poller + matcher (pricing milestone slices 16–17)
 # ---------------------------------------------------------------------------

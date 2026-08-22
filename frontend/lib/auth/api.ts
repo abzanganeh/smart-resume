@@ -34,6 +34,8 @@ export interface BackendUser {
   display_name: string
   tier: string
   credit_balance: number
+  spendable_credit_balance: number
+  credits_locked_until_verification: boolean
   auth_provider: string
   email_verified_at: string | null
   has_totp: boolean
@@ -69,6 +71,17 @@ export interface RegisterPayload {
   display_name?: string
   accepted_tos_version: string
   marketing_opt_in?: boolean
+  turnstile_token: string
+}
+
+export interface RegisterConfig {
+  turnstile_site_key: string
+}
+
+export async function fetchRegisterConfig(): Promise<RegisterConfig> {
+  const res = await fetch(`${BASE}/api/auth/register-config`)
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
 }
 
 export async function registerUser(payload: RegisterPayload): Promise<AuthSuccess> {

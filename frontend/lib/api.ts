@@ -521,6 +521,20 @@ export async function getSubscriptionCurrent(
   return subscriptionInflight
 }
 
+export async function claimExhaustionTopUp(
+  token: string,
+): Promise<{ ok: boolean; granted: number }> {
+  const result = await request<{ ok: boolean; granted: number }>(
+    "/api/credits/exhaustion-top-up",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  )
+  invalidateSubscriptionCache()
+  return result
+}
+
 export async function createCheckoutSession(
   token: string,
   payload: { stripe_price_id: string; billing_cycle?: "recurring" | "yearly" },
@@ -1050,6 +1064,8 @@ export interface DashboardSummaryResponse {
   display_name: string;
   tier: string;
   credit_balance: number;
+  spendable_credit_balance: number;
+  credits_locked_until_verification: boolean;
   next_billing_date: string | null;
   subscription: {
     id: string;
@@ -1148,6 +1164,11 @@ export interface SubscriptionCurrentResponse {
   } | null;
   /** Free credit balance (relevant when subscription is null) */
   credit_balance: number;
+  spendable_credit_balance: number;
+  credits_locked_until_verification: boolean;
+  exhaustion_top_up_eligible?: boolean;
+  exhaustion_top_up_amount?: number;
+  free_tier_usage_note?: string;
 }
 
 // ── Resume Chat ──────────────────────────────────────────────────────────────
