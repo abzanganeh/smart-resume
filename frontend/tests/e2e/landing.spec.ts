@@ -171,12 +171,22 @@ test.describe("journey", () => {
       /tell your story/i,
     )
 
-    // Marker elements live in an absolute layer; raw scrollIntoView is flaky in
-    // headless CI viewports. Letter buttons call the same goToStage() geometry
-    // visitors use when jumping ahead on the rail.
-    await page
-      .getByRole("button", { name: /C — Watch the companies you want/i })
-      .click()
+    // Pinned scrollytelling: use goToStage() geometry with instant scroll so
+    // smooth-scroll inertia cannot overshoot to the track stage in headless CI.
+    await page.evaluate(() => {
+      const track = document
+        .getElementById("journey-panel")
+        ?.closest(".relative.mx-auto") as HTMLElement | null
+      if (!track) return
+      const rect = track.getBoundingClientRect()
+      const index = 2 // jobs — story=0, discover=1, jobs=2
+      const stepCount = 6
+      const absoluteTop = rect.top + window.scrollY
+      const travel = rect.height - window.innerHeight
+      const share = (index + 0.5) / stepCount
+      const target = travel <= 0 ? absoluteTop : absoluteTop + share * travel
+      window.scrollTo({ top: Math.max(0, target), behavior: "instant" })
+    })
     await expect(panel).toHaveAttribute("data-active-stage", "jobs", {
       timeout: 10_000,
     })
