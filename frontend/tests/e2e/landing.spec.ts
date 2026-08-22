@@ -21,19 +21,36 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe("hero", () => {
-  test("leads with career discovery and keeps the ATS trust signals", async ({
+  test("leads with company watch and keeps the ATS trust signals", async ({
     page,
   }) => {
     await expect(
-      page.getByRole("heading", { level: 1, name: /not sure what to apply for/i }),
+      page.getByRole("heading", { level: 1, name: /name the companies/i }),
     ).toBeVisible()
 
-    // ATS is the highest-intent search term and the no-fabrication promise is
-    // the core differentiator — neither may be dropped from the hero.
     const badge = page.getByText(
-      /ATS-optimized · Evidence-based · Never fabricates metrics/i,
+      /Company watch · Alerts in minutes · Never fabricates metrics/i,
     )
     await expect(badge).toBeVisible()
+
+    // ATS is the highest-intent search term and the no-fabrication promise is
+    // the core differentiator. The badge no longer carries ATS, so the
+    // subheading has to, or the page loses the term entirely.
+    await expect(page.getByText(/ATS-optimized resume/i).first()).toBeVisible()
+  })
+
+  test("states the free watch limit rather than implying unlimited", async ({
+    page,
+  }) => {
+    // The hero promises "we'll tell you the minute they're hiring", but the
+    // free tier is one company at 30 minutes (career_watch_companies=1).
+    // The journey stage discloses the same limit, so scope to the hero.
+    const hero = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { level: 1 }) })
+    await expect(
+      hero.getByText(/free plans watch one company/i),
+    ).toBeVisible()
   })
 
   test("offers the no-account checkup alongside registration", async ({
@@ -77,13 +94,15 @@ test.describe("journey", () => {
       .getByRole("list", { name: "Job search stages" })
       .getByRole("heading", { level: 3 })
 
+    // The rail prefixes each stage with its letter marker, so the heading text
+    // is "A — Tell your story", not the bare title.
     await expect(headings).toHaveText([
-      "Tell your story",
-      "Discover where you fit",
-      "Find opportunities",
-      "Make every application fit",
-      "Apply without the busywork",
-      "Keep moving",
+      "A — Tell your story",
+      "B — Discover where you fit",
+      "C — Watch the companies you want",
+      "D — Make every application fit",
+      "E — Apply without the busywork",
+      "F — Keep moving",
     ])
   })
 
@@ -95,11 +114,11 @@ test.describe("journey", () => {
     const jobs = page
       .getByRole("list", { name: "Job search stages" })
       .getByRole("listitem")
-      .filter({ hasText: /find opportunities/i })
+      .filter({ hasText: /watch the companies you want/i })
     await expect(jobs).toHaveCount(1)
     await expect(jobs.getByText("Free · expanded on paid")).toBeVisible()
     await expect(
-      jobs.getByText(/expanded search and fit scoring need a paid plan/i),
+      jobs.getByText(/add expanded search and fit scoring/i),
     ).toBeVisible()
   })
 
@@ -132,7 +151,7 @@ test.describe("journey", () => {
 
     await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
     await expect(panel).toHaveAttribute("data-active-stage", "jobs")
-    await expect(panel).toContainText(/find opportunities/i)
+    await expect(panel).toContainText(/watch the companies you want/i)
   })
 })
 

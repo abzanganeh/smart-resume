@@ -59,13 +59,13 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   {
     id: "jobs",
     step: 3,
-    title: "Find opportunities",
+    title: "Watch the companies you want",
     description:
-      "Search live roles against your confirmed titles, block companies you are not interested in, and watch specific employers for new openings.",
+      `Name the employers you care about. ${PRODUCT_NAME} reads their careers pages directly, every 15 to 45 minutes, and tells you when a role opens — usually before it reaches the big job boards. Search the wider corpus any time.`,
     access: "mixed",
     accessNote:
-      "Corpus search is free once you confirm at least five titles. Expanded search and fit scoring need a paid plan.",
-    ctaLabel: "Find jobs for me",
+      "Free plans watch one company every 30 minutes and search the corpus once you confirm five titles. Paid plans watch more companies, check more often, and add expanded search and fit scoring.",
+    ctaLabel: "Watch a company",
     ctaHref: REGISTER,
   },
   {

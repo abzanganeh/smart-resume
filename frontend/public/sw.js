@@ -1,4 +1,4 @@
-/* TalioCV web push service worker (IMPLEMENTATION_PLAN §6b) */
+/* FlintApply web push service worker (IMPLEMENTATION_PLAN §6b) */
 const SW_VERSION = "dev";
 const VAPID_PUBLIC_KEY = "";
 
@@ -25,10 +25,10 @@ self.addEventListener("push", (event) => {
         payload = {};
       }
 
-      const title = payload.title || "TalioCV";
+      const title = payload.title || "FlintApply";
       const body = payload.body || "You have a new notification";
       const url = payload.url || "/notifications";
-      const tag = payload.tag || "taliocv";
+      const tag = payload.tag || "flintapply";
       const notificationId = payload.notification_id || null;
 
       await self.registration.showNotification(title, {

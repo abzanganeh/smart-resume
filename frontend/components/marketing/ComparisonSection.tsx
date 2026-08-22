@@ -7,23 +7,20 @@ import { pinnedProgress } from "@/lib/marketing/stageRail";
 import { SECTION, SECTION_HEADING, SECTION_SUBHEADING } from "./styles";
 
 const WITHOUT = [
-  "\u201cI need a job.\u201d",
-  "Scroll a job board",
-  "Hundreds of listings",
-  "Guess which ones fit",
-  "Open Word",
+  "Check a job board when you remember",
+  "The role went up three days ago",
+  "You are applicant 200",
   "Rewrite the resume by hand",
-  "Apply",
-  "Log it in a spreadsheet",
+  "Apply late",
+  "Never hear back",
 ];
 
 const WITH = [
-  "Tell your story once",
-  "Get the roles you fit",
-  "Search those roles",
-  "Paste the job description",
-  "Tailor and check the ATS score",
-  "Apply",
+  "Name the companies you want",
+  "Their careers pages are read every few minutes",
+  "You hear the moment a role opens",
+  "Tailor from your real experience",
+  "Apply the same hour",
   "Track it automatically",
 ];
 
@@ -106,7 +103,7 @@ export function ComparisonSection() {
 
   return (
     <section className={`${SECTION} pb-16`}>
-      <h2 className={SECTION_HEADING}>Same goal, fewer dead ends</h2>
+      <h2 className={SECTION_HEADING}>Same goal, days earlier</h2>
       <p className={SECTION_SUBHEADING}>
         Scroll to compare doing it alone versus using {PRODUCT_NAME}.
       </p>
@@ -141,7 +138,7 @@ export function ComparisonSection() {
             </div>
 
             {/* Sized for the longer of the two flows so neither list clips. */}
-            <div aria-hidden className="relative min-h-[22rem]">
+            <div aria-hidden className="relative min-h-[17rem]">
               <div
                 className="absolute inset-0"
                 style={{ opacity: 1 - compareProgress }}

@@ -15,18 +15,20 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
       <div className="relative z-[1] text-center max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-full px-4 py-1.5 text-sm text-slate-700 dark:text-slate-300 mb-6">
           <Sparkles aria-hidden className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-          ATS-optimized · Evidence-based · Never fabricates metrics
+          Company watch · Alerts in minutes · Never fabricates metrics
         </div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight">
-          Not sure what to apply for?{" "}
+          Name the companies.{" "}
           <span className="text-amber-700 dark:text-amber-400">
-            Start with what you&rsquo;ve done.
+            We&rsquo;ll tell you the minute they&rsquo;re hiring.
           </span>
         </h1>
         <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 mb-3 max-w-2xl mx-auto">
-          Tell {PRODUCT_NAME} your career story once. It finds the job titles you
-          actually fit, then tailors an ATS-optimized resume to every job
-          description you paste &mdash; using only your real experience.
+          {PRODUCT_NAME}{" "}
+          watches the careers pages you pick &mdash; the
+          company&rsquo;s own listings, not a job board &mdash; and tells you
+          when a role opens, in minutes rather than days. Then it tailors an
+          ATS-optimized resume to it, using only your real experience.
         </p>
       </div>
 
@@ -46,8 +48,10 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
           {formatSignupCreditsCopy(startingCredits)} · No credit card required
         </p>
         <p className={`mt-1 ${FINE_PRINT}`}>
-          The resume checkup needs no account at all. Registering takes about a
-          minute and includes {startingCredits} AI {creditsLabel}.
+          Free plans watch one company and check it every 30 minutes; paid plans
+          watch more, more often. Registering takes about a minute and includes{" "}
+          {startingCredits} AI {creditsLabel}. The resume checkup needs no
+          account at all.
         </p>
       </div>
 
