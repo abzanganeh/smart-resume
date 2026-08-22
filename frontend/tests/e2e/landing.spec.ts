@@ -30,9 +30,10 @@ test("emits OWASP A02 security headers on the public landing route", async ({
   const response = await page.goto("/")
   expect(response).not.toBeNull()
   const headers = response!.headers()
-  expect(headers["content-security-policy-report-only"]).toContain(
+  expect(headers["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   )
+  expect(headers["content-security-policy-report-only"]).toBeUndefined()
   expect(headers["x-content-type-options"]).toBe("nosniff")
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin")
   expect(headers["x-frame-options"]).toBe("DENY")

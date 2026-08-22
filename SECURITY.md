@@ -78,9 +78,9 @@ the accepted-risk row for that gate is cleared.
 These gates run with `continue-on-error: true` until findings are remediated or
 formally accepted. Re-verify this table on each dependency bump.
 
-| Scanner | Baseline (2026-08-21) | Owner action | Target blocking date |
+| Scanner | Baseline (2026-08-22) | Owner action | Target blocking date |
 |---|---|---|---|
-| `pip-audit` (backend) | Known: `weasyprint` PYSEC-2026-3412; `starlette` PYSEC-2026-248/249; `python-multipart` PYSEC-2026-3036/3037/3040; `pydantic-settings` GHSA-4xgf-cpjx-pc3j — mitigations tracked in M23; upgrade via Dependabot | Patch or document each CVE; WeasyPrint SSRF mitigated by `weasyprint_safe.py` (LLM10) | TBD after triage |
+| `pip-audit` (backend) | Accepted with mitigation: `weasyprint` PYSEC-2026-3412 (SSRF mitigated by `weasyprint_safe.py`); transitive: `aiohttp`, `urllib3` (botocore pin), `cryptography`, `ecdsa`, `httplib2` — upgrade via Dependabot | Patch or document each; ratchet `--ignore-vuln` list in CI when only documented accepts remain | Next Dependabot cycle |
 | `pnpm audit --audit-level=high` (frontend) | Advisory until first high+ triage | Triage any high/critical; patch or document | TBD after first PR scan |
 | `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately | Next clean PR |
 | Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates | Ongoing |
@@ -100,7 +100,7 @@ Production and staging TLS VMs add the same transport headers at the Caddy edge
 
 | Header | Where | Notes |
 |---|---|---|
-| `Content-Security-Policy-Report-Only` | Next.js (frontend); Caddy (API vhost) | Report-only first; enforce after e2e proves landing motion still works |
+| `Content-Security-Policy` | Next.js (frontend); Caddy API vhost uses `default-src 'none'` | Enforced 2026-08-22 after landing e2e smoke; `style-src 'unsafe-inline'` accepted risk for M16 motion |
 | `Strict-Transport-Security` | Next.js (production build only); Caddy (TLS vhosts) | Omitted on local HTTP dev (`:3100`) |
 | `X-Content-Type-Options: nosniff` | Next.js + Caddy | — |
 | `Referrer-Policy: strict-origin-when-cross-origin` | Next.js + Caddy | — |
@@ -121,12 +121,10 @@ PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
 
 | Control | Baseline (2026-08-21) | Owner action | Target blocking date |
 |---|---|---|---|
-| CSP `style-src 'unsafe-inline'` | Required for M16 landing motion (intro overlay, spotlight, journey rail CSS custom properties) | Prefer nonce/hash per inline block; remove `'unsafe-inline'` before enforce | Before CSP enforce (post e2e green) |
-| CSP `script-src 'unsafe-inline'` | Next.js `ThemeScript` + framework chunks | Audit for hash/nonce during enforce phase | Before CSP enforce |
-| CSP report-only mode | Violations logged in browser devtools only | Collect reports; fix violations; switch to `Content-Security-Policy` | TBD after smoke + staging soak |
+| CSP `style-src 'unsafe-inline'` | Required for M16 landing motion (intro overlay, spotlight, journey rail CSS custom properties) | Prefer nonce/hash per inline block; remove `'unsafe-inline'` in a follow-up ratchet | Ongoing |
+| CSP `script-src 'unsafe-inline'` | Next.js `ThemeScript` + framework chunks | Audit for hash/nonce in a follow-up ratchet | Ongoing |
 
-When report-only is clean on staging, rename the header to enforcing and remove
-the corresponding row from this table.
+`style-src 'unsafe-inline'` and `script-src 'unsafe-inline'` remain in the **enforcing** policy until nonce/hash migration.
 
 ## Cryptography (OWASP A04)
 
