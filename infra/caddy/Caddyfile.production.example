@@ -23,7 +23,7 @@
 # Stripe webhook:
 #   https://api.flintapply.com/api/billing/webhook
 
-# Shared edge headers (OWASP A02 / M23 A2). Frontend CSP-Report-Only is emitted
+# Shared edge headers (OWASP A02 / M23 A2). Frontend emits enforcing CSP via Next.js;
 # by Next.js upstream; Caddy adds transport and baseline headers for both vhosts.
 (security_headers) {
 	header {
@@ -45,7 +45,7 @@ flintapply.com {
 api.flintapply.com {
 	import security_headers
 	# JSON API: deny embedding and shrink default fetch surface at the edge.
-	header Content-Security-Policy-Report-Only "default-src 'none'; frame-ancestors 'none'"
+	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 	encode gzip
 	reverse_proxy localhost:8000
 }
