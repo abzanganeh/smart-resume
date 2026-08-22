@@ -62,6 +62,10 @@ from app.services.billing.credit_spend import (
     credits_locked_until_verification,
     spendable_free_credits,
 )
+from app.services.billing.exhaustion_paywall import (
+    build_exhaustion_paywall,
+    insufficient_credits_detail,
+)
 from app.services.billing.exhaustion_top_up import (
     get_exhaustion_top_up_eligibility,
     grant_exhaustion_top_up,
@@ -326,6 +330,17 @@ async def billing_free_tier(
     return FreeTierResponse(starting_credits=amount)
 
 
+@router.get("/api/billing/exhaustion-paywall")
+@limiter.limit("120/minute")
+async def billing_exhaustion_paywall(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """Contextual upgrade options when free credits are exhausted."""
+    return await build_exhaustion_paywall(db, user=user)
+
+
 @router.get("/api/credits/balance")
 @limiter.limit("120/minute")
 async def credits_balance(
@@ -434,11 +449,7 @@ async def credits_deduct(
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "code": "insufficient_credits",
-                "credit_kind": exc.credit_kind,
-                "balance": exc.balance,
-            },
+            detail=await insufficient_credits_detail(db, user=user, exc=exc),
         ) from exc
     except ValueError as exc:
         raise HTTPException(

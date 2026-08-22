@@ -21,6 +21,7 @@ from app.services.billing.exceptions import (
 )
 from app.services.session_ownership import require_session_user
 from app.services.billing.credit_spend import credits_locked_detail
+from app.services.billing.exhaustion_paywall import insufficient_credits_detail
 from app.services.billing.quota import check_quota_for_cover_letter
 from app.services.export_service import (
     render_cover_letter_docx,
@@ -87,8 +88,16 @@ async def generate_cover_letter(
             status_code=403,
             detail=credits_locked_detail(balance=exc.balance),
         ) from exc
-    except InsufficientCreditsError:
-        raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail=await insufficient_credits_detail(
+                db,
+                user=user,
+                exc=exc,
+                message="You're out of credits. Cover letter generation costs 1 credit.",
+            ),
+        ) from exc
 
     apply_llm_request_headers(
         session,

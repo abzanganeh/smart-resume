@@ -45,6 +45,7 @@ import { SessionAiControls } from "@/components/session/SessionAiControls";
 import { cn } from "@/lib/utils";
 import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
+import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
@@ -1003,8 +1004,17 @@ function SessionContent() {
                   >
                     Upload master resume →
                   </Link>
-                ) : runErrorCode === "insufficient_credits" ||
-                  runErrorCode === "subscription_required" ? (
+                ) : runErrorCode === "insufficient_credits" ? (
+                  !authSession?.backendAccessToken ? (
+                    <Link
+                      href="/billing"
+                      className="whitespace-nowrap underline hover:no-underline text-red-700 dark:text-red-400"
+                      onClick={() => setRunError(null)}
+                    >
+                      View billing →
+                    </Link>
+                  ) : null
+                ) : runErrorCode === "subscription_required" ? (
                   <Link
                     href="/billing"
                     className="whitespace-nowrap underline hover:no-underline text-red-700 dark:text-red-400"
@@ -1028,6 +1038,19 @@ function SessionContent() {
                 )}
               </div>
             </div>
+          )}
+
+          {runErrorCode === "insufficient_credits" && authSession?.backendAccessToken && (
+            <ExhaustionPaywall
+              token={authSession.backendAccessToken}
+              className="mb-6"
+              compact
+              onCreditsRefreshed={() => {
+                setRunError(null);
+                setRunErrorCode(null);
+                setRunErrorType(null);
+              }}
+            />
           )}
 
           {llmErrorActive && <div className="mb-6">{sessionAiControls}</div>}

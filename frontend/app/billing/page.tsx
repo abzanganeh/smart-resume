@@ -39,6 +39,7 @@ import {
   promoRedeemSuccessMessage,
 } from "@/lib/promoRedeem"
 import { clsx } from "clsx"
+import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall"
 
 // ── Feature display labels ─────────────────────────────────────────────────
 
@@ -715,6 +716,13 @@ export default function BillingPage() {
 
       {/* Plan selection */}
       <section className="space-y-5">
+        {!isSubscribed && !loadingCurrent && current?.credit_balance === 0 && token && (
+          <ExhaustionPaywall
+            token={token}
+            onCreditsRefreshed={() => void loadCurrent()}
+          />
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             {isSubscribed ? "Change plan" : "Choose a plan"}

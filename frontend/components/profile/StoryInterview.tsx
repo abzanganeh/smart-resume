@@ -25,6 +25,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall";
 import {
   type InterviewMessage,
   type VerifyItem,
@@ -60,6 +61,7 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showExhaustionPaywall, setShowExhaustionPaywall] = useState(false);
   const [reviewText, setReviewText] = useState<string | null>(null);
   const [verifyItems, setVerifyItems] = useState<VerifyItem[]>([]);
   const [verifyReviewCount, setVerifyReviewCount] = useState(0);
@@ -159,10 +161,12 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
         const e = err as Error & { code?: string };
         if (currentHistory.length === 0) interviewStartRef.current = false;
         if (e.code === "insufficient_credits") {
-          setError("You need at least 1 credit to start a coached interview. Upgrade to continue.");
+          setError("You need at least 1 credit to start a coached interview.");
+          setShowExhaustionPaywall(true);
           setPhase("credit-disclosure");
         } else {
           setError(e.message ?? "Failed to get next question. Please try again.");
+          setShowExhaustionPaywall(false);
         }
       } finally {
         setIsStreaming(false);
@@ -273,31 +277,42 @@ export function StoryInterview({ token, isFreeUser, onSaved, onBack }: Props) {
           This session costs{" "}
           <span className="text-amber-700 dark:text-amber-400 font-semibold">1 credit</span>. Subscribers pay nothing.
         </p>
-        {error && (
+        {error && !showExhaustionPaywall && (
           <p className="text-red-700 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-500/20 rounded-lg px-3 py-2">
             {error}
           </p>
         )}
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => {
+        {showExhaustionPaywall ? (
+          <ExhaustionPaywall
+            token={token}
+            contextMessage="You need credits to start Coached Interview"
+            onCreditsRefreshed={() => {
+              setShowExhaustionPaywall(false);
               setError(null);
-              interviewStartRef.current = false;
-              setPhase("interviewing");
             }}
-            className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 font-medium transition-colors"
-          >
-            Start interview (uses 1 credit)
-          </button>
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-xl border border-slate-300 dark:border-slate-700 hover:border-slate-500 text-slate-600 dark:text-slate-400 px-4 py-2.5 transition-colors"
-          >
-            Back
-          </button>
-        </div>
+          />
+        ) : (
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                interviewStartRef.current = false;
+                setPhase("interviewing");
+              }}
+              className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 font-medium transition-colors"
+            >
+              Start interview (uses 1 credit)
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-xl border border-slate-300 dark:border-slate-700 hover:border-slate-500 text-slate-600 dark:text-slate-400 px-4 py-2.5 transition-colors"
+            >
+              Back
+            </button>
+          </div>
+        )}
       </div>
     );
   }
