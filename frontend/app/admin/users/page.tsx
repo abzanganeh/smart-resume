@@ -344,7 +344,23 @@ function UserDetailDrawer({
                 <InfoRow label="Tier" value={<TierBadge tier={user.tier} />} />
                 <InfoRow label="Credits" value={<span className="font-mono text-white">{user.credit_balance}</span>} />
                 <InfoRow label="Plan" value={user.subscription_status ?? "—"} />
-                <InfoRow label="Resumes" value={String(user.resume_count)} />
+                <InfoRow label="Resumes" value={String(user.resume_count ?? "—")} />
+                {user.signup_ip && (
+                  <InfoRow label="Signup IP" value={<code className="text-xs text-slate-400">{user.signup_ip}</code>} />
+                )}
+                {user.last_login_ip && (
+                  <InfoRow label="Last login IP" value={<code className="text-xs text-slate-400">{user.last_login_ip}</code>} />
+                )}
+                {user.signup_abuse_review_flag && (
+                  <InfoRow
+                    label="Signup review"
+                    value={
+                      <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/40 px-2 py-0.5 rounded-full">
+                        {user.signup_abuse_review_flag}
+                      </span>
+                    }
+                  />
+                )}
                 {user.stripe_customer_id && (
                   <InfoRow label="Stripe ID" value={<code className="text-xs text-slate-400">{user.stripe_customer_id}</code>} />
                 )}

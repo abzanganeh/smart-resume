@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "Privacy Policy for TalioCV.  GDPR lawful bases, data categories, retention periods, and your rights.",
 }
 
-const LAST_UPDATED = "2026-05-31"
+const LAST_UPDATED = "2026-08-21"
 
 export default function PrivacyPage() {
   return (
@@ -60,6 +60,14 @@ export default function PrivacyPage() {
           rows, application tracker entries.
         </li>
         <li>
+          <strong>Security &amp; fraud prevention</strong>: signup IP address,
+          hashed device/browser fingerprint (never raw fingerprint inputs),
+          Turnstile signals, and auth audit metadata. Processed under
+          legitimate interest (GDPR Art. 6(1)(f)) to prevent free-tier abuse.
+          Under EU ePrivacy rules, reading device characteristics for this
+          purpose is disclosed here rather than via a separate cookie banner.
+        </li>
+        <li>
           <strong>Billing</strong>: Stripe customer / subscription IDs,
           payment-failure timestamps, refund records.  Card data never
           touches our servers.
@@ -82,6 +90,11 @@ export default function PrivacyPage() {
           <code>AdminAuditLog</code> — 7 years (financial / compliance).
         </li>
         <li><code>AuthAuditLog</code> — 1 year.</li>
+        <li>
+          Signup IP and hashed device fingerprint — retained while the account
+          is active and for up to 90 days after closure, then deleted with other
+          account metadata (aligned with auth audit retention).
+        </li>
         <li>
           <code>Notification</code> rows — 90 days hot, then archived 1 year.
         </li>

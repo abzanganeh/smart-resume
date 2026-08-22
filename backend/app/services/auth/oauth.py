@@ -29,6 +29,7 @@ class NormalisedOAuthProfile(TypedDict):
     email: str
     provider_id: str
     display_name: str
+    email_verified: bool
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +139,12 @@ def _normalise_google(profile: dict[str, Any]) -> NormalisedOAuthProfile:
         or profile.get("given_name")
         or email.split("@", 1)[0]
     )
-    return {"email": email, "provider_id": str(sub), "display_name": display}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": display,
+        "email_verified": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +190,7 @@ async def _github_profile_from_access_token(
         "email": email.lower().strip(),
         "provider_id": str(user["id"]),
         "display_name": user.get("name") or user.get("login") or email.split("@", 1)[0],
+        "email_verified": True,
     }
 
 
@@ -271,7 +278,12 @@ async def _microsoft_profile_from_access_token(
     if not email or not sub:
         raise OAuthError("Microsoft profile missing email or id")
     display = profile.get("displayName") or email.split("@", 1)[0]
-    return {"email": email, "provider_id": str(sub), "display_name": display}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": display,
+        "email_verified": False,
+    }
 
 
 async def fetch_microsoft_profile_with_access_token(
@@ -348,7 +360,12 @@ async def verify_microsoft_id_token(
     if not email or not sub:
         raise OAuthError("Microsoft id_token missing email or subject")
     display = claims.get("name") or email.split("@", 1)[0]
-    return {"email": email, "provider_id": str(sub), "display_name": display}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": display,
+        "email_verified": bool(claims.get("email_verified")),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +393,12 @@ async def _linkedin_profile_from_access_token(
     if not email or not sub:
         raise OAuthError("LinkedIn profile missing email or sub")
     display = profile.get("name") or email.split("@", 1)[0]
-    return {"email": email, "provider_id": str(sub), "display_name": display}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": display,
+        "email_verified": bool(profile.get("email_verified")),
+    }
 
 
 async def fetch_linkedin_profile_with_access_token(
@@ -456,7 +478,12 @@ async def verify_linkedin_id_token(
     if not email or not sub:
         raise OAuthError("LinkedIn id_token missing email or subject")
     display = claims.get("name") or email.split("@", 1)[0]
-    return {"email": email, "provider_id": str(sub), "display_name": display}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": display,
+        "email_verified": bool(claims.get("email_verified")),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +527,12 @@ async def verify_apple_id_token(
             "Apple did not share an email. Use a different sign-in method or "
             "revoke TalioCV in Apple ID settings and try again."
         )
-    return {"email": email, "provider_id": str(sub), "display_name": email.split("@", 1)[0]}
+    return {
+        "email": email,
+        "provider_id": str(sub),
+        "display_name": email.split("@", 1)[0],
+        "email_verified": bool(claims.get("email_verified")),
+    }
 
 
 __all__ = [
