@@ -194,6 +194,16 @@ class Settings(BaseSettings):
     JOB_SEARCH_DB_FIRST: bool = True
     JOB_SEARCH_DB_MIN_RESULTS: int = 5
 
+    # Optional free job aggregators (M19 slice 5) — each default off.
+    JOB_AGGREGATOR_REMOTIVE_ENABLED: bool = False
+    JOB_AGGREGATOR_REMOTEOK_ENABLED: bool = False
+    JOB_AGGREGATOR_ARBEITNOW_ENABLED: bool = False
+    JOB_AGGREGATOR_WEWORKREMOTELY_ENABLED: bool = False
+    JOB_AGGREGATOR_USAJOBS_ENABLED: bool = False
+    JOB_AGGREGATOR_HN_WHOS_HIRING_ENABLED: bool = False
+    USAJOBS_API_KEY: str = ""
+    USAJOBS_USER_AGENT: str = ""
+
     # ---------------------------------------------------------------
     # Admin panel (Step 35 - IMPLEMENTATION_PLAN section 8.4)
     # ---------------------------------------------------------------
