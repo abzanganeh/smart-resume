@@ -41,6 +41,10 @@ from app.models.user import (
     UserTier,
 )
 from app.services.billing.credits import get_balance
+from app.services.billing.credit_spend import (
+    credits_locked_until_verification,
+    spendable_free_credits,
+)
 from app.services.billing.tier_limits_lookup import registration_grant_credits
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
@@ -172,6 +176,8 @@ class MeResponse(BaseModel):
     display_name: str
     tier: UserTier
     credit_balance: int
+    spendable_credit_balance: int
+    credits_locked_until_verification: bool
     auth_provider: AuthProvider
     email_verified_at: datetime | None
     has_totp: bool
@@ -247,12 +253,17 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 def _me(user: User, *, credit_balance: int | None = None) -> MeResponse:
+    balance = credit_balance if credit_balance is not None else user.credit_balance
     return MeResponse(
         id=user.id,
         email=user.email,
         display_name=user.display_name,
         tier=user.tier,
-        credit_balance=credit_balance if credit_balance is not None else user.credit_balance,
+        credit_balance=balance,
+        spendable_credit_balance=spendable_free_credits(user, balance=balance),
+        credits_locked_until_verification=credits_locked_until_verification(
+            user, balance=balance
+        ),
         auth_provider=user.auth_provider,
         email_verified_at=user.email_verified_at,
         has_totp=user.has_totp,

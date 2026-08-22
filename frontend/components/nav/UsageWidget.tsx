@@ -106,16 +106,23 @@ export function UsageWidget() {
 
   const credits =
     current.credit_balance ?? session?.backendUser?.credit_balance ?? 0
+  const locked = current.credits_locked_until_verification
   return (
     <Link
-      href="/billing"
+      href={locked ? "/settings" : "/billing"}
       className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700"
-      title="Free plan — 1 credit per tailored resume. Upgrade for a monthly allowance plus job search, fit analysis, and Whisper voice."
+      title={
+        locked
+          ? `${credits} signup credits — verify your email in Settings to use them.`
+          : "Free plan — 1 credit per tailored resume. Upgrade for a monthly allowance plus job search, fit analysis, and Whisper voice."
+      }
     >
       <Zap className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
       <span className="tabular-nums">{credits}</span>
       <span className="hidden sm:inline text-slate-600 dark:text-slate-400">
-        {credits === 1 ? "credit" : "credits"} left
+        {locked
+          ? "credits — verify email to use"
+          : `${credits === 1 ? "credit" : "credits"} left`}
       </span>
       <span className="hidden sm:inline bg-amber-400 text-slate-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5">
         Upgrade

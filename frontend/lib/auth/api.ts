@@ -34,6 +34,8 @@ export interface BackendUser {
   display_name: string
   tier: string
   credit_balance: number
+  spendable_credit_balance: number
+  credits_locked_until_verification: boolean
   auth_provider: string
   email_verified_at: string | null
   has_totp: boolean

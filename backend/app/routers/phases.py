@@ -30,14 +30,17 @@ from app.services.auth.tokens import (
 )
 from app.services.billing.exceptions import (
     AccountSuspendedError,
+    CreditsLockedUntilVerificationError,
     InsufficientCreditsError,
+    PlanLimitReachedError,
+    SubscriptionRequiredError,
 )
+from app.services.billing.credit_spend import credits_locked_detail
 from app.services.billing.quota import (
     check_and_increment_quota,
     check_quota_for_section_regen,
     QuotaAction,
 )
-from app.services.billing.exceptions import PlanLimitReachedError, SubscriptionRequiredError
 from app.services.master_resume.crud import has_any_live_chunk
 from app.services.llm_session_config import apply_llm_request_headers
 from app.services.session_store import (
@@ -217,6 +220,11 @@ async def trigger_phase(
                     await db.commit()
                 except AccountSuspendedError:
                     raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except CreditsLockedUntilVerificationError as exc:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=credits_locked_detail(balance=exc.balance),
+                    ) from exc
                 except InsufficientCreditsError:
                     raise HTTPException(
                         status_code=402,
@@ -245,6 +253,11 @@ async def trigger_phase(
                     await db.commit()
                 except AccountSuspendedError:
                     raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except CreditsLockedUntilVerificationError as exc:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=credits_locked_detail(balance=exc.balance),
+                    ) from exc
                 except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError) as exc:
                     raise HTTPException(
                         status_code=402,

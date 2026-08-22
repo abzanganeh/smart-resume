@@ -463,6 +463,10 @@ export function DashboardView({ token }: { token: string }) {
               <span className="text-sm text-slate-600 dark:text-slate-400">
                 Next billing: {formatDate(sub.period_end)}
               </span>
+            ) : summary?.credits_locked_until_verification ? (
+              <span className="text-sm text-amber-700 dark:text-amber-300">
+                {summary?.credit_balance ?? 0} credits — verify email to use
+              </span>
             ) : (
               <span className="text-sm text-slate-600 dark:text-slate-400">
                 {summary?.credit_balance ?? 0} credits remaining
@@ -533,7 +537,9 @@ export function DashboardView({ token }: { token: string }) {
           ) : (
             <>
               <p className="text-slate-600 dark:text-slate-400 text-sm">
-                Free tier — {summary?.credit_balance ?? 0} credits left.
+                {summary?.credits_locked_until_verification
+                  ? `Free tier — ${summary?.credit_balance ?? 0} credits waiting. Verify your email in Settings to use them.`
+                  : `Free tier — ${summary?.credit_balance ?? 0} credits left.`}
               </p>
               <Link
                 href="/billing"

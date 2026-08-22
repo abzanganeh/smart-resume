@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import {
@@ -289,7 +290,12 @@ export default function BillingPage() {
       setCurrent(data)
     } catch {
       // Silently ignore — user may not have a subscription yet
-      setCurrent({ subscription: null, credit_balance: 0 })
+      setCurrent({
+        subscription: null,
+        credit_balance: 0,
+        spendable_credit_balance: 0,
+        credits_locked_until_verification: false,
+      })
     } finally {
       setLoadingCurrent(false)
     }
@@ -612,6 +618,15 @@ export default function BillingPage() {
                 credit{current.credit_balance === 1 ? "" : "s"} left
               </span>
             </p>
+            {current.credits_locked_until_verification && (
+              <p className="mt-2 text-sm text-amber-800 dark:text-amber-300">
+                Verify your email in{" "}
+                <Link href="/settings" className="underline font-medium">
+                  Settings
+                </Link>{" "}
+                to use these credits.
+              </p>
+            )}
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 max-w-[220px] text-right">
             Subscribe for a monthly resume allowance plus job search, fit analysis, and Whisper

@@ -36,6 +36,19 @@ class InsufficientCreditsError(BillingError):
         self.balance = balance
 
 
+class CreditsLockedUntilVerificationError(BillingError):
+    """Free credits exist but email is not verified yet.
+
+    Translated to HTTP 403 ``credits_locked_until_verification``.
+    """
+
+    def __init__(self, *, balance: int) -> None:
+        super().__init__(
+            f"free credits locked until email verification (balance={balance})"
+        )
+        self.balance = balance
+
+
 class SubscriptionRequiredError(BillingError):
     """Action is gated behind a paid subscription.
 
@@ -136,6 +149,7 @@ __all__ = [
     "AccountSuspendedError",
     "BillingCycleMismatchError",
     "BillingError",
+    "CreditsLockedUntilVerificationError",
     "InsufficientCreditsError",
     "PlanLimitReachedError",
     "PriceUnresolvedError",

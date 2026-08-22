@@ -19,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import CreditKind
 from app.models.user import CreditTransaction, CreditTransactionAction, User
 from app.services.billing.credits import get_balance
-from app.services.billing.exceptions import InsufficientCreditsError
+from app.services.billing.credit_spend import credits_locked_until_verification
+from app.services.billing.exceptions import (
+    CreditsLockedUntilVerificationError,
+    InsufficientCreditsError,
+)
 
 log = structlog.get_logger("billing.flint_credits")
 
@@ -77,7 +81,10 @@ async def deduct_flint_credits(
     if locked.scalar_one_or_none() is None:
         raise InsufficientCreditsError(CreditKind.free.value, 0)
 
+    user = await session.get(User, user_id)
     balance = await get_balance(session, user_id=user_id, credit_kind=CreditKind.free)
+    if user is not None and credits_locked_until_verification(user, balance=balance):
+        raise CreditsLockedUntilVerificationError(balance=balance)
     if balance < cost:
         raise InsufficientCreditsError(CreditKind.free.value, balance)
 

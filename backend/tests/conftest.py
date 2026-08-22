@@ -14,8 +14,8 @@ Provides:
 
 from __future__ import annotations
 
-import os
-from collections.abc import AsyncGenerator
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -29,6 +29,16 @@ from app.services.auth import session as redis_session
 from app.services.admin_auth import tokens as admin_tokens
 from app.services.session_store import reset_redis_keys_for_tests
 from app.db.engine import get_db
+
+
+async def verify_user_email(db_session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Mark a test user verified so free-credit spend paths can run."""
+    from app.models.user import User
+
+    user = await db_session.get(User, user_id)
+    if user is not None and user.email_verified_at is None:
+        user.email_verified_at = datetime.now(timezone.utc)
+        await db_session.flush()
 
 
 # slowapi assigns rate limits by IP — across many tests they would

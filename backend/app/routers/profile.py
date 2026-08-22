@@ -78,7 +78,12 @@ from app.services.billing.quota import (
     check_quota_for_story_interview,
     check_quota_for_story_save,
 )
-from app.services.billing.exceptions import AccountSuspendedError, InsufficientCreditsError
+from app.services.billing.exceptions import (
+    AccountSuspendedError,
+    CreditsLockedUntilVerificationError,
+    InsufficientCreditsError,
+)
+from app.services.billing.credit_spend import credits_locked_detail
 from app.services.resume_validation import validate_resume_text
 from app.services.master_resume import crud as master_crud
 from app.services.master_resume.chunking import Chunk, count_tokens
@@ -630,6 +635,11 @@ async def create_resume_from_story(
             whisper_path=body.whisper_path,
             session_id=story_session_id,
         )
+    except CreditsLockedUntilVerificationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=credits_locked_detail(balance=exc.balance),
+        ) from exc
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=402,
@@ -709,6 +719,11 @@ async def save_resume_from_story(
             user=user,
             session_id=story_session_id,
         )
+    except CreditsLockedUntilVerificationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=credits_locked_detail(balance=exc.balance),
+        ) from exc
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=402,
@@ -842,6 +857,11 @@ async def story_coach_endpoint(
             )
         except AccountSuspendedError:
             raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+        except CreditsLockedUntilVerificationError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail=credits_locked_detail(balance=exc.balance),
+            ) from exc
         except InsufficientCreditsError:
             raise HTTPException(
                 status_code=402,
@@ -920,6 +940,11 @@ async def story_interview_next(
             )
         except AccountSuspendedError:
             raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+        except CreditsLockedUntilVerificationError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail=credits_locked_detail(balance=exc.balance),
+            ) from exc
         except InsufficientCreditsError:
             raise HTTPException(
                 status_code=402,

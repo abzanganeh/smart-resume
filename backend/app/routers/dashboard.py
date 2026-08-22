@@ -29,6 +29,10 @@ from app.models.session import PhaseStatus
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
 from app.services.billing.credits import get_balance
+from app.services.billing.credit_spend import (
+    credits_locked_until_verification,
+    spendable_free_credits,
+)
 from app.services.billing.tier_limits_lookup import get_active_tier_limits
 from app.services.billing.plan_code import resolve_plan_code_for_subscription
 from app.services.billing.price_resolver import reverse_lookup_code
@@ -56,6 +60,8 @@ class DashboardSummaryResponse(BaseModel):
     display_name: str
     tier: str
     credit_balance: int
+    spendable_credit_balance: int
+    credits_locked_until_verification: bool
     next_billing_date: str | None
     subscription: dict[str, Any] | None
     counts: dict[str, int]
@@ -280,6 +286,10 @@ async def dashboard_summary(
         display_name=user.display_name,
         tier=tier,
         credit_balance=free_credits,
+        spendable_credit_balance=spendable_free_credits(user, balance=free_credits),
+        credits_locked_until_verification=credits_locked_until_verification(
+            user, balance=free_credits
+        ),
         next_billing_date=next_billing,
         subscription=subscription_payload,
         counts={
