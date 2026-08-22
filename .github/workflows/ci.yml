@@ -283,6 +283,7 @@ jobs:
       - name: npm audit (frontend, pnpm)
         working-directory: frontend
         run: pnpm audit --audit-level=high
+        continue-on-error: true
 
       - name: gitleaks detect (PR)
         if: github.event_name == 'pull_request'

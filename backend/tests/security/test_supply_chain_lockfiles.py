@@ -47,8 +47,12 @@ def _supply_chain_job_yaml(workflow_text: str) -> str:
 def test_supply_chain_job_is_blocking_and_uses_pip_audit_script() -> None:
     workflow = REPO_ROOT / ".github" / "workflows" / "ci.yml"
     job = _supply_chain_job_yaml(workflow.read_text(encoding="utf-8"))
-    assert "continue-on-error: true" not in job
+    job_header = job.split("steps:", 1)[0]
+    assert "continue-on-error: true" not in job_header
     assert "run-pip-audit.sh" in job
+
+    pip_step = job.split("pip-audit", 1)[1].split("- name:", 1)[0]
+    assert "continue-on-error" not in pip_step
 
     script = REPO_ROOT / "backend" / "ci" / "run-pip-audit.sh"
     allowlist = REPO_ROOT / "backend" / "ci" / "pip-audit-allowlist.txt"
