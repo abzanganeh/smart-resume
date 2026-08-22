@@ -15,6 +15,7 @@ from app.services.career_watch.aggregators.registry import enabled_aggregator_so
 from app.services.career_watch.aggregators.sync import sync_aggregator_jobs_to_cache
 from app.services.career_watch.corpus_sync import sync_polled_jobs_to_caches
 from app.services.career_watch.global_poll_schedule import fetch_due_global_seeds
+from app.services.career_watch.poll_budget import apply_daily_poll_budget, count_polls_today
 from app.services.career_watch.poll_schedule import fetch_due_companies
 from app.services.career_watch.registry import fetch_company_jobs
 
@@ -81,7 +82,8 @@ async def _due_companies_global_then_watchlist(
         ordered.append(company)
         if len(ordered) >= limit:
             break
-    return ordered
+    polls_today = await count_polls_today(session, now=now)
+    return apply_daily_poll_budget(ordered, polls_today=polls_today)
 
 
 async def poll_enabled_aggregators(
