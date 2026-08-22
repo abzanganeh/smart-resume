@@ -21,7 +21,7 @@ from app.models.session import ApprovedMetric
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REPO_BACKEND = REPO_ROOT / "backend"
 PHASE4_QA = REPO_BACKEND / "app" / "agent" / "phase4_qa.py"
-QUALITY_RULES = REPO_ROOT / ".cursor" / "rules" / "resume-quality.mdc"
+PROMPTS_DIR = REPO_BACKEND / "app" / "agent" / "prompts"
 
 
 def _resume_with_bullet(bullet: str) -> TailoredResumeOutput:
@@ -93,11 +93,14 @@ def test_compute_score_result_delegates_to_deterministic_engine() -> None:
     assert sum(axis.max_score for axis in result.axes) == 100
 
 
-def test_resume_quality_rules_forbid_metric_fabrication() -> None:
-    """LLM07 — product rule file matches code-level guardrails."""
-    text = QUALITY_RULES.read_text(encoding="utf-8")
-    assert "do NOT fabricate" in text.lower() or "not fabricate" in text.lower()
-    assert "metrics_needed" in text
+def test_operator_prompts_forbid_metric_fabrication() -> None:
+    """LLM07 — shipped operator prompts match the never-fabricate product rule."""
+    system_base = (PROMPTS_DIR / "system_base.txt").read_text(encoding="utf-8")
+    phase3 = (PROMPTS_DIR / "phase3.txt").read_text(encoding="utf-8")
+    for text in (system_base, phase3):
+        lower = text.lower()
+        assert "never fabricate" in lower
+        assert "metrics_needed" in lower
 
 
 def test_phase4_score_module_documents_llm_non_authority() -> None:
