@@ -90,7 +90,7 @@ Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
 
 | Scanner | Baseline (2026-08-22) | Owner action |
 |---|---|---|
-| `pnpm audit --audit-level=high` (frontend) | **Step-advisory** in CI (`continue-on-error` on that step only); 20 high / 3 critical transitive findings on 2026-08-22 (nanoid/postcss via Next, next-auth beta.31) | Bump `next-auth` to beta.32+; Dependabot grouped frontend PR | Next frontend dep PR |
+| `pnpm audit --audit-level=high` (frontend) | **Blocking** (2026-08-22): `next@16.2.11`, `next-auth@5.0.0-beta.32`, pnpm overrides for transitive `nanoid`, `postcss`, `sharp`, `js-yaml`, `brace-expansion` | Re-run audit on each frontend dep bump | Ongoing Dependabot |
 | `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately |
 | Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates |
 
