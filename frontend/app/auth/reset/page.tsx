@@ -101,16 +101,22 @@ function ResetPageContent() {
             <div className="space-y-5">
               <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm">
                 If an account exists for that email, we sent a reset link. Check
-                Mailpit at{" "}
-                <a
-                  href="http://127.0.0.1:38025"
-                  className="underline underline-offset-2"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  http://127.0.0.1:38025
-                </a>{" "}
-                locally, or your inbox. The link expires in one hour.
+                your inbox — the link expires in one hour.
+                {debugResetUrl && (
+                  <>
+                    {" "}
+                    In local development you can also open Mailpit at{" "}
+                    <a
+                      href="http://127.0.0.1:38025"
+                      className="underline underline-offset-2"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      http://127.0.0.1:38025
+                    </a>
+                    .
+                  </>
+                )}
               </div>
               {debugResetUrl && (
                 <p className="text-sm text-slate-600 dark:text-slate-400 break-all">
