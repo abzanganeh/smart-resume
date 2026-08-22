@@ -55,6 +55,7 @@ from app.services.auth.email import (
     send_verification_email,
 )
 from app.services.auth.email_canonical import canonicalize_email
+from app.services.auth.disposable_domains import is_disposable_email
 from app.services.auth.exceptions import (
     AccountLockedError,
     OAuthError,
@@ -221,6 +222,19 @@ class TfaRequiredResponse(BaseModel):
 
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
+
+
+def _disposable_email_http() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "code": "disposable_email_not_allowed",
+            "message": (
+                "Disposable email addresses cannot be used to sign up. "
+                "Use a personal or work email you can receive mail at."
+            ),
+        },
+    )
 
 
 def _user_agent(request: Request) -> str:
@@ -412,6 +426,9 @@ async def register(
 ) -> AuthSuccessResponse:
     email = payload.email.lower().strip()
     email_canonical = canonicalize_email(email)
+
+    if is_disposable_email(email):
+        raise _disposable_email_http()
 
     # Reject weak passwords up-front using zxcvbn (§18.2).
     try:
@@ -702,6 +719,8 @@ async def oauth_callback(
                     "with_provider": existing.auth_provider.value,
                 },
             )
+        if is_disposable_email(profile["email"]):
+            raise _disposable_email_http()
         grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),

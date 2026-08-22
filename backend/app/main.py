@@ -106,6 +106,10 @@ async def lifespan(app: FastAPI):
                 await db_session.commit()
         except Exception as exc:  # noqa: BLE001 - boot-time best effort
             log.warning("billing.bootstrap.skipped", error=str(exc))
+    from app.services.auth.disposable_domains import disposable_domains
+
+    blocklist = disposable_domains()
+    log.info("startup.disposable_domains_loaded", count=len(blocklist))
     log.info("startup", provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL)
     yield
     await close_redis()
