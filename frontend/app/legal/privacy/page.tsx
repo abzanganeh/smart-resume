@@ -104,7 +104,8 @@ export default function PrivacyPage() {
         </li>
         <li>
           Account closure — soft-delete with a 30-day grace; backups purged
-          within 60 days of grace expiry.
+          within 60 days of grace expiry. Résumé chunks and vector embeddings
+          are removed when closure executes.
         </li>
       </ul>
 
@@ -126,7 +127,9 @@ export default function PrivacyPage() {
         <li>
           <strong>Erasure</strong> — close your account via{" "}
           <code>POST /api/account/close</code>; soft-deleted with a 30-day
-          grace, backups purged within 60 days of grace expiry.
+          grace, backups purged within 60 days of grace expiry. Master-résumé
+          chunks, user-corpus fragments, and their pgvector embeddings are
+          hard-deleted when closure executes (GDPR Art. 17).
         </li>
         <li>
           <strong>Rectification</strong> — update profile data via the

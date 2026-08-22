@@ -18,7 +18,11 @@ from app.models.rewrite import TailoredResumeOutput
 from app.models.session import ApprovedMetric
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
-from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
+from app.services.session_ownership import (
+    bind_session_user_from_bearer,
+    bearer_claims_or_none,
+    resolve_bearer_user_id,
+)
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -37,21 +41,7 @@ async def new_session(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     session = await create_session()
-    # Best-effort binding of session -> authenticated user so downstream
-    # phase-3 retrieval can load that user's master-resume chunks.  We
-    # intentionally do not require auth here to preserve the anonymous
-    # demo flow.
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-        if token:
-            try:
-                claims = decode_access_token(token, expected_type="access")
-                session.user_id = str(claims.get("sub") or "")
-                await update_session(session)
-            except (TokenExpiredError, TokenInvalidError):
-                # Ignore invalid bearer headers here; authenticated APIs
-                # still enforce auth on their own routes.
-                pass
+    await bind_session_user_from_bearer(authorization, session)
     return {"session_id": session.session_id}
 
 
@@ -178,17 +168,10 @@ async def commit_tailored_edits(
         raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
 
     account_email: str | None = None
-    user_id = session.user_id
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-        if token:
-            try:
-                claims = decode_access_token(token)
-                user_id = claims.get("sub") or user_id
-                account_email = claims.get("email")
-            except (TokenExpiredError, TokenInvalidError):
-                pass
-
+    claims = bearer_claims_or_none(authorization)
+    if claims:
+        account_email = claims.get("email")
+    user_id = await resolve_bearer_user_id(authorization, session)
     await commit_tailored_resume(
         session_id,
         tailored,

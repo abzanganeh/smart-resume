@@ -5,7 +5,8 @@
 Please report suspected security issues privately.
 
 - Email: `security@zanganehai.com`
-- PGP fingerprint: `TBD` (publish before first public release)
+- PGP: public key not yet published — request an encryption key at the email
+  above for sensitive reports until the fingerprint is posted in this file.
 - Preferred format: include steps to reproduce, affected version, impact,
   and any proof-of-concept details.
 
@@ -126,4 +127,23 @@ PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
 
 When report-only is clean on staging, rename the header to enforcing and remove
 the corresponding row from this table.
+
+## Cryptography (OWASP A04)
+
+**Last verified:** 2026-08-22  
+**Milestone:** M23 Track B (`feature/owasp-2026-track-b`)
+
+| Control | Implementation | Rotation |
+|---|---|---|
+| JWT access tokens | HS256 with `AUTH_SECRET`; 15-minute TTL; `typ` claim enforced | Rotate `AUTH_SECRET` — invalidates all outstanding JWTs; force re-login |
+| Refresh tokens | Opaque random; SHA-256 digest stored; rotation + reuse detection | Revoked on password reset and concurrent-session replacement |
+| BYOK / TOTP at rest | AES-256-GCM via `BYOK_ENCRYPTION_KEY` (32-byte hex) | Deploy new hex key → re-encrypt `User.totp_secret` and any BYOK blobs → retire old key |
+| Platform embeddings | OpenAI `text-embedding-3-small`; platform-owned key | Key rotation via secret manager; no user BYOK for embeddings |
+| Session cookies | `HttpOnly`, `SameSite=Lax`, `Secure` when `is_production_grade()` | N/A — bound to refresh-token rotation |
+
+Regression coverage: `backend/tests/security/test_crypto_review.py`,
+`test_encryption_production_gate.py`, and `test_auth_asvs_l2.py`.
+
+**Accepted risk:** BYOK key rotation is operator-driven (no automatic re-wrap job
+yet). Document runbook before first production rotation.
 
