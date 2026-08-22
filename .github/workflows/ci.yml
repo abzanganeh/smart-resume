@@ -16,7 +16,7 @@ concurrency:
 # pnpm/action-setup@v4.1.0 → 7088e561eb65bb68695d245aa206f005ef30921d
 # actions/setup-node@v4.4.0 → 49933ea5288caeca8642d1e84afbd3f7d6820020
 # gitleaks/gitleaks-action@v2 → ff98106e4c7b2bc287b24eaf42907196329070c7
-# Ratchet: remove continue-on-error on security-supply-chain once SECURITY.md baseline is clean.
+# security-supply-chain is blocking; pip-audit uses backend/ci/run-pip-audit.sh + allowlist.
 
 jobs:
   backend-unit:
@@ -243,7 +243,6 @@ jobs:
   security-supply-chain:
     name: Security supply chain (A03)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -265,9 +264,7 @@ jobs:
 
       - name: pip-audit (backend, uv.lock)
         working-directory: backend
-        run: |
-          uv export --frozen --format requirements.txt --no-hashes --no-emit-project -o /tmp/requirements-audit.txt
-          uv tool run pip-audit -r /tmp/requirements-audit.txt
+        run: bash ci/run-pip-audit.sh
 
       - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d
         with:

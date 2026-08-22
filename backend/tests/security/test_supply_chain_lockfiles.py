@@ -36,3 +36,38 @@ def test_ci_declares_supply_chain_and_security_test_jobs() -> None:
     assert "pip-audit" in text
     assert "pnpm audit" in text
     assert "gitleaks" in text
+
+
+def _supply_chain_job_yaml(workflow_text: str) -> str:
+    start = workflow_text.index("security-supply-chain:")
+    end = workflow_text.index("backend-security:", start)
+    return workflow_text[start:end]
+
+
+def test_supply_chain_job_is_blocking_and_uses_pip_audit_script() -> None:
+    workflow = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    job = _supply_chain_job_yaml(workflow.read_text(encoding="utf-8"))
+    assert "continue-on-error: true" not in job
+    assert "run-pip-audit.sh" in job
+
+    script = REPO_ROOT / "backend" / "ci" / "run-pip-audit.sh"
+    allowlist = REPO_ROOT / "backend" / "ci" / "pip-audit-allowlist.txt"
+    assert script.is_file()
+    assert allowlist.is_file()
+
+
+def test_pip_audit_allowlist_entries_are_documented() -> None:
+    allowlist = REPO_ROOT / "backend" / "ci" / "pip-audit-allowlist.txt"
+    security_md = (REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    raw = allowlist.read_text(encoding="utf-8")
+
+    vuln_ids: list[str] = []
+    for line in raw.splitlines():
+        stripped = line.split("#", 1)[0].strip()
+        if stripped:
+            vuln_ids.append(stripped)
+
+    assert vuln_ids, "allowlist must contain at least one PYSEC id"
+    for vid in vuln_ids:
+        assert vid.startswith("PYSEC-"), f"unexpected allowlist entry: {vid}"
+        assert vid in security_md or vid in raw, f"{vid} must be documented in SECURITY.md or allowlist comments"
