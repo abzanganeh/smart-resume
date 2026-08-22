@@ -164,11 +164,14 @@ class CheckoutRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=64)
     success_url: str = Field(..., max_length=2048)
     cancel_url: str = Field(..., max_length=2048)
+    promo_code: str | None = Field(default=None, max_length=64)
 
 
 class CheckoutResponse(BaseModel):
     url: str
     id: str
+    discount_applied: bool = False
+    discount_message: str | None = None
 
 
 class PortalRequest(BaseModel):
@@ -513,12 +516,16 @@ async def subscriptions_checkout(
             code=payload.code,
             success_url=payload.success_url,
             cancel_url=payload.cancel_url,
+            promo_code=payload.promo_code,
         )
     except BillingError as exc:
         raise _billing_error_to_http(exc) from exc
+    session = result.session
     return CheckoutResponse(
-        url=str(result.get("url", "")),
-        id=str(result.get("id", "")),
+        url=str(session.get("url", "")),
+        id=str(session.get("id", "")),
+        discount_applied=result.discount_applied,
+        discount_message=result.discount_message,
     )
 
 

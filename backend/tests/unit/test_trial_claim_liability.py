@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import PlanConfig, PlanConfigInterval
 from app.models.user import AuthProvider, User, UserTier
 from app.services.billing.public_prices import build_public_billing_prices
-from app.services.billing.subscription import create_checkout_session
+from app.services.billing.subscription import CheckoutSessionResult, create_checkout_session
 
 pytestmark = pytest.mark.unit
 
@@ -72,7 +72,7 @@ async def test_checkout_session_omits_trial_period_days() -> None:
             side_effect=_fake_create,
         ),
     ):
-        await create_checkout_session(
+        result = await create_checkout_session(
             mock_session,
             user=user,
             code="monthly_pro",
@@ -80,6 +80,7 @@ async def test_checkout_session_omits_trial_period_days() -> None:
             cancel_url="http://localhost:3100/cancel",
         )
 
+    assert isinstance(result, CheckoutSessionResult)
     sub_data = captured.get("subscription_data") or {}
     assert "trial_period_days" not in sub_data
     assert sub_data.get("metadata") is not None

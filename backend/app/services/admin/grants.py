@@ -55,6 +55,25 @@ def validate_grant_payload(
             )
         return
 
+    if grant_type == AdminGrantType.price_discount:
+        promo_id = payload.get("stripe_promotion_code_id")
+        if not isinstance(promo_id, str) or not promo_id.strip():
+            raise InvalidGrantPayloadError(
+                "price_discount payload requires stripe_promotion_code_id"
+            )
+        applicable = payload.get("applicable_plan_codes", [])
+        if applicable is not None and not isinstance(applicable, list):
+            raise InvalidGrantPayloadError(
+                "applicable_plan_codes must be a list when provided"
+            )
+        if isinstance(applicable, list):
+            for code in applicable:
+                if not isinstance(code, str) or not code.strip():
+                    raise InvalidGrantPayloadError(
+                        "applicable_plan_codes entries must be non-empty strings"
+                    )
+        return
+
     raise InvalidGrantPayloadError(f"unsupported grant_type: {grant_type.value}")
 
 
