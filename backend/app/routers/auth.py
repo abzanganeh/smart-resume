@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, Security, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,10 @@ from app.models.user import (
     UserTier,
 )
 from app.services.billing.credits import get_balance
+from app.services.billing.credit_spend import (
+    credits_locked_until_verification,
+    spendable_free_credits,
+)
 from app.services.billing.tier_limits_lookup import registration_grant_credits
 from app.services.auth import session as redis_session
 from app.services.auth.audit import is_account_locked, record_auth_event
@@ -50,6 +55,17 @@ from app.services.auth.email import (
     send_password_reset_email,
     send_verification_email,
 )
+from app.services.auth.email_canonical import canonicalize_email
+from app.services.auth.maintenance import run_unverified_cleanup_tick
+from app.services.auth.client_ip import resolve_client_ip
+from app.services.auth.disposable_domains import is_disposable_email
+from app.services.auth.signup_fingerprint import derive_signup_device_fingerprint_hash
+from app.services.auth.signup_link_analysis import analyze_signup_links
+from app.services.auth.signup_rate_limit import (
+    SignupRateLimitError,
+    assert_signup_rate_limit_allowed,
+)
+from app.services.auth.turnstile import verify_turnstile_token
 from app.services.auth.exceptions import (
     AccountLockedError,
     OAuthError,
@@ -103,6 +119,8 @@ log = structlog.get_logger("auth.router")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+_scheduler_header = APIKeyHeader(name="X-Scheduler-Secret", auto_error=False)
+
 REFRESH_COOKIE_NAME = "sr_refresh"
 
 
@@ -117,6 +135,12 @@ class RegisterRequest(BaseModel):
     display_name: str = Field("", max_length=200)
     accepted_tos_version: str = Field(..., min_length=1, max_length=32)
     marketing_opt_in: bool = False
+    turnstile_token: str = Field(..., min_length=1, max_length=4096)
+    device_fingerprint: str | None = Field(default=None, max_length=512)
+
+
+class RegisterConfigResponse(BaseModel):
+    turnstile_site_key: str
 
 
 class LoginRequest(BaseModel):
@@ -172,6 +196,8 @@ class MeResponse(BaseModel):
     display_name: str
     tier: UserTier
     credit_balance: int
+    spendable_credit_balance: int
+    credits_locked_until_verification: bool
     auth_provider: AuthProvider
     email_verified_at: datetime | None
     has_totp: bool
@@ -213,7 +239,33 @@ class TfaRequiredResponse(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else ""
+    return resolve_client_ip(request)
+
+
+def _signup_rate_limit_http() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={
+            "code": "signup_rate_limited",
+            "message": (
+                "Too many signups from your network today — try again tomorrow, "
+                "or contact support."
+            ),
+        },
+    )
+
+
+def _disposable_email_http() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "code": "disposable_email_not_allowed",
+            "message": (
+                "Disposable email addresses cannot be used to sign up. "
+                "Use a personal or work email you can receive mail at."
+            ),
+        },
+    )
 
 
 def _user_agent(request: Request) -> str:
@@ -247,12 +299,17 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 def _me(user: User, *, credit_balance: int | None = None) -> MeResponse:
+    balance = credit_balance if credit_balance is not None else user.credit_balance
     return MeResponse(
         id=user.id,
         email=user.email,
         display_name=user.display_name,
         tier=user.tier,
-        credit_balance=credit_balance if credit_balance is not None else user.credit_balance,
+        credit_balance=balance,
+        spendable_credit_balance=spendable_free_credits(user, balance=balance),
+        credits_locked_until_verification=credits_locked_until_verification(
+            user, balance=balance
+        ),
         auth_provider=user.auth_provider,
         email_verified_at=user.email_verified_at,
         has_totp=user.has_totp,
@@ -389,7 +446,32 @@ async def _auth_session_id_for_refresh_token(
 # ===========================================================================
 
 
-# 1. POST /register --------------------------------------------------------
+# 1. GET /register-config -----------------------------------------------
+@router.get("/register-config")
+@limiter.limit("120/minute")
+async def register_config(request: Request) -> RegisterConfigResponse:
+    return RegisterConfigResponse(turnstile_site_key=settings.TURNSTILE_SITE_KEY)
+
+
+@router.post("/scheduler/unverified-cleanup")
+async def scheduler_unverified_cleanup(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_scheduler_secret: Annotated[str | None, Security(_scheduler_header)] = None,
+) -> dict[str, Any]:
+    """Internal endpoint for EventBridge unverified-account cleanup tick."""
+    secret = settings.INTERNAL_SCHEDULER_SECRET
+    if not secret or x_scheduler_secret != secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    result = await run_unverified_cleanup_tick(db)
+    return {
+        "ok": True,
+        "dry_run": result.dry_run,
+        "inspected": result.inspected,
+        "suspended": result.suspended,
+    }
+
+
+# 2. POST /register --------------------------------------------------------
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def register(
@@ -399,6 +481,22 @@ async def register(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthSuccessResponse:
     email = payload.email.lower().strip()
+    email_canonical = canonicalize_email(email)
+
+    if is_disposable_email(email):
+        raise _disposable_email_http()
+
+    if not await verify_turnstile_token(
+        token=payload.turnstile_token,
+        remote_ip=_client_ip(request) or None,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "turnstile_failed",
+                "message": "Human verification failed. Please try again.",
+            },
+        )
 
     # Reject weak passwords up-front using zxcvbn (§18.2).
     try:
@@ -416,24 +514,52 @@ async def register(
     existing = (
         await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
-    if existing is not None:
-        if existing.auth_provider != AuthProvider.email and not existing.password_hash:
+    canonical_owner = (
+        await db.execute(select(User).where(User.email_canonical == email_canonical))
+    ).scalar_one_or_none()
+    if existing is not None or (
+        canonical_owner is not None and canonical_owner.email != email
+    ):
+        conflict = existing or canonical_owner
+        assert conflict is not None
+        if conflict.auth_provider != AuthProvider.email and not conflict.password_hash:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "code": "email_registered_with_sso",
-                    "provider": existing.auth_provider.value,
+                    "provider": conflict.auth_provider.value,
                 },
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "email_already_registered"},
+            detail={
+                "code": "email_already_registered",
+                "message": (
+                    "An account already exists for this address — "
+                    "sign in or reset your password."
+                ),
+            },
         )
+
+    signup_ip = _client_ip(request) or None
+    signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(
+        request,
+        client_fingerprint=payload.device_fingerprint,
+    )
+    try:
+        await assert_signup_rate_limit_allowed(
+            db,
+            signup_ip=signup_ip or "",
+            device_fingerprint_hash=signup_device_fingerprint_hash,
+        )
+    except SignupRateLimitError as exc:
+        raise _signup_rate_limit_http() from exc
 
     grant_amount = await registration_grant_credits(db)
     user = User(
         id=uuid.uuid4(),
         email=email,
+        email_canonical=email_canonical,
         display_name=payload.display_name or email.split("@", 1)[0],
         auth_provider=AuthProvider.email,
         password_hash=hash_password(payload.password),
@@ -441,10 +567,20 @@ async def register(
         credit_balance=grant_amount,
         accepted_tos_version=payload.accepted_tos_version,
         marketing_opt_in=payload.marketing_opt_in,
-        last_login_ip=_client_ip(request) or None,
+        signup_ip=signup_ip,
+        signup_device_fingerprint_hash=signup_device_fingerprint_hash,
+        last_login_ip=signup_ip,
     )
     db.add(user)
     await db.flush()
+    abuse_flag = await analyze_signup_links(
+        db,
+        signup_ip=signup_ip,
+        device_fingerprint_hash=signup_device_fingerprint_hash,
+    )
+    if abuse_flag:
+        user.signup_abuse_review_flag = abuse_flag
+        await db.flush()
 
     # §18.3 — record the registration grant on the credit ledger in
     # the same transaction as the user row.  ``delta`` is the §7.5
@@ -663,33 +799,65 @@ async def oauth_callback(
         )
     ).scalar_one_or_none()
     if user is None:
+        email = profile["email"].lower().strip()
+        email_canonical = canonicalize_email(email)
         # Also reject if the email already belongs to a different provider.
         existing = (
-            await db.execute(select(User).where(User.email == profile["email"]))
+            await db.execute(select(User).where(User.email == email))
         ).scalar_one_or_none()
-        if existing is not None:
+        canonical_owner = (
+            await db.execute(select(User).where(User.email_canonical == email_canonical))
+        ).scalar_one_or_none()
+        if existing is not None or (
+            canonical_owner is not None and canonical_owner.email != email
+        ):
+            conflict = existing or canonical_owner
+            assert conflict is not None
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "code": "email_already_registered",
-                    "with_provider": existing.auth_provider.value,
+                    "with_provider": conflict.auth_provider.value,
                 },
             )
+        if is_disposable_email(email):
+            raise _disposable_email_http()
+        signup_ip = _client_ip(request) or None
+        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(request)
+        try:
+            await assert_signup_rate_limit_allowed(
+                db,
+                signup_ip=signup_ip or "",
+                device_fingerprint_hash=signup_device_fingerprint_hash,
+            )
+        except SignupRateLimitError as exc:
+            raise _signup_rate_limit_http() from exc
         grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),
-            email=profile["email"],
-            display_name=profile["display_name"] or profile["email"].split("@", 1)[0],
+            email=email,
+            email_canonical=email_canonical,
+            display_name=profile["display_name"] or email.split("@", 1)[0],
             auth_provider=provider_enum,
             provider_id=profile["provider_id"],
             email_verified_at=datetime.now(timezone.utc),  # OAuth provider already verified
             tier=UserTier.free,
             credit_balance=grant_amount,
             accepted_tos_version="oauth",  # frontend records ToS on the consent step
-            last_login_ip=_client_ip(request) or None,
+            signup_ip=signup_ip,
+            signup_device_fingerprint_hash=signup_device_fingerprint_hash,
+            last_login_ip=signup_ip,
         )
         db.add(user)
         await db.flush()
+        abuse_flag = await analyze_signup_links(
+            db,
+            signup_ip=signup_ip,
+            device_fingerprint_hash=signup_device_fingerprint_hash,
+        )
+        if abuse_flag:
+            user.signup_abuse_review_flag = abuse_flag
+            await db.flush()
         db.add(
             CreditTransaction(
                 id=uuid.uuid4(),

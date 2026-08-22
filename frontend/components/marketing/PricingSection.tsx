@@ -97,10 +97,10 @@ export function PricingSection({
                       </span>
                     </p>
                     <p className={`${FINE_PRINT} mt-1`}>
-                      {plan.trial_days
-                        ? `${plan.trial_days}-day trial`
-                        : plan.code === "weekly"
-                          ? "Billed weekly"
+                      {plan.code === "weekly"
+                        ? "Billed weekly"
+                        : plan.cycle === "yearly"
+                          ? "Billed yearly"
                           : "Billed monthly"}
                     </p>
                   </>

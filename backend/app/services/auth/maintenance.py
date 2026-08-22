@@ -6,8 +6,6 @@ by a daily cron job."
 
 The function is written so it can be invoked either from a CLI worker
 (see ``scripts/`` in later steps) or from an in-process scheduler hook.
-A future ``CronWorker`` (Step 31) will wire it up; until then the
-function is callable directly and covered by an integration test.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.user import AuthProvider, User
 
 log = structlog.get_logger("auth.maintenance")
@@ -29,13 +28,15 @@ log = structlog.get_logger("auth.maintenance")
 class CleanupResult:
     inspected: int
     suspended: list[str]
+    dry_run: bool = False
 
 
 async def soft_delete_unverified_accounts(
     session: AsyncSession,
     *,
-    older_than: timedelta = timedelta(days=7),
+    older_than: timedelta | None = None,
     now: datetime | None = None,
+    dry_run: bool | None = None,
 ) -> CleanupResult:
     """Mark unverified email-based accounts older than ``older_than`` as suspended.
 
@@ -45,8 +46,18 @@ async def soft_delete_unverified_accounts(
 
     Only accounts created via ``auth_provider="email"`` are eligible —
     OAuth signups are considered verified by the provider.
+
+    When ``dry_run`` is true, eligible accounts are counted and returned
+    but not modified — use this for the first scheduled deploy.
     """
     cutoff_now = now or datetime.now(timezone.utc)
+    window_days = settings.UNVERIFIED_ACCOUNT_CLEANUP_DAYS
+    older_than = older_than or timedelta(days=window_days)
+    dry_run = (
+        settings.UNVERIFIED_ACCOUNT_CLEANUP_DRY_RUN
+        if dry_run is None
+        else dry_run
+    )
     cutoff = cutoff_now - older_than
 
     stmt = (
@@ -59,19 +70,49 @@ async def soft_delete_unverified_accounts(
     rows: Iterable[User] = (await session.execute(stmt)).scalars().all()
     suspended_ids: list[str] = []
     for user in rows:
+        suspended_ids.append(str(user.id))
+        if dry_run:
+            continue
         user.suspended_at = cutoff_now
         user.suspension_reason = "email_not_verified_7d"
-        suspended_ids.append(str(user.id))
 
-    if suspended_ids:
+    if suspended_ids and not dry_run:
         await session.flush()
         log.info(
             "auth.maintenance.unverified_suspended",
             count=len(suspended_ids),
             cutoff=cutoff.isoformat(),
         )
+    elif suspended_ids and dry_run:
+        log.info(
+            "auth.maintenance.unverified_dry_run",
+            count=len(suspended_ids),
+            cutoff=cutoff.isoformat(),
+        )
 
-    return CleanupResult(inspected=len(suspended_ids), suspended=suspended_ids)
+    return CleanupResult(
+        inspected=len(suspended_ids),
+        suspended=suspended_ids,
+        dry_run=dry_run,
+    )
 
 
-__all__ = ["CleanupResult", "soft_delete_unverified_accounts"]
+async def run_unverified_cleanup_tick(
+    session: AsyncSession,
+    *,
+    now: datetime | None = None,
+    dry_run: bool | None = None,
+) -> CleanupResult:
+    """Scheduler entrypoint for daily unverified-account cleanup."""
+    return await soft_delete_unverified_accounts(
+        session,
+        now=now,
+        dry_run=dry_run,
+    )
+
+
+__all__ = [
+    "CleanupResult",
+    "run_unverified_cleanup_tick",
+    "soft_delete_unverified_accounts",
+]

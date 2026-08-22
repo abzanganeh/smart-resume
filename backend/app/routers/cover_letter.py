@@ -18,7 +18,12 @@ from app.limiter import limiter
 from app.models.cover_letter import CoverLetterTone
 from app.models.user import User
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
-from app.services.billing.exceptions import AccountSuspendedError, InsufficientCreditsError
+from app.services.billing.exceptions import (
+    AccountSuspendedError,
+    CreditsLockedUntilVerificationError,
+    InsufficientCreditsError,
+)
+from app.services.billing.credit_spend import credits_locked_detail
 from app.services.billing.quota import check_quota_for_cover_letter
 from app.services.export_service import (
     render_cover_letter_docx,
@@ -115,6 +120,11 @@ async def generate_cover_letter(
         await check_quota_for_cover_letter(db, user=user, session_id=session_id)
     except AccountSuspendedError:
         raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+    except CreditsLockedUntilVerificationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=credits_locked_detail(balance=exc.balance),
+        ) from exc
     except InsufficientCreditsError:
         raise HTTPException(status_code=402, detail={"code": "insufficient_credits"})
 

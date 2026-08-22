@@ -32,7 +32,7 @@ const PRICES_FIXTURE = {
       display_name: "Pro",
       cycle: "monthly",
       amount_cents: 1999,
-      trial_days: 7,
+      trial_days: null,
       stripe_price_id: "price_monthly_pro_test",
       is_active: true,
       features: ["resume_tailor", "cover_letter", "fit_analysis", "job_search", "master_resume", "ats_guidance"],

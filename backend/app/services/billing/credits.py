@@ -28,7 +28,11 @@ from app.models.user import (
     CreditTransactionAction,
     User,
 )
-from app.services.billing.exceptions import InsufficientCreditsError
+from app.services.billing.credit_spend import credits_locked_until_verification
+from app.services.billing.exceptions import (
+    CreditsLockedUntilVerificationError,
+    InsufficientCreditsError,
+)
 
 log = structlog.get_logger("billing.credits")
 
@@ -53,6 +57,7 @@ _REASON_TO_ACTION: dict[str, CreditTransactionAction] = {
     "admin_revoke": CreditTransactionAction.admin_revoke,
     "pricing_restructure_expire_addon": CreditTransactionAction.admin_revoke,
     "refund": CreditTransactionAction.refund_reverse,
+    "exhaustion_top_up": CreditTransactionAction.exhaustion_top_up,
     "backfill_legacy_balance": CreditTransactionAction.admin_grant,
 }
 
@@ -156,6 +161,8 @@ async def consume_credit(
     if locked.scalar_one_or_none() is None:
         raise InsufficientCreditsError(credit_kind.value, 0)
 
+    user = await session.get(User, user_id)
+
     # Also lock existing ledger rows for this (user, kind) projection so
     # the "check then insert" path is strictly serialized at the balance source.
     await session.execute(
@@ -167,6 +174,12 @@ async def consume_credit(
     balance = await get_balance(
         session, user_id=user_id, credit_kind=credit_kind, for_share=False
     )
+    if (
+        credit_kind == CreditKind.free
+        and user is not None
+        and credits_locked_until_verification(user, balance=balance)
+    ):
+        raise CreditsLockedUntilVerificationError(balance=balance)
     if balance <= 0:
         raise InsufficientCreditsError(credit_kind.value, balance)
 

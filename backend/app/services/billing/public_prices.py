@@ -144,7 +144,8 @@ async def build_public_billing_prices(session: AsyncSession) -> dict[str, Any]:
                 "display_name": display_name_for_plan_code(row.code),
                 "cycle": _cycle_for_row(row.code, row.interval),
                 "amount_cents": row.amount_cents,
-                "trial_days": 7 if row.code.startswith("monthly_") else None,
+                # No trial is configured in Stripe checkout — do not advertise one.
+                "trial_days": None,
                 "stripe_price_id": row.stripe_price_id,
                 "is_active": True,
                 "features": _FEATURES_BY_CODE.get(row.code, ["resume_tailor"]),

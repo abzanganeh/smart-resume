@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import {
@@ -19,6 +20,7 @@ import {
   getSubscriptionCurrent,
   createCheckoutSession,
   createPortalSession,
+  claimExhaustionTopUp,
   cancelSubscription,
   resumeSubscription,
   pauseSubscription,
@@ -148,14 +150,6 @@ function PlanCard({
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="bg-amber-400 text-slate-900 text-xs font-bold px-3 py-1 rounded-full">
             Most popular
-          </span>
-        </div>
-      )}
-
-      {plan.trial_days && plan.trial_days > 0 && (
-        <div className="absolute top-4 right-4">
-          <span className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-500/30">
-            {plan.trial_days}-day free trial
           </span>
         </div>
       )}
@@ -297,7 +291,14 @@ export default function BillingPage() {
       setCurrent(data)
     } catch {
       // Silently ignore — user may not have a subscription yet
-      setCurrent({ subscription: null, credit_balance: 0 })
+      setCurrent({
+        subscription: null,
+        credit_balance: 0,
+        spendable_credit_balance: 0,
+        credits_locked_until_verification: false,
+        exhaustion_top_up_eligible: false,
+        exhaustion_top_up_amount: 0,
+      })
     } finally {
       setLoadingCurrent(false)
     }
@@ -326,6 +327,20 @@ export default function BillingPage() {
       window.location.assign(checkout_url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start checkout")
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  async function handleExhaustionTopUp() {
+    if (!token || busyAction) return
+    setBusyAction("exhaustion-top-up")
+    setError(null)
+    try {
+      await claimExhaustionTopUp(token)
+      await loadCurrent()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not claim bonus credits")
     } finally {
       setBusyAction(null)
     }
@@ -611,20 +626,60 @@ export default function BillingPage() {
 
       {/* Free credits summary (no subscription) */}
       {!isSubscribed && !loadingCurrent && current && (
-        <section className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Free credits remaining</p>
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-              {current.credit_balance}{" "}
-              <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
-                credit{current.credit_balance === 1 ? "" : "s"} left
-              </span>
+        <section className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Free credits remaining</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                {current.credit_balance}{" "}
+                <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
+                  credit{current.credit_balance === 1 ? "" : "s"} left
+                </span>
+              </p>
+              {current.credits_locked_until_verification && (
+                <p className="mt-2 text-sm text-amber-800 dark:text-amber-300">
+                  Verify your email in{" "}
+                  <Link href="/settings" className="underline font-medium">
+                    Settings
+                  </Link>{" "}
+                  to use these credits.
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-[220px] text-right">
+              Subscribe for a monthly resume allowance plus job search, fit analysis, and Whisper
+              voice — none of which the free plan includes.
             </p>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-[220px] text-right">
-            Subscribe for a monthly resume allowance plus job search, fit analysis, and Whisper
-            voice — none of which the free plan includes.
-          </p>
+          {current.free_tier_usage_note && (
+            <p className="text-xs text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3">
+              {current.free_tier_usage_note}
+            </p>
+          )}
+          {current.exhaustion_top_up_eligible && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Need a few more tries?
+                </p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                  Claim a one-time bonus of {current.exhaustion_top_up_amount ?? 3} credits — once
+                  per account and device. Upgrade options below stay available anytime.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={busyAction === "exhaustion-top-up"}
+                onClick={() => void handleExhaustionTopUp()}
+                className="inline-flex items-center justify-center gap-2 bg-amber-400 text-slate-900 font-semibold px-4 py-2.5 rounded-xl hover:bg-amber-300 disabled:opacity-40 transition-colors shrink-0"
+              >
+                {busyAction === "exhaustion-top-up" && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Claim bonus credits
+              </button>
+            </div>
+          )}
         </section>
       )}
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -61,6 +62,7 @@ async def _seed_user(db_session: AsyncSession, *, free_credits: int) -> uuid.UUI
         tier=UserTier.free,
         credit_balance=0,
         accepted_tos_version="2026-06",
+        email_verified_at=datetime.now(timezone.utc),
     )
     db_session.add(user)
     await db_session.flush()

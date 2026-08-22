@@ -56,6 +56,7 @@ async def _seed_user(
         tier=UserTier.free,
         credit_balance=0,
         accepted_tos_version="2026-06",
+        email_verified_at=datetime.now(timezone.utc),
     )
     if suspended:
         user.suspended_at = datetime.now(timezone.utc)

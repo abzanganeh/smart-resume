@@ -18,7 +18,7 @@ function plan(overrides: Partial<BillingPlan> = {}): BillingPlan {
     display_name: "Pro",
     cycle: "monthly",
     amount_cents: 1999,
-    trial_days: 7,
+    trial_days: null,
     stripe_price_id: "price_test",
     is_active: true,
     features: ["resume_tailor"],
