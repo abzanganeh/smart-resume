@@ -12,7 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.career_watch import CareerAtsType, WatchedCompany
 
-VALID_ATS_TYPES: frozenset[str] = frozenset({"greenhouse", "lever", "ashby"})
+VALID_ATS_TYPES: frozenset[str] = frozenset(
+    {
+        "greenhouse",
+        "lever",
+        "ashby",
+        "smartrecruiters",
+        "workable",
+        "recruitee",
+        "breezy",
+        "personio",
+        "bamboohr",
+    }
+)
 TIER_TARGETS: dict[int, int] = {1: 100, 2: 175, 3: 225}
 TOTAL_TARGET = 500
 REQUIRED_FIELDS: tuple[str, ...] = (
