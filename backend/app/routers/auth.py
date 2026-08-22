@@ -55,7 +55,13 @@ from app.services.auth.email import (
     send_verification_email,
 )
 from app.services.auth.email_canonical import canonicalize_email
+from app.services.auth.client_ip import resolve_client_ip
 from app.services.auth.disposable_domains import is_disposable_email
+from app.services.auth.signup_fingerprint import derive_signup_device_fingerprint_hash
+from app.services.auth.signup_rate_limit import (
+    SignupRateLimitError,
+    assert_signup_rate_limit_allowed,
+)
 from app.services.auth.turnstile import verify_turnstile_token
 from app.services.auth.exceptions import (
     AccountLockedError,
@@ -125,6 +131,7 @@ class RegisterRequest(BaseModel):
     accepted_tos_version: str = Field(..., min_length=1, max_length=32)
     marketing_opt_in: bool = False
     turnstile_token: str = Field(..., min_length=1, max_length=4096)
+    device_fingerprint: str | None = Field(default=None, max_length=512)
 
 
 class RegisterConfigResponse(BaseModel):
@@ -227,7 +234,20 @@ class TfaRequiredResponse(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else ""
+    return resolve_client_ip(request)
+
+
+def _signup_rate_limit_http() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={
+            "code": "signup_rate_limited",
+            "message": (
+                "Too many signups from your network today — try again tomorrow, "
+                "or contact support."
+            ),
+        },
+    )
 
 
 def _disposable_email_http() -> HTTPException:
@@ -498,6 +518,20 @@ async def register(
             },
         )
 
+    signup_ip = _client_ip(request) or None
+    signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(
+        request,
+        client_fingerprint=payload.device_fingerprint,
+    )
+    try:
+        await assert_signup_rate_limit_allowed(
+            db,
+            signup_ip=signup_ip or "",
+            device_fingerprint_hash=signup_device_fingerprint_hash,
+        )
+    except SignupRateLimitError as exc:
+        raise _signup_rate_limit_http() from exc
+
     grant_amount = await registration_grant_credits(db)
     user = User(
         id=uuid.uuid4(),
@@ -510,7 +544,9 @@ async def register(
         credit_balance=grant_amount,
         accepted_tos_version=payload.accepted_tos_version,
         marketing_opt_in=payload.marketing_opt_in,
-        last_login_ip=_client_ip(request) or None,
+        signup_ip=signup_ip,
+        signup_device_fingerprint_hash=signup_device_fingerprint_hash,
+        last_login_ip=signup_ip,
     )
     db.add(user)
     await db.flush()
@@ -746,6 +782,16 @@ async def oauth_callback(
             )
         if is_disposable_email(profile["email"]):
             raise _disposable_email_http()
+        signup_ip = _client_ip(request) or None
+        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(request)
+        try:
+            await assert_signup_rate_limit_allowed(
+                db,
+                signup_ip=signup_ip or "",
+                device_fingerprint_hash=signup_device_fingerprint_hash,
+            )
+        except SignupRateLimitError as exc:
+            raise _signup_rate_limit_http() from exc
         grant_amount = await registration_grant_credits(db)
         user = User(
             id=uuid.uuid4(),
@@ -757,7 +803,9 @@ async def oauth_callback(
             tier=UserTier.free,
             credit_balance=grant_amount,
             accepted_tos_version="oauth",  # frontend records ToS on the consent step
-            last_login_ip=_client_ip(request) or None,
+            signup_ip=signup_ip,
+            signup_device_fingerprint_hash=signup_device_fingerprint_hash,
+            last_login_ip=signup_ip,
         )
         db.add(user)
         await db.flush()

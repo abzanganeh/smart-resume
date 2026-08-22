@@ -194,6 +194,10 @@ class User(Base):
     last_login_ip: Mapped[Optional[str]] = mapped_column(
         String(64), nullable=True
     )
+    signup_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    signup_device_fingerprint_hash: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
     blocked_companies: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )

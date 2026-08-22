@@ -223,6 +223,12 @@ class Settings(BaseSettings):
     TURNSTILE_SITE_KEY: str = ""
     TURNSTILE_SECRET_KEY: str = ""
 
+    # Signup abuse controls (M20 §11j slice 6).
+    TRUSTED_PROXY_IPS: list[str] = ["127.0.0.1", "::1"]
+    SIGNUP_IP_DAILY_LIMIT: int = 15
+    SIGNUP_IP_DEVICE_DAILY_LIMIT: int = 3
+    SIGNUP_FINGERPRINT_COLLISION_THRESHOLD: int = 5
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:
