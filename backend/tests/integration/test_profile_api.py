@@ -33,6 +33,7 @@ REGISTER_PAYLOAD = {
     "display_name": "Profile User",
     "accepted_tos_version": "2026-06",
     "marketing_opt_in": False,
+    "turnstile_token": "test-turnstile-token",
 }
 
 

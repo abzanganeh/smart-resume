@@ -14,7 +14,9 @@ Provides:
 
 from __future__ import annotations
 
+import os
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 
 import pytest
@@ -44,6 +46,17 @@ async def verify_user_email(db_session: AsyncSession, user_id: uuid.UUID) -> Non
 # slowapi assigns rate limits by IP — across many tests they would
 # starve each other.  Disable the limiter for the entire test run.
 limiter.enabled = False
+
+
+@pytest.fixture(autouse=True)
+def _mock_turnstile_verification(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _always_pass(*, token: str, remote_ip: str | None = None) -> bool:
+        return bool(token)
+
+    monkeypatch.setattr(
+        "app.routers.auth.verify_turnstile_token",
+        _always_pass,
+    )
 
 
 def _require_db_url() -> str:

@@ -71,6 +71,17 @@ export interface RegisterPayload {
   display_name?: string
   accepted_tos_version: string
   marketing_opt_in?: boolean
+  turnstile_token: string
+}
+
+export interface RegisterConfig {
+  turnstile_site_key: string
+}
+
+export async function fetchRegisterConfig(): Promise<RegisterConfig> {
+  const res = await fetch(`${BASE}/api/auth/register-config`)
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
 }
 
 export async function registerUser(payload: RegisterPayload): Promise<AuthSuccess> {

@@ -56,6 +56,7 @@ from app.services.auth.email import (
 )
 from app.services.auth.email_canonical import canonicalize_email
 from app.services.auth.disposable_domains import is_disposable_email
+from app.services.auth.turnstile import verify_turnstile_token
 from app.services.auth.exceptions import (
     AccountLockedError,
     OAuthError,
@@ -123,6 +124,11 @@ class RegisterRequest(BaseModel):
     display_name: str = Field("", max_length=200)
     accepted_tos_version: str = Field(..., min_length=1, max_length=32)
     marketing_opt_in: bool = False
+    turnstile_token: str = Field(..., min_length=1, max_length=4096)
+
+
+class RegisterConfigResponse(BaseModel):
+    turnstile_site_key: str
 
 
 class LoginRequest(BaseModel):
@@ -415,7 +421,14 @@ async def _auth_session_id_for_refresh_token(
 # ===========================================================================
 
 
-# 1. POST /register --------------------------------------------------------
+# 1. GET /register-config -----------------------------------------------
+@router.get("/register-config")
+@limiter.limit("120/minute")
+async def register_config(request: Request) -> RegisterConfigResponse:
+    return RegisterConfigResponse(turnstile_site_key=settings.TURNSTILE_SITE_KEY)
+
+
+# 2. POST /register --------------------------------------------------------
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def register(
@@ -429,6 +442,18 @@ async def register(
 
     if is_disposable_email(email):
         raise _disposable_email_http()
+
+    if not await verify_turnstile_token(
+        token=payload.turnstile_token,
+        remote_ip=_client_ip(request) or None,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "turnstile_failed",
+                "message": "Human verification failed. Please try again.",
+            },
+        )
 
     # Reject weak passwords up-front using zxcvbn (§18.2).
     try:

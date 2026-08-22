@@ -218,6 +218,11 @@ class Settings(BaseSettings):
     # Invite acceptance token TTL - invited admin sets password + 2FA.
     ADMIN_INVITE_TTL_SECONDS: int = 7 * 24 * 3600
 
+    # Cloudflare Turnstile (registration CAPTCHA). Dummy keys are injected in
+    # non-production when unset — see _apply_environment_defaults.
+    TURNSTILE_SITE_KEY: str = ""
+    TURNSTILE_SECRET_KEY: str = ""
+
     @field_validator("APP_ENV")
     @classmethod
     def _validate_app_env(cls, v: str) -> str:
@@ -236,6 +241,19 @@ class Settings(BaseSettings):
             and self.ACCESS_TOKEN_TTL_SECONDS == 15 * 60
         ):
             object.__setattr__(self, "ACCESS_TOKEN_TTL_SECONDS", 24 * 3600)
+        if self.APP_ENV != "production":
+            if not self.TURNSTILE_SITE_KEY:
+                object.__setattr__(
+                    self,
+                    "TURNSTILE_SITE_KEY",
+                    "1x00000000000000000000AA",
+                )
+            if not self.TURNSTILE_SECRET_KEY:
+                object.__setattr__(
+                    self,
+                    "TURNSTILE_SECRET_KEY",
+                    "1x0000000000000000000000000000000AA",
+                )
         return self
 
     # Phase 3 — LLM rewrite can take 30–120 s on large resumes; cap it so

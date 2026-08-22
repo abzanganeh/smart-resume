@@ -11,11 +11,13 @@ import { PRODUCT_NAME } from "@/lib/brand"
 import { ThemeToggle } from "@/components/theme/ThemeToggle"
 import {
   fetchMe,
+  fetchRegisterConfig,
   loginUser,
   registerUser,
   verify2fa,
   type TfaRequired,
 } from "@/lib/auth/api"
+import { TurnstileField } from "@/components/auth/TurnstileField"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
 import { friendlyAuthError } from "@/lib/auth/errors"
@@ -95,7 +97,16 @@ function AuthPageContent() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [strength, setStrength] = useState(0)
   const [ssoProviders, setSsoProviders] = useState<string[]>([])
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("")
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const postAuthRedirectRef = useRef(false)
+
+  useEffect(() => {
+    if (view !== "register") return
+    void fetchRegisterConfig()
+      .then((config) => setTurnstileSiteKey(config.turnstile_site_key))
+      .catch(() => setTurnstileSiteKey(""))
+  }, [view])
 
   useEffect(() => {
     getProviders().then((providers) => {
@@ -208,6 +219,10 @@ function AuthPageContent() {
       setError("Please choose a stronger password (score ≥ Fair).")
       return
     }
+    if (!turnstileToken) {
+      setError("Complete the human verification check before creating your account.")
+      return
+    }
     startTransition(async () => {
       try {
         const data = await registerUser({
@@ -216,6 +231,7 @@ function AuthPageContent() {
           display_name: displayName || undefined,
           accepted_tos_version: TOS_VERSION,
           marketing_opt_in: marketingOptIn,
+          turnstile_token: turnstileToken,
         })
         // Create NextAuth session from the backend tokens
         await signIn("token", {
@@ -650,6 +666,12 @@ function AuthPageContent() {
                         Send me product updates and tips (optional)
                       </span>
                     </label>
+                    {turnstileSiteKey ? (
+                      <TurnstileField
+                        siteKey={turnstileSiteKey}
+                        onToken={setTurnstileToken}
+                      />
+                    ) : null}
                   </div>
                 )}
 

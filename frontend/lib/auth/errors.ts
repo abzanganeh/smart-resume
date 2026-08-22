@@ -27,7 +27,9 @@ export function friendlyAuthError(code: string): string {
     account_locked:
       "Account temporarily locked after too many failed attempts. Try again in 15 minutes.",
     account_suspended: "This account has been suspended. Contact support.",
-    weak_password: "Password is too weak. Try a longer or more complex password.",
+    turnstile_failed: "Human verification failed. Please complete the check and try again.",
+    disposable_email_not_allowed:
+      "Disposable email addresses cannot be used to sign up. Use a personal or work email you can receive mail at.",
     reset_token_expired:
       "This reset link has expired. Request a new one to change your password.",
     reset_token_invalid:
