@@ -48,6 +48,7 @@ from app.models.billing import (
 from app.models.notifications import NotificationChannel
 from app.services.notifications.factory import build_notification
 from app.models.user import User
+from app.services.billing.card_fingerprint import record_payment_card_fingerprint
 from app.services.billing.credit_packs import (
     grant_for_one_time_code,
     is_one_time_purchase_code,
@@ -227,6 +228,13 @@ async def handle_checkout_completed(
             f"checkout.session.completed missing resolvable user "
             f"(customer={customer_id!r}, ref={obj.get('client_reference_id')!r})"
         )
+
+    await record_payment_card_fingerprint(
+        session,
+        user_id=user.id,
+        stripe_event_id=event["id"],
+        stripe_object=obj,
+    )
 
     if code and _is_one_time_credit_code(code):
         kind, delta = _credit_kind_for_one_time(code)
@@ -439,6 +447,12 @@ async def handle_invoice_succeeded(
             stripe_subscription_id=stripe_sub_id,
         )
         return
+    await record_payment_card_fingerprint(
+        session,
+        user_id=existing.user_id,
+        stripe_event_id=event["id"],
+        stripe_object=obj,
+    )
     was_grace = existing.status == SubscriptionStatus.grace
     if was_grace:
         existing.status = SubscriptionStatus.active
