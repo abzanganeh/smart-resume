@@ -14,7 +14,7 @@
 #   STAGING_FRONTEND_PORT=3001
 #   STAGING_BACKEND_PORT=8001
 
-# Shared edge headers (OWASP A02 / M23 A2). Frontend CSP-Report-Only is emitted
+# Shared edge headers (OWASP A02 / M23 A2). Frontend emits enforcing CSP via Next.js;
 # by Next.js upstream; Caddy adds transport and baseline headers for both vhosts.
 (security_headers) {
 	header {
