@@ -23,11 +23,7 @@ from app.models.audit import AuditOutput
 from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
 from app.models.session import PhaseRunScope, PhaseStatus
 from app.models.user import User
-from app.services.auth.tokens import (
-    TokenExpiredError,
-    TokenInvalidError,
-    decode_access_token,
-)
+from app.services.session_ownership import resolve_bearer_user_id
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     CreditsLockedUntilVerificationError,
@@ -103,33 +99,6 @@ def _versions_payload(session) -> list[dict]:
     ]
 
 
-async def _resolve_bearer_user_id(
-    authorization: str | None,
-    session,
-) -> str | None:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        return session.user_id
-    token = authorization[7:].strip()
-    if not token:
-        return session.user_id
-    try:
-        claims = decode_access_token(token, expected_type="access")
-        bearer_sub = str(claims.get("sub") or "")
-        if not bearer_sub:
-            return session.user_id
-        if session.user_id and session.user_id != bearer_sub:
-            raise HTTPException(
-                status_code=403,
-                detail="Session does not belong to this user.",
-            )
-        if session.user_id != bearer_sub:
-            session.user_id = bearer_sub
-            await update_session(session)
-        return bearer_sub
-    except (TokenExpiredError, TokenInvalidError):
-        return session.user_id
-
-
 router = APIRouter(prefix="/api/sessions", tags=["phases"])
 
 
@@ -161,7 +130,7 @@ async def trigger_phase(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    user_id = await _resolve_bearer_user_id(authorization, session)
+    user_id = await resolve_bearer_user_id(authorization, session)
 
     if phase >= 2 and getattr(session, f"phase{phase - 1}_status") != PhaseStatus.done:
         raise HTTPException(

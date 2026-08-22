@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import cover_letter as cover_letter_agent
@@ -16,13 +14,12 @@ from app.db.engine import get_db
 from app.llm.factory import get_llm_client
 from app.limiter import limiter
 from app.models.cover_letter import CoverLetterTone
-from app.models.user import User
-from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     CreditsLockedUntilVerificationError,
     InsufficientCreditsError,
 )
+from app.services.session_ownership import require_session_user
 from app.services.billing.credit_spend import credits_locked_detail
 from app.services.billing.quota import check_quota_for_cover_letter
 from app.services.export_service import (
@@ -42,41 +39,6 @@ _cover_letter_locks: set[str] = set()
 class CoverLetterGenerateRequest(BaseModel):
     tone: CoverLetterTone = "balanced"
     custom_hook: str | None = Field(default=None, max_length=500)
-
-
-async def _resolve_user_for_quota_or_401(
-    authorization: str | None,
-    session,
-    db: AsyncSession,
-) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-    token = authorization[7:].strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-    try:
-        claims = decode_access_token(token, expected_type="access")
-        bearer_sub = str(claims.get("sub") or "")
-        if not bearer_sub:
-            raise HTTPException(status_code=401, detail="Invalid access token")
-        if session.user_id and session.user_id != bearer_sub:
-            raise HTTPException(
-                status_code=403,
-                detail="Session does not belong to this user.",
-            )
-        if session.user_id != bearer_sub:
-            session.user_id = bearer_sub
-            await update_session(session)
-        try:
-            uid = uuid.UUID(bearer_sub)
-        except ValueError:
-            raise HTTPException(status_code=401, detail="Invalid access token")
-        user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
-        if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except (TokenExpiredError, TokenInvalidError):
-        raise HTTPException(status_code=401, detail="Invalid access token")
 
 
 def _require_tailored_resume(session) -> None:
@@ -116,7 +78,7 @@ async def generate_cover_letter(
         raise HTTPException(status_code=409, detail="Cover letter generation is already running.")
 
     try:
-        user = await _resolve_user_for_quota_or_401(authorization, session, db)
+        user = await require_session_user(authorization, session, db)
         await check_quota_for_cover_letter(db, user=user, session_id=session_id)
     except AccountSuspendedError:
         raise HTTPException(status_code=403, detail={"code": "account_suspended"})
