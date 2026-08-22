@@ -25,8 +25,11 @@ VALID_ATS_TYPES: frozenset[str] = frozenset(
         "bamboohr",
     }
 )
-TIER_TARGETS: dict[int, int] = {1: 100, 2: 175, 3: 225}
-TOTAL_TARGET = 500
+MIN_CORPUS_SIZE = 500
+MAX_CORPUS_SIZE = 2000
+TOTAL_TARGET = 2000
+TIER1_RATIO = 0.20
+TIER2_RATIO = 0.35
 REQUIRED_FIELDS: tuple[str, ...] = (
     "name",
     "slug",
@@ -35,6 +38,22 @@ REQUIRED_FIELDS: tuple[str, ...] = (
     "poll_priority_tier",
     "careers_page_url",
 )
+
+
+def tier_targets_for_total(total: int) -> dict[int, int]:
+    """Split ``total`` rows across poll tiers using the 20/35/45 corpus ratio."""
+    if total < MIN_CORPUS_SIZE or total > MAX_CORPUS_SIZE:
+        raise ValueError(
+            f"corpus size must be between {MIN_CORPUS_SIZE} and {MAX_CORPUS_SIZE}, got {total}"
+        )
+    tier1 = round(total * TIER1_RATIO)
+    tier2 = round(total * TIER2_RATIO)
+    tier3 = total - tier1 - tier2
+    return {1: tier1, 2: tier2, 3: tier3}
+
+
+# Default tier targets for a full 2,000-company corpus.
+TIER_TARGETS: dict[int, int] = tier_targets_for_total(TOTAL_TARGET)
 
 
 def careers_page_url(ats_type: str, board_token: str) -> str:
@@ -46,6 +65,18 @@ def careers_page_url(ats_type: str, board_token: str) -> str:
         return f"https://jobs.lever.co/{token}"
     if ats_type == "ashby":
         return f"https://jobs.ashbyhq.com/{token}"
+    if ats_type == "smartrecruiters":
+        return f"https://careers.smartrecruiters.com/{token}"
+    if ats_type == "workable":
+        return f"https://apply.workable.com/{token}"
+    if ats_type == "recruitee":
+        return f"https://{token}.recruitee.com/"
+    if ats_type == "breezy":
+        return f"https://{token}.breezy.hr/"
+    if ats_type == "personio":
+        return f"https://{token}.jobs.personio.com/"
+    if ats_type == "bamboohr":
+        return f"https://{token}.bamboohr.com/careers"
     raise ValueError(f"unsupported ats_type: {ats_type}")
 
 
@@ -72,14 +103,18 @@ def validate_seed_records(
     require_full_corpus: bool = True,
 ) -> None:
     """Validate seed corpus invariants; raise ``ValueError`` on failure."""
-    if require_full_corpus and len(records) != TOTAL_TARGET:
-        raise ValueError(f"expected {TOTAL_TARGET} rows, got {len(records)}")
+    total = len(records)
+    if require_full_corpus and (total < MIN_CORPUS_SIZE or total > MAX_CORPUS_SIZE):
+        raise ValueError(
+            f"corpus size must be between {MIN_CORPUS_SIZE} and {MAX_CORPUS_SIZE}, got {total}"
+        )
     if not require_full_corpus and not records:
         raise ValueError("seed records must not be empty")
 
     if require_full_corpus:
+        expected = tier_targets_for_total(total)
         counts = tier_counts(records)
-        for tier, target in TIER_TARGETS.items():
+        for tier, target in expected.items():
             if counts[tier] != target:
                 raise ValueError(
                     f"tier {tier}: expected {target} rows, got {counts[tier]}"
@@ -106,7 +141,7 @@ def validate_seed_records(
             raise ValueError(f"row {index} invalid ats_type: {ats_type!r}")
 
         tier = row["poll_priority_tier"]
-        if tier not in TIER_TARGETS:
+        if tier not in (1, 2, 3):
             raise ValueError(f"row {index} invalid poll_priority_tier: {tier!r}")
 
         token = str(row["ats_board_token"]).strip()
@@ -189,6 +224,8 @@ async def load_seed_file(session: AsyncSession, path: Path) -> LoadStats:
 
 __all__ = [
     "LoadStats",
+    "MAX_CORPUS_SIZE",
+    "MIN_CORPUS_SIZE",
     "REQUIRED_FIELDS",
     "TIER_TARGETS",
     "TOTAL_TARGET",
@@ -198,5 +235,6 @@ __all__ = [
     "load_seed_records",
     "read_seed_json",
     "tier_counts",
+    "tier_targets_for_total",
     "validate_seed_records",
 ]
