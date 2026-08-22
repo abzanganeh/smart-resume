@@ -1508,6 +1508,8 @@ class AdminUserDetail(AdminUserSummary):
     blocked_companies: list[str] = []
     last_login_at: datetime | None = None
     last_login_ip: str | None = None
+    signup_ip: str | None = None
+    signup_abuse_review_flag: str | None = None
     suspension_reason: str | None = None
 
 
@@ -1609,6 +1611,8 @@ async def admin_users_detail(
         closure_requested_at=u.closure_requested_at,
         last_login_at=u.last_login_at,
         last_login_ip=u.last_login_ip,
+        signup_ip=u.signup_ip,
+        signup_abuse_review_flag=u.signup_abuse_review_flag,
         created_at=u.created_at,
     )
 

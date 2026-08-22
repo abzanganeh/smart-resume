@@ -186,6 +186,10 @@ export interface AdminUserDetail extends AdminUser {
   resume_count: number
   credit_transactions: CreditTransaction[]
   login_history: LoginHistoryEntry[]
+  signup_ip?: string | null
+  signup_abuse_review_flag?: string | null
+  last_login_ip?: string | null
+  auth_provider?: string
 }
 
 export interface CreditTransaction {

@@ -16,11 +16,13 @@
  */
 import NextAuth from "next-auth"
 import type { User } from "next-auth"
+import { cookies } from "next/headers"
 import Google from "next-auth/providers/google"
 import GitHub from "next-auth/providers/github"
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
 import LinkedIn from "next-auth/providers/linkedin"
 import Credentials from "next-auth/providers/credentials"
+import { SIGNUP_DEVICE_FP_COOKIE } from "@/lib/auth/deviceFingerprint"
 
 const API_URL =
   process.env.INTERNAL_API_URL ??
@@ -86,6 +88,7 @@ async function syncOAuthWithBackend(
   accessToken: string | undefined,
   idToken: string | undefined,
   callbackUrl: string,
+  deviceFingerprint?: string,
 ): Promise<OAuthSyncResult> {
   if (!idToken && !accessToken) return { ok: false, error: "OAuthBackendSyncPending" }
   try {
@@ -97,6 +100,7 @@ async function syncOAuthWithBackend(
         ...(idToken ? { id_token: idToken } : {}),
         ...(accessToken ? { access_token: accessToken } : {}),
         redirect_uri: callbackUrl,
+        ...(deviceFingerprint ? { device_fingerprint: deviceFingerprint } : {}),
       }),
     })
     if (!res.ok) {
@@ -339,11 +343,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         BACKEND_OAUTH_PROVIDER[account.provider]
       ) {
         const backendProvider = BACKEND_OAUTH_PROVIDER[account.provider]!
+        const cookieStore = await cookies()
+        const fpCookie = cookieStore.get(SIGNUP_DEVICE_FP_COOKIE)?.value
+        const deviceFingerprint = fpCookie ? decodeURIComponent(fpCookie) : undefined
         const synced = await syncOAuthWithBackend(
           backendProvider,
           account.access_token ?? undefined,
           account.id_token ?? undefined,
           `${NEXTAUTH_URL}/api/auth/callback/${account.provider}`,
+          deviceFingerprint,
         )
         if (synced.ok) {
           token.backendAccessToken = synced.access_token

@@ -72,6 +72,7 @@ export interface RegisterPayload {
   accepted_tos_version: string
   marketing_opt_in?: boolean
   turnstile_token: string
+  device_fingerprint?: string
 }
 
 export interface RegisterConfig {

@@ -154,6 +154,7 @@ class CallbackRequest(BaseModel):
     id_token: str | None = Field(None, min_length=1, max_length=8192)
     access_token: str | None = Field(None, min_length=1, max_length=4096)
     redirect_uri: str = Field(default="http://localhost:3000", max_length=1024)
+    device_fingerprint: str | None = Field(default=None, max_length=512)
 
     @model_validator(mode="after")
     def require_one_credential(self) -> "CallbackRequest":
@@ -823,7 +824,10 @@ async def oauth_callback(
         if is_disposable_email(email):
             raise _disposable_email_http()
         signup_ip = _client_ip(request) or None
-        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(request)
+        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(
+            request,
+            client_fingerprint=payload.device_fingerprint,
+        )
         try:
             await assert_signup_rate_limit_allowed(
                 db,
@@ -833,6 +837,7 @@ async def oauth_callback(
         except SignupRateLimitError as exc:
             raise _signup_rate_limit_http() from exc
         grant_amount = await registration_grant_credits(db)
+        oauth_verified = profile.get("email_verified", False)
         user = User(
             id=uuid.uuid4(),
             email=email,
@@ -840,7 +845,7 @@ async def oauth_callback(
             display_name=profile["display_name"] or email.split("@", 1)[0],
             auth_provider=provider_enum,
             provider_id=profile["provider_id"],
-            email_verified_at=datetime.now(timezone.utc),  # OAuth provider already verified
+            email_verified_at=datetime.now(timezone.utc) if oauth_verified else None,
             tier=UserTier.free,
             credit_balance=grant_amount,
             accepted_tos_version="oauth",  # frontend records ToS on the consent step
@@ -869,6 +874,16 @@ async def oauth_callback(
             )
         )
         await db.flush()
+
+        if not oauth_verified:
+            try:
+                await send_verification_email(
+                    to_email=user.email,
+                    user_id=user.id,
+                    display_name=user.display_name,
+                )
+            except Exception as exc:  # pragma: no cover - email infra side
+                log.warning("auth.oauth.verification_send_failed", error=str(exc))
 
     if user.is_suspended:
         raise HTTPException(
