@@ -154,6 +154,7 @@ class CallbackRequest(BaseModel):
     id_token: str | None = Field(None, min_length=1, max_length=8192)
     access_token: str | None = Field(None, min_length=1, max_length=4096)
     redirect_uri: str = Field(default="http://localhost:3000", max_length=1024)
+    device_fingerprint: str | None = Field(default=None, max_length=512)
 
     @model_validator(mode="after")
     def require_one_credential(self) -> "CallbackRequest":
@@ -823,7 +824,10 @@ async def oauth_callback(
         if is_disposable_email(email):
             raise _disposable_email_http()
         signup_ip = _client_ip(request) or None
-        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(request)
+        signup_device_fingerprint_hash = derive_signup_device_fingerprint_hash(
+            request,
+            client_fingerprint=payload.device_fingerprint,
+        )
         try:
             await assert_signup_rate_limit_allowed(
                 db,

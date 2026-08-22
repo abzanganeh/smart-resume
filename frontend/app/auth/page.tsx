@@ -21,7 +21,7 @@ import { TurnstileField } from "@/components/auth/TurnstileField"
 import { isStaleAuthError } from "@/lib/auth/staleSession"
 import { resolveAuthReturnUrl, saveAuthReturnUrl } from "@/lib/auth/returnUrl"
 import { friendlyAuthError } from "@/lib/auth/errors"
-import { getSignupDeviceFingerprint } from "@/lib/auth/deviceFingerprint"
+import { getSignupDeviceFingerprint, persistSignupDeviceFingerprintForOAuth } from "@/lib/auth/deviceFingerprint"
 import {
   captureExtensionHandoffFromParams,
   captureExtensionHandoffFromUrl,
@@ -327,6 +327,7 @@ function AuthPageContent() {
       "/dashboard",
     )
     saveAuthReturnUrl(callbackUrl)
+    persistSignupDeviceFingerprintForOAuth()
     signIn(provider, { callbackUrl })
   }
 
