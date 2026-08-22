@@ -1,0 +1,17 @@
+# pip-audit vulnerability IDs with documented compensating controls (SECURITY.md).
+# One ID per line. Lines starting with # are ignored.
+#
+# weasyprint — SSRF/LFI mitigated by app/services/export/weasyprint_safe.py (LLM10)
+PYSEC-2026-3412
+#
+# ecdsa — transitive via python-jose; TalioCV signs JWTs with HS256 (AUTH_SECRET),
+# not ECDSA. Minimize exposure until python-jose removes/replaces ecdsa.
+PYSEC-2026-1325
+#
+# urllib3 1.26.x — pinned by botocore/boto3 for AWS SigV4 compatibility.
+# S3 usage is server-side only with trusted AWS endpoints.
+PYSEC-2026-141
+PYSEC-2026-1999
+PYSEC-2026-1998
+PYSEC-2026-1994
+PYSEC-2026-1996

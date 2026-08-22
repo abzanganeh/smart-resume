@@ -69,24 +69,30 @@ Dependabot (`.github/dependabot.yml`) opens **weekly grouped** update PRs for
 `backend/` (`uv`) and `frontend/` (`npm`).
 
 Third-party GitHub Actions in the supply-chain job are pinned to full commit
-SHAs. To ratchet a gate from advisory to blocking, set
-`SUPPLY_CHAIN_CONTINUE_ON_ERROR: "false"` in `.github/workflows/ci.yml` after
-the accepted-risk row for that gate is cleared.
+SHAs. The `security-supply-chain` CI job is **blocking** (no `continue-on-error`).
 
-### Accepted-risk baseline (ratchet start)
+### pip-audit allowlist (blocking with documented accepts)
 
-These gates run with `continue-on-error: true` until findings are remediated or
-formally accepted. Re-verify this table on each dependency bump.
+`backend/ci/run-pip-audit.sh` exports `uv.lock` and runs `pip-audit` with
+`--ignore-vuln` IDs listed in `backend/ci/pip-audit-allowlist.txt`. Re-verify
+on each dependency bump; remove IDs when upstream fixes land.
 
-| Scanner | Baseline (2026-08-22) | Owner action | Target blocking date |
-|---|---|---|---|
-| `pip-audit` (backend) | Accepted with mitigation: `weasyprint` PYSEC-2026-3412 (SSRF mitigated by `weasyprint_safe.py`); transitive: `aiohttp`, `urllib3` (botocore pin), `cryptography`, `ecdsa`, `httplib2` — upgrade via Dependabot | Patch or document each; ratchet `--ignore-vuln` list in CI when only documented accepts remain | Next Dependabot cycle |
-| `pnpm audit --audit-level=high` (frontend) | Advisory until first high+ triage | Triage any high/critical; patch or document | TBD after first PR scan |
-| `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately | Next clean PR |
-| Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates | Ongoing |
+| Vulnerability ID | Package | Compensating control |
+|---|---|---|
+| PYSEC-2026-3412 | `weasyprint` | SSRF/LFI mitigated by `app/services/export/weasyprint_safe.py` (LLM10) |
+| PYSEC-2026-1325 | `ecdsa` (via `python-jose`) | TalioCV JWTs use HS256 (`AUTH_SECRET`), not ECDSA signing |
+| PYSEC-2026-141, 1994, 1996, 1998, 1999 | `urllib3` 1.26.x (via `botocore`) | AWS SDK pin; S3 calls are server-side to trusted AWS endpoints only |
 
-When a row is cleared, remove it from this table and flip the corresponding CI
-gate to blocking.
+Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
+`boto3`/`botocore` — no remaining allowlist entries for those packages.
+
+### Remaining advisory / operational items
+
+| Scanner | Baseline (2026-08-22) | Owner action |
+|---|---|---|
+| `pnpm audit --audit-level=high` (frontend) | **Step-advisory** in CI (`continue-on-error` on that step only); 20 high / 3 critical transitive findings on 2026-08-22 (nanoid/postcss via Next, next-auth beta.31) | Bump `next-auth` to beta.32+; Dependabot grouped frontend PR | Next frontend dep PR |
+| `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately |
+| Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates |
 
 ## Security Headers (OWASP A02)
 
