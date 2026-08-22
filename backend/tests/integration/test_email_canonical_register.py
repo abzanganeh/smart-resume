@@ -12,7 +12,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_gmail_alias_collides_with_primary_mailbox(app_client: AsyncClient) -> None:
-    first = {**REGISTER_PAYLOAD, "email": "alias-owner@gmail.com"}
+    first = {**REGISTER_PAYLOAD, "email": "alias.owner@gmail.com"}
     assert (await app_client.post("/api/auth/register", json=first)).status_code == 201
 
     second = {

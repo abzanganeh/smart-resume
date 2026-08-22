@@ -56,6 +56,7 @@ async def test_register_returns_rate_limit_when_ip_device_cap_hit(
         "app.services.auth.signup_rate_limit.settings.SIGNUP_IP_DAILY_LIMIT",
         15,
     )
+    monkeypatch.setattr("app.routers.auth._client_ip", lambda _request: "testclient")
     fp_raw = "deadbeef" * 4
     fp_hash = hash_signup_device_fingerprint(fp_raw)
     await _seed_recent_signups(
