@@ -850,6 +850,11 @@ export default function BillingPage() {
             </button>
           </div>
         )}
+        {!loadingPrices && orderedPlans.length > 0 && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+            Apple Pay and Google Pay are available at checkout on supported devices.
+          </p>
+        )}
       </section>
 
       {creditPacks.length > 0 && (

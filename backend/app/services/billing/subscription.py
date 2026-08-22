@@ -32,6 +32,7 @@ from app.models.billing import (
 )
 from app.models.user import User
 from app.services.billing.checkout_discount import resolve_checkout_discount
+from app.services.billing.checkout_wallets import checkout_wallet_kwargs
 from app.services.billing.credit_packs import is_one_time_purchase_code
 from app.services.billing.exceptions import (
     BillingCycleMismatchError,
@@ -124,6 +125,8 @@ async def create_checkout_session(
         checkout_kwargs["discounts"] = [
             {"promotion_code": discount.stripe_promotion_code_id}
         ]
+
+    checkout_kwargs.update(checkout_wallet_kwargs())
 
     checkout = await _run_in_thread(
         stripe.checkout.Session.create,
