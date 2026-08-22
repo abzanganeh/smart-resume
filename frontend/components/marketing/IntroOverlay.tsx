@@ -5,6 +5,11 @@ import Image from "next/image";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { INTRO_GREETING, INTRO_SEEN_KEY, WORDMARK_LIGHT_SRC } from "@/lib/brand";
 import {
+  INTRO_DISMISS_SLACK_MS,
+  INTRO_FADE_MS,
+  INTRO_FALLBACK_TICK_MS,
+  INTRO_SCROLL_GRACE_MS,
+  INTRO_TOTAL_MS,
   introMotionAt,
   shouldPlayIntro,
   type IntroMotionFrame,
@@ -29,6 +34,11 @@ function layerStyle(motion: { scale: number; opacity: number }) {
  *
  * All three slots are reserved from the first frame so nothing shifts vertically
  * when the next layer emerges. Only opacity/scale animate — no translate.
+ *
+ * The timeline is driven from wall clock by two independent sources, and is
+ * dismissed by an unconditional backstop timer. `requestAnimationFrame` alone
+ * is not survivable here: browsers pause it for backgrounded or occluded tabs,
+ * which left this full-viewport overlay pinned open indefinitely.
  */
 export function IntroOverlay() {
   const [active, setActive] = useState(false);
@@ -36,19 +46,38 @@ export function IntroOverlay() {
   const [fading, setFading] = useState(false);
   const startRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  const backstopRef = useRef<number | null>(null);
+  const fadeRef = useRef<number | null>(null);
   const dismissedRef = useRef(false);
+
+  const clearDrivers = useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (backstopRef.current !== null) {
+      window.clearTimeout(backstopRef.current);
+      backstopRef.current = null;
+    }
+  }, []);
 
   const finish = useCallback(() => {
     if (dismissedRef.current) return;
     dismissedRef.current = true;
+    clearDrivers();
     try {
       sessionStorage.setItem(INTRO_SEEN_KEY, "1");
     } catch {
       // Private browsing may block storage; still dismiss.
     }
     setFading(true);
-    window.setTimeout(() => setActive(false), 320);
-  }, []);
+    fadeRef.current = window.setTimeout(() => setActive(false), INTRO_FADE_MS);
+  }, [clearDrivers]);
 
   useEffect(() => {
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -72,23 +101,51 @@ export function IntroOverlay() {
       return;
     }
 
-    setActive(true);
-    startRef.current = performance.now();
-    setMotion(introMotionAt(0));
+    let started = false;
 
-    const tick = (now: number) => {
-      if (dismissedRef.current || startRef.current === null) return;
-      const elapsed = now - startRef.current;
-      const next = introMotionAt(elapsed);
+    /** Recompute from wall clock. Returns true once the timeline is over. */
+    const sample = (): boolean => {
+      if (dismissedRef.current || startRef.current === null) return true;
+      const next = introMotionAt(performance.now() - startRef.current);
       setMotion(next);
       if (next.phase === "done") {
         finish();
-        return;
+        return true;
       }
+      return false;
+    };
+
+    const tick = () => {
+      if (sample()) return;
       frameRef.current = requestAnimationFrame(tick);
     };
 
-    frameRef.current = requestAnimationFrame(tick);
+    const start = () => {
+      if (started || dismissedRef.current) return;
+      started = true;
+      startRef.current = performance.now();
+      setActive(true);
+      setMotion(introMotionAt(0));
+      frameRef.current = requestAnimationFrame(tick);
+      intervalRef.current = window.setInterval(sample, INTRO_FALLBACK_TICK_MS);
+      backstopRef.current = window.setTimeout(
+        finish,
+        INTRO_TOTAL_MS + INTRO_DISMISS_SLACK_MS,
+      );
+    };
+
+    // Playing a 12s intro to a hidden tab burns the once-per-session budget on
+    // nobody, so wait until the page is actually on screen.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!started) {
+        start();
+        return;
+      }
+      sample();
+    };
+
+    if (document.visibilityState === "visible") start();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") finish();
@@ -97,23 +154,28 @@ export function IntroOverlay() {
     let scrollReady = false;
     const scrollTimer = window.setTimeout(() => {
       scrollReady = true;
-    }, 450);
+    }, INTRO_SCROLL_GRACE_MS);
 
     const onScroll = () => {
       if (!scrollReady || window.scrollY < 64) return;
       finish();
     };
 
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
       window.clearTimeout(scrollTimer);
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      if (fadeRef.current !== null) window.clearTimeout(fadeRef.current);
+      clearDrivers();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [finish]);
+  }, [finish, clearDrivers]);
 
   if (!active) return null;
 

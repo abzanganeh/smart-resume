@@ -28,6 +28,24 @@ export const INTRO_EMERGE_MS =
 
 export const INTRO_TOTAL_MS = INTRO_EMERGE_MS + INTRO_TIMING.holdMs;
 
+/**
+ * Frame-independent driver interval.
+ *
+ * `requestAnimationFrame` is paused outright for backgrounded or occluded tabs,
+ * which silently wedged the whole timeline. Timers are only clamped there
+ * (~1s), never stopped, so this keeps the clock advancing to `done`.
+ */
+export const INTRO_FALLBACK_TICK_MS = 200;
+
+/** Grace on top of `INTRO_TOTAL_MS` for the unconditional dismissal backstop. */
+export const INTRO_DISMISS_SLACK_MS = 750;
+
+/** Overlay fade-out duration; must match the transition in `IntroOverlay`. */
+export const INTRO_FADE_MS = 320;
+
+/** Ignore scroll for this long so restored scroll position cannot dismiss. */
+export const INTRO_SCROLL_GRACE_MS = 450;
+
 /** @deprecated Prefer `INTRO_TIMING.logoInMs`. */
 export const INTRO_LOGO_MS = INTRO_TIMING.logoInMs;
 
@@ -58,6 +76,14 @@ export const INTRO_MOTION = {
   wordmarkEndScale: 1,
   greetingStartScale: 0.85,
   greetingEndScale: 1,
+  /**
+   * The icon is the only thing on screen at t=0, so it cannot start fully
+   * transparent — a full-viewport overlay painting nothing reads as a crash.
+   * Later layers may start at 0 because the icon is already visible by then.
+   */
+  logoMarkStartOpacity: 0.15,
+  wordmarkStartOpacity: 0,
+  greetingStartOpacity: 0,
 } as const;
 
 export interface LayerMotion {
@@ -117,12 +143,13 @@ function entranceMotion(
   phaseDurationMs: number,
   startScale: number,
   endScale: number,
+  startOpacity: number,
 ): LayerMotion {
   const progress = clamp01(elapsedInPhase / phaseDurationMs);
   const eased = easeOutCubic(progress);
   return {
     scale: lerp(startScale, endScale, eased),
-    opacity: eased,
+    opacity: lerp(startOpacity, 1, eased),
   };
 }
 
@@ -182,6 +209,7 @@ export function introMotionAt(elapsedMs: number): IntroMotionFrame {
           logoInMs,
           INTRO_MOTION.logoMarkStartScale,
           INTRO_MOTION.logoMarkEndScale,
+          INTRO_MOTION.logoMarkStartOpacity,
         );
 
   let wordmark: LayerMotion = HIDDEN;
@@ -193,6 +221,7 @@ export function introMotionAt(elapsedMs: number): IntroMotionFrame {
       wordmarkInMs,
       INTRO_MOTION.wordmarkStartScale,
       INTRO_MOTION.wordmarkEndScale,
+      INTRO_MOTION.wordmarkStartOpacity,
     );
   }
 
@@ -205,6 +234,7 @@ export function introMotionAt(elapsedMs: number): IntroMotionFrame {
       greetingInMs,
       INTRO_MOTION.greetingStartScale,
       INTRO_MOTION.greetingEndScale,
+      INTRO_MOTION.greetingStartOpacity,
     );
   }
 

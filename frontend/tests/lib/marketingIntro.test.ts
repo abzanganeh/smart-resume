@@ -1,7 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  INTRO_DISMISS_SLACK_MS,
   INTRO_EMERGE_MS,
+  INTRO_FALLBACK_TICK_MS,
   INTRO_GREETING,
   INTRO_MOTION,
   INTRO_SIZE_SCALE,
@@ -78,13 +80,22 @@ describe("introPhaseProgress", () => {
 });
 
 describe("introMotionAt", () => {
-  it("starts the icon small and transparent", () => {
+  it("starts the icon small but never invisible", () => {
     const start = introMotionAt(0);
     assert.equal(start.phase, "logo-in");
-    assert.equal(start.logoMark.opacity, 0);
     assert.equal(start.logoMark.scale, INTRO_MOTION.logoMarkStartScale);
+    assert.equal(start.logoMark.opacity, INTRO_MOTION.logoMarkStartOpacity);
     assert.equal(start.wordmark.opacity, 0);
     assert.equal(start.greeting.opacity, 0);
+  });
+
+  it("paints something on the very first frame", () => {
+    // A full-viewport overlay whose first frame is blank is indistinguishable
+    // from a crash, which is exactly how the wedged intro presented.
+    const start = introMotionAt(0);
+    const painted =
+      start.logoMark.opacity + start.wordmark.opacity + start.greeting.opacity;
+    assert.ok(painted > 0, "first frame renders at least one visible layer");
   });
 
   it("keeps the icon visible once the wordmark phase begins", () => {
@@ -122,6 +133,51 @@ describe("introMotionAt", () => {
     assert.equal(INTRO_SIZE_SCALE, 2);
     assert.equal(afterEmerge.logoMark.opacity, 1);
     assert.equal(afterEmerge.wordmark.opacity, 1);
+  });
+});
+
+describe("frame-independent playback", () => {
+  it("reaches done from a coarse sampling cadence, not just per-frame", () => {
+    // Background tabs pause requestAnimationFrame outright and clamp timers to
+    // ~1s. The timeline must therefore be a pure function of elapsed wall-clock
+    // time, so a 1s sampler still walks every phase and terminates.
+    const seen = new Set<string>();
+    let elapsed = 0;
+    let done = false;
+
+    while (elapsed <= INTRO_TOTAL_MS + INTRO_DISMISS_SLACK_MS) {
+      const frame = introMotionAt(elapsed);
+      seen.add(frame.phase);
+      if (frame.phase === "done") {
+        done = true;
+        break;
+      }
+      elapsed += 1_000;
+    }
+
+    assert.ok(done, "a 1s sampler still reaches the done phase");
+    for (const phase of ["logo-in", "wordmark-in", "greeting-in", "hold"]) {
+      assert.ok(seen.has(phase), `coarse sampling still observes ${phase}`);
+    }
+  });
+
+  it("is already done by the time the dismissal backstop fires", () => {
+    const atBackstop = introMotionAt(INTRO_TOTAL_MS + INTRO_DISMISS_SLACK_MS);
+    assert.equal(atBackstop.phase, "done");
+    assert.ok(INTRO_DISMISS_SLACK_MS > 0, "backstop leaves room for the last frame");
+  });
+
+  it("ticks the fallback driver faster than a phase can be missed", () => {
+    const shortestPhase = Math.min(
+      INTRO_TIMING.logoInMs,
+      INTRO_TIMING.wordmarkInMs,
+      INTRO_TIMING.greetingInMs,
+      INTRO_TIMING.holdMs,
+    );
+    assert.ok(
+      INTRO_FALLBACK_TICK_MS < shortestPhase,
+      "fallback interval resolves finer than the shortest phase",
+    );
   });
 });
 
