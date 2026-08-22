@@ -4,7 +4,7 @@
 Usage (from ``backend/``):
 
   uv run python scripts/load_job_corpus_seed.py
-  uv run python scripts/load_job_corpus_seed.py --seed path/to/seed_500.json
+  uv run python scripts/load_job_corpus_seed.py --seed path/to/seed_2000.json
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from app.db.engine import async_session_factory
 from app.services.career_watch.job_corpus_seed import load_seed_file
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SEED = BACKEND_ROOT / "data" / "job_corpus" / "seed_500.json"
+DEFAULT_SEED = BACKEND_ROOT / "data" / "job_corpus" / "seed_2000.json"
+FALLBACK_SEED = BACKEND_ROOT / "data" / "job_corpus" / "seed_500.json"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -34,12 +35,15 @@ def _parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = _parse_args()
-    if not args.seed.is_file():
-        print(f"ERROR: seed file not found: {args.seed}", file=sys.stderr)
+    seed_path = args.seed
+    if seed_path == DEFAULT_SEED and not seed_path.is_file() and FALLBACK_SEED.is_file():
+        seed_path = FALLBACK_SEED
+    if not seed_path.is_file():
+        print(f"ERROR: seed file not found: {seed_path}", file=sys.stderr)
         sys.exit(1)
 
     async with async_session_factory() as session:
-        stats = await load_seed_file(session, args.seed)
+        stats = await load_seed_file(session, seed_path)
         await session.commit()
 
     print("Job corpus seed load complete")

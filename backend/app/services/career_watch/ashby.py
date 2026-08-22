@@ -47,6 +47,8 @@ class AshbyAdapter:
         for item in jobs_raw:
             if not isinstance(item, dict):
                 continue
+            if item.get("isListed") is False:
+                continue
             job_id = str(item.get("id") or item.get("jobId") or "")
             if not job_id:
                 continue
@@ -71,6 +73,8 @@ def parse_ashby_payload(jobs_raw: list[dict[str, Any]]) -> list[ParsedJob]:
     for item in jobs_raw:
         job_id = str(item.get("id") or "")
         if not job_id:
+            continue
+        if item.get("isListed") is False:
             continue
         parsed.append(
             ParsedJob(

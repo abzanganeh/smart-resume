@@ -41,6 +41,12 @@ class CareerAtsType(str, enum.Enum):
     ashby = "ashby"
     workday = "workday"
     generic_html = "generic_html"
+    smartrecruiters = "smartrecruiters"
+    workable = "workable"
+    recruitee = "recruitee"
+    breezy = "breezy"
+    personio = "personio"
+    bamboohr = "bamboohr"
 
 
 class CareerAlertStatus(str, enum.Enum):

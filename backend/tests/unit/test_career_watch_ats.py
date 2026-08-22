@@ -92,6 +92,24 @@ def test_ashby_parse_jobs() -> None:
     assert jobs[0].title == "Designer"
 
 
+def test_ashby_skips_unlisted_jobs() -> None:
+    jobs = parse_ashby_payload(
+        [
+            {
+                "id": "listed",
+                "title": "Listed",
+                "isListed": True,
+            },
+            {
+                "id": "hidden",
+                "title": "Hidden",
+                "isListed": False,
+            },
+        ]
+    )
+    assert [job.external_job_id for job in jobs] == ["listed"]
+
+
 def test_workday_parse_html_links() -> None:
     html = '<a href="/en-US/job/Backend-Engineer_R123">Backend Engineer</a>'
     jobs = parse_workday_html(

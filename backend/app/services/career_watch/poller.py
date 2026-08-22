@@ -11,8 +11,11 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.career_watch import WatchedCompany
+from app.services.career_watch.aggregators.registry import enabled_aggregator_sources
+from app.services.career_watch.aggregators.sync import sync_aggregator_jobs_to_cache
 from app.services.career_watch.corpus_sync import sync_polled_jobs_to_caches
 from app.services.career_watch.global_poll_schedule import fetch_due_global_seeds
+from app.services.career_watch.poll_budget import apply_daily_poll_budget, count_polls_today
 from app.services.career_watch.poll_schedule import fetch_due_companies
 from app.services.career_watch.registry import fetch_company_jobs
 
@@ -24,6 +27,9 @@ class PollStats:
     companies_polled: int = 0
     jobs_upserted: int = 0
     failures: int = 0
+    aggregators_polled: int = 0
+    aggregator_jobs_upserted: int = 0
+    aggregator_failures: int = 0
 
 
 async def poll_company(
@@ -76,7 +82,38 @@ async def _due_companies_global_then_watchlist(
         ordered.append(company)
         if len(ordered) >= limit:
             break
-    return ordered
+    polls_today = await count_polls_today(session, now=now)
+    return apply_daily_poll_budget(ordered, polls_today=polls_today)
+
+
+async def poll_enabled_aggregators(
+    session: AsyncSession,
+    *,
+    client: httpx.AsyncClient,
+    now: datetime | None = None,
+) -> PollStats:
+    """Fetch enabled free aggregators and upsert into shared job_cache."""
+    now = now or datetime.now(timezone.utc)
+    stats = PollStats()
+    for source in enabled_aggregator_sources():
+        try:
+            jobs = await source.fetch(client=client)
+            count = await sync_aggregator_jobs_to_cache(
+                session,
+                source=source.id,
+                jobs=jobs,
+                now=now,
+            )
+            stats.aggregators_polled += 1
+            stats.aggregator_jobs_upserted += count
+        except Exception as exc:  # noqa: BLE001
+            stats.aggregator_failures += 1
+            log.warning(
+                "career_watch_aggregator_poll_failed",
+                aggregator=source.id,
+                error=str(exc),
+            )
+    return stats
 
 
 async def poll_due_companies(
@@ -99,7 +136,23 @@ async def poll_due_companies(
                 stats.jobs_upserted += count
             except Exception:
                 stats.failures += 1
+        agg_stats = await poll_enabled_aggregators(
+            session, client=client, now=now
+        )
+        stats = PollStats(
+            companies_polled=stats.companies_polled,
+            jobs_upserted=stats.jobs_upserted,
+            failures=stats.failures,
+            aggregators_polled=agg_stats.aggregators_polled,
+            aggregator_jobs_upserted=agg_stats.aggregator_jobs_upserted,
+            aggregator_failures=agg_stats.aggregator_failures,
+        )
     return stats
 
 
-__all__ = ["PollStats", "poll_company", "poll_due_companies"]
+__all__ = [
+    "PollStats",
+    "poll_company",
+    "poll_due_companies",
+    "poll_enabled_aggregators",
+]

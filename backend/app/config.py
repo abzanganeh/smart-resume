@@ -191,8 +191,19 @@ class Settings(BaseSettings):
     GLOBAL_POLL_INTERVAL_TIER_1_MINUTES: int = 15
     GLOBAL_POLL_INTERVAL_TIER_2_MINUTES: int = 30
     GLOBAL_POLL_INTERVAL_TIER_3_MINUTES: int = 45
+    GLOBAL_POLL_DAILY_BUDGET: int = 100_000
     JOB_SEARCH_DB_FIRST: bool = True
     JOB_SEARCH_DB_MIN_RESULTS: int = 5
+
+    # Optional free job aggregators (M19 slice 5) — each default off.
+    JOB_AGGREGATOR_REMOTIVE_ENABLED: bool = False
+    JOB_AGGREGATOR_REMOTEOK_ENABLED: bool = False
+    JOB_AGGREGATOR_ARBEITNOW_ENABLED: bool = False
+    JOB_AGGREGATOR_WEWORKREMOTELY_ENABLED: bool = False
+    JOB_AGGREGATOR_USAJOBS_ENABLED: bool = False
+    JOB_AGGREGATOR_HN_WHOS_HIRING_ENABLED: bool = False
+    USAJOBS_API_KEY: str = ""
+    USAJOBS_USER_AGENT: str = ""
 
     # ---------------------------------------------------------------
     # Admin panel (Step 35 - IMPLEMENTATION_PLAN section 8.4)
