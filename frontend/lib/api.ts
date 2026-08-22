@@ -459,6 +459,54 @@ export async function getBillingPrices(token?: string): Promise<BillingPricesRes
   })
 }
 
+export interface ExhaustionPaywallFreeItem {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface ExhaustionPaywallResponse {
+  headline: string;
+  message: string;
+  credit_balance: number;
+  spendable_credit_balance: number;
+  credits_locked_until_verification: boolean;
+  free_still_available: ExhaustionPaywallFreeItem[];
+  upgrade_plans: BillingPlan[];
+  currency: string;
+  highlight_plan_code: string;
+  yearly_savings_percent: number | null;
+  exhaustion_top_up_eligible: boolean;
+  exhaustion_top_up_amount: number;
+}
+
+export async function getExhaustionPaywall(token: string): Promise<ExhaustionPaywallResponse> {
+  return request("/api/billing/exhaustion-paywall", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export interface BillingPopupOfferResponse {
+  offers: Array<{
+    code: string;
+    grant_type: string;
+    expires_at: string | null;
+    is_active: boolean;
+    is_redeemable: boolean;
+    applicable_plan_codes: string[];
+    display_name: string | null;
+    headline: string | null;
+    popup_enabled: boolean;
+    popup_triggers: Array<"exit_intent" | "post_exhaustion">;
+  }>;
+}
+
+export async function getPopupOffers(token: string): Promise<BillingPopupOfferResponse> {
+  return request("/api/billing/popup-offers", {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 const SUBSCRIPTION_CACHE_TTL_MS = 60_000
 let subscriptionCache: {
   token: string
@@ -537,6 +585,27 @@ export async function createCheckoutSession(
   token: string,
   payload: { stripe_price_id: string; billing_cycle?: "recurring" | "yearly" },
 ): Promise<{ checkout_url: string }> {
+  return request("/api/subscriptions/checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function createCheckoutSessionByCode(
+  token: string,
+  payload: {
+    code: string;
+    success_url: string;
+    cancel_url: string;
+    promo_code?: string;
+  },
+): Promise<{
+  url: string;
+  id: string;
+  discount_applied?: boolean;
+  discount_message?: string | null;
+}> {
   return request("/api/subscriptions/checkout", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },

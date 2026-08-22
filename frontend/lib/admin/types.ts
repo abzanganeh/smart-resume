@@ -223,7 +223,11 @@ export interface CreditAdjustPayload {
 
 // ── Promo & free grant ────────────────────────────────────────────────────────
 
-export type PromoGrantType = "extra_credits" | "tier_override" | "feature_unlock"
+export type PromoGrantType =
+  | "extra_credits"
+  | "tier_override"
+  | "feature_unlock"
+  | "price_discount"
 
 export interface PromoCode {
   id: string
@@ -234,6 +238,9 @@ export interface PromoCode {
   redemption_count: number
   expires_at: string | null
   is_active: boolean
+  is_redeemable: boolean
+  offer_summary: string
+  remaining_redemptions: number | null
   created_by_admin_id: string | null
   restricted_user_id: string | null
   created_at: string

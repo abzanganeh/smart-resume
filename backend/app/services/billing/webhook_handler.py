@@ -20,7 +20,7 @@ the row processed without mutation and log ``out_of_order_skip`` —
 Stripe is the source of truth and retransmits, but we never let an
 older event overwrite a newer state.
 
-One-time grants (better_5pack, best_per_resume) write a
+One-time grants (``credits_5``, ``credits_15``, plus retired LLM packs) write a
 ``CreditTransaction`` keyed by ``(stripe_event_id, credit_kind)`` so
 double delivery becomes a no-op via the partial UNIQUE index from §7.5.
 """
@@ -48,9 +48,15 @@ from app.models.billing import (
 from app.models.notifications import NotificationChannel
 from app.services.notifications.factory import build_notification
 from app.models.user import User
+from app.services.billing.card_fingerprint import record_payment_card_fingerprint
+from app.services.billing.credit_packs import (
+    grant_for_one_time_code,
+    is_one_time_purchase_code,
+)
 from app.services.billing.credits import grant_credit
 from app.services.billing.exceptions import WebhookPayloadError
 from app.services.billing.price_resolver import reverse_lookup_code
+from app.services.billing.promo_offers import record_checkout_promo_redemption
 
 log = structlog.get_logger("billing.webhook")
 
@@ -77,16 +83,11 @@ _CODE_TO_PLAN_CYCLE: dict[
 
 
 def _is_one_time_credit_code(code: str | None) -> bool:
-    return code in {"better_pack", "best_per_resume"}
+    return is_one_time_purchase_code(code)
 
 
 def _credit_kind_for_one_time(code: str) -> tuple[CreditKind, int]:
-    """Return (kind, delta) for a one-time credit purchase code."""
-    if code == "better_pack":
-        return CreditKind.better, 5
-    if code == "best_per_resume":
-        return CreditKind.best, 1
-    raise WebhookPayloadError(f"unknown credit-pack code: {code!r}")
+    return grant_for_one_time_code(code)
 
 
 def _is_addon_subscription_code(code: str | None) -> bool:
@@ -186,6 +187,28 @@ def _is_out_of_order(
 # ---------------------------------------------------------------------------
 
 
+async def _record_checkout_promo_if_present(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    metadata: dict[str, Any],
+) -> None:
+    promo_code = metadata.get("checkout_promo_code")
+    if not isinstance(promo_code, str) or not promo_code.strip():
+        return
+    recorded = await record_checkout_promo_redemption(
+        session,
+        user_id=user_id,
+        promo_code=promo_code,
+    )
+    if recorded:
+        log.info(
+            "billing.webhook.checkout_promo_redeemed",
+            user_id=str(user_id),
+            promo_code=promo_code,
+        )
+
+
 async def handle_checkout_completed(
     session: AsyncSession, event: dict[str, Any]
 ) -> None:
@@ -205,6 +228,13 @@ async def handle_checkout_completed(
             f"checkout.session.completed missing resolvable user "
             f"(customer={customer_id!r}, ref={obj.get('client_reference_id')!r})"
         )
+
+    await record_payment_card_fingerprint(
+        session,
+        user_id=user.id,
+        stripe_event_id=event["id"],
+        stripe_object=obj,
+    )
 
     if code and _is_one_time_credit_code(code):
         kind, delta = _credit_kind_for_one_time(code)
@@ -227,7 +257,10 @@ async def handle_checkout_completed(
                 event_id=event["id"],
                 code=code,
             )
+        await _record_checkout_promo_if_present(session, user_id=user.id, metadata=metadata)
         return
+
+    await _record_checkout_promo_if_present(session, user_id=user.id, metadata=metadata)
 
     # Recurring base plan or add-on subscription — Stripe will fire
     # ``customer.subscription.created`` next which is the authoritative
@@ -414,6 +447,12 @@ async def handle_invoice_succeeded(
             stripe_subscription_id=stripe_sub_id,
         )
         return
+    await record_payment_card_fingerprint(
+        session,
+        user_id=existing.user_id,
+        stripe_event_id=event["id"],
+        stripe_object=obj,
+    )
     was_grace = existing.status == SubscriptionStatus.grace
     if was_grace:
         existing.status = SubscriptionStatus.active

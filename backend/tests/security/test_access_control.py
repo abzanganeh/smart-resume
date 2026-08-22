@@ -196,6 +196,10 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/api/announcements"): "public runtime config",
     ("GET", "/api/billing/prices"): "public price list",
     ("GET", "/api/billing/free-tier"): "public signup-grant size",
+    (
+        "GET",
+        "/api/billing/offers/{code}",
+    ): "public offer metadata for marketing popups; stripe_promotion_code_id omitted",
     ("GET", "/api/llm/providers"): "static provider catalogue",
     # --- marketing / legal ----------------------------------------------
     ("POST", "/api/legal/dpo-contact"): "public DPO contact form",

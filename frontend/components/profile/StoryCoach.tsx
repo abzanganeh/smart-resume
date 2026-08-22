@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2, Mic, MicOff, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dispatchCreditsExhausted } from "@/lib/offerPopup";
+import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall";
 import { type CoachMessage, streamCoach } from "@/lib/story";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 
@@ -47,6 +49,7 @@ export function StoryCoach({
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showExhaustionPaywall, setShowExhaustionPaywall] = useState(false);
   const [isSegmentComplete, setIsSegmentComplete] = useState(false);
   const [creditAccepted, setCreditAccepted] = useState(
     !isFreeUser || coachSessionUnlocked,
@@ -125,9 +128,12 @@ export function StoryCoach({
       } catch (err: unknown) {
         const e = err as Error & { code?: string };
         if (e.code === "insufficient_credits") {
-          setError("You need at least 1 credit to start a coaching session. Upgrade to continue.");
+          setError("You need at least 1 credit to start a coaching session.");
+          setShowExhaustionPaywall(true);
+          dispatchCreditsExhausted();
         } else {
           setError(e.message ?? "Coach request failed. Please try again.");
+          setShowExhaustionPaywall(false);
         }
       } finally {
         setIsStreaming(false);
@@ -275,6 +281,18 @@ export function StoryCoach({
         <p className="text-red-700 dark:text-red-400 text-xs rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-500/20 px-3 py-2">
           {error}
         </p>
+      )}
+
+      {showExhaustionPaywall && (
+        <ExhaustionPaywall
+          token={token}
+          compact
+          contextMessage="You need credits to use Interview Coach"
+          onCreditsRefreshed={() => {
+            setShowExhaustionPaywall(false);
+            setError(null);
+          }}
+        />
       )}
 
       {/* Segment complete notice */}

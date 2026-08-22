@@ -17,7 +17,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,7 @@ from app.models.billing import (
     SubscriptionStatus,
 )
 from app.models.user import User
+from app.services.billing.promo_offers import lookup_public_offer
 from app.services.billing.public_prices import build_public_billing_prices
 
 router = APIRouter(tags=["public-config"])
@@ -227,6 +228,25 @@ async def public_billing_prices(
     payload = await build_public_billing_prices(db)
     response.headers["Cache-Control"] = _FLAG_CACHE_HEADER[1]
     return payload
+
+
+@router.get("/api/billing/offers/{code}")
+@limiter.limit("120/minute")
+async def public_billing_offer(
+    request: Request,
+    code: str,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Public, read-only checkout offer metadata for server-enforced deadlines."""
+    offer = await lookup_public_offer(db, code=code)
+    if offer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "offer_not_found"},
+        )
+    response.headers["Cache-Control"] = "public, max-age=30"
+    return offer.to_dict()
 
 
 __all__ = ["router"]

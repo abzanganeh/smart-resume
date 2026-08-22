@@ -18,7 +18,7 @@ import { useRequireAuth } from "@/lib/auth/guards"
 import {
   getBillingPrices,
   getSubscriptionCurrent,
-  createCheckoutSession,
+  createCheckoutSessionByCode,
   createPortalSession,
   claimExhaustionTopUp,
   cancelSubscription,
@@ -29,6 +29,7 @@ import {
   invalidateSubscriptionCache,
   ApiError,
   type BillingPlan,
+  type BillingAddon,
   type BillingPricesResponse,
   type SubscriptionCurrentResponse,
 } from "@/lib/api"
@@ -39,6 +40,7 @@ import {
   promoRedeemSuccessMessage,
 } from "@/lib/promoRedeem"
 import { clsx } from "clsx"
+import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall"
 
 // ── Feature display labels ─────────────────────────────────────────────────
 
@@ -120,7 +122,8 @@ interface PlanCardProps {
   yearlyToggle: boolean
   isCurrentPlan: boolean
   isBusy: boolean
-  onSubscribe: (stripePriceId: string, yearly: boolean) => void
+  disabled?: boolean
+  onSubscribe: (planCode: string) => void
 }
 
 function PlanCard({
@@ -129,6 +132,7 @@ function PlanCard({
   yearlyToggle,
   isCurrentPlan,
   isBusy,
+  disabled = false,
   onSubscribe,
 }: PlanCardProps) {
   const isMonthlyTier = plan.code.startsWith("monthly_")
@@ -199,8 +203,8 @@ function PlanCard({
         </div>
       ) : (
         <button
-          onClick={() => onSubscribe(plan.stripe_price_id, showYearly)}
-          disabled={isBusy}
+          onClick={() => onSubscribe(plan.code)}
+          disabled={isBusy || disabled}
           className={clsx(
             "w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2",
             isHighlighted
@@ -248,6 +252,42 @@ function UsageMeter({ label, used, limit }: UsageMeterProps) {
           style={{ width: `${pct}%` }}
         />
       </div>
+    </div>
+  )
+}
+
+interface CreditPackCardProps {
+  pack: BillingAddon
+  currency: string
+  isBusy: boolean
+  disabled?: boolean
+  onBuy: () => void
+}
+
+function CreditPackCard({ pack, currency, isBusy, disabled = false, onBuy }: CreditPackCardProps) {
+  return (
+    <div className="flex flex-col rounded-2xl border border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/60 p-5 gap-4">
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          {pack.display_name}
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          {pack.credits_granted} tailoring credits — use anytime, no expiry on unused balance.
+        </p>
+        <p className="text-2xl font-bold text-slate-900 dark:text-white mt-3">
+          {formatCents(pack.unit_amount_cents, currency)}
+          <span className="text-sm font-normal text-slate-600 dark:text-slate-400 ml-1">one-time</span>
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onBuy}
+        disabled={isBusy || disabled}
+        className="w-full py-2.5 rounded-xl bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+      >
+        {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+        Buy credits
+      </button>
     </div>
   )
 }
@@ -315,21 +355,30 @@ export default function BillingPage() {
     }
   }, [loadPrices, loadCurrent])
 
-  async function handleSubscribe(stripePriceId: string, yearly: boolean) {
+  async function startCheckout(planCode: string) {
     if (!token || busyAction) return
-    setBusyAction("checkout")
+    setBusyAction(`checkout:${planCode}`)
     setError(null)
     try {
-      const { checkout_url } = await createCheckoutSession(token, {
-        stripe_price_id: stripePriceId,
-        billing_cycle: yearly ? "yearly" : "recurring",
+      const origin = window.location.origin
+      const { url } = await createCheckoutSessionByCode(token, {
+        code: planCode,
+        success_url: `${origin}/billing?checkout=success`,
+        cancel_url: `${origin}/billing?checkout=cancel`,
       })
-      window.location.assign(checkout_url)
+      window.location.assign(url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start checkout")
-    } finally {
       setBusyAction(null)
     }
+  }
+
+  async function handleSubscribe(planCode: string) {
+    await startCheckout(planCode)
+  }
+
+  async function handleBuyCreditPack(planCode: string) {
+    await startCheckout(planCode)
   }
 
   async function handleExhaustionTopUp() {
@@ -475,6 +524,7 @@ export default function BillingPage() {
   const orderedPlans = [...visiblePlans].sort(
     (a, b) => order.indexOf(a.code) - order.indexOf(b.code),
   )
+  const creditPacks = (prices?.addons ?? []).filter((addon) => addon.kind === "credit_pack")
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10 space-y-10">
@@ -715,6 +765,13 @@ export default function BillingPage() {
 
       {/* Plan selection */}
       <section className="space-y-5">
+        {!isSubscribed && !loadingCurrent && current?.credit_balance === 0 && token && (
+          <ExhaustionPaywall
+            token={token}
+            onCreditsRefreshed={() => void loadCurrent()}
+          />
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             {isSubscribed ? "Change plan" : "Choose a plan"}
@@ -768,7 +825,8 @@ export default function BillingPage() {
                 currency={prices?.currency ?? "USD"}
                 yearlyToggle={yearlyToggle}
                 isCurrentPlan={isSubscribed && currentPlanCode === plan.code}
-                isBusy={isAnyActionBusy}
+                isBusy={busyAction === `checkout:${plan.code}`}
+                disabled={isAnyActionBusy && busyAction !== `checkout:${plan.code}`}
                 onSubscribe={handleSubscribe}
               />
             ))}
@@ -792,7 +850,38 @@ export default function BillingPage() {
             </button>
           </div>
         )}
+        {!loadingPrices && orderedPlans.length > 0 && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+            Apple Pay and Google Pay are available at checkout on supported devices.
+          </p>
+        )}
       </section>
+
+      {creditPacks.length > 0 && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+              Need credits without subscribing?
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              One-time packs add to your free credit balance for resume tailoring, cover letters,
+              and AI coaching — no subscription required.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4 max-w-2xl">
+            {creditPacks.map((pack) => (
+              <CreditPackCard
+                key={pack.code}
+                pack={pack}
+                currency={prices?.currency ?? "USD"}
+                isBusy={busyAction === `checkout:${pack.code}`}
+                disabled={isAnyActionBusy && busyAction !== `checkout:${pack.code}`}
+                onBuy={() => void handleBuyCreditPack(pack.code)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   )
 }
