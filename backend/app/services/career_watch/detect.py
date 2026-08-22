@@ -14,6 +14,18 @@ _GREENHOUSE_RE = re.compile(
 )
 _LEVER_RE = re.compile(r"jobs\.lever\.co/([^/?#]+)", re.IGNORECASE)
 _ASHBY_RE = re.compile(r"jobs\.ashbyhq\.com/([^/?#]+)", re.IGNORECASE)
+_SMARTRECRUITERS_RE = re.compile(
+    r"(?:careers\.smartrecruiters\.com|jobs\.smartrecruiters\.com)/([^/?#]+)",
+    re.IGNORECASE,
+)
+_WORKABLE_RE = re.compile(
+    r"(?:apply\.workable\.com|[^./]+\.workable\.com)/([^/?#]+)",
+    re.IGNORECASE,
+)
+_RECRUITEE_RE = re.compile(r"([^.]+)\.recruitee\.com", re.IGNORECASE)
+_BREEZY_RE = re.compile(r"([^.]+)\.breezy\.hr", re.IGNORECASE)
+_PERSONIO_RE = re.compile(r"([^.]+)\.jobs\.personio\.(?:com|de)", re.IGNORECASE)
+_BAMBOOHR_RE = re.compile(r"([^.]+)\.bamboohr\.com", re.IGNORECASE)
 _WORKDAY_HOST = "myworkdayjobs.com"
 
 
@@ -51,6 +63,62 @@ def detect_ats_from_url(url: str) -> AtsDetectionResult:
         token = match.group(1)
         return AtsDetectionResult(
             ats_type=CareerAtsType.ashby,
+            board_token=token,
+            careers_page_url=normalized,
+            company_name=token.replace("-", " ").title(),
+        )
+
+    if match := _SMARTRECRUITERS_RE.search(normalized):
+        token = match.group(1)
+        return AtsDetectionResult(
+            ats_type=CareerAtsType.smartrecruiters,
+            board_token=token,
+            careers_page_url=normalized,
+            company_name=token.replace("-", " ").title(),
+        )
+
+    if match := _WORKABLE_RE.search(normalized):
+        token = match.group(1)
+        if token.lower() not in {"api", "www"}:
+            return AtsDetectionResult(
+                ats_type=CareerAtsType.workable,
+                board_token=token,
+                careers_page_url=normalized,
+                company_name=token.replace("-", " ").title(),
+            )
+
+    if match := _RECRUITEE_RE.search(path.netloc):
+        token = match.group(1)
+        if token.lower() != "www":
+            return AtsDetectionResult(
+                ats_type=CareerAtsType.recruitee,
+                board_token=token,
+                careers_page_url=normalized,
+                company_name=token.replace("-", " ").title(),
+            )
+
+    if match := _BREEZY_RE.search(path.netloc):
+        token = match.group(1)
+        return AtsDetectionResult(
+            ats_type=CareerAtsType.breezy,
+            board_token=token,
+            careers_page_url=normalized,
+            company_name=token.replace("-", " ").title(),
+        )
+
+    if match := _PERSONIO_RE.search(path.netloc):
+        token = match.group(1)
+        return AtsDetectionResult(
+            ats_type=CareerAtsType.personio,
+            board_token=token,
+            careers_page_url=normalized,
+            company_name=token.replace("-", " ").title(),
+        )
+
+    if match := _BAMBOOHR_RE.search(path.netloc):
+        token = match.group(1)
+        return AtsDetectionResult(
+            ats_type=CareerAtsType.bamboohr,
             board_token=token,
             careers_page_url=normalized,
             company_name=token.replace("-", " ").title(),

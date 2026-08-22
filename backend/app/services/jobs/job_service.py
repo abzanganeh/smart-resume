@@ -29,6 +29,10 @@ _STALE_MESSAGE = (
     "Job search is temporarily unavailable. Showing cached results that may not be "
     "fully up to date."
 )
+_CORPUS_ONLY_MESSAGE = (
+    "Showing results from our cached job corpus. Live expanded search is not "
+    "configured."
+)
 _OUTAGE_EMPTY_MESSAGE = (
     "Job search is temporarily unavailable and we have no cached results for this query. "
     "Please try again in a few minutes."
@@ -232,6 +236,58 @@ async def log_search(
     await session.flush()
 
 
+def hirebase_is_configured() -> bool:
+    """True when Hirebase API credentials are present."""
+    return bool(settings.HIREBASE_API_KEY.strip())
+
+
+async def _corpus_only_search(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    query: str,
+    location: str | None,
+    filters: dict[str, Any],
+    page: int,
+    page_size: int,
+    blocked_companies: list[str],
+    message_when_empty: str,
+    message_when_hit: str,
+) -> tuple[list[JobResult], int, bool, str | None, bool, str]:
+    """Serve corpus/cache rows without calling Hirebase."""
+    jobs, total = await search_active_job_cache(
+        session,
+        query=query,
+        location=location,
+        filters=filters,
+        page=page,
+        page_size=page_size,
+        blocked_companies=blocked_companies,
+    )
+    if not jobs:
+        jobs, total = await search_cache(
+            session,
+            query=query,
+            location=location,
+            filters=filters,
+            page=page,
+            page_size=page_size,
+            blocked_companies=blocked_companies,
+        )
+    await log_search(
+        session,
+        user_id=user_id,
+        query=query,
+        location=location,
+        filters=filters,
+        result_count=len(jobs),
+        source=JobSearchSource.cache,
+    )
+    if jobs:
+        return jobs, total, True, message_when_hit, False, "corpus"
+    return [], 0, True, message_when_empty, False, "corpus"
+
+
 async def run_keyword_search(
     session: AsyncSession,
     *,
@@ -272,6 +328,20 @@ async def run_keyword_search(
                 source=JobSearchSource.cache,
             )
             return corpus_jobs, corpus_total, False, None, False, "corpus"
+
+    if not hirebase_is_configured():
+        return await _corpus_only_search(
+            session,
+            user_id=user_id,
+            query=normalized,
+            location=location,
+            filters=filters,
+            page=page,
+            page_size=page_size,
+            blocked_companies=blocked_companies,
+            message_when_empty=_OUTAGE_EMPTY_MESSAGE,
+            message_when_hit=_CORPUS_ONLY_MESSAGE,
+        )
 
     if circuit.is_open:
         jobs, total = await search_active_job_cache(
@@ -532,6 +602,7 @@ async def list_saved_jobs(
 
 __all__ = [
     "get_job_by_id",
+    "hirebase_is_configured",
     "hirebase_results_to_jobs",
     "list_saved_jobs",
     "log_search",

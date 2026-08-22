@@ -85,18 +85,26 @@ async def fetch_text(
 async def fetch_json(
     client: httpx.AsyncClient,
     url: str,
+    *,
+    params: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> object:
     host = _host_key(url)
     if _circuit_open(host):
         raise FetchCircuitOpenError(f"circuit open for {host}")
 
+    request_headers = {
+        "User-Agent": CAREER_WATCH_USER_AGENT,
+        "Accept": "application/json",
+    }
+    if headers:
+        request_headers.update(headers)
+
     try:
         response = await client.get(
             url,
-            headers={
-                "User-Agent": CAREER_WATCH_USER_AGENT,
-                "Accept": "application/json",
-            },
+            headers=request_headers,
+            params=params,
             timeout=FETCH_TIMEOUT_SECONDS,
             follow_redirects=True,
         )

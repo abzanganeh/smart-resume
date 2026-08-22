@@ -179,10 +179,16 @@ async def test_five_upstream_500s_open_circuit_and_sixth_uses_cache(
         await circuit_breaker.record_failure(status_code=500)
         raise circuit_breaker.HirebaseUnavailableError("upstream_500")
 
-    with patch(
-        "app.services.jobs.hirebase_client.search",
-        side_effect=_raise_500,
-    ) as mock_search:
+    with (
+        patch(
+            "app.services.jobs.job_service.hirebase_is_configured",
+            return_value=True,
+        ),
+        patch(
+            "app.services.jobs.hirebase_client.search",
+            side_effect=_raise_500,
+        ) as mock_search,
+    ):
         for _ in range(5):
             res = await app_client.post(
                 "/api/jobs/search",

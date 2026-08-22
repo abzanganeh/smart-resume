@@ -42,6 +42,10 @@ async def test_global_seeds_precede_watchlist_and_dedupe() -> None:
             "app.services.career_watch.poller.fetch_due_companies",
             new=AsyncMock(return_value=[overlap, watch_co]),
         ),
+        patch(
+            "app.services.career_watch.poller.count_polls_today",
+            new=AsyncMock(return_value=0),
+        ),
     ):
         result = await _due_companies_global_then_watchlist(
             session, limit=10, now=now
