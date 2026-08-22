@@ -171,25 +171,13 @@ test.describe("journey", () => {
       /tell your story/i,
     )
 
-    // Pinned scrollytelling: use goToStage() geometry with instant scroll so
-    // smooth-scroll inertia cannot overshoot to the track stage in headless CI.
-    await page.evaluate(() => {
-      const track = document
-        .getElementById("journey-panel")
-        ?.closest(".relative.mx-auto") as HTMLElement | null
-      if (!track) return
-      const rect = track.getBoundingClientRect()
-      const index = 2 // jobs — story=0, discover=1, jobs=2
-      const stepCount = 6
-      const absoluteTop = rect.top + window.scrollY
-      const travel = rect.height - window.innerHeight
-      const share = (index + 0.5) / stepCount
-      const target = travel <= 0 ? absoluteTop : absoluteTop + share * travel
-      window.scrollTo({ top: Math.max(0, target), behavior: "instant" })
-    })
-    await expect(panel).toHaveAttribute("data-active-stage", "jobs", {
-      timeout: 10_000,
-    })
+    await page.getByRole("navigation", { name: "Stage letters" }).waitFor()
+    await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
+    await expect
+      .poll(async () => panel.getAttribute("data-active-stage"), {
+        timeout: 15_000,
+      })
+      .toBe("jobs")
     await expect(panel).toContainText(/watch the companies you want/i)
   })
 })
