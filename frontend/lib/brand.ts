@@ -15,6 +15,9 @@ export const COMPANY_URL = "https://theflintai.com" as const;
 export const WORDMARK_LIGHT_SRC = "/brand/flintapply-wordmark-light.png" as const;
 export const WORDMARK_DARK_SRC = "/brand/flintapply-wordmark-dark.png" as const;
 
+/** Landing hero product shot (intrinsic 2352×1568). */
+export const HERO_PRODUCT_SHOT_SRC = "/marketing/flintapply-hero.jpg" as const;
+
 /** Session key — intro plays once per tab session. */
 export const INTRO_SEEN_KEY = "flintapply:intro-seen";
 
@@ -47,7 +50,7 @@ export const LEGACY_ASSET_REPLACEMENTS = [
   { path: "/brand/taliocv-2.svg", replaceWith: "FlintApply vector lockup" },
   { path: "/brand/mark.png", replaceWith: "FlintApply app icon" },
   { path: "/brand/mark.svg", replaceWith: "FlintApply icon SVG" },
-  { path: "/marketing/taliocv-hero.jpg", replaceWith: "FlintApply hero product shot" },
+  { path: "/marketing/taliocv-hero.jpg", replaceWith: "Retired — use flintapply-hero.jpg" },
   { path: "/brand/taliocv-mini.svg", replaceWith: "FlintApply compact mark" },
   { path: "/brand/taliocv-1.svg", replaceWith: "Retire or replace with FlintApply mark set" },
   { path: "/brand/taliocv-2-mini.svg", replaceWith: "FlintApply mini lockup" },
