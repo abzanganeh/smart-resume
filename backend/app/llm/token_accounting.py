@@ -15,6 +15,18 @@ from app.services import session_store
 
 log = structlog.get_logger()
 
+
+class SessionTokenBudgetExceeded(Exception):
+    """Raised when a resume session exceeds the configured LLM token ceiling."""
+
+    def __init__(self, session_id: str, *, used: int, ceiling: int) -> None:
+        self.session_id = session_id
+        self.used = used
+        self.ceiling = ceiling
+        super().__init__(
+            f"Session {session_id} exceeded LLM token budget ({used} >= {ceiling})"
+        )
+
 _llm_session_id: ContextVar[str | None] = ContextVar("llm_session_id", default=None)
 _llm_step: ContextVar[str | None] = ContextVar("llm_step", default=None)
 
@@ -105,6 +117,18 @@ async def record_llm_response(
         runs = await _load_runs(sid)
         runs.append(record)
         await _save_runs(sid, runs)
+        used = session_token_total(
+            SessionTokenTotals(
+                input_tokens=sum(r.input_tokens for r in runs),
+                output_tokens=sum(r.output_tokens for r in runs),
+                estimated_cost_usd=round(sum(r.estimated_cost_usd for r in runs), 6),
+                run_count=len(runs),
+                runs=runs,
+            )
+        )
+        ceiling = settings.SESSION_LLM_TOKEN_CEILING
+        if used >= ceiling:
+            raise SessionTokenBudgetExceeded(sid, used=used, ceiling=ceiling)
     return record
 
 
@@ -118,6 +142,20 @@ async def get_session_token_totals(session_id: str) -> SessionTokenTotals:
         run_count=len(runs),
         runs=runs,
     )
+
+
+def session_token_total(totals: SessionTokenTotals) -> int:
+    return totals.input_tokens + totals.output_tokens
+
+
+async def assert_session_within_token_ceiling(session_id: str) -> SessionTokenTotals:
+    """Raise when the session has hit the configured LLM token budget."""
+    totals = await get_session_token_totals(session_id)
+    used = session_token_total(totals)
+    ceiling = settings.SESSION_LLM_TOKEN_CEILING
+    if used >= ceiling:
+        raise SessionTokenBudgetExceeded(session_id, used=used, ceiling=ceiling)
+    return totals
 
 
 async def clear_session_token_totals(session_id: str) -> None:

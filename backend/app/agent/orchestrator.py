@@ -12,7 +12,11 @@ from app.db.engine import async_session_factory
 from app.llm.base import LLMClient
 from app.llm.factory import get_llm_client
 from app.llm.pricing import estimate_cost, format_cost
-from app.llm.token_accounting import llm_accounting_context
+from app.llm.token_accounting import (
+    SessionTokenBudgetExceeded,
+    assert_session_within_token_ceiling,
+    llm_accounting_context,
+)
 from app.models.session import PhaseStatus, Session
 from app.services import session_store
 from app.services.company_intel import get_company_intel
@@ -270,6 +274,24 @@ async def run_phase(
     await session_store.update_phase_status(session_id, phase, PhaseStatus.running)
     await event_queue.put({"event": "progress", "phase": phase, "message": f"Phase {phase} starting…"})
 
+    try:
+        await assert_session_within_token_ceiling(session_id)
+    except SessionTokenBudgetExceeded as exc:
+        await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "code": "session_token_budget_exceeded",
+            "status": 429,
+            "message": (
+                "This session has used its AI token budget. Start a new session to continue."
+            ),
+            "used_tokens": exc.used,
+            "token_ceiling": exc.ceiling,
+        })
+        await session_store.release_phase_lock(session_id, phase)
+        return
+
     start = time.monotonic()
     try:
         from app.agent import phase1_keywords, phase2_audit, phase3_rewrite, phase4_qa
@@ -441,6 +463,27 @@ async def run_phase(
             "total_tokens": e.total_tokens,
             "budget": e.budget,
             "model": e.model,
+        })
+        raise
+    except SessionTokenBudgetExceeded as exc:
+        await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
+        log.warning(
+            "phase_session_token_budget_exceeded",
+            session_id=session_id,
+            phase=phase,
+            used_tokens=exc.used,
+            token_ceiling=exc.ceiling,
+        )
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "code": "session_token_budget_exceeded",
+            "status": 429,
+            "message": (
+                "This session has used its AI token budget. Start a new session to continue."
+            ),
+            "used_tokens": exc.used,
+            "token_ceiling": exc.ceiling,
         })
         raise
     except Exception as e:
