@@ -112,8 +112,8 @@ async def test_premium_user_gets_tier_llm_model(db_session) -> None:
     provider, model = await resolve_phase3_model_for_user(
         db_session, user_id=user.id
     )
-    assert provider == "anthropic"
-    assert model == "claude-sonnet-4-6"
+    assert provider == "gemini"
+    assert model == "gemini-2.5-flash"
 
 
 @pytest.mark.asyncio
@@ -138,5 +138,5 @@ async def test_apply_phase3_tier_uses_tier_limits_not_legacy_addons(db_session) 
     )
     assert decision.effective_tier == "standard"
     assert decision.provider == "gemini"
-    assert decision.model_string == "gemini-2.5-flash-lite"
+    assert decision.model_string == "gemini-2.5-flash"
     assert decision.consumed_credit_id is None

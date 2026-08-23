@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import cover_letter as cover_letter_agent
 from app.db.engine import get_db
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.limiter import limiter
 from app.models.cover_letter import CoverLetterTone
 from app.services.billing.exceptions import (
@@ -106,7 +106,7 @@ async def generate_cover_letter(
     )
     await update_session(session)
 
-    llm = get_llm_client(session.provider, session.model)
+    llm = get_llm_client_for_step("cover_letter")
 
     async def event_generator():
         _cover_letter_locks.add(session_id)

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent import job_fit as job_fit_agent
 from app.config import settings
 from app.db.engine import get_db
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
@@ -261,10 +261,7 @@ async def analyze_fit(
             },
         )
 
-    llm = get_llm_client(
-        job_fit_agent.FIT_LLM_PROVIDER,
-        job_fit_agent.FIT_LLM_MODEL,
-    )
+    llm = get_llm_client_for_step("job_fit")
 
     async def event_generator():
         _fit_locks.add(lock_key)
