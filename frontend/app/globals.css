@@ -128,10 +128,15 @@ body {
   }
 
   .marketing-hero-orb,
-  .sr-scroll-reveal {
+  .sr-scroll-reveal,
+  .hero-strength-rotator__line {
     animation: none !important;
     transform: none !important;
     transition: none !important;
+  }
+
+  .hero-strength-rotator__line:not(.is-active) {
+    visibility: hidden;
   }
 }
 
@@ -194,4 +199,23 @@ body {
 
 .sr-scroll-reveal[data-revealed="true"] {
   transform: translate3d(0, 0, 0);
+}
+
+/* Hero strength rotator — stacked grid keeps height stable across variants. */
+.hero-strength-rotator__stage {
+  display: grid;
+  align-items: start;
+}
+
+.hero-strength-rotator__line {
+  grid-area: 1 / 1;
+  margin: 0;
+  opacity: 0;
+  transition: opacity 700ms ease;
+  pointer-events: none;
+}
+
+.hero-strength-rotator__line.is-active {
+  opacity: 1;
+  pointer-events: auto;
 }
