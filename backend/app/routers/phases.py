@@ -204,6 +204,40 @@ async def trigger_phase(
                         },
                     )
 
+    # Phase 3 full rewrite debits resume_build quota (scoped regen uses section_regen above).
+    if phase == 3 and body.scope is None and user_id and not should_skip_billing_quota():
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+        if uid is not None:
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            if user is not None:
+                try:
+                    await check_and_increment_quota(
+                        db,
+                        user=user,
+                        action=QuotaAction.resume_build,
+                        session_id=session_id,
+                    )
+                    await db.commit()
+                except AccountSuspendedError:
+                    raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except CreditsLockedUntilVerificationError as exc:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=credits_locked_detail(balance=exc.balance),
+                    ) from exc
+                except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError):
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "insufficient_credits",
+                            "action": "resume_build",
+                            "message": "You're out of credits or plan resume slots for this period.",
+                        },
+                    )
+
     # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
     if phase == 4 and user_id and not should_skip_billing_quota():
         try:
