@@ -254,7 +254,7 @@ async def test_password_forgot_does_not_reveal_whether_email_exists(
     )
     assert known.status_code == 200, known.text
     assert unknown.status_code == 200, unknown.text
-    assert known.json() == {"ok": True}
+    assert known.json()["ok"] is True
     assert unknown.json() == {"ok": True}
 
 

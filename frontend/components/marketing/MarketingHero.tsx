@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, FileSearch, Sparkles } from "lucide-react";
 import { ProductScreenshot } from "@/components/brand/ProductScreenshot";
+import { HeroStrengthRotator } from "@/components/marketing/HeroStrengthRotator";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { formatSignupCreditsCopy } from "@/lib/freeTier";
 import { FINE_PRINT, PRIMARY_CTA, SECONDARY_CTA } from "./styles";
@@ -23,6 +24,7 @@ export function MarketingHero({ startingCredits }: { startingCredits: number }) 
             We&rsquo;ll tell you the minute they&rsquo;re hiring.
           </span>
         </h1>
+        <HeroStrengthRotator />
         <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 mb-3 max-w-2xl mx-auto">
           {PRODUCT_NAME}{" "}
           watches the careers pages you pick &mdash; the
