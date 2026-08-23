@@ -149,7 +149,7 @@ async def _fallback_keyword_extraction(
     ]
     try:
         parsed = await complete_structured(
-            llm, messages, KeywordStringsOutput, max_tokens=4096, max_retries=3,
+            llm, messages, KeywordStringsOutput, max_tokens=4096, max_retries=2,
         )
         resume_lower = resume_text.lower()
         must_kw = _strings_to_keywords(parsed.must_have_keywords, "must_have", jd_text, resume_lower)
@@ -222,7 +222,7 @@ async def run(
             messages,
             KeywordExtractionOutput,
             max_tokens=8192,
-            max_retries=5,
+            max_retries=2,
             accept_result=_reject_hollow_phase1,
         )
     except Exception as exc:

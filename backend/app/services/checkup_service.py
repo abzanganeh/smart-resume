@@ -52,6 +52,7 @@ async def run_checkup_analysis(
     job_title: str,
     llm: LLMClient,
     career_stage: str = "mid",
+    include_narrative: bool = True,
 ) -> QAOutput:
     """Score + narrate a resume against a JD without a session."""
     tailored = parsed_to_tailored(parsed)
@@ -83,20 +84,21 @@ async def run_checkup_analysis(
     )
 
     target_role = job_title.strip() or phase1.role_context.primary_domain.strip()
-    try:
-        narrative = await synthesize_phase4_narrative(
-            llm=llm,
-            score_result=score_result,
-            target_role=target_role,
-            rank_label=rank_label,
-        )
-        output = output.model_copy(
-            update={
-                "headline": narrative.headline,
-                "category_summaries": [item.model_dump() for item in narrative.category_summaries],
-            }
-        )
-    except Exception as exc:
-        log.warning("checkup_narrative_failed", error=str(exc))
+    if include_narrative:
+        try:
+            narrative = await synthesize_phase4_narrative(
+                llm=llm,
+                score_result=score_result,
+                target_role=target_role,
+                rank_label=rank_label,
+            )
+            output = output.model_copy(
+                update={
+                    "headline": narrative.headline,
+                    "category_summaries": [item.model_dump() for item in narrative.category_summaries],
+                }
+            )
+        except Exception as exc:
+            log.warning("checkup_narrative_failed", error=str(exc))
 
     return output

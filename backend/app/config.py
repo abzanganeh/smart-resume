@@ -294,6 +294,10 @@ class Settings(BaseSettings):
     PHASE_LOCK_TTL_SECONDS: int = 600
     # SSE keepalive interval while the event queue is idle (during LLM calls).
     SSE_KEEPALIVE_SECONDS: int = 15
+    # Abort a resume session when cumulative LLM tokens exceed this budget.
+    SESSION_LLM_TOKEN_CEILING: int = 400_000
+    # Anonymous checkup: max runs per device fingerprint per UTC day.
+    CHECKUP_DEVICE_DAILY_LIMIT: int = 5
 
 
 settings = Settings()

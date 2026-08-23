@@ -17,7 +17,7 @@ from app.agent import job_fit as job_fit_agent
 from app.agent import job_title_suggestions
 from app.agent.title_fit_insights import enrich_title_suggestions
 from app.db.engine import get_db
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
@@ -293,7 +293,7 @@ async def get_title_suggestions(
 
     llm_client = None
     try:
-        llm_client = get_llm_client(None, None)
+        llm_client = get_llm_client_for_step("job_title_suggestions")
     except Exception:  # noqa: BLE001
         llm_client = None
 
@@ -692,10 +692,7 @@ async def fit_job(
         db, user=user, action=QuotaAction.fit_analysis, charge=True
     )
 
-    llm = get_llm_client(
-        job_fit_agent.FIT_LLM_PROVIDER,
-        job_fit_agent.FIT_LLM_MODEL,
-    )
+    llm = get_llm_client_for_step("job_fit")
     import asyncio
 
     queue: asyncio.Queue = asyncio.Queue()

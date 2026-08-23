@@ -196,7 +196,7 @@ async def run(
             messages,
             AuditLLMOutput,
             max_tokens=8192,
-            max_retries=5,
+            max_retries=2,
             accept_result=_reject_hollow_llm,
         )
     except Exception as exc:

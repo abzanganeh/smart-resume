@@ -41,11 +41,11 @@ export function SessionAiControls({
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-300 dark:border-slate-700 space-y-4">
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Phase 3 model quality is determined by your subscription tier. Upgrade your plan on{" "}
+            Platform AI is included on every plan with the same rewrite quality. Upgrade on{" "}
             <a href="/billing" className="text-amber-700 dark:text-amber-400 hover:underline">
               Billing
             </a>{" "}
-            for higher-quality AI.
+            for higher volume limits — more tailored resumes, searches, and watched companies.
           </p>
           {phaseRunning && (
             <p className="text-xs text-amber-700 dark:text-amber-400/90">AI is running — settings are locked until the phase completes.</p>

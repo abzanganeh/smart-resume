@@ -17,7 +17,8 @@ from app.agent.orchestrator import run_phase
 from app.agent.phase3_postprocess import normalize_skills_to_categories
 from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
+from app.llm.model_registry import phase_step
 from app.limiter import limiter
 from app.models.audit import AuditOutput
 from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
@@ -203,6 +204,40 @@ async def trigger_phase(
                         },
                     )
 
+    # Phase 3 full rewrite debits resume_build quota (scoped regen uses section_regen above).
+    if phase == 3 and body.scope is None and user_id and not should_skip_billing_quota():
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+        if uid is not None:
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            if user is not None:
+                try:
+                    await check_and_increment_quota(
+                        db,
+                        user=user,
+                        action=QuotaAction.resume_build,
+                        session_id=session_id,
+                    )
+                    await db.commit()
+                except AccountSuspendedError:
+                    raise HTTPException(status_code=403, detail={"code": "account_suspended"})
+                except CreditsLockedUntilVerificationError as exc:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=credits_locked_detail(balance=exc.balance),
+                    ) from exc
+                except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError):
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "insufficient_credits",
+                            "action": "resume_build",
+                            "message": "You're out of credits or plan resume slots for this period.",
+                        },
+                    )
+
     # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
     if phase == 4 and user_id and not should_skip_billing_quota():
         try:
@@ -303,7 +338,7 @@ async def phase_events(request: Request, session_id: str, phase: int):
     await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
-    llm = get_llm_client(session.provider, session.model)
+    llm = get_llm_client_for_step(phase_step(phase))
 
     task = asyncio.create_task(run_phase(session_id, phase, llm, event_queue))
 

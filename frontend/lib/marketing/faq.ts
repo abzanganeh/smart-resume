@@ -89,9 +89,8 @@ export function faqEntries(startingCredits: number): FaqEntry[] {
         text: "Platform AI is included on every plan — there are no API keys to configure.",
       },
       {
-        text: "Free through Pro+ use Gemini for rewrites; Premium adds Claude Sonnet for the rewrite phase.",
+        text: "Every plan uses the same rewrite quality; tiers differ by how many resumes, searches, and watched companies you can run — not by which model rewrites your bullets.",
       },
-      { text: "Model quality scales with your subscription tier." },
     ]),
     {
       question: "What does the free plan include?",

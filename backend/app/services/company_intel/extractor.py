@@ -55,22 +55,18 @@ def _sanitize_company_name(name: str) -> str:
 
 
 def _get_extraction_client() -> LLMClient | None:
-    """Return the cheapest available platform LLM client for extraction.
+    """Return the platform LLM client for company-intel extraction.
 
     Returns None when no platform key is configured so the caller can
     skip extraction gracefully.
     """
     from app.config import settings
-    from app.llm.factory import _is_real_api_key  # noqa: PLC2701 — shared key validation
+    from app.llm.factory import _is_real_api_key, get_llm_client, get_llm_client_for_step  # noqa: PLC2701
 
     if _is_real_api_key(settings.GOOGLE_API_KEY):
-        from app.llm.providers.gemini_adapter import GeminiAdapter
-        return GeminiAdapter(model=_PRIMARY_MODEL, api_key=settings.GOOGLE_API_KEY)
-
+        return get_llm_client_for_step("company_intel")
     if _is_real_api_key(settings.OPENAI_API_KEY):
-        from app.llm.providers.openai_adapter import OpenAIAdapter
-        return OpenAIAdapter(model=_FALLBACK_MODEL, api_key=settings.OPENAI_API_KEY)
-
+        return get_llm_client(provider="openai", model=_FALLBACK_MODEL)
     return None
 
 
