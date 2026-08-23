@@ -566,7 +566,7 @@ def llm_factory_spy(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     having already spent the money.
     """
     spy = MagicMock(side_effect=AssertionError("the LLM provider was reached"))
-    monkeypatch.setattr("app.routers.checkup.get_llm_client", spy)
+    monkeypatch.setattr("app.routers.checkup.get_llm_client_for_step", spy)
     return spy
 
 
