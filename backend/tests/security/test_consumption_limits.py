@@ -28,7 +28,8 @@ Deriving the inventory instead of listing it
 --------------------------------------------
 
 ``_llm_entry_points`` walks the AST of every router module and collects
-handlers that call ``get_llm_client`` or ``complete_structured``, then
+handlers that call ``get_llm_client``, ``get_llm_client_for_step``, or
+``complete_structured``, then
 matches them to live routes. A hand-written list would be correct on
 the day it was written and stale a milestone later; the derived one
 means a *new* LLM endpoint that ships without auth or a rate limit
@@ -91,7 +92,9 @@ AGENT_DIR = pathlib.Path(__file__).resolve().parents[2] / "app" / "agent"
 
 # Calling either of these from a request handler means that request can
 # reach a paid provider.
-LLM_CALL_NAMES = frozenset({"get_llm_client", "complete_structured"})
+LLM_CALL_NAMES = frozenset(
+    {"get_llm_client", "get_llm_client_for_step", "complete_structured"}
+)
 
 AUTH_DEPENDENCY_NAMES = frozenset(
     {"get_current_user", "get_current_user_id", "get_current_admin"}
@@ -202,7 +205,8 @@ def test_llm_entry_point_inventory_is_not_empty() -> None:
     """Guard the AST scan itself.
 
     Every inventory assertion below is derived from this scan. A refactor
-    that renamed ``get_llm_client`` or moved handlers out of
+    that renamed ``get_llm_client`` / ``get_llm_client_for_step`` or moved
+    handlers out of
     ``app/routers`` would empty the inventory and turn the rest of this
     module green while covering nothing.
     """
@@ -656,7 +660,7 @@ async def test_checkup_rejects_empty_resume_before_reaching_the_provider(
 def phase_llm_factory_spy(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Fail the test if the SSE handler constructs an LLM client."""
     spy = MagicMock(side_effect=AssertionError("the LLM provider was reached"))
-    monkeypatch.setattr("app.routers.phases.get_llm_client", spy)
+    monkeypatch.setattr("app.routers.phases.get_llm_client_for_step", spy)
     return spy
 
 
