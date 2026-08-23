@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.config import settings
 from app.llm.base import LLMClient
 from app.llm.model_catalog import default_model_for_provider, models_for_provider
+from app.llm.tracking_client import TrackingLLMClient
 
 
 def _is_real_api_key(key: str) -> bool:
@@ -50,21 +51,22 @@ def get_llm_client(
     match p:
         case "openai":
             from app.llm.providers.openai_adapter import OpenAIAdapter
-            return OpenAIAdapter(model=m, api_key=key)
+            client: LLMClient = OpenAIAdapter(model=m, api_key=key)
         case "anthropic":
             from app.llm.providers.anthropic_adapter import AnthropicAdapter
-            return AnthropicAdapter(model=m, api_key=key)
+            client = AnthropicAdapter(model=m, api_key=key)
         case "gemini":
             from app.llm.providers.gemini_adapter import GeminiAdapter
-            return GeminiAdapter(model=m, api_key=key)
+            client = GeminiAdapter(model=m, api_key=key)
         case "openrouter":
             from app.llm.providers.openrouter_adapter import OpenRouterAdapter
-            return OpenRouterAdapter(model=m, api_key=key)
+            client = OpenRouterAdapter(model=m, api_key=key)
         case "ollama":
             from app.llm.providers.ollama_adapter import OllamaAdapter
-            return OllamaAdapter(model=m, base_url=settings.OLLAMA_BASE_URL)
+            client = OllamaAdapter(model=m, base_url=settings.OLLAMA_BASE_URL)
         case _:
             raise ValueError(f"Unknown LLM_PROVIDER: {p!r}")
+    return TrackingLLMClient(client)
 
 
 def get_all_providers() -> list[dict]:

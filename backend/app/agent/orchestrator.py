@@ -12,6 +12,7 @@ from app.db.engine import async_session_factory
 from app.llm.base import LLMClient
 from app.llm.factory import get_llm_client
 from app.llm.pricing import estimate_cost, format_cost
+from app.llm.token_accounting import llm_accounting_context
 from app.models.session import PhaseStatus, Session
 from app.services import session_store
 from app.services.company_intel import get_company_intel
@@ -273,25 +274,26 @@ async def run_phase(
     try:
         from app.agent import phase1_keywords, phase2_audit, phase3_rewrite, phase4_qa
 
-        match phase:
-            case 1:
-                output = await phase1_keywords.run(session, llm, event_queue)
-            case 2:
-                output = await phase2_audit.run(session, llm, event_queue)
-            case 3:
-                scope = session.phase_run_scope
-                # Step 19 — resolve LLM tier (consume Better credit /
-                # increment Best counter) before the rewrite call.
-                phase3_llm, _ = await _resolve_phase3_llm(
-                    session, llm, event_queue
-                )
-                output = await phase3_rewrite.run(
-                    session, phase3_llm, event_queue, scope=scope
-                )
-            case 4:
-                output = await phase4_qa.run(session, llm, event_queue)
-            case _:
-                raise ValueError(f"Unknown phase: {phase}")
+        with llm_accounting_context(session_id, f"phase{phase}"):
+            match phase:
+                case 1:
+                    output = await phase1_keywords.run(session, llm, event_queue)
+                case 2:
+                    output = await phase2_audit.run(session, llm, event_queue)
+                case 3:
+                    scope = session.phase_run_scope
+                    # Step 19 — resolve LLM tier (consume Better credit /
+                    # increment Best counter) before the rewrite call.
+                    phase3_llm, _ = await _resolve_phase3_llm(
+                        session, llm, event_queue
+                    )
+                    output = await phase3_rewrite.run(
+                        session, phase3_llm, event_queue, scope=scope
+                    )
+                case 4:
+                    output = await phase4_qa.run(session, llm, event_queue)
+                case _:
+                    raise ValueError(f"Unknown phase: {phase}")
 
         await session_store.save_phase_output(session_id, phase, output)
 
