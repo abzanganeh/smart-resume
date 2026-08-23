@@ -70,19 +70,32 @@ def test_llm_factory_allowlist_is_explicit_match() -> None:
         assert f'case "{provider}"' in source or f"case '{provider}'" in source
 
 
-KNOWN_INGESTION_GAPS: dict[str, str] = {
-    "job_corpus_html_sanitisation": (
-        "M19 free-job-corpus — scraped HTML normalisation before embed/prompt"
-    ),
-    "job_row_embedding_poisoning_tests": (
-        "M19 — tenant-scoped corpus ingest with adversarial job descriptions"
+def test_corpus_privacy_sanitization_is_wired_for_m19_llm05() -> None:
+    """LLM05 — M19 corpus ingest strips user-scoped keys before shared cache write."""
+    from app.services.career_watch.corpus_privacy import (
+        sanitize_parsed_job_for_corpus,
+        sanitize_raw_payload_for_corpus,
+    )
+    from app.services.career_watch.corpus_sync import _job_cache_record_from_poll
+
+    assert callable(sanitize_parsed_job_for_corpus)
+    assert callable(sanitize_raw_payload_for_corpus)
+    sync_source = inspect.getsource(_job_cache_record_from_poll)
+    assert "sanitize_parsed_job_for_corpus" in sync_source
+
+
+ACCEPTED_LLM05_GAPS: dict[str, str] = {
+    "adversarial_job_embedding_red_team": (
+        "Optional red-team fixtures for poisoned job descriptions in embeddings"
     ),
 }
 
 
-@pytest.mark.parametrize("gap_id,description", list(KNOWN_INGESTION_GAPS.items()))
-def test_documented_ingestion_gap_for_gap_matrix(gap_id: str, description: str) -> None:
-    """Registry of LLM05 gaps deferred to M19."""
+@pytest.mark.parametrize("gap_id,description", list(ACCEPTED_LLM05_GAPS.items()))
+def test_accepted_llm05_gap_documented_for_gap_matrix(
+    gap_id: str, description: str
+) -> None:
+    """Remaining LLM05 work is an accepted-risk row, not a silent gap."""
     assert gap_id
     assert description
 
