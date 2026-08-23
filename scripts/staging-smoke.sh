@@ -103,7 +103,7 @@ smoke_email="staging-smoke-$(date +%s%N)-$$@example.com"
 register_tmp="$(mktemp)"
 register_status="$(curl -s -o "$register_tmp" -w '%{http_code}' -X POST "$API_URL/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\"}")"
+  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\",\"turnstile_token\":\"staging-smoke-turnstile\"}")"
 register_json="$(cat "$register_tmp")"
 rm -f "$register_tmp"
 
