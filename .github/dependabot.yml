@@ -24,3 +24,6 @@ updates:
       frontend-dependencies:
         patterns:
           - "*"
+        exclude-patterns:
+          - "typescript"
+          - "eslint"
