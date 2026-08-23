@@ -51,6 +51,16 @@ describe("faqEntries", () => {
     assert.ok(text.includes("no account"), "states no account is needed");
   });
 
+  it("does not claim tier-based model quality", () => {
+    const text = faqEntries(6)
+      .map((e) => `${e.question} ${e.answer}`)
+      .join(" ")
+      .toLowerCase();
+    assert.ok(!text.includes("claude sonnet"), "no tier-based Claude claim");
+    assert.ok(!text.includes("model quality scales"), "no tier-quality scaling claim");
+    assert.ok(text.includes("same rewrite quality"), "states unified quality bar");
+  });
+
   it("does not claim anything about model training", () => {
     // The privacy policy makes no training claim, so the marketing page must
     // not invent one. Data questions point at the policy instead.

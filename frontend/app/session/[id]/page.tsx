@@ -872,7 +872,7 @@ function SessionContent() {
         phaseRunning={phaseRunning}
         open={aiSettingsOpen}
         onOpenChange={setAiSettingsOpen}
-        modelLabel="Included with your subscription tier"
+        modelLabel="Same quality on every plan"
       />
     </div>
   );

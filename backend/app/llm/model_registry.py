@@ -28,11 +28,13 @@ PipelineStep = Literal[
 
 ModelRoute = tuple[str, str]
 
-# One quality bar — step defaults, not tier. Slice 4 may re-pin costs.
+# Step→model pins (verified 2026-08-22, ai.google.dev/gemini-api/docs/pricing).
+# One quality bar: tiers differ by volume, not output model.
+# Phase 3 stays on gemini-2.5-flash (prior pro-tier default) — not flash-lite.
 STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
     "phase1_keywords": ("gemini", "gemini-2.5-flash-lite"),
     "phase2_audit": ("gemini", "gemini-2.5-flash-lite"),
-    "phase3_rewrite": ("gemini", "gemini-2.5-flash"),
+    "phase3_rewrite": ("gemini", "gemini-2.5-flash"),  # mid flash — paid deliverable
     "phase3_truthfulness": ("gemini", "gemini-2.5-flash-lite"),
     "phase4_qa": ("gemini", "gemini-2.5-flash-lite"),
     "phase4_narrative": ("gemini", "gemini-2.5-flash-lite"),
@@ -50,7 +52,7 @@ STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
     "story_verify": ("gemini", "gemini-2.5-flash-lite"),
     "chat": ("gemini", "gemini-2.5-flash-lite"),
     "company_intel": ("gemini", "gemini-2.5-flash-lite"),
-    "checkup": ("gemini", "gemini-2.5-flash-lite"),
+    "checkup": ("gemini", "gemini-2.5-flash-lite"),  # pinned — never settings.LLM_MODEL
 }
 
 # Empty today — reintroducing a premium step override is one map entry.
