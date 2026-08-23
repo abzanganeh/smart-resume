@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.limiter import limiter, rate_limit_key
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.models.qa import QAOutput
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
@@ -75,7 +75,7 @@ async def run_checkup(
         raise HTTPException(status_code=422, detail="Job description exceeds character limit.")
 
     raw_resume = await _extract_resume_text(resume_text=resume_text, file=file)
-    llm = get_llm_client(settings.LLM_PROVIDER, settings.LLM_MODEL)
+    llm = get_llm_client_for_step("checkup")
     parsed = await _structure_resume(raw_resume, llm)
     result = await run_checkup_analysis(
         parsed=parsed,

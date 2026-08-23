@@ -17,7 +17,8 @@ from app.agent.orchestrator import run_phase
 from app.agent.phase3_postprocess import normalize_skills_to_categories
 from app.config import settings, should_skip_billing_quota
 from app.db.engine import get_db
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
+from app.llm.model_registry import phase_step
 from app.limiter import limiter
 from app.models.audit import AuditOutput
 from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
@@ -303,7 +304,7 @@ async def phase_events(request: Request, session_id: str, phase: int):
     await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
-    llm = get_llm_client(session.provider, session.model)
+    llm = get_llm_client_for_step(phase_step(phase))
 
     task = asyncio.create_task(run_phase(session_id, phase, llm, event_queue))
 

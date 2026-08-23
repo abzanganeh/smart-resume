@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.config import settings
 from app.llm.base import LLMClient
 from app.llm.model_catalog import default_model_for_provider, models_for_provider
+from app.llm.model_registry import PipelineStep, resolve_model
 from app.llm.tracking_client import TrackingLLMClient
 
 
@@ -67,6 +68,12 @@ def get_llm_client(
         case _:
             raise ValueError(f"Unknown LLM_PROVIDER: {p!r}")
     return TrackingLLMClient(client)
+
+
+def get_llm_client_for_step(step: PipelineStep, *, tier: str | None = None) -> LLMClient:
+    """Resolve provider/model from the step registry and return a tracking client."""
+    provider, model = resolve_model(step, tier=tier)
+    return get_llm_client(provider=provider, model=model)
 
 
 def get_all_providers() -> list[dict]:

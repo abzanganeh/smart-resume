@@ -53,7 +53,7 @@ from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.base import LLMMessage
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
 from app.models.resume import ParsedResume
@@ -177,7 +177,7 @@ async def _structure_with_llm(
     raw-text fallback path that still produces useful chunks.
     """
     try:
-        llm = get_llm_client(provider, model)
+        llm = get_llm_client_for_step("chat")
     except Exception as exc:
         log.warning("profile.llm.unavailable", error=str(exc))
         return {}
@@ -626,7 +626,7 @@ async def create_resume_from_story(
     model = request.headers.get("X-Model", "").strip()
     story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
-    llm_client = get_llm_client(provider or None, model or None)
+    llm_client = get_llm_client_for_step("story")
 
     try:
         billing = await check_quota_for_story_generate(
@@ -793,7 +793,7 @@ async def polish_resume_draft(
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
 
-    llm_client = get_llm_client(provider or None, model or None)
+    llm_client = get_llm_client_for_step("polish")
 
     try:
         updated = await polish_resume(body.text, body.instruction, llm_client)
@@ -872,7 +872,7 @@ async def story_coach_endpoint(
             )
         await session.commit()
 
-    llm_client = get_llm_client(provider or None, model or None)
+    llm_client = get_llm_client_for_step("story_coach")
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -955,7 +955,7 @@ async def story_interview_next(
             )
         await session.commit()
 
-    llm_client = get_llm_client(provider or None, model or None)
+    llm_client = get_llm_client_for_step("story_interview")
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -1008,7 +1008,7 @@ async def story_interview_submit(
         exchange_count=len(body.history),
     )
 
-    llm_client = get_llm_client(provider or None, model or None)
+    llm_client = get_llm_client_for_step("story_verify")
 
     try:
         draft_text = await story_to_resume(narrative, llm_client)
