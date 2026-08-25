@@ -5,8 +5,15 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { ArrowRight } from "lucide-react";
 import { JOURNEY_STEPS, accessBadge } from "@/lib/marketing/journey";
 import {
+  journeyScrollTrackHeightVh,
+  journeyStageProgressFromTrack,
+  PINNED_PANEL_HEIGHT_CLASS,
+  PINNED_STICKY_TOP_CLASS,
+  PINNED_STICKY_TOP_PX,
+} from "@/lib/marketing/scrollPin";
+import {
   activeStageFromProgress,
-  pinnedProgress,
+  pinnedProgressForSticky,
   stageLetter,
   stageTheme,
 } from "@/lib/marketing/stageRail";
@@ -18,20 +25,12 @@ import {
   SECTION_SUBHEADING,
 } from "./styles";
 
-/** Scroll distance allotted to each stage, as a share of the viewport. */
-const SEGMENT_VH = 58;
-
 /**
  * Pinned scrollytelling journey.
  *
- * The track is tall enough to give each stage its own slice of scroll; the
- * letters and the panel are pinned inside it, so scrolling advances A → F in
- * place rather than moving past a stack of cards. Scroll position never enters
- * React state as a coordinate — one rAF-coalesced listener derives the active
- * index and writes the rail fill as a CSS variable.
- *
- * The full copy for every stage also renders in the screen-reader list, so
- * crawlers and no-JS clients get all six descriptions.
+ * The section title stays visible while scrolling advances A → F in place.
+ * The track is tall enough that each stage gets a full viewport of scroll
+ * travel on a trackpad.
  */
 export function JourneySection() {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -48,13 +47,18 @@ export function JourneySection() {
         if (!track) return;
 
         const rect = track.getBoundingClientRect();
-        const progress = pinnedProgress(
+        const progress = pinnedProgressForSticky(
           { top: rect.top, height: rect.height },
           window.innerHeight,
+          PINNED_STICKY_TOP_PX,
         );
         setRailProgressValue(progress);
 
-        const next = activeStageFromProgress(progress, JOURNEY_STEPS.length);
+        const stageProgress = journeyStageProgressFromTrack(
+          progress,
+          JOURNEY_STEPS.length,
+        );
+        const next = activeStageFromProgress(stageProgress, JOURNEY_STEPS.length);
         if (next !== null) setActiveIndex(next);
       });
     };
@@ -69,14 +73,6 @@ export function JourneySection() {
     };
   }, []);
 
-  /**
-   * Scroll to the middle of a stage's band so that stage reads as active.
-   *
-   * Derived from the same pinned-travel geometry as `pinnedProgress` rather
-   * than from the marker offsets — the markers divide the whole track, but only
-   * `height - viewport` of it is scrollable while the panel is pinned, so
-   * targeting a marker directly overshoots by up to a full stage.
-   */
   const goToStage = useCallback((index: number) => {
     const track = trackRef.current;
     if (!track) return;
@@ -94,25 +90,18 @@ export function JourneySection() {
 
   return (
     <section className={`${SECTION} pb-16`}>
-      <h2 className={SECTION_HEADING}>Your job search, step by step</h2>
-      <p className={`${SECTION_SUBHEADING} mb-8`}>
-        Scroll to walk through each stage, or pick a letter. Badges show where a
-        paid plan is required &mdash; everything else works on the free tier.
-      </p>
-
       <div
         id="journey-track"
         ref={trackRef}
-        className="relative mx-auto max-w-4xl h-[348vh]"
+        className="relative mx-auto max-w-4xl"
+        data-journey-scroll-track
         style={
           {
+            height: `${journeyScrollTrackHeightVh(JOURNEY_STEPS.length)}vh`,
             "--rail-progress": railProgressValue,
           } as CSSProperties
         }
       >
-        {/* Scroll slices: they give each stage its own scroll distance and
-            double as deep-link anchors. Absolutely positioned so they add no
-            layout height of their own. */}
         <div aria-hidden className="absolute inset-0 flex flex-col">
           {JOURNEY_STEPS.map((item) => (
             <div
@@ -124,16 +113,25 @@ export function JourneySection() {
           ))}
         </div>
 
-        <div className="sticky top-24">
+        <div
+          className={`sticky ${PINNED_STICKY_TOP_CLASS} ${PINNED_PANEL_HEIGHT_CLASS} flex min-h-0 flex-col overflow-hidden bg-gradient-to-br from-slate-100 via-white to-slate-200 py-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 sm:py-6`}
+        >
+          <header className="shrink-0 text-center">
+            <h2 className={SECTION_HEADING}>Your job search, step by step</h2>
+            <p className={`${SECTION_SUBHEADING} mb-4 sm:mb-6`}>
+              Scroll to walk through each stage, or pick a letter. Badges show where a
+              paid plan is required &mdash; everything else works on the free tier.
+            </p>
+          </header>
+
           <div
-            className="grid gap-6 lg:grid-cols-[2.75rem_minmax(0,1fr)] lg:gap-10"
+            className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[2.75rem_minmax(0,1fr)] lg:gap-8 lg:items-center"
             style={{ "--stage-glow": theme.glow } as CSSProperties}
           >
             <nav
               aria-label="Stage letters"
-              className="relative flex items-center justify-center gap-3 lg:flex-col lg:justify-start lg:gap-4"
+              className="relative flex shrink-0 items-center justify-center gap-2 sm:gap-3 lg:flex-col lg:justify-center lg:gap-3"
             >
-              {/* Rail track: horizontal on small screens, vertical on desktop. */}
               <span
                 aria-hidden
                 className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-slate-300 dark:bg-slate-700 lg:bottom-0 lg:left-1/2 lg:right-auto lg:top-0 lg:h-auto lg:w-px lg:translate-y-0 lg:-translate-x-1/2"
@@ -160,7 +158,7 @@ export function JourneySection() {
                       aria-label={`${stageLetter(index)} — ${item.title}`}
                       data-active={isActive ? "true" : "false"}
                       onClick={() => goToStage(index)}
-                      className={`relative z-[1] flex h-11 w-11 items-center justify-center rounded-full border font-mono text-sm font-bold transition-all duration-300 motion-reduce:transition-none motion-reduce:scale-100 ${
+                      className={`relative z-[1] flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border font-mono text-sm font-bold transition-all duration-300 motion-reduce:transition-none motion-reduce:scale-100 ${
                         isActive
                           ? `scale-110 shadow-lg ${letterTheme.badge} ${letterTheme.text} ${letterTheme.border}`
                           : "scale-95 border-slate-300 bg-white text-slate-500 hover:scale-100 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
@@ -169,16 +167,15 @@ export function JourneySection() {
                       {stageLetter(index)}
                     </button>
 
-                    {/* Connector from the active letter to the panel. */}
                     {isActive && (
                       <>
                         <span
                           aria-hidden
-                          className="absolute left-1/2 top-full h-6 w-px -translate-x-1/2 bg-[rgb(var(--stage-glow))] lg:hidden"
+                          className="absolute left-1/2 top-full h-4 w-px -translate-x-1/2 bg-[rgb(var(--stage-glow))] lg:hidden"
                         />
                         <span
                           aria-hidden
-                          className="absolute left-full top-1/2 hidden h-px w-10 -translate-y-1/2 bg-[rgb(var(--stage-glow))] lg:block"
+                          className="absolute left-full top-1/2 hidden h-px w-8 -translate-y-1/2 bg-[rgb(var(--stage-glow))] lg:block"
                         />
                       </>
                     )}
@@ -191,7 +188,7 @@ export function JourneySection() {
               id="journey-panel"
               data-active-stage={step.id}
               aria-live="polite"
-              className={`min-h-[19rem] rounded-2xl border-l-4 border-y border-r bg-white/70 p-6 shadow-sm transition-colors duration-500 motion-reduce:transition-none dark:bg-slate-900/60 sm:p-8 ${theme.border}`}
+              className={`flex min-h-0 flex-1 flex-col justify-center rounded-2xl border-l-4 border-y border-r bg-white/70 p-5 shadow-sm transition-colors duration-500 motion-reduce:transition-none dark:bg-slate-900/60 sm:p-7 ${theme.border}`}
               style={{ borderLeftColor: "rgb(var(--stage-glow))" }}
             >
               <div className="mb-2 flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
@@ -201,7 +198,7 @@ export function JourneySection() {
                 </span>
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-xl">
                   {step.title}
                 </h3>
                 {badge && (
@@ -216,7 +213,7 @@ export function JourneySection() {
               {step.accessNote && (
                 <p className={`mt-3 ${FINE_PRINT}`}>{step.accessNote}</p>
               )}
-              <Link href={step.ctaHref} className={`${INLINE_CTA} mt-5 inline-flex`}>
+              <Link href={step.ctaHref} className={`${INLINE_CTA} mt-4 inline-flex sm:mt-5`}>
                 {step.ctaLabel}
                 <ArrowRight aria-hidden className="h-4 w-4" />
               </Link>
@@ -225,22 +222,25 @@ export function JourneySection() {
         </div>
       </div>
 
-      <ol aria-label="Job search stages" className="sr-only">
-        {JOURNEY_STEPS.map((item, index) => {
-          const itemBadge = accessBadge(item.access);
-          return (
-            <li key={item.id}>
-              <h3>
-                {stageLetter(index)} — {item.title}
-              </h3>
-              {itemBadge && <span>{itemBadge}</span>}
-              <p>{item.description}</p>
-              {item.accessNote && <p>{item.accessNote}</p>}
-              <a href={item.ctaHref}>{item.ctaLabel}</a>
-            </li>
-          );
-        })}
-      </ol>
+      <div className="sr-only">
+        <h2>Your job search, step by step</h2>
+        <ol aria-label="Job search stages">
+          {JOURNEY_STEPS.map((item, index) => {
+            const itemBadge = accessBadge(item.access);
+            return (
+              <li key={item.id}>
+                <h3>
+                  {stageLetter(index)} — {item.title}
+                </h3>
+                {itemBadge && <span>{itemBadge}</span>}
+                <p>{item.description}</p>
+                {item.accessNote && <p>{item.accessNote}</p>}
+                <a href={item.ctaHref}>{item.ctaLabel}</a>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </section>
   );
 }

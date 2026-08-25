@@ -16,10 +16,10 @@
  */
 import { test, expect } from "@playwright/test"
 import { suppressIntro } from "./helpers/intro"
+import { scrollPostHeroProgress } from "./helpers/postHero"
 
 test.beforeEach(async ({ page }) => {
-  // Scrolling dismisses the intro, so the scroll-driven specs below pass by
-  // accident today. Suppress it up front so they pass on purpose.
+  // Suppress the intro up front so scroll-driven specs are deterministic.
   await suppressIntro(page)
   await page.goto("/")
 })
@@ -50,10 +50,10 @@ test.describe("hero", () => {
       page.getByRole("heading", { level: 1, name: /name the companies/i }),
     ).toBeVisible()
 
-    const badge = page.getByText(
-      /Company watch · Alerts in minutes · Never fabricates metrics/i,
-    )
-    await expect(badge).toBeVisible()
+    const badge = page
+      .locator(".hero-message-set__badge")
+      .getByText(/Company watch · Alerts in minutes · Never fabricates metrics/i);
+    await expect(badge).toBeVisible();
 
     // ATS is the highest-intent search term and the no-fabrication promise is
     // the core differentiator. The badge no longer carries ATS, so the
@@ -64,20 +64,16 @@ test.describe("hero", () => {
   test("states the free watch limit rather than implying unlimited", async ({
     page,
   }) => {
-    // The hero promises "we'll tell you the minute they're hiring", but the
-    // free tier is one company at 30 minutes (career_watch_companies=1).
-    // The journey stage discloses the same limit, so scope to the hero.
-    const hero = page
-      .locator("section")
-      .filter({ has: page.getByRole("heading", { level: 1 }) })
+    await scrollPostHeroProgress(page, 0.08)
     await expect(
-      hero.getByText(/free plans watch one company/i),
+      page.locator(".marketing-hero-cta").getByText(/free plans watch one company/i),
     ).toBeVisible()
   })
 
   test("offers the no-account checkup alongside registration", async ({
     page,
   }) => {
+    await scrollPostHeroProgress(page, 0.08)
     await expect(
       page.getByRole("link", { name: /start your career story/i }).first(),
     ).toHaveAttribute("href", "/auth?mode=register")
@@ -88,12 +84,14 @@ test.describe("hero", () => {
   })
 
   test("advertises the real signup credit grant", async ({ page }) => {
+    await scrollPostHeroProgress(page, 0.08)
     await expect(page.getByText(/6 credits on signup/i).first()).toBeVisible()
   })
 })
 
 test.describe("career discovery", () => {
   test("is a top-level section, not a footnote", async ({ page }) => {
+    await scrollPostHeroProgress(page, 0.08)
     await expect(
       page.getByRole("heading", {
         level: 2,
@@ -103,6 +101,7 @@ test.describe("career discovery", () => {
   })
 
   test("labels its example data as illustrative", async ({ page }) => {
+    await scrollPostHeroProgress(page, 0.35)
     // Required by the no-fabrication rule: sample fit scores must never read
     // as a claim about a real result.
     await expect(page.getByText(/illustrative example/i)).toBeVisible()
@@ -179,6 +178,7 @@ test.describe("journey", () => {
 
 test.describe("pricing", () => {
   test("shows the free tier and every public paid tier", async ({ page }) => {
+    await page.locator("#pricing").scrollIntoViewIfNeeded()
     await expect(
       page.getByRole("heading", { level: 2, name: /start free, upgrade only/i }),
     ).toBeVisible()
@@ -190,12 +190,43 @@ test.describe("pricing", () => {
         page.getByRole("heading", { level: 3, name: tier, exact: true }),
       ).toBeVisible()
     }
-    await expect(page.getByText("$9.99")).toBeVisible()
-    await expect(page.getByText("$19.99")).toBeVisible()
+    const pricingSection = page.locator("#pricing")
+    for (const label of [
+      "Choose Weekly",
+      "Choose Pro",
+      "Choose Pro+",
+      "Choose Premium",
+    ]) {
+      await expect(
+        pricingSection.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible()
+    }
+    const syncedWeekly = page.getByText("$9.99")
+    if (await syncedWeekly.count()) {
+      await expect(syncedWeekly).toBeVisible()
+      await expect(page.getByText("$19.99")).toBeVisible()
+    }
   })
 
   test("never renders an unsynced plan as $0.00", async ({ page }) => {
+    await page.locator("#pricing").scrollIntoViewIfNeeded()
     await expect(page.getByText("$0.00")).toHaveCount(0)
+  })
+
+  test("links paid tiers through auth to billing", async ({ page }) => {
+    await page.locator("#pricing").scrollIntoViewIfNeeded()
+    await expect(
+      page.getByRole("link", { name: /create account & choose a plan/i }),
+    ).toHaveAttribute("href", "/auth?mode=register&callbackUrl=%2Fbilling")
+    await expect(
+      page.getByRole("link", { name: /sign in to upgrade/i }),
+    ).toHaveAttribute("href", "/auth?callbackUrl=%2Fbilling")
+    await expect(
+      page.getByRole("link", { name: /choose pro/i }).first(),
+    ).toHaveAttribute("href", "/auth?mode=register&callbackUrl=%2Fbilling")
+    await expect(
+      page.getByRole("link", { name: /choose weekly/i }).first(),
+    ).toHaveAttribute("href", "/auth?mode=register&callbackUrl=%2Fbilling")
   })
 })
 

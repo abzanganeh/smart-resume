@@ -1,5 +1,4 @@
 import { CapabilitySpotlight } from "@/components/marketing/CapabilitySpotlight";
-import { CareerDiscoverySection } from "@/components/marketing/CareerDiscoverySection";
 import { CheckupInvite } from "@/components/marketing/CheckupInvite";
 import { ClosingCta } from "@/components/marketing/ClosingCta";
 import { ComparisonSection } from "@/components/marketing/ComparisonSection";
@@ -32,19 +31,16 @@ export default async function LandingPage() {
       />
       <MarketingHero startingCredits={startingCredits} />
       <IntroOverlay />
-      <ScrollReveal>
-        <CareerDiscoverySection />
-      </ScrollReveal>
       <JourneySection />
+      <ScrollReveal>
+        <PricingSection pricing={pricing} startingCredits={startingCredits} />
+      </ScrollReveal>
       <ComparisonSection />
       {/* Demo the audit, then invite the visitor to run the real one. */}
       <KeywordScanDemo />
       <CheckupInvite />
       <ScrollReveal>
         <CapabilitySpotlight />
-      </ScrollReveal>
-      <ScrollReveal>
-        <PricingSection pricing={pricing} startingCredits={startingCredits} />
       </ScrollReveal>
       <FaqSection startingCredits={startingCredits} />
       <ClosingCta startingCredits={startingCredits} />

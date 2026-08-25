@@ -95,9 +95,17 @@ export function NavBar() {
   return (
     <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
+        <Link href={renderUserMenu ? "/dashboard" : "/"} className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
           <BrandLogo className="h-10 w-auto max-w-[200px] sm:max-w-[240px]" />
         </Link>
+
+        {!renderUserMenu && (
+          <div className="hidden sm:flex items-center gap-1 text-sm">
+            <NavLink href="/#pricing" active={pathname === "/"}>
+              Pricing
+            </NavLink>
+          </div>
+        )}
 
         {renderUserMenu && (
           <div className="hidden md:flex items-center gap-0.5 text-sm text-slate-600 dark:text-slate-400 min-w-0">
