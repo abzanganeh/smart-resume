@@ -12,12 +12,18 @@ describe("postHeroMotion", () => {
   });
 
   it("swaps CTA for roles left-to-right", () => {
-    const before = postHeroMotion(0.3);
-    const during = postHeroMotion(0.48);
-    const after = postHeroMotion(0.65);
+    const before = postHeroMotion(0.25);
+    const during = postHeroMotion(0.33);
+    const after = postHeroMotion(0.45);
     assert.ok(before.cta.opacity > 0.9);
     assert.ok(during.roles.opacity > before.roles.opacity);
     assert.ok(after.roles.opacity > 0.9);
     assert.ok(after.cta.opacity < 0.1);
+  });
+
+  it("hands off to the proof card after roles exit", () => {
+    const late = postHeroMotion(0.75);
+    assert.ok(late.proof.opacity > 0.9);
+    assert.ok(late.roles.opacity < 0.1);
   });
 });

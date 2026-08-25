@@ -15,8 +15,21 @@ export const COMPANY_URL = "https://theflintai.com" as const;
 export const WORDMARK_LIGHT_SRC = "/brand/flintapply-wordmark-light.png" as const;
 export const WORDMARK_DARK_SRC = "/brand/flintapply-wordmark-dark.png" as const;
 
-/** Landing hero product shot (intrinsic 2352×1568). */
+/**
+ * Framed product marketing shot — used by `ProductScreenshot` in inline
+ * capability strips. Kept on the JPG because that shot is a crawler-friendly
+ * flat render, not the atmospheric hero art.
+ */
 export const HERO_PRODUCT_SHOT_SRC = "/marketing/flintapply-hero.jpg" as const;
+
+/**
+ * Full-bleed pinned hero art. Dark 3D render of a document radiating into
+ * hex nodes; transparent PNG so the wash underneath shines through the edges.
+ * Kept separate from `HERO_PRODUCT_SHOT_SRC` because that constant is still
+ * used by the plain framed screenshot and swapping it there would replace a
+ * literal product screenshot with a stylised render.
+ */
+export const HERO_PRODUCT_SRC = "/marketing/hero-image.png" as const;
 
 /** Session key — intro plays once per tab session. */
 export const INTRO_SEEN_KEY = "flintapply:intro-seen";

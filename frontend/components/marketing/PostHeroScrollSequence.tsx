@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Compass, FileSearch } from "lucide-react";
+import { ArrowRight, Compass, FileSearch, ShieldCheck } from "lucide-react";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { formatSignupCreditsCopy } from "@/lib/freeTier";
 import { titleFitBar, titleFitLabel } from "@/lib/jobs";
@@ -90,6 +90,7 @@ export function PostHeroScrollSequence({
       <div className="mx-auto max-w-3xl space-y-12 px-4 py-16 sm:px-6">
         <CtaPanel startingCredits={startingCredits} creditsLabel={creditsLabel} />
         <RolesPanel />
+        <ProofPanel />
       </div>
     );
   }
@@ -131,6 +132,18 @@ export function PostHeroScrollSequence({
           >
             <RolesPanel />
           </div>
+
+          <div
+            className="post-hero-sequence-layer absolute inset-0 flex items-center justify-center px-4 sm:px-6"
+            style={{
+              opacity: motion.proof.opacity,
+              transform: layerTransform(motion.proof.x, motion.proof.y),
+              pointerEvents: motion.proof.opacity > 0.2 ? "auto" : "none",
+            }}
+            aria-hidden={motion.proof.opacity < 0.05}
+          >
+            <ProofPanel />
+          </div>
         </div>
       </div>
     </>
@@ -171,9 +184,9 @@ function CtaPanel({
             You don&rsquo;t have to know what to search for.
           </h2>
           <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:text-base">
-            Once your master resume exists, {PRODUCT_NAME} reads it and proposes ten
-            realistic job titles &mdash; each with a fit score and the strengths and
-            gaps behind it.
+            Once your master resume exists, {PRODUCT_NAME}{" "}
+            reads it and proposes ten realistic job titles &mdash; each with a fit
+            score and the strengths and gaps behind it.
           </p>
         </div>
 
@@ -233,6 +246,91 @@ function RolesPanel() {
           Discover my career options
           <ArrowRight aria-hidden className="h-4 w-4" />
         </Link>
+      </div>
+    </div>
+  );
+}
+
+const SCORE_PROOF = [
+  { label: "Your resume as-is", score: 54, tone: "before" as const },
+  { label: "After tailoring", score: 88, tone: "after" as const },
+];
+
+const HONESTY_RULES = [
+  "Must-have keywords are lifted verbatim from the posting, then matched against experience you actually wrote.",
+  "A missing metric gets flagged for you to fill in — never invented to lift the score.",
+  "Titles, employers, and dates are never rewritten.",
+];
+
+function ProofPanel() {
+  return (
+    <div className="w-full max-w-2xl rounded-2xl border border-slate-300 bg-white/95 p-6 shadow-lg dark:border-slate-700 dark:bg-slate-900/95 sm:p-8">
+      <div className="mb-5 flex items-baseline justify-between gap-4">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+          Why the numbers hold up
+        </h3>
+        <span className={ILLUSTRATIVE_NOTE}>
+          Illustrative scores &mdash; yours come from your own resume
+        </span>
+      </div>
+
+      <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+        The ATS score is computed in code, not guessed by a model.
+      </h2>
+      <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:text-base">
+        Every version runs through the same scoring engine, so a before-and-after
+        is a real measurement you can repeat &mdash; not a second opinion.
+      </p>
+
+      <dl className="mt-6 space-y-3">
+        {SCORE_PROOF.map((entry) => (
+          <div
+            key={entry.label}
+            className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4"
+          >
+            <dt className="shrink-0 text-sm font-medium text-slate-900 dark:text-slate-100 sm:w-40">
+              {entry.label}
+            </dt>
+            <dd className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className={`font-mono text-xs tracking-tighter ${
+                  entry.tone === "after"
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-slate-500 dark:text-slate-500"
+                }`}
+              >
+                {titleFitBar(entry.score, 16)}
+              </span>
+              <span className="text-xs tabular-nums text-slate-600 dark:text-slate-400">
+                {entry.score} / 100
+              </span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <ul className="mt-6 space-y-2 border-t border-slate-300 pt-5 dark:border-slate-700">
+        {HONESTY_RULES.map((rule) => (
+          <li
+            key={rule}
+            className="flex gap-2 text-sm leading-snug text-slate-600 dark:text-slate-400"
+          >
+            <ShieldCheck
+              aria-hidden
+              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400"
+            />
+            {rule}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-6 flex flex-col gap-2">
+        <Link href="/checkup" className={INLINE_CTA}>
+          Score a resume free
+          <ArrowRight aria-hidden className="h-4 w-4" />
+        </Link>
+        <p className={FINE_PRINT}>No account needed for the checkup.</p>
       </div>
     </div>
   );
