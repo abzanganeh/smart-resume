@@ -8,7 +8,7 @@ import {
   INTRO_DISMISS_SLACK_MS,
   INTRO_FADE_MS,
   INTRO_FALLBACK_TICK_MS,
-  INTRO_SCROLL_LOCK_CLASS,
+  INTRO_SCROLL_GRACE_MS,
   INTRO_TOTAL_MS,
   introMotionAt,
   shouldPlayIntro,
@@ -123,7 +123,6 @@ export function IntroOverlay() {
     const start = () => {
       if (started || dismissedRef.current) return;
       started = true;
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
       startRef.current = performance.now();
       setActive(true);
       setMotion(introMotionAt(0));
@@ -152,42 +151,31 @@ export function IntroOverlay() {
       if (event.key === "Escape") finish();
     };
 
+    let scrollReady = false;
+    const scrollTimer = window.setTimeout(() => {
+      scrollReady = true;
+    }, INTRO_SCROLL_GRACE_MS);
+
+    const onScroll = () => {
+      if (!scrollReady || window.scrollY < 64) return;
+      finish();
+    };
+
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
+      window.clearTimeout(scrollTimer);
       if (fadeRef.current !== null) window.clearTimeout(fadeRef.current);
       clearDrivers();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll);
     };
   }, [finish, clearDrivers]);
-
-  /** Keep the landing page at the top and non-scrollable while intro plays. */
-  useEffect(() => {
-    if (!active) {
-      document.documentElement.classList.remove(INTRO_SCROLL_LOCK_CLASS);
-      return;
-    }
-
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    document.documentElement.classList.add(INTRO_SCROLL_LOCK_CLASS);
-
-    const blockScroll = (event: Event) => {
-      event.preventDefault();
-    };
-
-    window.addEventListener("wheel", blockScroll, { passive: false });
-    window.addEventListener("touchmove", blockScroll, { passive: false });
-
-    return () => {
-      window.removeEventListener("wheel", blockScroll);
-      window.removeEventListener("touchmove", blockScroll);
-      document.documentElement.classList.remove(INTRO_SCROLL_LOCK_CLASS);
-    };
-  }, [active]);
 
   if (!active) return null;
 

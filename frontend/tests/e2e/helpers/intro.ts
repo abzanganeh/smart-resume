@@ -12,6 +12,9 @@ const INTRO_SEEN_KEY = "flintapply:intro-seen"
  * `locator.hover()` — otherwise land the cursor on the overlay instead of the
  * element under test, and the interaction silently never registers.
  *
+ * Scrolling also dismisses the intro, so scroll-driven specs tend to pass by
+ * accident. Suppressing it up front makes that deterministic too.
+ *
  * Call before `page.goto`.
  */
 export async function suppressIntro(page: Page): Promise<void> {

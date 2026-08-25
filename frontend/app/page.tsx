@@ -7,6 +7,7 @@ import { IntroOverlay } from "@/components/marketing/IntroOverlay";
 import { JourneySection } from "@/components/marketing/JourneySection";
 import { KeywordScanDemo } from "@/components/marketing/KeywordScanDemo";
 import { MarketingHero } from "@/components/marketing/MarketingHero";
+import { PostHeroScrollSequence } from "@/components/marketing/PostHeroScrollSequence";
 import { PricingSection } from "@/components/marketing/PricingSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { fetchFreeTierStartingCredits } from "@/lib/freeTier";
@@ -31,6 +32,7 @@ export default async function LandingPage() {
       />
       <MarketingHero startingCredits={startingCredits} />
       <IntroOverlay />
+      <PostHeroScrollSequence startingCredits={startingCredits} />
       <JourneySection />
       <ScrollReveal>
         <PricingSection pricing={pricing} startingCredits={startingCredits} />

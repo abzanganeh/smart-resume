@@ -22,8 +22,6 @@ import {
   INLINE_CTA,
   PRIMARY_CTA,
   SECONDARY_CTA,
-  SECTION_HEADING,
-  SECTION_SUBHEADING,
 } from "./styles";
 
 const EXAMPLE_TITLES = [
@@ -133,18 +131,6 @@ export function PostHeroScrollSequence({
           >
             <RolesPanel />
           </div>
-
-          <div
-            className="post-hero-sequence-layer absolute inset-0 flex items-center justify-center px-4 sm:px-6"
-            style={{
-              opacity: motion.journeyIntro.opacity,
-              transform: layerTransform(motion.journeyIntro.x, motion.journeyIntro.y),
-              pointerEvents: motion.journeyIntro.opacity > 0.2 ? "auto" : "none",
-            }}
-            aria-hidden={motion.journeyIntro.opacity < 0.05}
-          >
-            <JourneyIntroPanel />
-          </div>
         </div>
       </div>
     </>
@@ -249,19 +235,5 @@ function RolesPanel() {
         </Link>
       </div>
     </div>
-  );
-}
-
-function JourneyIntroPanel() {
-  return (
-    <header className="max-w-3xl px-2 text-center">
-      <h2 className={`${SECTION_HEADING} text-3xl sm:text-4xl`}>
-        Your job search, step by step
-      </h2>
-      <p className={`${SECTION_SUBHEADING} mt-4 text-base sm:text-lg`}>
-        Scroll to walk through each stage, or pick a letter. Badges show where a paid
-        plan is required &mdash; everything else works on the free tier.
-      </p>
-    </header>
   );
 }

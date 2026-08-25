@@ -9,8 +9,8 @@ import {
 } from "@/lib/marketing/heroStrengthRotation";
 
 describe("HERO_STRENGTHS", () => {
-  it("ships seven distinct capability lines", () => {
-    assert.equal(HERO_STRENGTHS.length, 7);
+  it("ships six distinct capability lines", () => {
+    assert.equal(HERO_STRENGTHS.length, 6);
     const ids = new Set(HERO_STRENGTHS.map((item) => item.id));
     assert.equal(ids.size, HERO_STRENGTHS.length);
   });
@@ -26,8 +26,8 @@ describe("HERO_STRENGTHS", () => {
 
 describe("nextStrengthIndex", () => {
   it("wraps at the end of the list", () => {
-    assert.equal(nextStrengthIndex(0, 7), 1);
-    assert.equal(nextStrengthIndex(6, 7), 0);
+    assert.equal(nextStrengthIndex(0, 6), 1);
+    assert.equal(nextStrengthIndex(5, 6), 0);
   });
 
   it("returns zero for empty catalogs", () => {
@@ -44,7 +44,7 @@ describe("shouldAdvanceStrengthRotation", () => {
         intervalMs: HERO_STRENGTH_ROTATION_MS,
         paused: false,
         documentHidden: false,
-        count: 7,
+        count: 6,
       }),
       true,
     );
@@ -55,7 +55,7 @@ describe("shouldAdvanceStrengthRotation", () => {
       now: 20_000,
       lastAdvanceAt: 0,
       intervalMs: HERO_STRENGTH_ROTATION_MS,
-      count: 7,
+      count: 6,
     };
     assert.equal(
       shouldAdvanceStrengthRotation({ ...base, paused: true, documentHidden: false }),

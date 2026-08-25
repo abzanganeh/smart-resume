@@ -1,84 +1,41 @@
 /**
- * Full hero message sets for the landing rotator.
+ * Rotating hero strength lines — subordinate to the fixed company-watch h1.
  *
- * Each set focuses on one shipped capability. All variants stay in the DOM for
- * crawlers; the client component cross-fades the active set every ~10 seconds.
+ * Every line maps to a shipped capability. Copy lives here (not inline in
+ * components) so unit tests can pin claims against real product behavior.
  */
 
-import { PRODUCT_NAME } from "@/lib/brand";
-
-export interface HeroMessage {
+export interface HeroStrength {
   id: string;
-  badge: string;
-  headlineLead: string;
-  headlineAccent: string;
-  tagline: string;
-  description: string;
+  line: string;
 }
 
-export const HERO_MESSAGES: readonly HeroMessage[] = [
-  {
-    id: "company-watch",
-    badge: "Company watch · Alerts in minutes · Never fabricates metrics",
-    headlineLead: "Name the companies.",
-    headlineAccent: "We'll tell you the minute they're hiring.",
-    tagline: "Your short list, on your schedule — not a job board's.",
-    description: `${PRODUCT_NAME} watches the careers pages you pick — the company's own listings, not a job board — and tells you when a role opens, in minutes rather than days. Then it tailors an ATS-optimized resume to it, using only your real experience.`,
-  },
+/** Headline covers company watch; the rotator carries the rest. */
+export const HERO_STRENGTHS: readonly HeroStrength[] = [
   {
     id: "story-mode",
-    badge: "Story Mode · Master resume · Built once",
-    headlineLead: "Speak your career out loud.",
-    headlineAccent: "We turn it into a master resume.",
-    tagline: "Upload, coach, or interview — one source of truth for every application.",
-    description: `Tell ${PRODUCT_NAME} your story in your own words. It structures a master resume you refine once, then reuse for every role — no copy-paste drift between versions.`,
+    line: "Speak your career out loud — we turn it into a master resume.",
   },
   {
     id: "career-discovery",
-    badge: "Career discovery · Fit scoring · Realistic titles",
-    headlineLead: "Ten realistic job titles.",
-    headlineAccent: "Each scored against your real experience.",
-    tagline: "You do not have to know what to search for on day one.",
-    description: `${PRODUCT_NAME} reads your master resume and suggests titles that actually fit — with strengths, gaps, and a fit score behind each one.`,
+    line: "Ten realistic job titles, each scored against your real experience.",
   },
   {
     id: "ats-keywords",
-    badge: "ATS optimization · Keyword audit · Evidence-backed",
-    headlineLead: "Every must-have keyword",
-    headlineAccent: "pulled from the posting and checked against your evidence.",
-    tagline: "Tailoring that stays honest — nothing invented to pass a scan.",
-    description: `Paste a job description. ${PRODUCT_NAME} extracts what the ATS expects, audits your resume against it, and rewrites from experience you already have.`,
+    line:
+      "Every must-have keyword pulled from the posting, audited against your evidence.",
   },
   {
     id: "ats-score",
-    badge: "Deterministic scoring · Before & after · No guesswork",
-    headlineLead: "A before-and-after ATS score,",
-    headlineAccent: "computed in code — never guessed.",
-    tagline: "See exactly what changed and why the score moved.",
-    description: `${PRODUCT_NAME} runs the same scoring engine on every version so you can compare drafts with numbers you can trust — not a model's hunch.`,
+    line: "A before-and-after ATS score, computed in code — never guessed.",
   },
   {
     id: "cover-letters",
-    badge: "Cover letters · Same evidence · No contradictions",
-    headlineLead: "Cover letters drawn from the same evidence",
-    headlineAccent: "so they never contradict your resume.",
-    tagline: "One story, every document — tailored per role.",
-    description: `When ${PRODUCT_NAME} drafts a cover letter, it pulls from the same master resume and job audit — so every claim matches what you already submitted.`,
+    line:
+      "Cover letters drawn from the same evidence, so they can never contradict your resume.",
   },
   {
     id: "tracker",
-    badge: "Application tracker · Draft to Offer · One board",
-    headlineLead: "Every application on one board,",
-    headlineAccent: "from Draft to Offer.",
-    tagline: "Status, notes, and next steps without a spreadsheet.",
-    description: `Track where you applied, what stage each role is in, and what to do next — inside ${PRODUCT_NAME}, next to the resumes and cover letters you already built.`,
+    line: "Every application on one board, from Draft to Offer.",
   },
 ] as const;
-
-/** @deprecated Use `HERO_MESSAGES` — kept for rotation unit tests. */
-export const HERO_STRENGTHS = HERO_MESSAGES.map((message) => ({
-  id: message.id,
-  line: message.tagline,
-}));
-
-export type HeroStrength = { id: string; line: string };
