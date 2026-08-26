@@ -1,86 +1,72 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { HERO_STRENGTHS } from "@/lib/marketing/heroStrengths";
-import {
-  HERO_STRENGTH_ROTATION_MS,
-  nextStrengthIndex,
-  resyncRotationClock,
-  shouldAdvanceStrengthRotation,
-} from "@/lib/marketing/heroStrengthRotation";
+import { HERO_MESSAGES } from "@/lib/marketing/heroStrengths";
+import { PRODUCT_NAME } from "@/lib/brand";
 
-describe("HERO_STRENGTHS", () => {
-  it("ships seven distinct capability lines", () => {
-    assert.equal(HERO_STRENGTHS.length, 7);
-    const ids = new Set(HERO_STRENGTHS.map((item) => item.id));
-    assert.equal(ids.size, HERO_STRENGTHS.length);
+const REQUIRED_KEYS = [
+  "id",
+  "badge",
+  "headlineLead",
+  "headlineAccent",
+  "tagline",
+  "description",
+] as const;
+
+describe("HERO_MESSAGES", () => {
+  it("ships seven distinct capability sets", () => {
+    assert.equal(HERO_MESSAGES.length, 7);
+    const ids = new Set(HERO_MESSAGES.map((message) => message.id));
+    assert.equal(ids.size, HERO_MESSAGES.length);
   });
 
-  it("claims no fabricated metrics", () => {
-    for (const strength of HERO_STRENGTHS) {
-      assert.doesNotMatch(strength.line, /\d+\s*%/);
-      assert.doesNotMatch(strength.line, /guarantee/i);
-      assert.ok(strength.line.length > 20, `${strength.id} is substantive copy`);
+  it("each message has the full marketing shape", () => {
+    for (const message of HERO_MESSAGES) {
+      for (const key of REQUIRED_KEYS) {
+        assert.ok(
+          typeof message[key] === "string" && message[key].length > 0,
+          `${message.id}.${key} is a non-empty string`,
+        );
+      }
     }
   });
-});
 
-describe("nextStrengthIndex", () => {
-  it("wraps at the end of the list", () => {
-    assert.equal(nextStrengthIndex(0, 7), 1);
-    assert.equal(nextStrengthIndex(6, 7), 0);
+  it("covers shipped product capabilities", () => {
+    const ids = HERO_MESSAGES.map((message) => message.id);
+    assert.deepEqual(ids, [
+      "company-watch",
+      "story-mode",
+      "career-discovery",
+      "ats-keywords",
+      "ats-score",
+      "cover-letters",
+      "tracker",
+    ]);
   });
 
-  it("returns zero for empty catalogs", () => {
-    assert.equal(nextStrengthIndex(3, 0), 0);
+  it("claims no fabricated metrics in user-facing copy", () => {
+    for (const message of HERO_MESSAGES) {
+      const copy = [
+        message.badge,
+        message.headlineLead,
+        message.headlineAccent,
+        message.tagline,
+        message.description,
+      ].join(" ");
+      assert.doesNotMatch(copy, /\d+\s*%/);
+      assert.doesNotMatch(copy, /guarantee/i);
+      assert.ok(copy.length > 40, `${message.id} is substantive copy`);
+    }
   });
-});
 
-describe("shouldAdvanceStrengthRotation", () => {
-  it("advances after the interval when active", () => {
-    assert.equal(
-      shouldAdvanceStrengthRotation({
-        now: 10_500,
-        lastAdvanceAt: 0,
-        intervalMs: HERO_STRENGTH_ROTATION_MS,
-        paused: false,
-        documentHidden: false,
-        count: 7,
-      }),
-      true,
+  it("uses the canonical product name in descriptions", () => {
+    for (const message of HERO_MESSAGES) {
+      if (message.id === "company-watch") {
+        assert.match(message.description, new RegExp(PRODUCT_NAME));
+      }
+    }
+    const withProductName = HERO_MESSAGES.filter((message) =>
+      message.description.includes(PRODUCT_NAME),
     );
-  });
-
-  it("does not advance while paused, hidden, or on a single line", () => {
-    const base = {
-      now: 20_000,
-      lastAdvanceAt: 0,
-      intervalMs: HERO_STRENGTH_ROTATION_MS,
-      count: 7,
-    };
-    assert.equal(
-      shouldAdvanceStrengthRotation({ ...base, paused: true, documentHidden: false }),
-      false,
-    );
-    assert.equal(
-      shouldAdvanceStrengthRotation({ ...base, paused: false, documentHidden: true }),
-      false,
-    );
-    assert.equal(
-      shouldAdvanceStrengthRotation({ ...base, paused: false, documentHidden: false, count: 1 }),
-      false,
-    );
-  });
-});
-
-describe("resyncRotationClock", () => {
-  it("returns the current time for a finite value", () => {
-    assert.equal(resyncRotationClock(42_000), 42_000);
-    assert.equal(resyncRotationClock(Number.NaN), 0);
-  });
-});
-
-describe("HERO_STRENGTH_ROTATION_MS", () => {
-  it("rotates on a ten-second cadence", () => {
-    assert.equal(HERO_STRENGTH_ROTATION_MS, 10_000);
+    assert.ok(withProductName.length >= 5, "most capability blurbs name the product");
   });
 });

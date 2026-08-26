@@ -553,21 +553,3 @@ html.intro-scroll-lock body {
   }
 }
 
-/* Hero strength rotator — stacked grid keeps height stable across variants. */
-.hero-strength-rotator__stage {
-  display: grid;
-  align-items: start;
-}
-
-.hero-strength-rotator__line {
-  grid-area: 1 / 1;
-  margin: 0;
-  opacity: 0;
-  transition: opacity 700ms ease;
-  pointer-events: none;
-}
-
-.hero-strength-rotator__line.is-active {
-  opacity: 1;
-  pointer-events: auto;
-}
