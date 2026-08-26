@@ -291,6 +291,68 @@ html.intro-scroll-lock body {
   }
 }
 
+/*
+ * Landing scroll band.
+ *
+ * A single horizontal wash under the comparison → journey → keyword audit →
+ * checkup range. The main element's diagonal gradient still handles the
+ * areas above (hero) and below (pricing → closing); this band replaces the
+ * per-section slate washes those sections used to paint on their own sticky
+ * panels, so containers can float above one continuous background.
+ *
+ * The tint is deliberately low-chroma: amber on the left, neutral in the
+ * middle, sky on the right. Anything stronger visually competes with the
+ * content cards, which is not the goal — the goal is a stable band that
+ * makes section transitions look intentional rather than seam-cut.
+ */
+.landing-scroll-band {
+  background: linear-gradient(
+    to right,
+    rgb(254 243 199 / 0.55) 0%,
+    rgb(248 250 252 / 0.85) 45%,
+    rgb(241 245 249 / 0.85) 55%,
+    rgb(224 242 254 / 0.55) 100%
+  );
+}
+
+.dark .landing-scroll-band {
+  background: linear-gradient(
+    to right,
+    rgb(69 26 3 / 0.35) 0%,
+    rgb(2 6 23 / 0.9) 40%,
+    rgb(2 6 23 / 0.9) 60%,
+    rgb(8 47 73 / 0.35) 100%
+  );
+}
+
+/*
+ * Amber overlay for the "Same goal, days earlier" comparison. Sits above the
+ * band, absolutely positioned on the section wrapper so it can span the full
+ * viewport width — the section itself is width-constrained by SECTION.
+ * Opacity is driven inline from compareProgress so the wash fades cleanly to
+ * reveal the base band when the "With FlintApply" side is on screen.
+ */
+.comparison-band-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    rgb(254 205 211 / 0.7) 0%,
+    rgb(254 215 170 / 0.7) 45%,
+    rgb(253 230 138 / 0.55) 100%
+  );
+}
+
+.dark .comparison-band-overlay {
+  background: linear-gradient(
+    to right,
+    rgb(76 5 25 / 0.55) 0%,
+    rgb(67 20 7 / 0.55) 45%,
+    rgb(66 32 6 / 0.4) 100%
+  );
+}
+
 /* Hero ambient orbs — decorative, CSS-only. */
 .marketing-hero-ambient {
   position: relative;

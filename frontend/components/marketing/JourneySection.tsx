@@ -114,7 +114,7 @@ export function JourneySection() {
         </div>
 
         <div
-          className={`sticky ${PINNED_STICKY_TOP_CLASS} ${PINNED_PANEL_HEIGHT_CLASS} flex min-h-0 flex-col overflow-hidden bg-gradient-to-br from-slate-100 via-white to-slate-200 py-4 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 sm:py-6`}
+          className={`sticky ${PINNED_STICKY_TOP_CLASS} ${PINNED_PANEL_HEIGHT_CLASS} flex min-h-0 flex-col overflow-hidden py-4 sm:py-6`}
         >
           <header className="shrink-0 text-center">
             <h2 className={SECTION_HEADING}>Your job search, step by step</h2>

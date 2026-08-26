@@ -7,6 +7,7 @@ import { IntroOverlay } from "@/components/marketing/IntroOverlay";
 import { JourneySection } from "@/components/marketing/JourneySection";
 import { KeywordScanDemo } from "@/components/marketing/KeywordScanDemo";
 import { MarketingHero } from "@/components/marketing/MarketingHero";
+import { PostHeroScrollSequence } from "@/components/marketing/PostHeroScrollSequence";
 import { PricingSection } from "@/components/marketing/PricingSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { fetchFreeTierStartingCredits } from "@/lib/freeTier";
@@ -27,18 +28,28 @@ export default async function LandingPage() {
       <script
         type="application/ld+json"
         nonce={nonce}
+        suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: faqStructuredData }}
       />
-      <MarketingHero startingCredits={startingCredits} />
+      <MarketingHero />
       <IntroOverlay />
-      <JourneySection />
+      {/*
+        Scroll band: one horizontal amber → neutral → sky wash carries the
+        eye from the post-hero handoff through the comparison, the pinned
+        journey, the live keyword audit, and the checkup invite. Each
+        section renders its content in a similarly sized card so container
+        position stays stable while the background does the storytelling.
+      */}
+      <div className="landing-scroll-band relative">
+        <PostHeroScrollSequence startingCredits={startingCredits} />
+        <ComparisonSection />
+        <JourneySection />
+        <KeywordScanDemo />
+        <CheckupInvite />
+      </div>
       <ScrollReveal>
         <PricingSection pricing={pricing} startingCredits={startingCredits} />
       </ScrollReveal>
-      <ComparisonSection />
-      {/* Demo the audit, then invite the visitor to run the real one. */}
-      <KeywordScanDemo />
-      <CheckupInvite />
       <ScrollReveal>
         <CapabilitySpotlight />
       </ScrollReveal>

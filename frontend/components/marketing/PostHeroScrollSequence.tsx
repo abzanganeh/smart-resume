@@ -107,7 +107,7 @@ export function PostHeroScrollSequence({
         style={{ height: `${POST_HERO_TRACK_VH}vh` }}
       >
         <div
-          className={`post-hero-sequence-stage sticky ${PINNED_STICKY_TOP_CLASS} ${PINNED_PANEL_HEIGHT_CLASS} overflow-hidden bg-gradient-to-br from-slate-100 via-white to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800`}
+          className={`post-hero-sequence-stage sticky ${PINNED_STICKY_TOP_CLASS} ${PINNED_PANEL_HEIGHT_CLASS} overflow-hidden`}
         >
           <div
             className="post-hero-sequence-layer absolute inset-0 flex items-center justify-center px-4 sm:px-6"
