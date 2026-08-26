@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test"
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/")
+  await page.locator("#pricing").scrollIntoViewIfNeeded()
 })
 
 test("shows every paid tier without inventing a $0 price", async ({ page }) => {
@@ -16,7 +17,9 @@ test("shows every paid tier without inventing a $0 price", async ({ page }) => {
   }
 
   await expect(page.getByText("$0.00")).toHaveCount(0)
-  await expect(page.getByText(/price shown at checkout/i).first()).toBeVisible()
+  await expect(
+    page.getByText(/checkout shows the live price before you pay/i).first(),
+  ).toBeVisible()
 })
 
 test("still shows the free tier when paid prices are unavailable", async ({
