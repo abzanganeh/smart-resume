@@ -74,14 +74,3 @@ export const HERO_MESSAGES: readonly HeroMessage[] = [
     description: `Track where you applied, what stage each role is in, and what to do next — inside ${PRODUCT_NAME}, next to the resumes and cover letters you already built.`,
   },
 ] as const;
-
-/**
- * @deprecated Use `HERO_MESSAGES`. The only remaining consumer is
- * `HeroStrengthRotator`, which no longer renders on any route.
- */
-export const HERO_STRENGTHS = HERO_MESSAGES.map((message) => ({
-  id: message.id,
-  line: message.tagline,
-}));
-
-export type HeroStrength = { id: string; line: string };
