@@ -8,6 +8,7 @@ import {
   landingPlansHaveSyncedPrice,
   planCycleSuffix,
   planHighlights,
+  resolveLandingPlans,
   selectLandingPlans,
   selectPublicPlans,
 } from "@/lib/marketing/pricing";
@@ -107,6 +108,23 @@ describe("selectLandingPlans", () => {
       payload([plan({ code: "weekly", cycle: "weekly", is_active: false })]),
     );
     assert.deepEqual(selected, []);
+  });
+});
+
+describe("resolveLandingPlans", () => {
+  it("returns all four paid tiers when the API is empty", () => {
+    const plans = resolveLandingPlans(null);
+    assert.deepEqual(
+      plans.map((p) => p.code),
+      ["weekly", "monthly_pro", "monthly_plus", "monthly_premium"],
+    );
+  });
+
+  it("prefers live API data over fallbacks", () => {
+    const synced = plan({ code: "monthly_pro", amount_cents: 1500 });
+    const plans = resolveLandingPlans(payload([synced]));
+    const pro = plans.find((p) => p.code === "monthly_pro");
+    assert.equal(pro?.amount_cents, 1500);
   });
 });
 

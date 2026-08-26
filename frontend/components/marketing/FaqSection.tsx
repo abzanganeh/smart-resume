@@ -49,7 +49,7 @@ export function FaqSection({ startingCredits }: { startingCredits: number }) {
   }, []);
 
   return (
-    <section ref={sectionRef} className={`${SECTION} pb-24`}>
+    <section ref={sectionRef} id="faq" className={`${SECTION} scroll-mt-24 pb-24`}>
       <h2 className={SECTION_HEADING}>Questions people ask first</h2>
       <p className={SECTION_SUBHEADING}>
         Short answers, and nothing the product cannot back up.

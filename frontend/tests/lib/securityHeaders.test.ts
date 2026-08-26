@@ -29,7 +29,8 @@ describe("securityResponseHeaders", () => {
 
     assert.match(csp, new RegExp(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`));
     assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
-    assert.match(csp, new RegExp(`style-src 'self' 'nonce-${nonce}' 'unsafe-inline'`));
+    assert.match(csp, /style-src 'self' 'unsafe-inline'/);
+    assert.doesNotMatch(csp, /style-src[^;]*'nonce-/);
     assert.match(csp, /frame-ancestors 'none'/);
     assert.match(csp, /frame-src 'self' https:\/\/challenges\.cloudflare\.com/);
   });

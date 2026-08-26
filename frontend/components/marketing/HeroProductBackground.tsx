@@ -1,0 +1,47 @@
+import Image from "next/image";
+import { HERO_PRODUCT_SRC, productScreenshotAlt } from "@/lib/brand";
+
+type HeroProductBackgroundProps = {
+  /** 0 = first slide (image most visible); approaches 1 on the last slide. */
+  fade?: number;
+};
+
+/**
+ * Full-bleed product art behind the pinned hero copy. Decorative for sighted
+ * users; the alt string satisfies crawlers and assistive summaries.
+ *
+ * The render is dark and detailed on its own, so the scrim is a neutral top-
+ * bright / bottom-solid veil rather than another tinted wash. Hue comes from
+ * the per-slide gradient sitting behind this component, not from here.
+ */
+export function HeroProductBackground({ fade = 0 }: HeroProductBackgroundProps) {
+  const imageOpacity = Math.max(0.45, 1 - fade * 0.55);
+  const scrimStrength = 0.55 + fade * 0.2;
+
+  return (
+    <div
+      role="img"
+      aria-label={productScreenshotAlt()}
+      className="hero-product-background pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      <div
+        className="hero-product-background__frame absolute inset-0"
+        style={{ opacity: imageOpacity }}
+      >
+        <Image
+          src={HERO_PRODUCT_SRC}
+          alt=""
+          fill
+          priority
+          unoptimized
+          sizes="100vw"
+          className="hero-product-background__image object-cover object-center motion-reduce:scale-100"
+        />
+      </div>
+      <div
+        className="absolute inset-0 bg-gradient-to-b from-transparent via-white/50 to-white/80 dark:via-slate-950/55 dark:to-slate-950/85"
+        style={{ opacity: scrimStrength }}
+      />
+    </div>
+  );
+}

@@ -1,8 +1,11 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import {
+  LANDING_NAV_LINKS,
   MOBILE_NAV_LINKS,
   NAV_PILLARS,
+  landingNavHrefFromLocation,
+  landingNavLinkIsActive,
   navPathIsActive,
   navPillarIsActive,
 } from "@/components/nav/navPillars"
@@ -41,5 +44,28 @@ describe("navPillars", () => {
     const jobs = NAV_PILLARS.find((p) => p.id === "jobs")!
     assert.equal(navPillarIsActive("/tracker", jobs), true)
     assert.equal(navPillarIsActive("/billing", jobs), false)
+  })
+
+  it("landing nav highlights only the matching hash anchor", () => {
+    assert.equal(landingNavLinkIsActive("/", "/#pricing", "#pricing"), true)
+    assert.equal(landingNavLinkIsActive("/", "/#faq", "#pricing"), false)
+    assert.equal(landingNavLinkIsActive("/", "/#faq", "#faq"), true)
+    assert.equal(landingNavLinkIsActive("/", "/#pricing", ""), false)
+    assert.equal(landingNavLinkIsActive("/checkup", "/checkup", ""), true)
+    assert.equal(landingNavLinkIsActive("/checkup", "/#pricing", "#pricing"), false)
+  })
+
+  it("resolves the active landing nav href from the current location", () => {
+    assert.equal(landingNavHrefFromLocation("/", "#pricing"), "/#pricing")
+    assert.equal(landingNavHrefFromLocation("/", "#faq"), "/#faq")
+    assert.equal(landingNavHrefFromLocation("/checkup"), "/checkup")
+    assert.equal(landingNavHrefFromLocation("/"), null)
+  })
+
+  it("exposes pricing, FAQ, and CV Checkup for signed-out visitors", () => {
+    assert.deepEqual(
+      LANDING_NAV_LINKS.map((link) => link.label),
+      ["Pricing", "FAQ", "CV Checkup"],
+    )
   })
 })

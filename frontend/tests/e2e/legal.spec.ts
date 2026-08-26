@@ -43,7 +43,7 @@ test.describe("footer", () => {
     await page.goto(`${BASE}/`)
     const footer = page.getByRole("contentinfo")
     await expect(footer).toBeVisible()
-    await expect(footer).toContainText("© 2026 Alireza Barzin Zanganeh")
+    await expect(footer).toContainText(`© ${new Date().getFullYear()} Flint AI`)
     await expect(footer).toContainText("BSL 1.1")
     await expect(
       footer.getByRole("link", { name: "privacy@zanganehai.com" }),

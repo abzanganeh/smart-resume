@@ -46,6 +46,9 @@ export const INTRO_FADE_MS = 320;
 /** Ignore scroll for this long so restored scroll position cannot dismiss. */
 export const INTRO_SCROLL_GRACE_MS = 450;
 
+/** Applied to `document.documentElement` while the intro overlay is open. */
+export const INTRO_SCROLL_LOCK_CLASS = "intro-scroll-lock";
+
 /** @deprecated Prefer `INTRO_TIMING.logoInMs`. */
 export const INTRO_LOGO_MS = INTRO_TIMING.logoInMs;
 
