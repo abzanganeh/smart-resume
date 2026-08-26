@@ -13,8 +13,34 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.services.auth import session as redis_session
 from app.services.auth.tokens import TokenExpiredError, TokenInvalidError, decode_access_token
 from app.services.session_store import update_session
+
+
+def _session_replaced() -> HTTPException:
+    """Same 401 shape ``get_current_user`` returns, so clients re-auth alike."""
+    return HTTPException(status_code=401, detail={"code": "session_replaced"})
+
+
+async def _auth_session_is_current(claims: dict, subject: str) -> bool:
+    """Whether the token's ``sid`` still names the user's active login.
+
+    ``get_current_user`` applies this rule to every gated route, so a token
+    superseded by a newer login is already dead everywhere else.  The helpers
+    below decode the same access token without that dependency, so omitting
+    the check would leave a revoked token able to drive a claimed tailoring
+    session — spending the owner's credits and reaching their corpus.
+    """
+    sid = claims.get("sid")
+    if not sid:
+        return True
+    try:
+        user_id = uuid.UUID(subject)
+    except ValueError:
+        return False
+    active_sid = await redis_session.get_active_auth_session_id(user_id)
+    return not active_sid or str(sid) == active_sid
 
 
 async def resolve_bearer_user_id(
@@ -28,6 +54,9 @@ async def resolve_bearer_user_id(
       an already-claimed session (403 on mismatch).
     - Invalid/expired bearer → fall back to ``session.user_id`` so anonymous
       routes keep working; authenticated-only routes must enforce separately.
+    - Superseded bearer → 401, matching ``get_current_user``.  Falling back
+      here would hand the caller the claimed session's owner id, which is
+      exactly the access the newer login was meant to revoke.
     """
     if not authorization or not authorization.lower().startswith("bearer "):
         return session.user_id
@@ -39,6 +68,8 @@ async def resolve_bearer_user_id(
         bearer_sub = str(claims.get("sub") or "")
         if not bearer_sub:
             return session.user_id
+        if not await _auth_session_is_current(claims, bearer_sub):
+            raise _session_replaced()
         if session.user_id and session.user_id != bearer_sub:
             raise HTTPException(
                 status_code=403,
@@ -56,7 +87,12 @@ async def bind_session_user_from_bearer(
     authorization: str | None,
     session,
 ) -> None:
-    """Best-effort bind on session creation; ignores invalid bearer tokens."""
+    """Best-effort bind on session creation; ignores invalid bearer tokens.
+
+    A superseded token leaves the new session anonymous rather than raising:
+    the route is public, so refusing to bind is enough to keep a revoked
+    login from attaching work to the account.
+    """
     if not authorization or not authorization.lower().startswith("bearer "):
         return
     token = authorization[7:].strip()
@@ -65,7 +101,7 @@ async def bind_session_user_from_bearer(
     try:
         claims = decode_access_token(token, expected_type="access")
         sub = str(claims.get("sub") or "")
-        if sub:
+        if sub and await _auth_session_is_current(claims, sub):
             session.user_id = sub
             await update_session(session)
     except (TokenExpiredError, TokenInvalidError):
@@ -101,6 +137,8 @@ async def require_session_user(
         bearer_sub = str(claims.get("sub") or "")
         if not bearer_sub:
             raise HTTPException(status_code=401, detail="Invalid access token")
+        if not await _auth_session_is_current(claims, bearer_sub):
+            raise _session_replaced()
         if session.user_id and session.user_id != bearer_sub:
             raise HTTPException(
                 status_code=403,

@@ -67,7 +67,7 @@ from app.main import app
 from app.models.admin import AdminRole
 from app.models.dashboard import ResumeRecord, ResumeRecordStatus
 from app.models.user import CreditTransaction
-from app.services.session_store import create_session, update_session
+from app.services.session_store import create_session, get_session, update_session
 from tests.admin.conftest import issue_admin_session, make_admin
 
 # Dependencies that establish an authenticated principal.  A route whose
@@ -1032,6 +1032,161 @@ async def test_commit_tailored_rejects_a_different_bearer(
         "commit_tailored must reject a bearer that does not match the "
         f"claimed session, got {hijack.status_code} {hijack.text[:300]}"
     )
+
+
+@pytest_asyncio.fixture()
+async def superseded_token(
+    app_client: AsyncClient, stub_turnstile: None
+) -> tuple[str, str]:
+    """``(dead_token, live_token)`` for one user whose login was replaced.
+
+    Registering then logging in again rotates the ``sid`` claim, which is
+    how the app revokes a stolen access token before it expires: the
+    victim signs in again (or resets their password) and the old token
+    must stop working everywhere.
+    """
+    email = f"replaced-{uuid.uuid4().hex[:10]}@example.com"
+    register = await app_client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": _PASSWORD,
+            "display_name": "replaced",
+            "accepted_tos_version": "2026-06",
+            "marketing_opt_in": False,
+            "turnstile_token": "test-turnstile-token",
+        },
+    )
+    assert register.status_code == 201, register.text
+    dead_token = register.json()["access_token"]
+
+    login = await app_client.post(
+        "/api/auth/login", json={"email": email, "password": _PASSWORD}
+    )
+    assert login.status_code == 200, login.text
+    return dead_token, login.json()["access_token"]
+
+
+@pytest.mark.integration
+async def test_superseded_token_is_rejected_on_a_gated_route(
+    app_client: AsyncClient, superseded_token: tuple[str, str]
+) -> None:
+    """Positive control for the session-scoped assertions below.
+
+    If this ever stops returning 401 the rotation never happened and the
+    tests that follow would pass vacuously.
+    """
+    dead_token, _ = superseded_token
+    response = await app_client.get("/api/resumes", headers=_auth(dead_token))
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"]["code"] == "session_replaced"
+
+
+@pytest.mark.integration
+async def test_superseded_token_cannot_drive_a_claimed_session(
+    app_client: AsyncClient, superseded_token: tuple[str, str]
+) -> None:
+    """Revocation must reach the session-scoped routes too.
+
+    ``resolve_bearer_user_id`` decodes the access token itself instead of
+    depending on ``get_current_user``, so it used to miss the ``sid``
+    check that every other gated route applies. A phase run charges the
+    owner's credits and retrieves against ``session.user_id``'s corpus,
+    so a token the owner had already revoked could still spend their
+    balance and pull their résumé text into a response.
+    """
+    dead_token, live_token = superseded_token
+
+    created = await app_client.post("/api/sessions", headers=_auth(live_token))
+    assert created.status_code == 201, created.text
+    session_id = created.json()["session_id"]
+
+    denied = await app_client.post(
+        f"/api/sessions/{session_id}/phases/1/run",
+        json={},
+        headers=_auth(dead_token),
+    )
+    assert denied.status_code == 401, (
+        "a superseded access token must not start a phase run, got "
+        f"{denied.status_code} {denied.text[:300]}"
+    )
+
+    allowed = await app_client.post(
+        f"/api/sessions/{session_id}/phases/1/run",
+        json={},
+        headers=_auth(live_token),
+    )
+    assert allowed.status_code == 202, (
+        "the live token must still drive its own session, got "
+        f"{allowed.status_code} {allowed.text[:300]}"
+    )
+
+
+@pytest.mark.integration
+async def test_superseded_token_cannot_commit_into_the_owners_corpus(
+    app_client: AsyncClient, superseded_token: tuple[str, str]
+) -> None:
+    """``commit_tailored`` writes the master résumé and the RAG corpus.
+
+    It resolves the target user from the bearer, so a revoked token
+    reaching it would let a stolen session keep editing the account's
+    long-lived corpus rather than just the throwaway tailoring session.
+    """
+    dead_token, live_token = superseded_token
+
+    created = await app_client.post("/api/sessions", headers=_auth(live_token))
+    assert created.status_code == 201, created.text
+    session_id = created.json()["session_id"]
+
+    denied = await app_client.post(
+        f"/api/sessions/{session_id}/tailored/commit",
+        json={
+            "tailored_output": {
+                "contact": {"name": "Jane Doe"},
+                "summary": "Engineer.",
+                "skills": [],
+                "experience": [],
+                "education": [],
+            }
+        },
+        headers=_auth(dead_token),
+    )
+    assert denied.status_code == 401, (
+        "a superseded access token must not commit a tailored résumé, got "
+        f"{denied.status_code} {denied.text[:300]}"
+    )
+
+
+@pytest.mark.integration
+async def test_superseded_token_does_not_claim_a_new_session(
+    app_client: AsyncClient, superseded_token: tuple[str, str]
+) -> None:
+    """``POST /api/sessions`` is public, so it binds rather than rejects.
+
+    A revoked token must leave the new session anonymous: binding it
+    would attach the work — and later the corpus writes it unlocks — to
+    an account the caller no longer holds a live login for.
+    """
+    dead_token, live_token = superseded_token
+
+    created = await app_client.post("/api/sessions", headers=_auth(dead_token))
+    assert created.status_code == 201, created.text
+    session_id = created.json()["session_id"]
+
+    session = await get_session(session_id)
+    assert session is not None
+    assert session.user_id is None, (
+        "a superseded token claimed the new session for its subject"
+    )
+
+    # The live token still claims it, so refusing to bind costs the real
+    # owner nothing.
+    claimed = await app_client.post(
+        f"/api/sessions/{session_id}/phases/1/run",
+        json={},
+        headers=_auth(live_token),
+    )
+    assert claimed.status_code == 202, claimed.text
 
 
 @pytest.mark.integration
