@@ -16,6 +16,14 @@ export async function scrollPostHeroProgress(
   const track = page.locator("[data-post-hero-sequence]");
   await track.scrollIntoViewIfNeeded();
 
+  const reducedMotion = await page.evaluate(() =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  if (reducedMotion) {
+    // Static stack: all beats are already in the document; no scroll track to drive.
+    return;
+  }
+
   await page.evaluate(
     ({ targetProgress, stickyTop }) => {
       const element = document.querySelector(
@@ -31,6 +39,7 @@ export async function scrollPostHeroProgress(
       const trackDocTop = rect.top + window.scrollY;
       const desiredRectTop = stickyTop - targetProgress * travel;
       window.scrollTo(0, Math.max(0, trackDocTop - desiredRectTop));
+      window.dispatchEvent(new Event("scroll"));
     },
     { targetProgress: progress, stickyTop: PINNED_STICKY_TOP_PX },
   );
