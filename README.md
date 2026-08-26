@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="docs/assets/marketing/taliocv-hero.png" alt="Flint Apply — AI resume tailoring and job applications" width="720" />
+  <img src="frontend/public/marketing/hero-image.png" alt="Flint Apply — AI resume tailoring and job applications" width="720" />
 </p>
 
 # Flint Apply
