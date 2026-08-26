@@ -97,18 +97,12 @@ Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
 
 ## Security Headers (OWASP A02)
 
-**Last verified:** 2026-08-21  
-**Milestone:** M23 slice A2 (`feature/owasp-2026-baseline`)
-
-Flint Apply emits baseline browser security headers from the Next.js app
-(`frontend/proxy.ts` → `frontend/lib/securityHeaders.ts` for CSP nonces;
-`frontend/next.config.ts` for transport headers) on every route.
-Production and staging TLS VMs add the same transport headers at the Caddy edge
-(`infra/caddy/Caddyfile.*.example`).
+**Last verified:** 2026-08-26  
+**Milestone:** M23 Track B post-landing (`feature/m23-track-b-post-landing`); PR #116 landing CSP retained
 
 | Header | Where | Notes |
 |---|---|---|
-| `Content-Security-Policy` | Next.js proxy (per-request nonce); Caddy API vhost uses `default-src 'none'` | Enforced 2026-08-22; production `script-src` uses `'nonce-*'` + `'strict-dynamic'` (no `'unsafe-inline'`); `style-src` keeps `'unsafe-inline'` for React `style={{}}` attributes (M16 motion) |
+| `Content-Security-Policy` | Next.js proxy (per-request nonce); Caddy API vhost uses `default-src 'none'` | Enforced; production `script-src` uses `'nonce-*'` + `'strict-dynamic'` (no `'unsafe-inline'`); `style-src` keeps `'unsafe-inline'` for React `style={{}}` and scroll-driven landing motion (PR #116) |
 | `Strict-Transport-Security` | Next.js (production build only); Caddy (TLS vhosts) | Omitted on local HTTP dev (`:3100`) |
 | `X-Content-Type-Options: nosniff` | Next.js + Caddy | — |
 | `Referrer-Policy: strict-origin-when-cross-origin` | Next.js + Caddy | — |
@@ -128,12 +122,12 @@ PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
 
 ### Accepted-risk baseline (A02 ratchet start)
 
-| Control | Baseline (2026-08-21) | Owner action | Target blocking date |
+| Control | Baseline | Owner action | Target blocking date |
 |---|---|---|---|
-| CSP `style-src 'unsafe-inline'` | Required for M16 landing motion (intro overlay, spotlight, journey rail CSS custom properties) | Prefer nonce/hash per inline block; remove `'unsafe-inline'` in a follow-up ratchet | Ongoing |
-| CSP `script-src 'unsafe-inline'` | Next.js `ThemeScript` + framework chunks | Audit for hash/nonce in a follow-up ratchet | Ongoing |
+| CSP `style-src 'unsafe-inline'` | Required for M16/M22 landing motion: intro overlay, spotlight, journey rail CSS variables, and PR #116 scroll-linked hero (`HeroScrollExperience` inline `style={{ height: …vh }}`). **Blocker:** CSP Level 3 ignores `'unsafe-inline'` on any directive that also lists a nonce; adding the per-request nonce to `style-src` therefore disables inline `style` attributes and broke the landing page in CI — see `frontend/lib/securityHeaders.ts`. | Prefer hash/nonce per inline block; remove `'unsafe-inline'` in a follow-up ratchet | Ongoing |
+| CSP `script-src 'unsafe-inline'` (dev only) | Local dev (`NODE_ENV !== production`) keeps `'unsafe-inline'` + `'unsafe-eval'` with the nonce for Next.js HMR. **Production** enforces nonce + `'strict-dynamic'` only — no `'unsafe-inline'` on `script-src`. | Audit dev-only allowances; keep production ratchet strict | Ongoing |
 
-`style-src 'unsafe-inline'` and `script-src 'unsafe-inline'` remain in the **enforcing** policy until nonce/hash migration.
+`style-src 'unsafe-inline'` remains in the **enforcing** production policy until hash/nonce migration. Production `script-src` does **not** include `'unsafe-inline'`.
 
 ## Cryptography (OWASP A04)
 
