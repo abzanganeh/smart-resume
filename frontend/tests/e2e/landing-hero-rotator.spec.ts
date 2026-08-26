@@ -83,4 +83,44 @@ test.describe("hero scroll messages", () => {
       })
       .not.toBe("0");
   });
+
+  test("renders exactly one visible h1 for the active message", async ({
+    page,
+  }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
+
+  test("attaches all seven message sets to the DOM", async ({ page }) => {
+    await expect(page.locator("[data-message-id]")).toHaveCount(7);
+    await expect(page.locator(".hero-message-rotator .sr-only li")).toHaveCount(7);
+  });
+
+  test("uses a static hero panel without a scroll track under reduced motion", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+
+    await expect(page.locator("[data-hero-scroll-track]")).toHaveCount(0);
+    await expect(page.locator(".hero-message-rotator__stage")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: /name the companies/i }),
+    ).toBeVisible();
+  });
+});
+
+test.describe("landing security headers", () => {
+  test("emits OWASP A02 headers on the public landing route", async ({ page }) => {
+    const response = await page.goto("/");
+    expect(response).not.toBeNull();
+    const headers = response!.headers();
+    expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(headers["content-security-policy"]).toMatch(/'nonce-[-A-Za-z0-9+/=]+'/);
+    expect(headers["content-security-policy"]).toContain("'strict-dynamic'");
+    expect(headers["content-security-policy-report-only"]).toBeUndefined();
+    expect(headers["x-content-type-options"]).toBe("nosniff");
+    expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(headers["x-frame-options"]).toBe("DENY");
+    expect(headers["permissions-policy"]).toContain("camera=()");
+  });
 });

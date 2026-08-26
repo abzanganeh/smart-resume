@@ -2,7 +2,7 @@
  * Full hero message sets for the landing rotator.
  *
  * Each set focuses on one shipped capability. All variants stay in the DOM for
- * crawlers; the client component cross-fades the active set every ~10 seconds.
+ * crawlers and assistive tech; scroll position drives which set is visible.
  */
 
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -74,11 +74,3 @@ export const HERO_MESSAGES: readonly HeroMessage[] = [
     description: `Track where you applied, what stage each role is in, and what to do next — inside ${PRODUCT_NAME}, next to the resumes and cover letters you already built.`,
   },
 ] as const;
-
-/** @deprecated Use `HERO_MESSAGES` — kept for rotation unit tests. */
-export const HERO_STRENGTHS = HERO_MESSAGES.map((message) => ({
-  id: message.id,
-  line: message.tagline,
-}));
-
-export type HeroStrength = { id: string; line: string };

@@ -88,7 +88,7 @@ export function HeroScrollExperience() {
       </div>
       <div
         className="relative z-[1] shrink-0 flex flex-col items-center gap-1.5 px-4 pb-2 pt-2 text-slate-600 dark:text-slate-300"
-        aria-live="polite"
+        aria-hidden
       >
         <div className="flex items-center gap-1.5" aria-hidden>
           {HERO_MESSAGES.map((message, index) => (

@@ -71,7 +71,8 @@ export function HeroMessageRotator({
                 viewport ? " hero-message-set--viewport" : ""
               }`}
               data-message-id={message.id}
-              aria-hidden={index === displayIndex ? undefined : true}
+              aria-hidden={isActiveHeading ? undefined : true}
+              inert={isActiveHeading ? undefined : true}
             >
               <div className="hero-message-set__badge inline-flex max-w-[min(100%,40rem)] items-center gap-2 rounded-full border border-slate-300/80 bg-white/88 px-3 py-1.5 text-xs backdrop-blur-md dark:border-slate-600/80 dark:bg-slate-900/88 sm:text-sm text-slate-700 dark:text-slate-200 shadow-sm">
                 <span
@@ -104,8 +105,12 @@ export function HeroMessageRotator({
                   </p>
                 )}
 
-                <p className={taglineClass}>{message.tagline}</p>
-                <p className={bodyClass}>{message.description}</p>
+                <p className={taglineClass} aria-hidden={isActiveHeading ? undefined : true}>
+                  {message.tagline}
+                </p>
+                <p className={bodyClass} aria-hidden={isActiveHeading ? undefined : true}>
+                  {message.description}
+                </p>
               </div>
             </article>
           );

@@ -4,6 +4,7 @@ import {
   STAGE_LETTERS,
   activeStageFromProgress,
   pinnedProgress,
+  pinnedProgressForSticky,
   railProgress,
   stageLetter,
   stageTheme,
@@ -114,6 +115,92 @@ describe("pinnedProgress", () => {
       0,
     );
     assert.equal(pinnedProgress({ top: 0, height: HEIGHT }, Number.NaN), 0);
+  });
+});
+
+describe("pinnedProgressForSticky", () => {
+  const VIEWPORT = 800;
+  const STICKY_TOP = 64;
+  const HEIGHT = 2400;
+
+  it("is zero until the track reaches the sticky offset below the nav", () => {
+    assert.equal(
+      pinnedProgressForSticky({ top: STICKY_TOP + 100, height: HEIGHT }, VIEWPORT, STICKY_TOP),
+      0,
+    );
+    assert.equal(
+      pinnedProgressForSticky({ top: STICKY_TOP, height: HEIGHT }, VIEWPORT, STICKY_TOP),
+      0,
+    );
+  });
+
+  // Travel is divided as `height - viewportHeight`, so progress saturates once
+  // the track has moved that far past the sticky line — one `stickyTop` before
+  // the track bottom actually reaches the viewport bottom.
+  it("reaches one at the end of the divided travel", () => {
+    const travel = HEIGHT - VIEWPORT;
+    assert.equal(
+      pinnedProgressForSticky(
+        { top: STICKY_TOP - travel, height: HEIGHT },
+        VIEWPORT,
+        STICKY_TOP,
+      ),
+      1,
+    );
+    assert.equal(
+      pinnedProgressForSticky(
+        { top: -(HEIGHT - VIEWPORT), height: HEIGHT },
+        VIEWPORT,
+        STICKY_TOP,
+      ),
+      1,
+    );
+  });
+
+  it("clamps past the end of the track", () => {
+    assert.equal(
+      pinnedProgressForSticky({ top: -9000, height: HEIGHT }, VIEWPORT, STICKY_TOP),
+      1,
+    );
+  });
+
+  it("is a half at the midpoint of the divided travel", () => {
+    const travel = HEIGHT - VIEWPORT;
+    const midpointTop = STICKY_TOP - travel / 2;
+    assert.equal(
+      pinnedProgressForSticky({ top: midpointTop, height: HEIGHT }, VIEWPORT, STICKY_TOP),
+      0.5,
+    );
+  });
+
+  it("resolves a track shorter than the viewport by its side of the sticky line", () => {
+    assert.equal(
+      pinnedProgressForSticky({ top: STICKY_TOP - 1, height: 200 }, VIEWPORT, STICKY_TOP),
+      1,
+    );
+    assert.equal(
+      pinnedProgressForSticky({ top: STICKY_TOP + 1, height: 200 }, VIEWPORT, STICKY_TOP),
+      0,
+    );
+  });
+
+  it("returns zero for non-finite input", () => {
+    assert.equal(
+      pinnedProgressForSticky({ top: Number.NaN, height: HEIGHT }, VIEWPORT, STICKY_TOP),
+      0,
+    );
+    assert.equal(
+      pinnedProgressForSticky({ top: 0, height: Number.NaN }, VIEWPORT, STICKY_TOP),
+      0,
+    );
+    assert.equal(
+      pinnedProgressForSticky({ top: 0, height: HEIGHT }, Number.NaN, STICKY_TOP),
+      0,
+    );
+    assert.equal(
+      pinnedProgressForSticky({ top: 0, height: HEIGHT }, VIEWPORT, Number.NaN),
+      0,
+    );
   });
 });
 

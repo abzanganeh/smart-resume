@@ -22,6 +22,7 @@ from typing import Any
 
 import structlog
 
+from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.services.auth.tokens import create_purpose_token
 
@@ -62,17 +63,17 @@ async def send_verification_email(
     token = make_email_verification_token(user_id)
     link = verification_link(token)
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Verify your TalioCV email"
+    subject = f"Verify your {PRODUCT_NAME} email"
     body_text = (
         f"Hi {name},\n\n"
-        "Please confirm your TalioCV email by clicking the link below "
+        f"Please confirm your {PRODUCT_NAME} email by clicking the link below "
         "within the next 24 hours:\n\n"
         f"{link}\n\n"
         "If you did not create an account, you can safely ignore this message."
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>Please confirm your TalioCV email by clicking the button below "
+        f"<p>Please confirm your {PRODUCT_NAME} email by clicking the button below "
         "within the next 24 hours.</p>"
         f'<p><a href="{link}" '
         'style="display:inline-block;padding:10px 18px;background:#0d9488;'
@@ -91,10 +92,10 @@ async def send_password_reset_email(
     token = make_password_reset_token(user_id)
     link = password_reset_link(token)
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Reset your TalioCV password"
+    subject = f"Reset your {PRODUCT_NAME} password"
     body_text = (
         f"Hi {name},\n\n"
-        "We received a request to reset your TalioCV password. "
+        f"We received a request to reset your {PRODUCT_NAME} password. "
         "Use the link below within the next hour to choose a new one:\n\n"
         f"{link}\n\n"
         "If you did not request this, you can safely ignore this email — "
@@ -102,7 +103,7 @@ async def send_password_reset_email(
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>We received a request to reset your TalioCV password. "
+        f"<p>We received a request to reset your {PRODUCT_NAME} password. "
         "Use the button below within the next hour to choose a new one.</p>"
         f'<p><a href="{link}" '
         'style="display:inline-block;padding:10px 18px;background:#dc2626;'
@@ -118,16 +119,16 @@ async def send_account_deleted_email(
     display_name: str | None = None,
 ) -> dict[str, Any]:
     name = display_name or to_email.split("@", 1)[0]
-    subject = "Your TalioCV account has been deleted"
+    subject = f"Your {PRODUCT_NAME} account has been deleted"
     body_text = (
         f"Hi {name},\n\n"
-        "Your TalioCV account and associated data have been permanently deleted "
+        f"Your {PRODUCT_NAME} account and associated data have been permanently deleted "
         "as requested.\n\n"
         "If you believe this was a mistake, please contact support."
     )
     body_html = _wrap_html(
         f"<p>Hi {name},</p>"
-        "<p>Your TalioCV account and associated data have been permanently "
+        f"<p>Your {PRODUCT_NAME} account and associated data have been permanently "
         "deleted as requested.</p>"
         "<p>If you believe this was a mistake, please contact support.</p>"
     )
@@ -145,7 +146,7 @@ def _wrap_html(inner: str) -> str:
         'max-width:560px;margin:0 auto;padding:24px">'
         f"{inner}"
         '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>'
-        '<p style="font-size:11px;color:#9ca3af">TalioCV — '
+        f'<p style="font-size:11px;color:#9ca3af">{PRODUCT_NAME} — '
         "automated message, please do not reply.</p>"
         "</div>"
     )

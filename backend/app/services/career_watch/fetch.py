@@ -8,9 +8,13 @@ from collections import defaultdict
 import httpx
 import structlog
 
+from app.brand import PRODUCT_NAME, PRODUCT_SITE_URL
+
 log = structlog.get_logger("career_watch.fetch")
 
-CAREER_WATCH_USER_AGENT = "FlintResume-CareerWatch/1.0 (+https://flintresume.com)"
+CAREER_WATCH_USER_AGENT = (
+    f"{PRODUCT_NAME}-CareerWatch/1.0 (+{PRODUCT_SITE_URL})"
+)
 FETCH_TIMEOUT_SECONDS = 10.0
 CIRCUIT_FAILURE_THRESHOLD = 5
 CIRCUIT_COOLDOWN_SECONDS = 300
