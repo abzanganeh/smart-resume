@@ -161,6 +161,28 @@ export function pinnedProgress(rect: RailRect, viewportHeight: number): number {
   return moved;
 }
 
+/**
+ * Like `pinnedProgress`, but accounts for a sticky panel offset below the nav
+ * (e.g. `top-16`). Progress is 0 when the track top reaches the sticky line
+ * and 1 when the track bottom reaches the viewport bottom.
+ */
+export function pinnedProgressForSticky(
+  rect: RailRect,
+  viewportHeight: number,
+  stickyTop: number,
+): number {
+  if (!Number.isFinite(rect.top) || !Number.isFinite(rect.height)) return 0;
+  if (!Number.isFinite(viewportHeight) || !Number.isFinite(stickyTop)) return 0;
+
+  const travel = rect.height - viewportHeight;
+  if (travel <= 0) return rect.top <= stickyTop ? 1 : 0;
+
+  const moved = (stickyTop - rect.top) / travel;
+  if (moved <= 0) return 0;
+  if (moved > 1) return 1;
+  return moved;
+}
+
 /** Stage the read line currently sits on, or `null` when there are none. */
 export function activeStageFromProgress(
   progress: number,

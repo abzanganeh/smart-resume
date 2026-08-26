@@ -129,15 +129,228 @@ body {
 
   .marketing-hero-orb,
   .sr-scroll-reveal,
-  .hero-strength-rotator__line {
+  .hero-message-set,
+  .intro-overlay-aurora,
+  .intro-overlay-shimmer,
+  .intro-overlay-glow-core {
     animation: none !important;
     transform: none !important;
     transition: none !important;
   }
 
-  .hero-strength-rotator__line:not(.is-active) {
+  .intro-overlay-glow-core {
+    opacity: 0.65;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  .hero-message-set:not(.hero-message-set--is-active) {
     visibility: hidden;
   }
+}
+
+html.intro-scroll-lock {
+  overflow: hidden;
+  height: 100%;
+}
+
+html.intro-scroll-lock body {
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+/*
+ * Landing intro overlay.
+ *
+ * Three decorative layers sit behind the brand stack: aurora ribbons drifting
+ * on a long loop, a diagonal shimmer sweep on a shorter loop, and a slow
+ * radial glow behind the icon. The `.motion-off` variant swaps every layer to
+ * a still frame — used when `prefers-reduced-motion: reduce` is set, so we do
+ * not depend on browser support for `.motion-reduce` classes here.
+ */
+.intro-overlay-backdrop {
+  overflow: hidden;
+  background: linear-gradient(
+    155deg,
+    rgb(12 18 38) 0%,
+    rgb(6 10 24) 38%,
+    rgb(10 16 34) 68%,
+    rgb(4 7 16) 100%
+  );
+}
+
+.intro-overlay-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.intro-overlay-aurora {
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(
+      45% 32% at 22% 30%,
+      rgba(245, 158, 11, 0.35) 0%,
+      rgba(245, 158, 11, 0) 65%
+    ),
+    radial-gradient(
+      38% 30% at 78% 28%,
+      rgba(129, 140, 248, 0.35) 0%,
+      rgba(129, 140, 248, 0) 65%
+    ),
+    radial-gradient(
+      42% 34% at 68% 78%,
+      rgba(56, 189, 248, 0.32) 0%,
+      rgba(56, 189, 248, 0) 65%
+    ),
+    radial-gradient(
+      40% 32% at 24% 74%,
+      rgba(217, 70, 239, 0.3) 0%,
+      rgba(217, 70, 239, 0) 65%
+    );
+  filter: blur(48px);
+  opacity: 0.75;
+  animation: intro-aurora-shift 22s ease-in-out infinite alternate;
+}
+
+.intro-overlay-shimmer {
+  position: absolute;
+  inset: -20% -40%;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    rgba(255, 235, 200, 0.14) 48%,
+    rgba(255, 235, 200, 0.32) 50%,
+    rgba(255, 235, 200, 0.14) 52%,
+    transparent 60%
+  );
+  transform: translateX(-30%);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  animation: intro-shimmer-sweep 9s ease-in-out infinite;
+}
+
+.intro-overlay-glow-core {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 60vmin;
+  height: 60vmin;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(251, 191, 36, 0.35) 0%,
+    rgba(251, 191, 36, 0.18) 32%,
+    rgba(251, 191, 36, 0) 68%
+  );
+  filter: blur(24px);
+  animation: intro-glow-pulse 6s ease-in-out infinite;
+}
+
+@keyframes intro-aurora-shift {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 2%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 3%, 0) scale(1.02);
+  }
+}
+
+@keyframes intro-shimmer-sweep {
+  0% {
+    transform: translateX(-30%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.55;
+  }
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(30%);
+    opacity: 0;
+  }
+}
+
+@keyframes intro-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+/*
+ * Landing scroll band.
+ *
+ * A single horizontal wash under the comparison → journey → keyword audit →
+ * checkup range. The main element's diagonal gradient still handles the
+ * areas above (hero) and below (pricing → closing); this band replaces the
+ * per-section slate washes those sections used to paint on their own sticky
+ * panels, so containers can float above one continuous background.
+ *
+ * The tint is deliberately low-chroma: amber on the left, neutral in the
+ * middle, sky on the right. Anything stronger visually competes with the
+ * content cards, which is not the goal — the goal is a stable band that
+ * makes section transitions look intentional rather than seam-cut.
+ */
+.landing-scroll-band {
+  background: linear-gradient(
+    to right,
+    rgb(254 243 199 / 0.55) 0%,
+    rgb(248 250 252 / 0.85) 45%,
+    rgb(241 245 249 / 0.85) 55%,
+    rgb(224 242 254 / 0.55) 100%
+  );
+}
+
+.dark .landing-scroll-band {
+  background: linear-gradient(
+    to right,
+    rgb(69 26 3 / 0.35) 0%,
+    rgb(2 6 23 / 0.9) 40%,
+    rgb(2 6 23 / 0.9) 60%,
+    rgb(8 47 73 / 0.35) 100%
+  );
+}
+
+/*
+ * Amber overlay for the "Same goal, days earlier" comparison. Sits above the
+ * band, absolutely positioned on the section wrapper so it can span the full
+ * viewport width — the section itself is width-constrained by SECTION.
+ * Opacity is driven inline from compareProgress so the wash fades cleanly to
+ * reveal the base band when the "With FlintApply" side is on screen.
+ */
+.comparison-band-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    rgb(254 205 211 / 0.7) 0%,
+    rgb(254 215 170 / 0.7) 45%,
+    rgb(253 230 138 / 0.55) 100%
+  );
+}
+
+.dark .comparison-band-overlay {
+  background: linear-gradient(
+    to right,
+    rgb(76 5 25 / 0.55) 0%,
+    rgb(67 20 7 / 0.55) 45%,
+    rgb(66 32 6 / 0.4) 100%
+  );
 }
 
 /* Hero ambient orbs — decorative, CSS-only. */
@@ -199,6 +412,145 @@ body {
 
 .sr-scroll-reveal[data-revealed="true"] {
   transform: translate3d(0, 0, 0);
+}
+
+/* Hero message rotator — stacked sets with slide + fade transitions. */
+.hero-message-rotator__stage {
+  display: grid;
+  align-items: start;
+}
+
+.hero-message-rotator--viewport .hero-message-rotator__stage {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.hero-message-set {
+  grid-area: 1 / 1;
+  margin: 0;
+  opacity: 0;
+  transform: translate3d(-1.75rem, 0, 0);
+  transition:
+    opacity 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.hero-message-set--is-active {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+}
+
+.hero-message-set--is-exiting {
+  opacity: 0;
+  transform: translate3d(1.75rem, 0, 0);
+  pointer-events: none;
+}
+
+.hero-message-set--is-idle {
+  opacity: 0;
+  transform: translate3d(-1.75rem, 0, 0);
+  pointer-events: none;
+}
+
+.hero-message-set--viewport {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hero-message-set--viewport .hero-message-set__badge {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+@media (min-width: 640px) {
+  .hero-message-set--viewport .hero-message-set__badge {
+    margin-top: 1rem;
+  }
+}
+
+.hero-message-set--viewport .hero-message-set__copy {
+  position: relative;
+  width: 100%;
+}
+
+/*
+ * Soft plate behind the copy block. The pinned hero uses a dark 3D render as
+ * its background, so the light-mode body copy needs more than a text-shadow
+ * to stay readable. `z-index: -1` resolves inside the message set's own
+ * stacking context, keeping the plate above the product art and below the
+ * text.
+ */
+.hero-message-set--viewport .hero-message-set__copy::before {
+  content: "";
+  position: absolute;
+  inset: -1.25rem -1.5rem;
+  z-index: -1;
+  border-radius: 2.5rem;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(255 255 255 / 0.88) 0%,
+    rgb(255 255 255 / 0.72) 50%,
+    rgb(255 255 255 / 0) 100%
+  );
+}
+
+.dark .hero-message-set--viewport .hero-message-set__copy::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgb(2 6 23 / 0.88) 0%,
+    rgb(2 6 23 / 0.72) 50%,
+    rgb(2 6 23 / 0) 100%
+  );
+}
+
+/*
+ * Layered halo so the copy stays readable at the plate's soft edge. Stacked
+ * shadows build a solid glow close to the glyphs and a soft falloff further
+ * out; a single large-radius shadow is too diffuse to lift contrast.
+ */
+.hero-message-set--viewport .hero-message-set__headline,
+.hero-message-set--viewport .hero-message-set__tagline,
+.hero-message-set--viewport .hero-message-set__body {
+  text-shadow:
+    0 0 3px rgb(255 255 255 / 0.95),
+    0 0 8px rgb(255 255 255 / 0.9),
+    0 0 16px rgb(255 255 255 / 0.8),
+    0 0 32px rgb(255 255 255 / 0.6);
+}
+
+.dark .hero-message-set--viewport .hero-message-set__headline,
+.dark .hero-message-set--viewport .hero-message-set__tagline,
+.dark .hero-message-set--viewport .hero-message-set__body {
+  text-shadow:
+    0 0 4px rgb(2 6 23 / 0.95),
+    0 0 12px rgb(2 6 23 / 0.85),
+    0 0 28px rgb(2 6 23 / 0.7);
+}
+
+.post-hero-sequence-layer {
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.post-hero-sequence-layer a,
+.post-hero-sequence-layer button {
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-hero-sequence-layer {
+    transform: none !important;
+    opacity: 1 !important;
+  }
 }
 
 /* Hero strength rotator — stacked grid keeps height stable across variants. */

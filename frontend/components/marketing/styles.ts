@@ -9,6 +9,12 @@ export const SECONDARY_CTA =
 export const INLINE_CTA =
   "inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors";
 
+export const TIER_CTA =
+  "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-slate-600 dark:text-slate-100 dark:hover:border-amber-500/50 dark:hover:bg-amber-950/30";
+
+export const TIER_CTA_HIGHLIGHT =
+  "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-900 transition-colors hover:bg-amber-300";
+
 export const SECTION = "max-w-5xl mx-auto px-6";
 
 export const SECTION_HEADING =

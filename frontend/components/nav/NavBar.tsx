@@ -13,8 +13,10 @@ import {
 } from "lucide-react"
 import { BrandLogo } from "@/components/brand/BrandLogo"
 import {
+  LANDING_NAV_LINKS,
   MOBILE_NAV_LINKS,
   NAV_PILLARS,
+  landingNavHrefFromLocation,
   navPathIsActive,
   navPillarIsActive,
 } from "@/components/nav/navPillars"
@@ -32,6 +34,7 @@ export function NavBar() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pillarRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [hadUserMenu, setHadUserMenu] = useState(false)
+  const [activeLandingHref, setActiveLandingHref] = useState<string | null>(null)
 
   const accessToken =
     session?.error === "TokenExpired" ? undefined : session?.backendAccessToken
@@ -47,6 +50,20 @@ export function NavBar() {
 
   const renderUserMenu =
     showUserMenu || (status === "loading" && hadUserMenu)
+
+  useEffect(() => {
+    setActiveLandingHref(
+      landingNavHrefFromLocation(pathname, window.location.hash),
+    )
+  }, [pathname])
+
+  function isLandingNavActive(href: string) {
+    return activeLandingHref === href
+  }
+
+  function handleLandingNavClick(href: string) {
+    setActiveLandingHref(href)
+  }
 
   useEffect(() => {
     if (!dropdownOpen) return
@@ -95,9 +112,24 @@ export function NavBar() {
   return (
     <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
+        <Link href={renderUserMenu ? "/dashboard" : "/"} className="flex items-center hover:opacity-90 transition-opacity shrink-0 py-1">
           <BrandLogo className="h-10 w-auto max-w-[200px] sm:max-w-[240px]" />
         </Link>
+
+        {!renderUserMenu && (
+          <div className="hidden sm:flex items-center gap-1 text-sm">
+            {LANDING_NAV_LINKS.map((link) => (
+              <NavLink
+                key={link.href}
+                href={link.href}
+                active={isLandingNavActive(link.href)}
+                onClick={() => handleLandingNavClick(link.href)}
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
 
         {renderUserMenu && (
           <div className="hidden md:flex items-center gap-0.5 text-sm text-slate-600 dark:text-slate-400 min-w-0">
@@ -248,6 +280,26 @@ export function NavBar() {
           ))}
         </div>
       )}
+
+      {!renderUserMenu && (
+        <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 px-2 py-2 flex gap-1 overflow-x-auto text-xs">
+          {LANDING_NAV_LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => handleLandingNavClick(href)}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0",
+                isLandingNavActive(href)
+                  ? "bg-amber-400/20 text-amber-900 dark:text-amber-200 font-medium"
+                  : "text-slate-600 dark:text-slate-400",
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
     </nav>
   )
 }
@@ -255,15 +307,18 @@ export function NavBar() {
 function NavLink({
   href,
   active,
+  onClick,
   children,
 }: {
   href: string
   active?: boolean
+  onClick?: () => void
   children: React.ReactNode
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={clsx(
         "px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap",
         active

@@ -33,6 +33,120 @@ export const LANDING_PLAN_CODES = [
 export type LandingPlanCode = (typeof LANDING_PLAN_CODES)[number];
 
 /**
+ * Static catalog when `/api/billing/prices` is unreachable.
+ *
+ * Allowances mirror `backend/app/services/billing/tier_limits.py` seed rows.
+ * Prices stay at 0 (unsynced) — never shown as dollar amounts on the page.
+ */
+const LANDING_PLAN_FALLBACKS: Record<LandingPlanCode, BillingPlan> = {
+  weekly: {
+    code: "weekly",
+    display_name: "Weekly",
+    cycle: "weekly",
+    amount_cents: 0,
+    trial_days: null,
+    stripe_price_id: "",
+    is_active: true,
+    features: ["resume_tailor", "cover_letter", "fit_analysis", "job_search"],
+    limits: {
+      resumes_per_period: 10,
+      searches_per_period: 20,
+      fit_analyses_per_period: 10,
+      whisper_uses_per_period: 2,
+      career_watch_companies: 3,
+    },
+  },
+  monthly_pro: {
+    code: "monthly_pro",
+    display_name: "Pro",
+    cycle: "monthly",
+    amount_cents: 0,
+    trial_days: 7,
+    stripe_price_id: "",
+    is_active: true,
+    features: [
+      "resume_tailor",
+      "cover_letter",
+      "fit_analysis",
+      "job_search",
+      "master_resume",
+      "ats_guidance",
+    ],
+    limits: {
+      resumes_per_period: 50,
+      searches_per_period: 100,
+      fit_analyses_per_period: 50,
+      whisper_uses_per_period: 5,
+      career_watch_companies: 10,
+    },
+  },
+  monthly_plus: {
+    code: "monthly_plus",
+    display_name: "Pro+",
+    cycle: "monthly",
+    amount_cents: 0,
+    trial_days: 7,
+    stripe_price_id: "",
+    is_active: true,
+    features: [
+      "resume_tailor",
+      "cover_letter",
+      "fit_analysis",
+      "job_search",
+      "master_resume",
+      "ats_guidance",
+    ],
+    limits: {
+      resumes_per_period: 100,
+      searches_per_period: 200,
+      fit_analyses_per_period: 100,
+      whisper_uses_per_period: 15,
+      career_watch_companies: 30,
+    },
+  },
+  monthly_premium: {
+    code: "monthly_premium",
+    display_name: "Premium",
+    cycle: "monthly",
+    amount_cents: 0,
+    trial_days: 7,
+    stripe_price_id: "",
+    is_active: true,
+    features: [
+      "resume_tailor",
+      "cover_letter",
+      "fit_analysis",
+      "job_search",
+      "master_resume",
+      "ats_guidance",
+    ],
+    limits: {
+      resumes_per_period: 300,
+      searches_per_period: 300,
+      fit_analyses_per_period: 300,
+      whisper_uses_per_period: null,
+      career_watch_companies: 50,
+    },
+  },
+};
+
+/**
+ * Always returns all four paid landing tiers.
+ *
+ * Live API data wins when present; otherwise the static catalog keeps every
+ * option visible beside Free so visitors can compare and choose.
+ */
+export function resolveLandingPlans(
+  payload: BillingPricesResponse | null | undefined,
+): BillingPlan[] {
+  const fromApi = selectLandingPlans(payload);
+  const apiByCode = new Map(fromApi.map((plan) => [plan.code, plan] as const));
+  return LANDING_PLAN_CODES.map(
+    (code) => apiByCode.get(code) ?? LANDING_PLAN_FALLBACKS[code],
+  );
+}
+
+/**
  * Read the public price catalog for unauthenticated visitors.
  *
  * Returns `null` on any failure so the landing page can fall back to a

@@ -1,13 +1,6 @@
 import { headers } from "next/headers";
-import Script from "next/script";
 
-/** Applies saved theme before paint. Must use next/script — a React <script> in layout is not executed on the client. */
-export async function ThemeScript() {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-
-  return (
-    <Script id="sr-theme-init" strategy="beforeInteractive" nonce={nonce}>
-      {`(function () {
+const THEME_INIT_SOURCE = `(function () {
   try {
     var key = "sr-theme";
     var stored = localStorage.getItem(key);
@@ -20,7 +13,28 @@ export async function ThemeScript() {
     root.classList.add(dark ? "dark" : "light");
     root.style.colorScheme = dark ? "dark" : "light";
   } catch (e) {}
-})();`}
-    </Script>
+})();`;
+
+/**
+ * Applies saved theme before paint.
+ *
+ * Uses a plain <script> in the server layout head instead of next/script.
+ * next/script's beforeInteractive wrapper re-hydrates an inner <script> whose
+ * nonce attribute disagrees with the streamed RSC payload in dev (server
+ * renders nonce="", client expects the CSP nonce), which trips React's
+ * hydration warning even with suppressHydrationWarning on the wrapper.
+ * A single server-rendered script tag executes from the initial HTML and
+ * keeps the nonce on the element React actually hydrates.
+ */
+export async function ThemeScript() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
+  return (
+    <script
+      id="sr-theme-init"
+      nonce={nonce}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: THEME_INIT_SOURCE }}
+    />
   );
 }

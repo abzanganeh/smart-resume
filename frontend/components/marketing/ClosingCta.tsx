@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { PRIMARY_CTA } from "./styles";
+import { PRIMARY_CTA, SECONDARY_CTA } from "./styles";
 
 export function ClosingCta({ startingCredits }: { startingCredits: number }) {
   const creditsLabel = startingCredits === 1 ? "credit" : "credits";
@@ -20,9 +20,12 @@ export function ClosingCta({ startingCredits }: { startingCredits: number }) {
           Start my job search
           <ArrowRight aria-hidden className="w-5 h-5" />
         </Link>
+        <Link href="/#pricing" className={SECONDARY_CTA}>
+          View plans &amp; pricing
+        </Link>
         <Link
           href="/auth"
-          className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-colors"
+          className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-colors sm:ml-1"
         >
           Already have an account? Sign in
         </Link>

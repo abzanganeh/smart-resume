@@ -1,9 +1,11 @@
 /**
  * OWASP A02 baseline response headers (M23 slice A2, E5 nonce ratchet).
  *
- * CSP is generated per request in proxy.ts with a cryptographic nonce.
- * ``style-src 'unsafe-inline'`` remains for React ``style={{}}`` attributes
- * (CSS nonces do not cover inline style properties — see SECURITY.md).
+ * CSP is generated per request in proxy.ts with a cryptographic nonce used by
+ * ``script-src``. ``style-src`` intentionally omits the nonce and keeps
+ * ``'unsafe-inline'``: no ``<style>`` element in the app is nonced, and CSP-3
+ * ignores ``'unsafe-inline'`` for a directive that also lists a nonce, which
+ * would block every React ``style={{}}`` attribute (see SECURITY.md).
  */
 
 const API_ORIGIN = (() => {
@@ -55,9 +57,7 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
       : "script-src 'self' 'unsafe-inline'";
   }
 
-  const styleSrc = nonce
-    ? `style-src 'self' 'nonce-${nonce}' 'unsafe-inline'`
-    : "style-src 'self' 'unsafe-inline'";
+  const styleSrc = "style-src 'self' 'unsafe-inline'";
 
   const directives = [
     "default-src 'self'",
