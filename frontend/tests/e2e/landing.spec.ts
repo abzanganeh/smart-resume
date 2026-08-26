@@ -21,6 +21,7 @@ import { scrollPostHeroProgress } from "./helpers/postHero"
 test.beforeEach(async ({ page }) => {
   // Suppress the intro up front so scroll-driven specs are deterministic.
   await suppressIntro(page)
+  await page.emulateMedia({ reducedMotion: "no-preference" })
   await page.goto("/")
 })
 

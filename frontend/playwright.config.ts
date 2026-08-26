@@ -31,8 +31,6 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",
-    // Scroll-driven landing specs assume full motion choreography is available.
-    reducedMotion: "no-preference",
   },
   projects: [
     {
