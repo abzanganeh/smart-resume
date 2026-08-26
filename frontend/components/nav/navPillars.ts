@@ -48,6 +48,38 @@ export const MOBILE_NAV_LINKS: readonly NavLinkDef[] = NAV_PILLARS.flatMap((pill
   pillar.comingSoon ? [] : pillar.links,
 ).filter((link) => link.href !== "/dashboard")
 
+/** Public landing header — shown to signed-out visitors only. */
+export const LANDING_NAV_LINKS: readonly NavLinkDef[] = [
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#faq", label: "FAQ" },
+  { href: "/checkup", label: "CV Checkup" },
+] as const
+
+export function landingNavHrefFromLocation(
+  pathname: string,
+  hash: string = "",
+): string | null {
+  const match = LANDING_NAV_LINKS.find((link) =>
+    landingNavLinkIsActive(pathname, link.href, hash),
+  )
+  return match?.href ?? null
+}
+
+export function landingNavLinkIsActive(
+  pathname: string,
+  href: string,
+  hash: string = "",
+): boolean {
+  if (href === "/checkup") {
+    return pathname === "/checkup" || pathname.startsWith("/checkup/")
+  }
+  if (href.startsWith("/#")) {
+    if (pathname !== "/") return false
+    return hash === href.slice(1)
+  }
+  return navPathIsActive(pathname, href)
+}
+
 export function navPathIsActive(pathname: string, href: string): boolean {
   if (href === "#") return false
   if (href === "/dashboard") return pathname === "/dashboard"

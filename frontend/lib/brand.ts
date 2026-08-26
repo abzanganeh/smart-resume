@@ -9,7 +9,11 @@ export const PRODUCT_NAME = "FlintApply" as const;
 
 export const COMPANY_LINE = "by The Flint AI" as const;
 
+export const COMPANY_NAME = "Flint AI" as const;
+
 export const COMPANY_URL = "https://theflintai.com" as const;
+
+export const PRIVACY_EMAIL = "privacy@zanganehai.com" as const;
 
 /** Text wordmark PNGs — replace in place when art updates. */
 export const WORDMARK_LIGHT_SRC = "/brand/flintapply-wordmark-light.png" as const;

@@ -125,12 +125,12 @@ export function JourneySection() {
           </header>
 
           <div
-            className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[2.75rem_minmax(0,1fr)] lg:gap-8 lg:items-center"
+            className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[3.25rem_minmax(0,1fr)] lg:gap-8 lg:items-center"
             style={{ "--stage-glow": theme.glow } as CSSProperties}
           >
             <nav
               aria-label="Stage letters"
-              className="relative flex shrink-0 items-center justify-center gap-2 sm:gap-3 lg:flex-col lg:justify-center lg:gap-3"
+              className="relative flex shrink-0 items-center justify-center gap-2 px-3 sm:gap-3 sm:px-4 lg:flex-col lg:justify-center lg:gap-3 lg:px-0 lg:py-1"
             >
               <span
                 aria-hidden
