@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 PipelineStep = Literal[
+    "resume_structure",
     "phase1_keywords",
     "phase2_audit",
     "phase3_rewrite",
@@ -32,6 +33,7 @@ ModelRoute = tuple[str, str]
 # One quality bar: tiers differ by volume, not output model.
 # Phase 3 stays on gemini-2.5-flash (prior pro-tier default) — not flash-lite.
 STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
+    "resume_structure": ("gemini", "gemini-2.5-flash-lite"),
     "phase1_keywords": ("gemini", "gemini-2.5-flash-lite"),
     "phase2_audit": ("gemini", "gemini-2.5-flash-lite"),
     "phase3_rewrite": ("gemini", "gemini-2.5-flash"),  # mid flash — paid deliverable
