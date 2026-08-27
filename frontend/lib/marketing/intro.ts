@@ -46,6 +46,18 @@ export const INTRO_FADE_MS = 320;
 /** Ignore scroll for this long so restored scroll position cannot dismiss. */
 export const INTRO_SCROLL_GRACE_MS = 450;
 
+/**
+ * Whether a scroll attempt this far into the intro should dismiss it.
+ *
+ * Scrolling is one of the four dismiss paths, but a browser restoring scroll
+ * position or inertia carried over from load would otherwise cancel the intro
+ * before anyone saw it. Non-finite input is treated as too early to dismiss.
+ */
+export function shouldDismissOnScroll(elapsedMs: number): boolean {
+  if (!Number.isFinite(elapsedMs)) return false;
+  return elapsedMs >= INTRO_SCROLL_GRACE_MS;
+}
+
 /** Applied to `document.documentElement` while the intro overlay is open. */
 export const INTRO_SCROLL_LOCK_CLASS = "intro-scroll-lock";
 
