@@ -21,4 +21,12 @@ describe("userFacingError", () => {
     const out = userFacingError(new Error("OpenRouter 402: not enough credits"));
     assert.equal(out.code, "llm_insufficient_credits");
   });
+
+  it("maps session_replaced to friendly copy", () => {
+    const out = userFacingError(
+      new ApiError("session_replaced", 401, "session_replaced"),
+    );
+    assert.match(out.message, /signed in somewhere else/i);
+    assert.equal(out.code, "session_replaced");
+  });
 });
