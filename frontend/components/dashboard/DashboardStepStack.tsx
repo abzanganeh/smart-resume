@@ -10,7 +10,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react"
-import { COMPANY_LINE, COMPANY_URL, PRODUCT_NAME } from "@/lib/brand"
+import { COMPANY_LINE, COMPANY_URL, FLINT_DESKTOP_URL, FLINT_PRODUCT_NAME, PRODUCT_NAME } from "@/lib/brand"
 import { DashboardStepCard } from "@/components/dashboard/DashboardStepCard"
 import {
   computeStepStates,
@@ -29,8 +29,6 @@ export interface DashboardStepStackProps {
   applicationCounts?: StepStackInputs["applicationCounts"]
   formatDate: (iso: string) => string
 }
-
-const FLINT_PRODUCT_NAME = "Flint"
 
 /**
  * Sequential dashboard progress stack.  Steps unlock in order and collapse
@@ -188,7 +186,7 @@ export function DashboardStepStack({
         ready={captureReady}
         locked={states.capture === "locked"}
         primaryHref={rolesEffectivelyReady ? COMPANY_URL : undefined}
-        primaryLabel="How the extension works"
+        primaryLabel="Learn more"
         secondaryHref={rolesEffectivelyReady ? "/jobs" : undefined}
         secondaryLabel={rolesEffectivelyReady ? "Search & save jobs" : undefined}
         skipHref={
@@ -229,12 +227,10 @@ export function DashboardStepStack({
         secondaryHref={tailorReady ? "/dashboard#tailored-resumes" : undefined}
         secondaryLabel={tailorReady ? "View list" : undefined}
         skipHref={
-          states.tailor === "locked" && rolesEffectivelyReady
-            ? "/session/new"
-            : undefined
+          states.tailor === "locked" && hasMasterResume ? "/session/new" : undefined
         }
         skipLabel={
-          states.tailor === "locked" && rolesEffectivelyReady
+          states.tailor === "locked" && hasMasterResume
             ? "Use this feature now →"
             : undefined
         }
@@ -245,7 +241,7 @@ export function DashboardStepStack({
       <DashboardStepCard
         step={6}
         icon={ClipboardPaste}
-        title={applyReady ? "Applied with autofill" : "Apply with autofill"}
+        title={applyReady ? "Application submitted" : "Apply with autofill"}
         description={
           applyReady
             ? ""
@@ -256,20 +252,18 @@ export function DashboardStepStack({
         ready={applyReady}
         locked={states.apply === "locked"}
         primaryHref={hasTailored ? COMPANY_URL : undefined}
-        primaryLabel="Extension autofill guide"
+        primaryLabel="Learn more"
         secondaryHref={hasTailored ? "/tracker" : undefined}
         secondaryLabel={hasTailored ? "Track application" : undefined}
         skipHref={
-          states.apply === "locked" && (hasJd || rolesEffectivelyReady)
+          states.apply === "locked" && (hasJd || hasMasterResume)
             ? "/session/new"
             : undefined
         }
         skipLabel={
-          states.apply === "locked" && hasJd
+          states.apply === "locked" && (hasJd || hasMasterResume)
             ? "Tailor a resume first →"
-            : states.apply === "locked" && rolesEffectivelyReady
-              ? "Use this feature now →"
-              : undefined
+            : undefined
         }
         testId="dashboard-step-apply"
       />
@@ -313,14 +307,14 @@ export function DashboardStepStack({
         data-testid="dashboard-flint-coming-soon"
       >
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
-          Coming soon
+          Separate product
         </p>
         <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
           <span className="font-semibold text-slate-900 dark:text-white">{FLINT_PRODUCT_NAME}</span>
-          {" — live interview co-pilot (separate desktop app {COMPANY_LINE}). "}
-          Not included in your {PRODUCT_NAME} subscription.{" "}
+          {` — live interview co-pilot (separate desktop app ${COMPANY_LINE}). `}
+          Not included in your {PRODUCT_NAME} subscription. Early access handoff is available from tailored sessions.{" "}
           <Link
-            href={COMPANY_URL}
+            href={FLINT_DESKTOP_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-amber-800 dark:text-amber-300 hover:underline"

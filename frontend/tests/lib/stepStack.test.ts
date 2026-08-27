@@ -172,4 +172,17 @@ describe("computeStepStates", () => {
     })
     assert.equal(s.tailor, "locked")
   })
+
+  it("contradictory input: tailored resume count without master resume gates tailor and apply", () => {
+    const s = computeStepStates({
+      hasMasterResume: false,
+      jobRolesReady: false,
+      jobRolesStale: false,
+      hasJd: false,
+      tailoredResumeCount: 3,
+      applicationCounts: zeroApps,
+    })
+    assert.equal(s.tailor, "locked")
+    assert.equal(s.apply, "locked")
+  })
 })

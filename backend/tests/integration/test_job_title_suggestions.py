@@ -241,6 +241,28 @@ async def test_put_preferences_cannot_overwrite_reserved_metadata(
 
 
 @pytest.mark.asyncio
+async def test_put_preferred_titles_accepts_twelve_titles(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    token, user_id = await _register(app_client)
+    await _seed_master_resume(db_session, user_id)
+    await db_session.commit()
+
+    titles = [f"Role {i}" for i in range(12)]
+    r = await app_client.put(
+        "/api/jobs/preferred-titles",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"titles": titles},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["titles"]) == 12
+    assert body["confirmed"] is True
+    assert body["max_allowed"] == 12
+
+
+@pytest.mark.asyncio
 async def test_free_user_corpus_search_after_preferred_titles(
     app_client: AsyncClient,
     db_session: AsyncSession,
@@ -257,13 +279,7 @@ async def test_free_user_corpus_search_after_preferred_titles(
     ).scalar_one()
     set_preferred_titles(
         user,
-        [
-            "Mobile Developer",
-            "React Native Developer",
-            "Software Engineer",
-            "iOS Developer",
-            "Android Developer",
-        ],
+        ["Mobile Developer"],
     )
     await db_session.commit()
 

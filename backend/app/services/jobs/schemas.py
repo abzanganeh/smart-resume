@@ -8,6 +8,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.services.jobs.preferred_titles import (
+    MAX_PREFERRED_JOB_TITLES,
+    MIN_PREFERRED_JOB_TITLES,
+)
+
 
 class JobResult(BaseModel):
     """Normalized job listing returned by search/match endpoints."""
@@ -85,7 +90,8 @@ class JobPreferencesOut(BaseModel):
     preferred_titles: list[str] = Field(default_factory=list)
     preferred_titles_confirmed: bool = False
     preferred_titles_stale: bool = False
-    min_preferred_titles: int = 1
+    min_preferred_titles: int = MIN_PREFERRED_JOB_TITLES
+    max_preferred_titles: int = MAX_PREFERRED_JOB_TITLES
 
 
 class JobPreferencesUpdate(BaseModel):
@@ -109,14 +115,19 @@ class JobTitleSuggestionsOut(BaseModel):
 
 
 class PreferredTitlesUpdate(BaseModel):
-    titles: list[str] = Field(..., min_length=1, max_length=10)
+    titles: list[str] = Field(
+        ...,
+        min_length=MIN_PREFERRED_JOB_TITLES,
+        max_length=MAX_PREFERRED_JOB_TITLES,
+    )
 
 
 class PreferredTitlesOut(BaseModel):
     titles: list[str]
     confirmed: bool
     stale: bool = False
-    min_required: int = 5
+    min_required: int = MIN_PREFERRED_JOB_TITLES
+    max_allowed: int = MAX_PREFERRED_JOB_TITLES
 
 
 __all__ = [

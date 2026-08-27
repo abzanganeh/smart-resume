@@ -1124,6 +1124,7 @@ export interface DashboardSummaryResponse {
     master_chunks: number;
     applications: number;
     saved_jobs: number;
+    job_descriptions: number;
   };
   recent_activity: DashboardActivityItem[];
   ats_trend: Array<{

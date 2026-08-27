@@ -39,11 +39,12 @@ export function JobTitlePicker({
   const [heldTitles, setHeldTitles] = useState<string[]>([])
   const [selectedTitles, setSelectedTitles] = useState<string[]>([])
   const [customDraft, setCustomDraft] = useState("")
+  const [titleLimit, setTitleLimit] = useState(MAX_PREFERRED_JOB_TITLES)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const atMax = selectedTitles.length >= MAX_PREFERRED_JOB_TITLES
+  const atMax = selectedTitles.length >= titleLimit
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,10 +56,12 @@ export function JobTitlePicker({
       ])
       setSuggestions(res.suggestions)
       setHeldTitles(res.held_titles)
+      const maxTitles = prefs?.max_preferred_titles ?? MAX_PREFERRED_JOB_TITLES
+      setTitleLimit(maxTitles)
 
       const saved = prefs?.preferred_titles?.filter(Boolean) ?? []
       if (saved.length > 0) {
-        setSelectedTitles(saved.slice(0, MAX_PREFERRED_JOB_TITLES))
+        setSelectedTitles(saved.slice(0, maxTitles))
       } else if (res.suggestions.length > 0) {
         setSelectedTitles([res.suggestions[0].title])
       } else {
@@ -88,8 +91,8 @@ export function JobTitlePicker({
       setError("That title is already in your list.")
       return
     }
-    if (selectedTitles.length >= MAX_PREFERRED_JOB_TITLES) {
-      setError(`You can save up to ${MAX_PREFERRED_JOB_TITLES} titles. Remove one to add another.`)
+    if (selectedTitles.length >= titleLimit) {
+      setError(`You can save up to ${titleLimit} titles. Remove one to add another.`)
       return
     }
     setError(null)
@@ -144,7 +147,7 @@ export function JobTitlePicker({
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
           Based on your master resume, we ranked roles by fit. Pick at least{" "}
           <strong className="text-slate-900 dark:text-slate-200">{MIN_PREFERRED_JOB_TITLES}</strong>{" "}
-          (up to {MAX_PREFERRED_JOB_TITLES}) — remove suggestions you do not want and add your own anytime.
+          (up to {titleLimit}) — remove suggestions you do not want and add your own anytime.
         </p>
         {heldTitles.length > 0 && (
           <p className="text-xs text-slate-500 dark:text-slate-500">
@@ -157,7 +160,7 @@ export function JobTitlePicker({
       {selectedTitles.length > 0 && (
         <div className="space-y-2" data-testid="job-title-selected">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Your target roles ({selectedTitles.length}/{MAX_PREFERRED_JOB_TITLES})
+            Your target roles ({selectedTitles.length}/{titleLimit})
           </p>
           <div className="flex flex-wrap gap-2">
             {selectedTitles.map((title) => (
@@ -277,7 +280,7 @@ export function JobTitlePicker({
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-500">
         {selectedTitles.length} selected · minimum {MIN_PREFERRED_JOB_TITLES} · maximum{" "}
-        {MAX_PREFERRED_JOB_TITLES}
+        {titleLimit}
       </p>
 
       {error && (

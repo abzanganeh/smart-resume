@@ -10,7 +10,7 @@
  * detail disclosure so gating can never drift between the places we state it.
  */
 
-import { COMPANY_LINE, PRODUCT_NAME } from "@/lib/brand";
+import { COMPANY_LINE, FLINT_DESKTOP_URL, FLINT_PRODUCT_NAME, PRODUCT_NAME } from "@/lib/brand";
 
 /**
  * `mixed` means partially usable on the free tier. Job search is the only such
@@ -134,7 +134,8 @@ export function journeyStepById(id: string): JourneyStep {
 
 /** Flint desktop co-pilot — separate product, shown below the numbered journey. */
 export const FLINT_COMING_SOON = {
-  productName: "Flint",
+  productName: FLINT_PRODUCT_NAME,
   description:
-    `Live interview co-pilot — a separate desktop app ${COMPANY_LINE}. Not included in your ${PRODUCT_NAME} subscription.`,
+    `Live interview co-pilot — a separate desktop app ${COMPANY_LINE}. Not included in your ${PRODUCT_NAME} subscription. Early access handoff is available from tailored sessions.`,
+  learnMoreUrl: FLINT_DESKTOP_URL,
 } as const;

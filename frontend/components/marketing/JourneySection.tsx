@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight } from "lucide-react";
 import { JOURNEY_STEPS, FLINT_COMING_SOON, accessBadge } from "@/lib/marketing/journey";
-import { COMPANY_URL } from "@/lib/brand";
 import {
   journeyScrollTrackHeightVh,
   journeyStageProgressFromTrack,
@@ -131,7 +130,7 @@ export function JourneySection() {
           >
             <nav
               aria-label="Stage letters"
-              className="relative flex shrink-0 flex-wrap items-center justify-center gap-1.5 px-2 sm:gap-3 sm:px-4 lg:flex-col lg:flex-nowrap lg:justify-center lg:gap-3 lg:px-0 lg:py-1"
+              className="relative flex shrink-0 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto px-2 sm:justify-center sm:gap-3 sm:px-4 lg:flex-col lg:flex-nowrap lg:justify-center lg:gap-3 lg:overflow-visible lg:px-0 lg:py-1"
             >
               <span
                 aria-hidden
@@ -228,7 +227,7 @@ export function JourneySection() {
         data-testid="landing-flint-coming-soon"
       >
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          Coming soon
+          Separate product
         </p>
         <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
           <span className="font-semibold text-slate-900 dark:text-white">
@@ -237,7 +236,7 @@ export function JourneySection() {
           {" — "}
           {FLINT_COMING_SOON.description}{" "}
           <Link
-            href={COMPANY_URL}
+            href={FLINT_COMING_SOON.learnMoreUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-amber-800 hover:underline dark:text-amber-300"

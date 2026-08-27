@@ -71,7 +71,7 @@ export function computeStepStates(inputs: StepStackInputs): StepStackStates {
         : hasTailored
           ? "ready"
           : "active",
-    apply: !hasTailored
+    apply: !hasMasterResume || !rolesEffectivelyReady || !hasTailored
       ? "locked"
       : hasApplications
         ? "ready"

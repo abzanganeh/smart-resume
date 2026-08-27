@@ -24,6 +24,7 @@ from app.models.dashboard import (
 )
 from app.models.master_resume import MasterResume
 from app.models.tracker import Application
+from app.models.job_description import JobDescription
 from app.models.jobs import SavedJob
 from app.models.session import PhaseStatus
 from app.models.user import User
@@ -233,6 +234,14 @@ async def dashboard_summary(
         )
     ).scalar_one()
 
+    job_description_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(JobDescription)
+            .where(JobDescription.user_id == user.id)
+        )
+    ).scalar_one()
+
     application_count = (
         await db.execute(
             select(func.count())
@@ -297,6 +306,7 @@ async def dashboard_summary(
             "master_chunks": master_chunk_count,
             "applications": application_count,
             "saved_jobs": saved_jobs_count,
+            "job_descriptions": job_description_count,
         },
         recent_activity=[ActivityItem(**item) for item in activity],
         ats_trend=await _ats_trend_last_30_days(db, user.id),

@@ -483,7 +483,9 @@ export function DashboardView({ token }: { token: string }) {
         jobRolesReady={jobRolesReady}
         jobRolesStale={jobRolesStale}
         hasJd={
-          (summary?.counts.saved_jobs ?? 0) > 0 || (summary?.counts.resumes ?? 0) > 0
+          (summary?.counts.job_descriptions ?? 0) > 0 ||
+          (summary?.counts.saved_jobs ?? 0) > 0 ||
+          (summary?.counts.resumes ?? 0) > 0
         }
         preferredTitles={preferredTitles}
         tailoredResumeCount={summary?.counts.resumes ?? 0}
