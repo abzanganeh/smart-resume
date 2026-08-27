@@ -138,7 +138,8 @@ export interface PreferredTitlesResponse {
   min_required: number
 }
 
-export const MIN_PREFERRED_JOB_TITLES = 5
+export const MIN_PREFERRED_JOB_TITLES = 1
+export const MAX_PREFERRED_JOB_TITLES = 12
 
 export interface JobFitResponse {
   analysis_id: string

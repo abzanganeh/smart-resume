@@ -85,7 +85,7 @@ class JobPreferencesOut(BaseModel):
     preferred_titles: list[str] = Field(default_factory=list)
     preferred_titles_confirmed: bool = False
     preferred_titles_stale: bool = False
-    min_preferred_titles: int = 5
+    min_preferred_titles: int = 1
 
 
 class JobPreferencesUpdate(BaseModel):

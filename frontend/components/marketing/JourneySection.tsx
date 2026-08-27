@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight } from "lucide-react";
-import { JOURNEY_STEPS, accessBadge } from "@/lib/marketing/journey";
+import { JOURNEY_STEPS, FLINT_COMING_SOON, accessBadge } from "@/lib/marketing/journey";
+import { COMPANY_URL } from "@/lib/brand";
 import {
   journeyScrollTrackHeightVh,
   journeyStageProgressFromTrack,
@@ -28,7 +29,7 @@ import {
 /**
  * Pinned scrollytelling journey.
  *
- * The section title stays visible while scrolling advances A → F in place.
+ * The section title stays visible while scrolling advances A → G in place.
  * The track is tall enough that each stage gets a full viewport of scroll
  * travel on a trackpad.
  */
@@ -130,7 +131,7 @@ export function JourneySection() {
           >
             <nav
               aria-label="Stage letters"
-              className="relative flex shrink-0 items-center justify-center gap-2 px-3 sm:gap-3 sm:px-4 lg:flex-col lg:justify-center lg:gap-3 lg:px-0 lg:py-1"
+              className="relative flex shrink-0 flex-wrap items-center justify-center gap-1.5 px-2 sm:gap-3 sm:px-4 lg:flex-col lg:flex-nowrap lg:justify-center lg:gap-3 lg:px-0 lg:py-1"
             >
               <span
                 aria-hidden
@@ -220,6 +221,30 @@ export function JourneySection() {
             </article>
           </div>
         </div>
+      </div>
+
+      <div
+        className="mx-auto mt-8 max-w-4xl rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-5 dark:border-slate-700 dark:bg-slate-900/30"
+        data-testid="landing-flint-coming-soon"
+      >
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          Coming soon
+        </p>
+        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          <span className="font-semibold text-slate-900 dark:text-white">
+            {FLINT_COMING_SOON.productName}
+          </span>
+          {" — "}
+          {FLINT_COMING_SOON.description}{" "}
+          <Link
+            href={COMPANY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-amber-800 hover:underline dark:text-amber-300"
+          >
+            Learn more →
+          </Link>
+        </p>
       </div>
 
       <div className="sr-only">

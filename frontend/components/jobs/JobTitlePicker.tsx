@@ -1,9 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Plus, X } from "lucide-react"
 import {
+  getJobPreferences,
   getJobTitleSuggestions,
+  MAX_PREFERRED_JOB_TITLES,
   MIN_PREFERRED_JOB_TITLES,
   savePreferredJobTitles,
   titleFitBar,
@@ -19,6 +21,14 @@ interface JobTitlePickerProps {
   className?: string
 }
 
+function normalizeTitle(title: string): string {
+  return title.trim().replace(/\s+/g, " ")
+}
+
+function titleKey(title: string): string {
+  return normalizeTitle(title).toLowerCase()
+}
+
 export function JobTitlePicker({
   accessToken,
   onComplete,
@@ -27,23 +37,33 @@ export function JobTitlePicker({
 }: JobTitlePickerProps) {
   const [suggestions, setSuggestions] = useState<JobTitleSuggestion[]>([])
   const [heldTitles, setHeldTitles] = useState<string[]>([])
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectedTitles, setSelectedTitles] = useState<string[]>([])
+  const [customDraft, setCustomDraft] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const atMax = selectedTitles.length >= MAX_PREFERRED_JOB_TITLES
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await getJobTitleSuggestions(accessToken)
+      const [res, prefs] = await Promise.all([
+        getJobTitleSuggestions(accessToken),
+        getJobPreferences(accessToken).catch(() => null),
+      ])
       setSuggestions(res.suggestions)
       setHeldTitles(res.held_titles)
-      const preselect = new Set<string>()
-      for (const row of res.suggestions.slice(0, MIN_PREFERRED_JOB_TITLES)) {
-        preselect.add(row.title)
+
+      const saved = prefs?.preferred_titles?.filter(Boolean) ?? []
+      if (saved.length > 0) {
+        setSelectedTitles(saved.slice(0, MAX_PREFERRED_JOB_TITLES))
+      } else if (res.suggestions.length > 0) {
+        setSelectedTitles([res.suggestions[0].title])
+      } else {
+        setSelectedTitles([])
       }
-      setSelected(preselect)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load job title suggestions.")
     } finally {
@@ -55,30 +75,53 @@ export function JobTitlePicker({
     void load()
   }, [load])
 
-  function toggle(title: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(title)) {
-        next.delete(title)
-      } else {
-        next.add(title)
-      }
-      return next
-    })
+  function isSelected(title: string): boolean {
+    const key = titleKey(title)
+    return selectedTitles.some((row) => titleKey(row) === key)
+  }
+
+  function addTitle(title: string) {
+    const normalized = normalizeTitle(title)
+    if (!normalized) return
+    const key = titleKey(normalized)
+    if (selectedTitles.some((row) => titleKey(row) === key)) {
+      setError("That title is already in your list.")
+      return
+    }
+    if (selectedTitles.length >= MAX_PREFERRED_JOB_TITLES) {
+      setError(`You can save up to ${MAX_PREFERRED_JOB_TITLES} titles. Remove one to add another.`)
+      return
+    }
+    setError(null)
+    setSelectedTitles((prev) => [...prev, normalized])
+    setCustomDraft("")
+  }
+
+  function removeTitle(title: string) {
+    const key = titleKey(title)
+    setSelectedTitles((prev) => prev.filter((row) => titleKey(row) !== key))
+    setError(null)
+  }
+
+  function toggleSuggestion(title: string) {
+    if (isSelected(title)) {
+      removeTitle(title)
+    } else {
+      addTitle(title)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (selected.size < MIN_PREFERRED_JOB_TITLES) {
-      setError(`Select at least ${MIN_PREFERRED_JOB_TITLES} titles to continue.`)
+    if (selectedTitles.length < MIN_PREFERRED_JOB_TITLES) {
+      setError(`Select at least ${MIN_PREFERRED_JOB_TITLES} title to continue.`)
       return
     }
     setSaving(true)
     setError(null)
     try {
-      const titles = Array.from(selected)
-      await savePreferredJobTitles(accessToken, titles)
-      await onComplete(titles)
+      await savePreferredJobTitles(accessToken, selectedTitles)
+      await onComplete(selectedTitles)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your selections.")
     } finally {
@@ -101,7 +144,7 @@ export function JobTitlePicker({
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
           Based on your master resume, we ranked roles by fit. Pick at least{" "}
           <strong className="text-slate-900 dark:text-slate-200">{MIN_PREFERRED_JOB_TITLES}</strong>{" "}
-          — you can refine these anytime on the Jobs page.
+          (up to {MAX_PREFERRED_JOB_TITLES}) — remove suggestions you do not want and add your own anytime.
         </p>
         {heldTitles.length > 0 && (
           <p className="text-xs text-slate-500 dark:text-slate-500">
@@ -111,18 +154,74 @@ export function JobTitlePicker({
         )}
       </div>
 
+      {selectedTitles.length > 0 && (
+        <div className="space-y-2" data-testid="job-title-selected">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Your target roles ({selectedTitles.length}/{MAX_PREFERRED_JOB_TITLES})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {selectedTitles.map((title) => (
+              <span
+                key={title}
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-sm text-slate-800 dark:text-slate-100"
+              >
+                {title}
+                <button
+                  type="button"
+                  onClick={() => removeTitle(title)}
+                  className="rounded-full p-0.5 hover:bg-amber-400/30"
+                  aria-label={`Remove ${title}`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          value={customDraft}
+          onChange={(e) => setCustomDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              addTitle(customDraft)
+            }
+          }}
+          placeholder="Add your own job title"
+          disabled={atMax}
+          maxLength={200}
+          data-testid="job-title-custom-input"
+          className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 disabled:opacity-50"
+        />
+        <button
+          type="button"
+          onClick={() => addTitle(customDraft)}
+          disabled={atMax || !customDraft.trim()}
+          data-testid="job-title-custom-add"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 hover:border-amber-400/60 disabled:opacity-40"
+        >
+          <Plus className="w-4 h-4" />
+          Add title
+        </button>
+      </div>
+
       <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1" data-testid="job-title-suggestions">
         {suggestions.map((row) => {
-          const isSelected = selected.has(row.title)
+          const selected = isSelected(row.title)
           return (
             <button
               key={row.title}
               type="button"
-              onClick={() => toggle(row.title)}
+              onClick={() => toggleSuggestion(row.title)}
+              disabled={!selected && atMax}
               data-testid={`job-title-option-${row.title}`}
               className={clsx(
-                "w-full text-left rounded-xl border p-4 transition-colors",
-                isSelected
+                "w-full text-left rounded-xl border p-4 transition-colors disabled:opacity-50",
+                selected
                   ? "border-amber-400 bg-amber-400/10 ring-1 ring-amber-400/40"
                   : "border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 hover:border-amber-400/50",
               )}
@@ -131,7 +230,7 @@ export function JobTitlePicker({
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {row.title}
                 </h3>
-                {isSelected ? (
+                {selected ? (
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 ) : null}
               </div>
@@ -177,7 +276,8 @@ export function JobTitlePicker({
       </div>
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-500">
-        {selected.size} selected · minimum {MIN_PREFERRED_JOB_TITLES}
+        {selectedTitles.length} selected · minimum {MIN_PREFERRED_JOB_TITLES} · maximum{" "}
+        {MAX_PREFERRED_JOB_TITLES}
       </p>
 
       {error && (
@@ -189,7 +289,7 @@ export function JobTitlePicker({
 
       <button
         type="submit"
-        disabled={saving || selected.size < MIN_PREFERRED_JOB_TITLES}
+        disabled={saving || selectedTitles.length < MIN_PREFERRED_JOB_TITLES}
         data-testid="job-title-picker-submit"
         className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-40"
       >

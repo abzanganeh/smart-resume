@@ -193,8 +193,9 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 
 ### Dashboard guided journey (B1–B8)
 
-- [ ] Dashboard step stack shows 6 steps: Master resume → Job roles → Search → Tailor → Applications → Prepare (locked)
-- [ ] Job roles: pick ≥5 titles; regenerate after master resume change is free
+- [ ] Dashboard step stack shows 7 steps: Master resume → Job roles → Search → Capture JD → Tailor → Apply (autofill) → Track applications; Flint desktop in a separate "Coming soon" block (not numbered)
+- [ ] Landing journey shows 7 scroll stages (A–G) aligned with dashboard; Flint desktop in separate "Coming soon" block below the rail
+- [ ] Job roles: pick ≥1 title (up to 12); add custom titles; regenerate after master resume change is free
 - [ ] Nav pillar labels: **Dashboard**, **Applications** (not Tracker); mobile nav has no duplicate Dashboard link
 - [ ] Delete tailored resume confirms no credit refund
 - [ ] `./scripts/staging-smoke.sh` passes against staging API/frontend URLs
