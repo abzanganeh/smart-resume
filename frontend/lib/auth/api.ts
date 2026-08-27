@@ -9,6 +9,8 @@
  * rely on the browser sending sr_refresh automatically.
  */
 
+import { notifySessionRevoked, parseApiErrorDetail } from "@/lib/parseApiError"
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
 function authHeaders(token?: string): HeadersInit {
@@ -20,7 +22,9 @@ function authHeaders(token?: string): HeadersInit {
 async function parseError(res: Response): Promise<string> {
   try {
     const body = await res.json()
-    return body?.detail?.code ?? body?.detail ?? `HTTP ${res.status}`
+    const { message, code } = parseApiErrorDetail(body?.detail, res.status)
+    notifySessionRevoked(code)
+    return message
   } catch {
     return `HTTP ${res.status}`
   }

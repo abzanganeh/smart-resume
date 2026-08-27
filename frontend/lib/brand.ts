@@ -13,6 +13,11 @@ export const COMPANY_NAME = "Flint AI" as const;
 
 export const COMPANY_URL = "https://theflintai.com" as const;
 
+/** Separate desktop interview co-pilot — not part of FlintApply billing. */
+export const FLINT_PRODUCT_NAME = "Flint" as const;
+
+export const FLINT_DESKTOP_URL = "https://github.com/abzanganeh/flint" as const;
+
 export const PRIVACY_EMAIL = "privacy@zanganehai.com" as const;
 
 /** Text wordmark PNGs — replace in place when art updates. */

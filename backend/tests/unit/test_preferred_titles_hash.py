@@ -28,8 +28,8 @@ def _make_user() -> User:
     return user
 
 
-def test_min_titles_is_five() -> None:
-    assert MIN_PREFERRED_JOB_TITLES == 5
+def test_min_titles_is_one() -> None:
+    assert MIN_PREFERRED_JOB_TITLES == 1
 
 
 def test_hash_stable_across_whitespace_edits() -> None:
@@ -54,13 +54,7 @@ def test_hash_empty_input_is_deterministic() -> None:
 
 def test_set_preferred_titles_persists_source_hash_when_confirmed() -> None:
     user = _make_user()
-    titles = [
-        "Backend Engineer",
-        "Software Engineer",
-        "Platform Engineer",
-        "API Engineer",
-        "Python Engineer",
-    ]
+    titles = ["Backend Engineer"]
     saved = set_preferred_titles(user, titles, source_hash="sha256:abc")
     assert saved == titles
     assert has_confirmed_preferred_titles(user)
@@ -70,8 +64,8 @@ def test_set_preferred_titles_persists_source_hash_when_confirmed() -> None:
 def test_hash_cleared_when_titles_drop_below_min() -> None:
     user = _make_user()
     user.job_default_filters = {PREFERRED_TITLES_SOURCE_HASH_KEY: "old"}
-    saved = set_preferred_titles(user, ["Only One Title"], source_hash="new")
-    assert saved == ["Only One Title"]
+    saved = set_preferred_titles(user, [], source_hash="new")
+    assert saved == []
     assert not has_confirmed_preferred_titles(user)
     assert get_preferred_titles_source_hash(user) is None
 

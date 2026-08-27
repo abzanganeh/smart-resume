@@ -48,6 +48,8 @@ export function friendlyAuthError(code: string): string {
     Configuration:
       "Sign-in could not finish — usually the browser host does not match the OAuth callback (try the same URL you opened, e.g. localhost vs LAN IP). If this persists, confirm GOOGLE_CLIENT_SECRET in frontend/.env.local and restart npm run dev.",
     OAuthCallback: "SSO callback failed. Please try again.",
+    session_replaced:
+      "You signed in somewhere else. Sign in again to continue.",
     Default: "Something went wrong. Please try again.",
   }
   return map[code] ?? map["Default"]

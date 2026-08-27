@@ -2,6 +2,8 @@
  * Master resume profile API helpers and pure utilities for /profile.
  */
 
+import { notifySessionRevoked, parseApiErrorDetail } from "@/lib/parseApiError"
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
 function authHeaders(token: string, extra?: HeadersInit): HeadersInit {
@@ -14,7 +16,9 @@ function authHeaders(token: string, extra?: HeadersInit): HeadersInit {
 async function parseError(res: Response): Promise<string> {
   try {
     const body = await res.json()
-    return body?.detail ?? `HTTP ${res.status}`
+    const { message, code } = parseApiErrorDetail(body?.detail, res.status)
+    notifySessionRevoked(code)
+    return message
   } catch {
     return `HTTP ${res.status}`
   }

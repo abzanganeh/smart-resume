@@ -54,6 +54,7 @@ from app.services.jobs.schemas import (
     SavedSearchUpdate,
 )
 from app.services.jobs.preferred_titles import (
+    MAX_PREFERRED_JOB_TITLES,
     MIN_PREFERRED_JOB_TITLES,
     PREFERRED_TITLES_CONFIRMED_AT_KEY,
     PREFERRED_TITLES_KEY,
@@ -67,6 +68,17 @@ from app.services.jobs.preferred_titles import (
 )
 from app.services.master_resume import crud as master_crud
 from app.services.retrieval.exceptions import MasterResumeRequiredError
+
+logger = structlog.get_logger(__name__)
+
+
+def _min_titles_unlock_message() -> str:
+    if MIN_PREFERRED_JOB_TITLES == 1:
+        return "Pick a job title to unlock free corpus search."
+    return (
+        f"Pick at least {MIN_PREFERRED_JOB_TITLES} job titles to "
+        "unlock free corpus search."
+    )
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 log = structlog.get_logger("jobs.router")
@@ -142,10 +154,7 @@ async def _require_job_search_access(
                 "code": "preferred_titles_incomplete",
                 "resolution": "choose_job_titles",
                 "min_required": MIN_PREFERRED_JOB_TITLES,
-                "message": (
-                    f"Pick at least {MIN_PREFERRED_JOB_TITLES} job titles to "
-                    "unlock free corpus search."
-                ),
+                "message": _min_titles_unlock_message(),
             },
         )
     raise HTTPException(
@@ -154,10 +163,7 @@ async def _require_job_search_access(
             "code": "job_titles_required",
             "resolution": "choose_job_titles",
             "min_required": MIN_PREFERRED_JOB_TITLES,
-            "message": (
-                f"Pick at least {MIN_PREFERRED_JOB_TITLES} job titles to "
-                "unlock free corpus search."
-            ),
+            "message": _min_titles_unlock_message(),
         },
     )
 
@@ -202,6 +208,7 @@ async def _preferences_response(
         preferred_titles_confirmed=len(titles) >= MIN_PREFERRED_JOB_TITLES,
         preferred_titles_stale=stale,
         min_preferred_titles=MIN_PREFERRED_JOB_TITLES,
+        max_preferred_titles=MAX_PREFERRED_JOB_TITLES,
     )
 
 
@@ -338,7 +345,11 @@ async def update_preferred_titles(
             detail={
                 "code": "preferred_titles_incomplete",
                 "min_required": MIN_PREFERRED_JOB_TITLES,
-                "message": f"Select at least {MIN_PREFERRED_JOB_TITLES} job titles.",
+                "message": (
+                    "Select a job title."
+                    if MIN_PREFERRED_JOB_TITLES == 1
+                    else f"Select at least {MIN_PREFERRED_JOB_TITLES} job titles."
+                ),
             },
         )
     resume = await master_crud.get_raw_resume(db, user_id=user.id)
@@ -354,6 +365,7 @@ async def update_preferred_titles(
         confirmed=len(saved) >= MIN_PREFERRED_JOB_TITLES,
         stale=False,
         min_required=MIN_PREFERRED_JOB_TITLES,
+        max_allowed=MAX_PREFERRED_JOB_TITLES,
     )
 
 

@@ -119,7 +119,7 @@ async function mockJobPreferences(page: Page) {
           preferred_titles: ["Python engineer", "Backend engineer"],
           preferred_titles_confirmed: true,
           preferred_titles_stale: false,
-          min_preferred_titles: 5,
+          min_preferred_titles: 1,
         }),
       })
     }

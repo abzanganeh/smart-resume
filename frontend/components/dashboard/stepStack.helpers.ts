@@ -9,6 +9,8 @@ export interface StepStackInputs {
   hasMasterResume: boolean
   jobRolesReady: boolean
   jobRolesStale: boolean
+  /** Saved job or any tailored resume implies the user has a JD in the system. */
+  hasJd: boolean
   tailoredResumeCount: number
   applicationCounts: {
     active: number
@@ -17,7 +19,7 @@ export interface StepStackInputs {
     /**
      * Total tracked applications regardless of status.  Used for the
      * "applications ready" gate so users whose only apps are rejected /
-     * withdrawn still see step 5 as done.
+     * withdrawn still see step 7 as done.
      */
     total: number
   } | null
@@ -27,9 +29,10 @@ export interface StepStackStates {
   master: StepState
   roles: StepState
   search: StepState
+  capture: StepState
   tailor: StepState
+  apply: StepState
   applications: StepState
-  prepare: StepState
 }
 
 export function computeStepStates(inputs: StepStackInputs): StepStackStates {
@@ -37,19 +40,17 @@ export function computeStepStates(inputs: StepStackInputs): StepStackStates {
     hasMasterResume,
     jobRolesReady,
     jobRolesStale,
+    hasJd,
     tailoredResumeCount,
     applicationCounts,
   } = inputs
 
   const hasTailored = tailoredResumeCount > 0
-  // Applications step is "done" once the user has tracked anything at all,
-  // including terminal states (rejected / withdrawn).  The active/interviewing/
-  // offer counts still drive the display copy in the UI.
   const hasApplications = (applicationCounts?.total ?? 0) > 0
 
-  // The prerequisite chain is strictly master -> roles -> search.  Even if a
-  // stale write leaves `jobRolesReady=true` without a master resume, we refuse
-  // to unlock later steps until the earlier ones are actually satisfied.
+  // The prerequisite chain is strictly master -> roles.  Even if a stale write
+  // leaves `jobRolesReady=true` without a master resume, we refuse to unlock
+  // later steps until the earlier ones are actually satisfied.
   const rolesEffectivelyReady = hasMasterResume && jobRolesReady
 
   return {
@@ -62,13 +63,23 @@ export function computeStepStates(inputs: StepStackInputs): StepStackStates {
           ? "ready"
           : "active",
     search: !rolesEffectivelyReady ? "locked" : "ready",
-    tailor: !hasMasterResume ? "locked" : hasTailored ? "ready" : "active",
-    applications: !hasTailored
+    capture: !rolesEffectivelyReady ? "locked" : hasJd ? "ready" : "active",
+    tailor: !hasMasterResume
+      ? "locked"
+      : !hasJd
+        ? "locked"
+        : hasTailored
+          ? "ready"
+          : "active",
+    apply: !hasMasterResume || !rolesEffectivelyReady || !hasTailored
       ? "locked"
       : hasApplications
         ? "ready"
         : "active",
-    // Prepare (interviews) is always locked in v1.
-    prepare: "locked",
+    applications: !rolesEffectivelyReady
+      ? "locked"
+      : hasApplications
+        ? "ready"
+        : "active",
   }
 }
