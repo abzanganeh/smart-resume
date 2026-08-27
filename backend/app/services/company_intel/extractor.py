@@ -214,7 +214,8 @@ async def extract_from_jd(
     )
 
     try:
-        raw = await llm.complete(messages, max_tokens=400, temperature=0.0)
+        with llm_accounting_context(step="company_intel"):
+            raw = await llm.complete(messages, max_tokens=400, temperature=0.0)
     except Exception as exc:
         log.warning("company_intel_llm_error", company_name=company_name, error=str(exc))
         return None

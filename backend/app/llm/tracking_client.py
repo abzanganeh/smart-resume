@@ -36,12 +36,31 @@ class TrackingLLMClient(LLMClient):
         max_tokens: int = 4096,
         temperature: float = 0.2,
     ) -> AsyncIterator[str]:
+        parts: list[str] = []
         async for chunk in self._inner.stream(
             messages,
             max_tokens=max_tokens,
             temperature=temperature,
         ):
+            parts.append(chunk)
             yield chunk
+
+        input_tokens = int(getattr(self._inner, "last_stream_input_tokens", 0) or 0)
+        output_tokens = int(getattr(self._inner, "last_stream_output_tokens", 0) or 0)
+        text = "".join(parts)
+        if output_tokens <= 0 and text:
+            output_tokens = max(1, len(text) // 4)
+
+        if text or input_tokens > 0 or output_tokens > 0:
+            await record_llm_response(
+                LLMResponse(
+                    content=text,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    model=self._inner.model_name,
+                    provider=self._inner.provider_name,
+                )
+            )
 
     @property
     def context_window(self) -> int:

@@ -18,6 +18,7 @@ from app.agent import job_title_suggestions
 from app.agent.title_fit_insights import enrich_title_suggestions
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
@@ -300,15 +301,19 @@ async def get_title_suggestions(
 
     llm_client = None
     try:
-        llm_client = get_llm_client_for_step("job_title_suggestions")
+        with llm_accounting_context(step="job_title_suggestions", user_id=str(user.id)):
+            llm_client = get_llm_client_for_step("job_title_suggestions")
+            suggestions, held, source = await job_title_suggestions.suggest_job_titles(
+                resume_text=resume.raw_text,
+                parsed_sections=resume.parsed_sections,
+                llm_client=llm_client,
+            )
     except Exception:  # noqa: BLE001
-        llm_client = None
-
-    suggestions, held, source = await job_title_suggestions.suggest_job_titles(
-        resume_text=resume.raw_text,
-        parsed_sections=resume.parsed_sections,
-        llm_client=llm_client,
-    )
+        suggestions, held, source = await job_title_suggestions.suggest_job_titles(
+            resume_text=resume.raw_text,
+            parsed_sections=resume.parsed_sections,
+            llm_client=None,
+        )
     enriched = enrich_title_suggestions(
         suggestions,
         resume_text=resume.raw_text or "",
@@ -704,31 +709,32 @@ async def fit_job(
         db, user=user, action=QuotaAction.fit_analysis, charge=True
     )
 
-    llm = get_llm_client_for_step("job_fit")
-    import asyncio
+    with llm_accounting_context(step="job_fit", user_id=str(user.id)):
+        llm = get_llm_client_for_step("job_fit")
+        import asyncio
 
-    queue: asyncio.Queue = asyncio.Queue()
-    try:
-        output = await job_fit_agent.run(
-            db,
-            user_id=user.id,
-            jd_text=row.description,
-            llm=llm,
-            event_queue=queue,
-        )
-    except MasterResumeRequiredError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "master_resume_required",
-                "message": "Upload a master resume on /profile before running fit analysis.",
-            },
-        )
-    except Exception as exc:
-        await db.rollback()
-        log.exception("jobs.fit_failed", error=str(exc))
-        raise HTTPException(status_code=500, detail="Fit analysis failed.") from exc
+        queue: asyncio.Queue = asyncio.Queue()
+        try:
+            output = await job_fit_agent.run(
+                db,
+                user_id=user.id,
+                jd_text=row.description,
+                llm=llm,
+                event_queue=queue,
+            )
+        except MasterResumeRequiredError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "master_resume_required",
+                    "message": "Upload a master resume on /profile before running fit analysis.",
+                },
+            )
+        except Exception as exc:
+            await db.rollback()
+            log.exception("jobs.fit_failed", error=str(exc))
+            raise HTTPException(status_code=500, detail="Fit analysis failed.") from exc
 
     analysis_id = uuid.uuid4()
     fit_row = FitAnalysis(

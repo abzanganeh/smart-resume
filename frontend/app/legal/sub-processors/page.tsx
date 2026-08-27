@@ -74,13 +74,6 @@ const SUBPROCESSORS: Subprocessor[] = [
     privacyUrl: "https://policies.google.com/privacy",
   },
   {
-    name: "Anthropic",
-    purpose:
-      "Retained as a standby LLM provider.  No plan currently routes résumé or job-description text to Anthropic; disclosed here because the integration remains in place and may be re-enabled.",
-    region: "Global (US headquartered)",
-    privacyUrl: "https://www.anthropic.com/legal/privacy",
-  },
-  {
     name: "OpenAI",
     purpose:
       "Platform-owned embedding model (used for master-résumé chunk retrieval and fit scoring) and Whisper speech-to-text for voice input on paid plans.  We do not accept customer-supplied API keys.",

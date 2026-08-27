@@ -22,6 +22,7 @@ from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.llm.structured import complete_structured
 from app.models.job_description import JobDescription
 from app.models.resume import ParsedResume
@@ -104,8 +105,9 @@ async def upload_resume(
 
     raw_text = validate_resume_text(raw_text)
 
-    llm = get_llm_client_for_step("resume_structure")
-    parsed = await _structure_resume(raw_text, llm)
+    with llm_accounting_context(session_id, "resume_structure"):
+        llm = get_llm_client_for_step("resume_structure")
+        parsed = await _structure_resume(raw_text, llm)
 
     session.resume_raw = raw_text
     session.resume_parsed = parsed
@@ -129,8 +131,9 @@ async def paste_resume(
 
     text = validate_resume_text(body.text)
 
-    llm = get_llm_client_for_step("resume_structure")
-    parsed = await _structure_resume(text, llm)
+    with llm_accounting_context(session_id, "resume_structure"):
+        llm = get_llm_client_for_step("resume_structure")
+        parsed = await _structure_resume(text, llm)
 
     session.resume_raw = text
     session.resume_parsed = parsed
@@ -209,13 +212,14 @@ async def suggest_audit_bullet_fixes(
     if not body.indices:
         raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
 
-    llm = get_llm_client_for_step("mechanical_fixes")
-    fixes = await suggest_bullet_fixes(
-        llm,
-        session=session,
-        issues=audit.bullet_issues,
-        indices=body.indices,
-    )
+    with llm_accounting_context(session_id, "mechanical_fixes"):
+        llm = get_llm_client_for_step("mechanical_fixes")
+        fixes = await suggest_bullet_fixes(
+            llm,
+            session=session,
+            issues=audit.bullet_issues,
+            indices=body.indices,
+        )
     return SuggestBulletFixesResponse(fixes=fixes)
 
 

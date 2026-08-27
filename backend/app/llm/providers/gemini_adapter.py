@@ -200,6 +200,16 @@ class GeminiAdapter(LLMClient):
             ),
             stream=True,
         )
+        self.last_stream_input_tokens = 0
+        self.last_stream_output_tokens = 0
         async for chunk in resp:
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage is not None:
+                prompt_tokens = getattr(usage, "prompt_token_count", None)
+                candidate_tokens = getattr(usage, "candidates_token_count", None)
+                if prompt_tokens:
+                    self.last_stream_input_tokens = int(prompt_tokens)
+                if candidate_tokens:
+                    self.last_stream_output_tokens = int(candidate_tokens)
             if chunk.text:
                 yield chunk.text

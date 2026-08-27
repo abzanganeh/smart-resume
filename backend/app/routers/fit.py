@@ -19,6 +19,7 @@ from app.agent import job_fit as job_fit_agent
 from app.config import settings
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
 from app.models.fit_analysis import FitAnalysis
@@ -271,13 +272,14 @@ async def analyze_fit(
 
         async def run_and_signal():
             try:
-                output = await job_fit_agent.run(
-                    db,
-                    user_id=user.id,
-                    jd_text=resolved_jd,
-                    llm=llm,
-                    event_queue=event_queue,
-                )
+                with llm_accounting_context(step="job_fit", user_id=str(user.id)):
+                    output = await job_fit_agent.run(
+                        db,
+                        user_id=user.id,
+                        jd_text=resolved_jd,
+                        llm=llm,
+                        event_queue=event_queue,
+                    )
                 row = FitAnalysis(
                     id=analysis_id,
                     user_id=user.id,

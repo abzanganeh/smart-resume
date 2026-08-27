@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from datetime import datetime, timezone
 from typing import Iterator
 
 import structlog
@@ -14,6 +15,9 @@ from app.llm.pricing import estimate_cost
 from app.services import session_store
 
 log = structlog.get_logger()
+
+_PLATFORM_USAGE_TTL_SECONDS = 90 * 24 * 3600
+_USER_USAGE_TTL_SECONDS = 90 * 24 * 3600
 
 
 class SessionTokenBudgetExceeded(Exception):
@@ -29,6 +33,7 @@ class SessionTokenBudgetExceeded(Exception):
 
 _llm_session_id: ContextVar[str | None] = ContextVar("llm_session_id", default=None)
 _llm_step: ContextVar[str | None] = ContextVar("llm_step", default=None)
+_llm_user_id: ContextVar[str | None] = ContextVar("llm_user_id", default=None)
 
 
 class LLMRunRecord(BaseModel):
@@ -52,31 +57,72 @@ def _usage_key(session_id: str) -> str:
     return f"llm_usage:{session_id}"
 
 
+def _user_usage_key(user_id: str) -> str:
+    return f"llm_usage:user:{user_id}"
+
+
+def _platform_usage_key(day: str | None = None) -> str:
+    utc_day = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return f"llm_usage:platform:{utc_day}"
+
+
 @contextmanager
-def llm_accounting_context(session_id: str, step: str) -> Iterator[None]:
-    """Bind resume session + pipeline step for downstream LLM token recording."""
-    session_token: Token[str | None] = _llm_session_id.set(session_id)
-    step_token: Token[str | None] = _llm_step.set(step)
+def llm_accounting_context(
+    session_id: str | None = None,
+    step: str = "unknown",
+    *,
+    user_id: str | None = None,
+) -> Iterator[None]:
+    """Bind session, user, and pipeline step for downstream LLM token recording."""
+    tokens: list[Token[str | None]] = []
+    if session_id is not None:
+        tokens.append(("session", _llm_session_id.set(session_id)))
+    if step:
+        tokens.append(("step", _llm_step.set(step)))
+    if user_id is not None:
+        tokens.append(("user", _llm_user_id.set(user_id)))
     try:
         yield
     finally:
-        _llm_session_id.reset(session_token)
-        _llm_step.reset(step_token)
+        for kind, token in reversed(tokens):
+            if kind == "session":
+                _llm_session_id.reset(token)
+            elif kind == "step":
+                _llm_step.reset(token)
+            else:
+                _llm_user_id.reset(token)
 
 
-async def _load_runs(session_id: str) -> list[LLMRunRecord]:
-    raw = await session_store.redis_get(_usage_key(session_id))
+async def _load_records(key: str) -> list[LLMRunRecord]:
+    raw = await session_store.redis_get(key)
     if not raw:
         return []
     payload = json.loads(raw)
     return [LLMRunRecord.model_validate(item) for item in payload]
 
 
-async def _save_runs(session_id: str, runs: list[LLMRunRecord]) -> None:
+async def _save_records(key: str, runs: list[LLMRunRecord], *, ttl_seconds: int) -> None:
     await session_store.redis_set(
-        _usage_key(session_id),
+        key,
         json.dumps([run.model_dump() for run in runs]),
-        ex=settings.SESSION_TTL_SECONDS,
+        ex=ttl_seconds,
+    )
+
+
+async def _append_record(key: str, record: LLMRunRecord, *, ttl_seconds: int) -> list[LLMRunRecord]:
+    runs = await _load_records(key)
+    runs.append(record)
+    await _save_records(key, runs, ttl_seconds=ttl_seconds)
+    return runs
+
+
+def _totals_from_runs(runs: list[LLMRunRecord]) -> SessionTokenTotals:
+    return SessionTokenTotals(
+        input_tokens=sum(run.input_tokens for run in runs),
+        output_tokens=sum(run.output_tokens for run in runs),
+        estimated_cost_usd=round(sum(run.estimated_cost_usd for run in runs), 6),
+        run_count=len(runs),
+        runs=runs,
     )
 
 
@@ -85,9 +131,11 @@ async def record_llm_response(
     *,
     step: str | None = None,
     session_id: str | None = None,
+    user_id: str | None = None,
 ) -> LLMRunRecord:
     """Persist provider-reported token counts for one completion (content never logged)."""
     sid = session_id or _llm_session_id.get()
+    uid = user_id or _llm_user_id.get()
     step_name = step or _llm_step.get() or "unknown"
     cost = estimate_cost(
         response.input_tokens,
@@ -106,6 +154,7 @@ async def record_llm_response(
     log.info(
         "llm_run_tokens",
         session_id=sid,
+        user_id=uid,
         step=step_name,
         provider=response.provider,
         model=response.model,
@@ -113,19 +162,25 @@ async def record_llm_response(
         output_tokens=response.output_tokens,
         estimated_cost_usd=cost,
     )
-    if sid:
-        runs = await _load_runs(sid)
-        runs.append(record)
-        await _save_runs(sid, runs)
-        used = session_token_total(
-            SessionTokenTotals(
-                input_tokens=sum(r.input_tokens for r in runs),
-                output_tokens=sum(r.output_tokens for r in runs),
-                estimated_cost_usd=round(sum(r.estimated_cost_usd for r in runs), 6),
-                run_count=len(runs),
-                runs=runs,
-            )
+
+    await _append_record(
+        _platform_usage_key(),
+        record,
+        ttl_seconds=_PLATFORM_USAGE_TTL_SECONDS,
+    )
+    if uid:
+        await _append_record(
+            _user_usage_key(uid),
+            record,
+            ttl_seconds=_USER_USAGE_TTL_SECONDS,
         )
+    if sid:
+        runs = await _append_record(
+            _usage_key(sid),
+            record,
+            ttl_seconds=settings.SESSION_TTL_SECONDS,
+        )
+        used = session_token_total(_totals_from_runs(runs))
         ceiling = settings.SESSION_LLM_TOKEN_CEILING
         if used >= ceiling:
             raise SessionTokenBudgetExceeded(sid, used=used, ceiling=ceiling)
@@ -134,14 +189,20 @@ async def record_llm_response(
 
 async def get_session_token_totals(session_id: str) -> SessionTokenTotals:
     """Return per-run records and summed token/cost totals for a resume session."""
-    runs = await _load_runs(session_id)
-    return SessionTokenTotals(
-        input_tokens=sum(run.input_tokens for run in runs),
-        output_tokens=sum(run.output_tokens for run in runs),
-        estimated_cost_usd=round(sum(run.estimated_cost_usd for run in runs), 6),
-        run_count=len(runs),
-        runs=runs,
-    )
+    runs = await _load_records(_usage_key(session_id))
+    return _totals_from_runs(runs)
+
+
+async def get_user_token_totals(user_id: str) -> SessionTokenTotals:
+    """Return per-run records and summed token/cost totals for a user."""
+    runs = await _load_records(_user_usage_key(user_id))
+    return _totals_from_runs(runs)
+
+
+async def get_platform_token_totals(day: str | None = None) -> SessionTokenTotals:
+    """Return summed token/cost totals for platform-managed LLM usage on a UTC day."""
+    runs = await _load_records(_platform_usage_key(day))
+    return _totals_from_runs(runs)
 
 
 def session_token_total(totals: SessionTokenTotals) -> int:
@@ -159,5 +220,15 @@ async def assert_session_within_token_ceiling(session_id: str) -> SessionTokenTo
 
 
 async def clear_session_token_totals(session_id: str) -> None:
-    """Reset stored usage — for tests only."""
+    """Reset stored session usage — for tests only."""
     await session_store.redis_delete(_usage_key(session_id))
+
+
+async def clear_user_token_totals(user_id: str) -> None:
+    """Reset stored user usage — for tests only."""
+    await session_store.redis_delete(_user_usage_key(user_id))
+
+
+async def clear_platform_token_totals(day: str | None = None) -> None:
+    """Reset stored platform usage — for tests only."""
+    await session_store.redis_delete(_platform_usage_key(day))

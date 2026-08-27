@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent import cover_letter as cover_letter_agent
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.limiter import limiter
 from app.models.cover_letter import CoverLetterTone
 from app.services.billing.exceptions import (
@@ -122,13 +123,18 @@ async def generate_cover_letter(
                         "message": "Session not found.",
                     })
                     return
-                output = await cover_letter_agent.run(
-                    refreshed,
-                    llm,
-                    event_queue,
-                    tone=body.tone,
-                    custom_hook=body.custom_hook,
-                )
+                with llm_accounting_context(
+                    session_id,
+                    "cover_letter",
+                    user_id=str(user.id),
+                ):
+                    output = await cover_letter_agent.run(
+                        refreshed,
+                        llm,
+                        event_queue,
+                        tone=body.tone,
+                        custom_hook=body.custom_hook,
+                    )
                 session_after = await get_session(session_id)
                 if session_after is not None:
                     session_after.cover_letter_output = output
