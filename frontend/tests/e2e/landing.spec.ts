@@ -111,20 +111,21 @@ test.describe("career discovery", () => {
 })
 
 test.describe("journey", () => {
-  test("renders all six stages in order", async ({ page }) => {
+  test("renders all seven stages in order", async ({ page }) => {
     const headings = page
       .getByRole("list", { name: "Job search stages" })
       .getByRole("heading", { level: 3 })
 
     // The rail prefixes each stage with its letter marker, so the heading text
-    // is "A — Tell your story", not the bare title.
+    // is "A — Build your master resume", not the bare title.
     await expect(headings).toHaveText([
-      "A — Tell your story",
-      "B — Discover where you fit",
-      "C — Watch the companies you want",
-      "D — Make every application fit",
-      "E — Apply without the busywork",
-      "F — Keep moving",
+      "A — Build your master resume",
+      "B — Choose roles to search for",
+      "C — Search jobs",
+      "D — Capture a job posting",
+      "E — Tailor your resume",
+      "F — Apply with autofill",
+      "G — Track applications",
     ])
   })
 
@@ -136,7 +137,7 @@ test.describe("journey", () => {
     const jobs = page
       .getByRole("list", { name: "Job search stages" })
       .getByRole("listitem")
-      .filter({ hasText: /watch the companies you want/i })
+      .filter({ hasText: /search jobs/i })
     await expect(jobs).toHaveCount(1)
     await expect(jobs.getByText("Free · expanded on paid")).toBeVisible()
     await expect(
@@ -148,7 +149,7 @@ test.describe("journey", () => {
     const discover = page
       .getByRole("list", { name: "Job search stages" })
       .getByRole("listitem")
-      .filter({ hasText: /discover where you fit/i })
+      .filter({ hasText: /choose roles to search for/i })
     await expect(discover).toHaveCount(1)
     await expect(discover.getByText(/paid/i)).toHaveCount(0)
   })
@@ -168,12 +169,12 @@ test.describe("journey", () => {
     const panel = page.locator("#journey-panel")
     await expect(panel).toHaveAttribute("data-active-stage", "story")
     await expect(panel.getByRole("heading", { level: 3 })).toHaveText(
-      /tell your story/i,
+      /build your master resume/i,
     )
 
     await page.locator('[data-journey-marker="jobs"]').scrollIntoViewIfNeeded()
     await expect(panel).toHaveAttribute("data-active-stage", "jobs")
-    await expect(panel).toContainText(/watch the companies you want/i)
+    await expect(panel).toContainText(/search jobs/i)
   })
 })
 

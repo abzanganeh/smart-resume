@@ -7,11 +7,15 @@ import {
 } from "@/lib/marketing/journey";
 
 describe("JOURNEY_STEPS", () => {
-  it("covers the six stages in order", () => {
-    assert.equal(JOURNEY_STEPS.length, 6);
+  it("covers the seven stages in order", () => {
+    assert.equal(JOURNEY_STEPS.length, 7);
     assert.deepEqual(
       JOURNEY_STEPS.map((s) => s.step),
-      [1, 2, 3, 4, 5, 6],
+      [1, 2, 3, 4, 5, 6, 7],
+    );
+    assert.deepEqual(
+      JOURNEY_STEPS.map((s) => s.id),
+      ["story", "discover", "jobs", "capture", "tailor", "apply", "track"],
     );
   });
 

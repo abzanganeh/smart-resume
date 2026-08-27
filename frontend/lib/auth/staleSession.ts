@@ -7,6 +7,7 @@ export const STALE_AUTH_MESSAGES = new Set([
   "refresh_token_invalid",
   "refresh_token_expired",
   "refresh_token_reuse",
+  "session_replaced",
 ])
 
 export function isStaleAuthError(message: string): boolean {

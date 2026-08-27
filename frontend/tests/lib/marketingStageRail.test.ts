@@ -12,15 +12,15 @@ import {
 import { JOURNEY_STEPS } from "@/lib/marketing/journey";
 
 describe("stageLetter", () => {
-  it("labels the stages A through F, matching the six-stage journey", () => {
+  it("labels the stages A through G, matching the seven-stage journey", () => {
     assert.equal(stageLetter(0), "A");
-    assert.equal(stageLetter(5), "F");
+    assert.equal(stageLetter(6), "G");
     assert.equal(STAGE_LETTERS.length, JOURNEY_STEPS.length);
   });
 
   it("falls back to a number past the letter range rather than throwing", () => {
-    // The rail is decorative. A seventh stage must not blank the section.
-    assert.equal(stageLetter(6), "7");
+    // The rail is decorative. An eighth stage must not blank the section.
+    assert.equal(stageLetter(7), "8");
   });
 
   it("ignores a negative or non-integer index", () => {

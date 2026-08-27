@@ -2,6 +2,26 @@ import type { FitAnalysisOutput } from "./api"
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
+function formatJobsApiError(detail: unknown, status: number): string {
+  if (typeof detail === "string" && detail.trim()) return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: string }).msg)
+        }
+        return null
+      })
+      .filter((msg): msg is string => Boolean(msg))
+    if (messages.length > 0) return messages.join("; ")
+  }
+  if (detail && typeof detail === "object" && "message" in detail) {
+    return String((detail as { message: string }).message)
+  }
+  return `HTTP ${status}`
+}
+
 async function jobsRequest<T>(
   path: string,
   token: string,
@@ -18,8 +38,11 @@ async function jobsRequest<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const detail = body?.detail
-    const code = typeof detail === "object" ? detail?.code : detail
-    const err = new Error(code ?? detail ?? `HTTP ${res.status}`) as Error & {
+    const code =
+      typeof detail === "object" && detail !== null && !Array.isArray(detail)
+        ? (detail as { code?: string }).code
+        : undefined
+    const err = new Error(formatJobsApiError(detail, res.status)) as Error & {
       code?: string
       status?: number
     }
@@ -104,6 +127,7 @@ export interface JobPreferences {
   preferred_titles_confirmed?: boolean
   preferred_titles_stale?: boolean
   min_preferred_titles?: number
+  max_preferred_titles?: number
 }
 
 export interface JobTitleSuggestion {
@@ -138,7 +162,8 @@ export interface PreferredTitlesResponse {
   min_required: number
 }
 
-export const MIN_PREFERRED_JOB_TITLES = 5
+export const MIN_PREFERRED_JOB_TITLES = 1
+export const MAX_PREFERRED_JOB_TITLES = 12
 
 export interface JobFitResponse {
   analysis_id: string

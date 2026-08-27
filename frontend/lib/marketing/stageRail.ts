@@ -10,7 +10,7 @@
  * out-of-range input must produce a usable number rather than `NaN`.
  */
 
-export const STAGE_LETTERS = ["A", "B", "C", "D", "E", "F"] as const;
+export const STAGE_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
 
 export interface StageTheme {
   /** Stable identifier for the hue, used to assert one colour per stage. */
@@ -65,6 +65,14 @@ const THEMES: Record<string, StageTheme> = {
     badge: "bg-sky-50 dark:bg-sky-950/60",
     border: "border-sky-400/70",
     glow: "14 165 233",
+  },
+  capture: {
+    accent: "cyan",
+    text: "text-cyan-700 dark:text-cyan-400",
+    dot: "bg-cyan-500",
+    badge: "bg-cyan-50 dark:bg-cyan-950/60",
+    border: "border-cyan-400/70",
+    glow: "6 182 212",
   },
   tailor: {
     accent: "amber",

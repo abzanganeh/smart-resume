@@ -28,6 +28,12 @@ export interface DashboardStepCardProps {
   primaryLabel?: string
   secondaryHref?: string
   secondaryLabel?: string
+  /**
+   * On a prerequisite-locked step, optional escape hatch so power users can
+   * jump ahead without implying the recommended path is complete.
+   */
+  skipHref?: string
+  skipLabel?: string
   /** When true and `ready`, render the full-height card. Default: slim. */
   expandedWhenReady?: boolean
   /**
@@ -51,10 +57,13 @@ export function DashboardStepCard({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
+  skipHref,
+  skipLabel,
   expandedWhenReady = false,
   comingSoon = false,
   testId,
 }: DashboardStepCardProps) {
+  const isExternal = (href: string) => /^https?:\/\//i.test(href)
   const slim = ready && !expandedWhenReady
   const border = ready
     ? "border-emerald-400/30 bg-emerald-400/5"
@@ -102,6 +111,8 @@ export function DashboardStepCard({
           <div className="flex flex-row gap-2 shrink-0 w-full sm:w-auto">
             <Link
               href={primaryHref}
+              target={isExternal(primaryHref) ? "_blank" : undefined}
+              rel={isExternal(primaryHref) ? "noopener noreferrer" : undefined}
               className="flex-1 sm:flex-none min-h-[40px] px-4 py-2.5 sm:py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-lg transition-colors text-sm sm:text-xs text-center inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
             >
               {primaryLabel}
@@ -151,12 +162,24 @@ export function DashboardStepCard({
             )}
           </p>
           <p className="text-slate-600 dark:text-slate-400 text-sm">{description}</p>
+          {locked && skipHref && skipLabel && (
+            <Link
+              href={skipHref}
+              target={isExternal(skipHref) ? "_blank" : undefined}
+              rel={isExternal(skipHref) ? "noopener noreferrer" : undefined}
+              className="inline-flex mt-2 text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
+            >
+              {skipLabel}
+            </Link>
+          )}
         </div>
       </div>
       {!locked && primaryHref && primaryLabel && (
         <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
           <Link
             href={primaryHref}
+            target={isExternal(primaryHref) ? "_blank" : undefined}
+            rel={isExternal(primaryHref) ? "noopener noreferrer" : undefined}
             className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold rounded-xl transition-colors text-sm text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
           >
             {primaryLabel}

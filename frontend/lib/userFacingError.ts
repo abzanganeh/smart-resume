@@ -29,7 +29,10 @@ export function userFacingError(error: unknown): {
     }
     if (error.status === 401 || error.code === "unauthorized") {
       return {
-        message: "Your session expired. Sign in again and retry.",
+        message:
+          error.code === "session_replaced"
+            ? "You signed in somewhere else. Sign in again to continue."
+            : "Your session expired. Sign in again and retry.",
         code: error.code ?? "unauthorized",
       };
     }

@@ -1,5 +1,6 @@
 import { byokHeaders } from "./keyStore";
 import { getSession } from "next-auth/react";
+import { notifySessionRevoked, parseApiErrorDetail } from "./parseApiError";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -19,39 +20,7 @@ function formatApiErrorMessage(
   detail: unknown,
   status: number,
 ): { message: string; code?: string } {
-  if (typeof detail === "string") {
-    return { message: detail };
-  }
-  if (detail && typeof detail === "object") {
-    const d = detail as Record<string, unknown>;
-    const code = typeof d.code === "string" ? d.code : undefined;
-    const candidate = d.message ?? d.error;
-    if (typeof candidate === "string") {
-      return { message: candidate, code };
-    }
-    if (code === "insufficient_credits") {
-      const action = typeof d.action === "string" ? d.action : undefined;
-      if (action === "ats_recalc") {
-        return {
-          code,
-          message:
-            "You're out of credits. ATS score recalculation costs 1 credit.",
-        };
-      }
-      return {
-        code,
-        message: "You're out of credits. Subscribe from Billing to keep going.",
-      };
-    }
-    if (code === "subscription_required") {
-      return { code, message: "This feature requires an active subscription." };
-    }
-    if (typeof code === "string") {
-      return { message: code, code };
-    }
-    return { message: JSON.stringify(detail) };
-  }
-  return { message: `HTTP ${status}` };
+  return parseApiErrorDetail(detail, status);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -81,6 +50,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const { message, code } = formatApiErrorMessage(body?.detail, res.status);
+    notifySessionRevoked(code);
     throw new ApiError(message, res.status, code);
   }
   return res.json() as Promise<T>;
@@ -1154,6 +1124,7 @@ export interface DashboardSummaryResponse {
     master_chunks: number;
     applications: number;
     saved_jobs: number;
+    job_descriptions: number;
   };
   recent_activity: DashboardActivityItem[];
   ats_trend: Array<{

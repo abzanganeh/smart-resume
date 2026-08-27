@@ -10,7 +10,7 @@
  * detail disclosure so gating can never drift between the places we state it.
  */
 
-import { PRODUCT_NAME } from "@/lib/brand";
+import { COMPANY_LINE, FLINT_DESKTOP_URL, FLINT_PRODUCT_NAME, PRODUCT_NAME } from "@/lib/brand";
 
 /**
  * `mixed` means partially usable on the free tier. Job search is the only such
@@ -38,7 +38,7 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   {
     id: "story",
     step: 1,
-    title: "Tell your story",
+    title: "Build your master resume",
     description:
       `Speak your career out loud, upload an existing resume, or answer a coached interview. ${PRODUCT_NAME} turns it into a master resume you only build once.`,
     access: "free",
@@ -49,9 +49,9 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   {
     id: "discover",
     step: 2,
-    title: "Discover where you fit",
+    title: "Choose roles to search for",
     description:
-      `${PRODUCT_NAME} reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. You do not have to know what to search for.`,
+      `${PRODUCT_NAME} reads your master resume and suggests ten realistic job titles, each with a fit score and the strengths and gaps behind it. Pick the ones you want — or add your own — up to twelve roles.`,
     access: "free",
     ctaLabel: "See my career options",
     ctaHref: REGISTER,
@@ -59,21 +59,31 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   {
     id: "jobs",
     step: 3,
-    title: "Watch the companies you want",
+    title: "Search jobs",
     description:
-      `Name the employers you care about. ${PRODUCT_NAME} reads their careers pages directly, every 15 to 45 minutes, and tells you when a role opens — usually before it reaches the big job boards. Search the wider corpus any time.`,
+      `Search our company job corpus with your target roles. ${PRODUCT_NAME} surfaces real openings from hundreds of tech employers — and Career Watch can alert you when a company you follow posts a new role.`,
     access: "mixed",
     accessNote:
-      "Free plans watch one company every 30 minutes and search the corpus once you confirm five titles. Paid plans watch more companies, check more often, and add expanded search and fit scoring.",
-    ctaLabel: "Watch a company",
+      "Free plans watch one company every 30 minutes and search the corpus once you confirm your target job titles. Paid plans watch more companies, check more often, and add expanded search and fit scoring.",
+    ctaLabel: "Search the job corpus",
+    ctaHref: REGISTER,
+  },
+  {
+    id: "capture",
+    step: 4,
+    title: "Capture a job posting",
+    description:
+      `On Greenhouse, Lever, Ashby, and similar sites, the ${PRODUCT_NAME} browser extension captures the full job description in one click — no copy-paste. You can also save a posting from in-app search.`,
+    access: "free",
+    ctaLabel: "See how capture works",
     ctaHref: REGISTER,
   },
   {
     id: "tailor",
-    step: 4,
-    title: "Make every application fit",
+    step: 5,
+    title: "Tailor your resume",
     description:
-      `Paste the job description. ${PRODUCT_NAME} extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.`,
+      `Paste a job description or send one from the extension. ${PRODUCT_NAME} extracts every must-have keyword, audits your resume against it, rewrites from your real experience, and scores the result.`,
     access: "free",
     accessNote: "One credit per tailored resume on the free plan.",
     ctaLabel: "Check my resume free",
@@ -81,19 +91,19 @@ export const JOURNEY_STEPS: readonly JourneyStep[] = [
   },
   {
     id: "apply",
-    step: 5,
-    title: "Apply without the busywork",
+    step: 6,
+    title: "Apply with autofill",
     description:
-      "Export a clean PDF or DOCX, generate a matching cover letter from the same evidence, and send the application the same day.",
+      `Return to the employer site with the ${PRODUCT_NAME} extension and autofill application forms from your tailored resume. Export a clean PDF or DOCX and generate a matching cover letter from the same evidence when you are ready to submit.`,
     access: "free",
-    accessNote: "One credit per cover letter on the free plan.",
-    ctaLabel: "Export and apply",
+    accessNote: "Autofill is free. One credit per cover letter on the free plan.",
+    ctaLabel: "Start applying faster",
     ctaHref: REGISTER,
   },
   {
     id: "track",
-    step: 6,
-    title: "Keep moving",
+    step: 7,
+    title: "Track applications",
     description:
       "Every application lands on a board from Draft through Applied, Interviewing, and Offer, with notes and status history so nothing goes quiet unnoticed.",
     access: "free",
@@ -121,3 +131,11 @@ export function journeyStepById(id: string): JourneyStep {
   }
   return step;
 }
+
+/** Flint desktop co-pilot — separate product, shown below the numbered journey. */
+export const FLINT_COMING_SOON = {
+  productName: FLINT_PRODUCT_NAME,
+  description:
+    `Live interview co-pilot — a separate desktop app ${COMPANY_LINE}. Not included in your ${PRODUCT_NAME} subscription. Early access handoff is available from tailored sessions.`,
+  learnMoreUrl: FLINT_DESKTOP_URL,
+} as const;
