@@ -172,8 +172,8 @@ def _user_facing_error(exc: BaseException) -> str:
     kind = _classify_error(exc)
     messages = {
         "llm_insufficient_credits": (
-            "The AI provider rejected the request because its API credits are exhausted (402). "
-            "Add credits to your provider account or switch to Gemini in AI settings, then retry."
+            "The AI service is out of credit on our side (402). "
+            "Retry in a moment — if it keeps failing, contact support."
         ),
         "llm_rate_limit": (
             "The AI model hit its rate limit. Wait a moment and retry — "

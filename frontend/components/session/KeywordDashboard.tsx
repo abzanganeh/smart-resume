@@ -101,7 +101,7 @@ export function KeywordDashboard({ output, streaming, claimedKeywords = [] }: Pr
         )}
         <p className="text-slate-600 dark:text-slate-400 text-xs mt-1.5">
           {mustHaveTotal === 0
-            ? "No must-have keywords were extracted — use Retry or try a stronger model."
+            ? "No must-have keywords were extracted — use Retry, or paste a fuller job description."
             : mustHaveTotal - effectivePresent > 0
             ? `${mustHaveTotal - effectivePresent} must-have keyword${mustHaveTotal - effectivePresent > 1 ? "s" : ""} will be added by the rewrite.`
             : "All must-have keywords are already covered."}

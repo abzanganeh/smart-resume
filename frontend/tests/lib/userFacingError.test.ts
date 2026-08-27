@@ -22,6 +22,18 @@ describe("userFacingError", () => {
     assert.equal(out.code, "llm_insufficient_credits");
   });
 
+  it("never sends the user to a third-party provider to top up", () => {
+    // BYOK is retired: Platform AI runs on our keys, so a provider billing
+    // failure is not something the user can resolve at OpenRouter or Google.
+    const out = userFacingError(new Error("402: not enough credits"));
+    assert.ok(out.helpUrl, "keeps a help link");
+    assert.ok(
+      out.helpUrl!.startsWith("/"),
+      `helpUrl must stay in-product, got ${out.helpUrl}`,
+    );
+    assert.doesNotMatch(out.message, /add provider credits|switch to gemini/i);
+  });
+
   it("maps session_replaced to friendly copy", () => {
     const out = userFacingError(
       new ApiError("session_replaced", 401, "session_replaced"),

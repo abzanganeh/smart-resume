@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent import chat as chat_agent
 from app.db.engine import get_db
 from app.limiter import limiter
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.dashboard import ResumeRecord
 from app.services.dashboard.resume_record import resolve_company_name
@@ -193,12 +193,7 @@ async def chat_with_resume(
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    # Use the session's provider/model so chat works the same LLM
-    # the user already configured for their phase runs.
-    llm = get_llm_client(
-        provider=session.provider or None,
-        model=session.model or None,
-    )
+    llm = get_llm_client_for_step("chat")
     return await chat_agent.run(session, body, llm)
 
 

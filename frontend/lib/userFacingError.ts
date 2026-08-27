@@ -1,6 +1,8 @@
 import { ApiError } from "./api";
 
-const LLM_HELP_URL = "https://openrouter.ai/settings/credits";
+// Platform AI runs on our keys, so a provider billing rejection is ours to
+// fix, not something the user can top up. Point at support, not a provider.
+const LLM_HELP_URL = "/legal/contact";
 
 /** Turn API and unknown errors into user-facing copy with optional action hints. */
 export function userFacingError(error: unknown): {
@@ -22,7 +24,7 @@ export function userFacingError(error: unknown): {
       return {
         message:
           error.message ||
-          "The AI provider rejected the request — credits may be exhausted. Add provider credits or switch to Gemini, then retry.",
+          "The AI service rejected the request on our side. Retry in a moment — if it keeps failing, let us know.",
         code: error.code ?? "payment_required",
         helpUrl: LLM_HELP_URL,
       };
@@ -52,7 +54,7 @@ export function userFacingError(error: unknown): {
     if (lower.includes("402") || lower.includes("not enough credits")) {
       return {
         message:
-          "The AI provider rejected the request because credits are exhausted. Add provider credits or switch to Gemini, then retry.",
+          "The AI service is out of credit on our side. Retry in a moment — if it keeps failing, let us know.",
         code: "llm_insufficient_credits",
         helpUrl: LLM_HELP_URL,
       };

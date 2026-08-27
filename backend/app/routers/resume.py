@@ -8,7 +8,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    Header,
     HTTPException,
     Query,
     Request,
@@ -22,7 +21,7 @@ from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.base import LLMMessage
-from app.llm.factory import get_llm_client
+from app.llm.factory import get_llm_client_for_step
 from app.llm.structured import complete_structured
 from app.models.job_description import JobDescription
 from app.models.resume import ParsedResume
@@ -83,8 +82,6 @@ async def upload_resume(
     request: Request,
     session_id: str,
     file: UploadFile = File(...),
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
 ):
     session = await get_session(session_id)
     if not session:
@@ -107,17 +104,11 @@ async def upload_resume(
 
     raw_text = validate_resume_text(raw_text)
 
-    provider = x_provider or session.provider
-    model = x_model or session.model
-    llm = get_llm_client(provider, model)
+    llm = get_llm_client_for_step("resume_structure")
     parsed = await _structure_resume(raw_text, llm)
 
     session.resume_raw = raw_text
     session.resume_parsed = parsed
-    if x_provider:
-        session.provider = x_provider
-    if x_model:
-        session.model = x_model
     await update_session(session)
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
@@ -131,8 +122,6 @@ async def paste_resume(
     request: Request,
     session_id: str,
     body: ResumeTextRequest,
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
 ):
     session = await get_session(session_id)
     if not session:
@@ -140,17 +129,11 @@ async def paste_resume(
 
     text = validate_resume_text(body.text)
 
-    provider = x_provider or session.provider
-    model = x_model or session.model
-    llm = get_llm_client(provider, model)
+    llm = get_llm_client_for_step("resume_structure")
     parsed = await _structure_resume(text, llm)
 
     session.resume_raw = text
     session.resume_parsed = parsed
-    if x_provider:
-        session.provider = x_provider
-    if x_model:
-        session.model = x_model
     await update_session(session)
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
@@ -215,8 +198,6 @@ async def suggest_audit_bullet_fixes(
     request: Request,
     session_id: str,
     body: SuggestBulletFixesRequest,
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
 ) -> SuggestBulletFixesResponse:
     """Generate AI rewrite suggestions for selected Phase 2 bullet issues."""
     session = await get_session(session_id)
@@ -228,9 +209,7 @@ async def suggest_audit_bullet_fixes(
     if not body.indices:
         raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
 
-    provider = x_provider or session.provider
-    model = x_model or session.model
-    llm = get_llm_client(provider, model)
+    llm = get_llm_client_for_step("mechanical_fixes")
     fixes = await suggest_bullet_fixes(
         llm,
         session=session,
@@ -349,10 +328,9 @@ async def submit_jd(
 
     jd_changed = (session.jd_raw or "").strip() != jd_text.strip()
     session.jd_raw = jd_text
-    if body.provider:
-        session.provider = body.provider
-    if body.model:
-        session.model = body.model
+    # `body.provider` / `body.model` are accepted for wire compatibility with
+    # older clients but deliberately not stored: model choice comes from the
+    # step registry, never from the caller.
 
     # If the JD changed, all phase outputs are stale — wipe them so the
     # user is not misled by results computed from the old job description.
