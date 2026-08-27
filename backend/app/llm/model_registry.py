@@ -60,17 +60,52 @@ STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
 # Empty today — reintroducing a premium step override is one map entry.
 TIER_STEP_OVERRIDES: dict[str, dict[PipelineStep, ModelRoute]] = {}
 
+# Human-readable labels for admin UI (step id → display name).
+STEP_LABELS: dict[PipelineStep, str] = {
+    "resume_structure": "Resume parse / structure",
+    "phase1_keywords": "Phase 1 — keywords",
+    "phase2_audit": "Phase 2 — audit",
+    "phase3_rewrite": "Phase 3 — rewrite",
+    "phase3_truthfulness": "Phase 3 — truthfulness",
+    "phase4_qa": "Phase 4 — QA",
+    "phase4_narrative": "Phase 4 — narrative",
+    "phase4_rank": "Phase 4 — rank",
+    "polish": "Polish",
+    "tone_lint": "Tone lint",
+    "mechanical_fixes": "Mechanical fixes",
+    "cover_letter": "Cover letter",
+    "job_fit": "Job fit",
+    "job_title_suggestions": "Job title suggestions",
+    "title_fit_insights": "Title fit insights",
+    "story": "Story",
+    "story_coach": "Story coach",
+    "story_interview": "Story interview",
+    "story_verify": "Story verify",
+    "chat": "Session chat",
+    "company_intel": "Company intel",
+    "checkup": "Resume checkup",
+}
+
+
+def all_pipeline_steps() -> list[PipelineStep]:
+    """Return canonical step ids in stable order."""
+    return list(STEP_DEFAULTS.keys())
+
 
 def resolve_model(step: PipelineStep, tier: str | None = None) -> ModelRoute:
     """Return ``(provider, model)`` for a pipeline step.
 
-    ``tier`` is reserved for future per-plan overrides; when the override map
-    is empty every caller gets the same step default regardless of plan code.
+    Precedence: tier override map → admin DB pin cache → ``STEP_DEFAULTS``.
     """
     if tier:
         overrides = TIER_STEP_OVERRIDES.get(tier)
         if overrides and step in overrides:
             return overrides[step]
+    from app.llm.step_pin_cache import get_step_pin
+
+    pin = get_step_pin(step)
+    if pin is not None:
+        return pin
     return STEP_DEFAULTS[step]
 
 

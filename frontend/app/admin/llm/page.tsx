@@ -8,12 +8,14 @@ import {
   getAdminLLMConfigs,
   createAdminLLMConfig,
   getAdminLLMHistory,
+  getAdminStepLLMConfigs,
+  createAdminStepLLMConfig,
   updateSimilarityThreshold,
 } from "@/lib/admin/api"
-import type { LLMConfig, LLMConfigPayload } from "@/lib/admin/types"
+import type { LLMConfig, LLMConfigPayload, StepLLMConfig, StepLLMConfigPayload } from "@/lib/admin/types"
 
 const TIERS = ["standard", "better", "best"] as const
-const PROVIDERS = ["openai", "anthropic", "google", "cohere", "mistral", "groq", "together"]
+const PROVIDERS = ["openai", "anthropic", "gemini", "openrouter", "ollama"] as const
 
 // ── LLM Config Page ───────────────────────────────────────────────────────────
 
@@ -24,6 +26,8 @@ export default function AdminLLMPage() {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
   const [threshold, setThreshold] = useState(0.72)
   const [history, setHistory] = useState<LLMConfig[]>([])
+  const [stepPins, setStepPins] = useState<StepLLMConfig[]>([])
+  const [editingStep, setEditingStep] = useState<StepLLMConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingTier, setEditingTier] = useState<LLMConfig | null>(null)
@@ -40,13 +44,15 @@ export default function AdminLLMPage() {
     setLoading(true)
     setError(null)
     try {
-      const [res, hist] = await Promise.all([
+      const [res, hist, steps] = await Promise.all([
         getAdminLLMConfigs(token!),
         getAdminLLMHistory(token!),
+        getAdminStepLLMConfigs(token!),
       ])
       setConfigs(Array.isArray(res.configs) ? res.configs : [])
       setThreshold(res.similarity_threshold ?? 0.72)
       setHistory(Array.isArray(hist) ? hist : [])
+      setStepPins(Array.isArray(steps) ? steps : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load LLM configs")
     } finally {
@@ -122,6 +128,55 @@ export default function AdminLLMPage() {
               </div>
             )
           })}
+        </div>
+      </Section>
+
+      {/* ── Pipeline step pins ───────────────────────────────────────── */}
+      <Section title="Pipeline Step Pins">
+        <p className="text-xs text-slate-500 mb-4">
+          Controls which provider/model runs for each pipeline step. Changes take effect immediately — no deploy required.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-800">
+                <Th>Step</Th>
+                <Th>Provider</Th>
+                <Th>Model</Th>
+                <Th>Source</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {stepPins.map((pin) => (
+                <tr key={pin.step} className="text-slate-300">
+                  <Td>
+                    <div className="font-medium text-slate-200">{pin.label}</div>
+                    <code className="text-xs text-slate-500">{pin.step}</code>
+                  </Td>
+                  <Td>{pin.provider}</Td>
+                  <Td><code className="text-xs text-amber-300">{pin.model_string}</code></Td>
+                  <Td>
+                    <span className={clsx(
+                      "text-xs px-2 py-0.5 rounded-full",
+                      pin.source === "pin" ? "bg-emerald-900/40 text-emerald-300" : "bg-slate-800 text-slate-500",
+                    )}>
+                      {pin.source}
+                    </span>
+                  </Td>
+                  <Td className="text-right">
+                    <button
+                      onClick={() => setEditingStep(pin)}
+                      className="text-slate-500 hover:text-white transition-colors"
+                      title="Edit pin"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Section>
 
@@ -226,6 +281,19 @@ export default function AdminLLMPage() {
             await loadData()
           }}
           onClose={() => setEditingTier(null)}
+        />
+      )}
+
+      {editingStep !== null && (
+        <StepPinEditModal
+          initial={editingStep}
+          onSave={async (payload) => {
+            const res = await createAdminStepLLMConfig(token, payload)
+            showAuditToast(res.audit_log_id)
+            setEditingStep(null)
+            await loadData()
+          }}
+          onClose={() => setEditingStep(null)}
         />
       )}
     </div>
@@ -342,6 +410,84 @@ function LLMEditModal({
         </div>
 
         <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save config" />
+      </form>
+    </Modal>
+  )
+}
+
+// ── Step pin edit modal ───────────────────────────────────────────────────────
+
+function StepPinEditModal({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial: StepLLMConfig
+  onSave: (payload: StepLLMConfigPayload) => Promise<void>
+  onClose: () => void
+}) {
+  const [isPending, startTransition] = useTransition()
+  const [err, setErr] = useState<string | null>(null)
+  const [provider, setProvider] = useState(initial.provider)
+  const [model, setModel] = useState(initial.model_string)
+  const [notes, setNotes] = useState(initial.notes ?? "")
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErr(null)
+    startTransition(async () => {
+      try {
+        await onSave({
+          step: initial.step,
+          provider,
+          model_string: model,
+          notes: notes || undefined,
+        })
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Save failed")
+      }
+    })
+  }
+
+  return (
+    <Modal title={`Edit step: ${initial.label}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {err && <ErrorBanner msg={err} />}
+        <p className="text-xs text-slate-500">
+          Step id: <code className="text-slate-400">{initial.step}</code>
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Provider">
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
+              {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Model string">
+            <input
+              type="text"
+              required
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className={inputCls}
+              placeholder="gemini-3.5-flash"
+            />
+          </FormField>
+        </div>
+        <FormField label="Notes (optional)">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputCls}
+            placeholder="Why this pin changed"
+          />
+        </FormField>
+        {!initial.has_price_row && (
+          <p className="text-xs text-amber-400">
+            Current model has no pricing row — accounting may show $0 until pricing is added.
+          </p>
+        )}
+        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save pin" />
       </form>
     </Modal>
   )
