@@ -12,6 +12,7 @@ from app.agent import chat as chat_agent
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.dashboard import ResumeRecord
 from app.services.dashboard.resume_record import resolve_company_name
@@ -193,8 +194,14 @@ async def chat_with_resume(
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    llm = get_llm_client_for_step("chat")
-    return await chat_agent.run(session, body, llm)
+    user_id = getattr(session, "user_id", None)
+    with llm_accounting_context(
+        session_id,
+        "chat",
+        user_id=str(user_id) if user_id else None,
+    ):
+        llm = get_llm_client_for_step("chat")
+        return await chat_agent.run(session, body, llm)
 
 
 @router.get("/{session_id}/resume-record", response_model=SessionResumeRecordResponse)

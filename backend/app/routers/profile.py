@@ -54,6 +54,7 @@ from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
 from app.models.resume import ParsedResume
@@ -169,6 +170,7 @@ async def _structure_with_llm(
     *,
     provider: str | None,
     model: str | None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Best-effort LLM call to turn raw text into structured sections.
 
@@ -177,24 +179,20 @@ async def _structure_with_llm(
     raw-text fallback path that still produces useful chunks.
     """
     try:
-        llm = get_llm_client_for_step("chat")
-    except Exception as exc:
-        log.warning("profile.llm.unavailable", error=str(exc))
-        return {}
-
-    messages = [
-        LLMMessage(
-            role="system",
-            content=(
-                "You are a resume parser. Extract the candidate's master resume "
-                "into structured sections.  Return JSON matching the schema. "
-                "If a field is missing, return empty string or empty list."
-            ),
-        ),
-        LLMMessage(role="user", content=f"MASTER RESUME TEXT:\n{raw_text}"),
-    ]
-    try:
-        parsed: ParsedResume = await complete_structured(llm, messages, ParsedResume)
+        with llm_accounting_context(step="chat", user_id=user_id):
+            llm = get_llm_client_for_step("chat")
+            messages = [
+                LLMMessage(
+                    role="system",
+                    content=(
+                        "You are a resume parser. Extract the candidate's master resume "
+                        "into structured sections.  Return JSON matching the schema. "
+                        "If a field is missing, return empty string or empty list."
+                    ),
+                ),
+                LLMMessage(role="user", content=f"MASTER RESUME TEXT:\n{raw_text}"),
+            ]
+            parsed: ParsedResume = await complete_structured(llm, messages, ParsedResume)
     except Exception as exc:  # noqa: BLE001 — fall back to raw chunking
         log.warning("profile.llm.parse_failed", error=str(exc))
         return {}
@@ -394,7 +392,7 @@ async def create_or_replace_resume(
 
     raw = await _extract_resume_text(file=file, text_payload=text)
     parsed_sections = await _structure_with_llm(
-        raw, provider=x_provider, model=x_model
+        raw, provider=x_provider, model=x_model, user_id=str(user.id)
     )
     resume, chunks = await master_crud.replace_all_chunks(
         db,
@@ -626,39 +624,40 @@ async def create_resume_from_story(
     model = request.headers.get("X-Model", "").strip()
     story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
-    llm_client = get_llm_client_for_step("story")
+    with llm_accounting_context(step="story", user_id=str(user.id)):
+        llm_client = get_llm_client_for_step("story")
 
-    try:
-        billing = await check_quota_for_story_generate(
-            db,
-            user=user,
-            whisper_path=body.whisper_path,
-            session_id=story_session_id,
-        )
-    except CreditsLockedUntilVerificationError as exc:
-        raise HTTPException(
-            status_code=403,
-            detail=credits_locked_detail(balance=exc.balance),
-        ) from exc
-    except InsufficientCreditsError as exc:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "insufficient_credits",
-                "message": "Regenerating from your story costs 1 credit.",
-            },
-        ) from exc
+        try:
+            billing = await check_quota_for_story_generate(
+                db,
+                user=user,
+                whisper_path=body.whisper_path,
+                session_id=story_session_id,
+            )
+        except CreditsLockedUntilVerificationError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail=credits_locked_detail(balance=exc.balance),
+            ) from exc
+        except InsufficientCreditsError as exc:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "insufficient_credits",
+                    "message": "Regenerating from your story costs 1 credit.",
+                },
+            ) from exc
 
-    narrative = "\n\n---\n\n".join(seg.strip() for seg in body.segments if seg.strip())
+        narrative = "\n\n---\n\n".join(seg.strip() for seg in body.segments if seg.strip())
 
-    try:
-        draft_text = await story_to_resume(narrative, llm_client)
-    except Exception as exc:
-        log.error("story.convert_failed", error=str(exc))
-        raise HTTPException(
-            status_code=502,
-            detail={"code": "story_conversion_failed", "message": str(exc)},
-        ) from exc
+        try:
+            draft_text = await story_to_resume(narrative, llm_client)
+        except Exception as exc:
+            log.error("story.convert_failed", error=str(exc))
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "story_conversion_failed", "message": str(exc)},
+            ) from exc
 
     verify_items = [item.to_dict() for item in build_verify_items(body.segments, draft_text)]
     review_count = sum(1 for item in verify_items if item["status"] == "review")
@@ -735,7 +734,10 @@ async def save_resume_from_story(
 
     draft_text = body.resume_text.strip()
     parsed_sections = await _structure_with_llm(
-        draft_text, provider=provider or None, model=model or None
+        draft_text,
+        provider=provider or None,
+        model=model or None,
+        user_id=str(user.id),
     )
     try:
         resume, chunks = await master_crud.replace_all_chunks(
@@ -793,16 +795,17 @@ async def polish_resume_draft(
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
 
-    llm_client = get_llm_client_for_step("polish")
+    with llm_accounting_context(step="polish", user_id=str(user.id)):
+        llm_client = get_llm_client_for_step("polish")
 
-    try:
-        updated = await polish_resume(body.text, body.instruction, llm_client)
-    except Exception as exc:
-        log.error("polish.failed", error=str(exc), user_id=str(user.id))
-        raise HTTPException(
-            status_code=502,
-            detail={"code": "polish_failed", "message": str(exc)},
-        ) from exc
+        try:
+            updated = await polish_resume(body.text, body.instruction, llm_client)
+        except Exception as exc:
+            log.error("polish.failed", error=str(exc), user_id=str(user.id))
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "polish_failed", "message": str(exc)},
+            ) from exc
 
     return {"text": updated}
 
@@ -872,31 +875,32 @@ async def story_coach_endpoint(
             )
         await session.commit()
 
-    llm_client = get_llm_client_for_step("story_coach")
+    with llm_accounting_context(step="story_coach", user_id=str(user.id)):
+        llm_client = get_llm_client_for_step("story_coach")
 
-    history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
+        history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
-    import json
+        import json
 
-    async def _generate():
-        buffer = ""
-        try:
-            async for delta in coach_segment(
-                segment_text=body.segment_text,
-                history=history_dicts,
-                llm_client=llm_client,
-            ):
-                buffer += delta
-                yield f"data: {json.dumps({'delta': delta})}\n\n"
-        except Exception as exc:  # noqa: BLE001
-            log.error("story_coach.stream_error", error=str(exc))
-            yield 'data: {"error": "coach_failed"}\n\n'
-            return
+        async def _generate():
+            buffer = ""
+            try:
+                async for delta in coach_segment(
+                    segment_text=body.segment_text,
+                    history=history_dicts,
+                    llm_client=llm_client,
+                ):
+                    buffer += delta
+                    yield f"data: {json.dumps({'delta': delta})}\n\n"
+            except Exception as exc:  # noqa: BLE001
+                log.error("story_coach.stream_error", error=str(exc))
+                yield 'data: {"error": "coach_failed"}\n\n'
+                return
 
-        complete = is_complete_response(buffer)
-        yield f"data: {json.dumps({'done': True, 'complete': complete})}\n\n"
+            complete = is_complete_response(buffer)
+            yield f"data: {json.dumps({'done': True, 'complete': complete})}\n\n"
 
-    return StreamingResponse(_generate(), media_type="text/event-stream")
+        return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 @router.post("/story/interview/next", status_code=200)
@@ -955,27 +959,28 @@ async def story_interview_next(
             )
         await session.commit()
 
-    llm_client = get_llm_client_for_step("story_interview")
+    with llm_accounting_context(step="story_interview", user_id=str(user.id)):
+        llm_client = get_llm_client_for_step("story_interview")
 
-    history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
+        history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
-    import json as _json
+        import json as _json
 
-    async def _generate():
-        buffer = ""
-        try:
-            async for delta in next_interview_question(history_dicts, llm_client):
-                buffer += delta
-                yield f"data: {_json.dumps({'delta': delta})}\n\n"
-        except Exception as exc:  # noqa: BLE001
-            log.error("story_interview.stream_error", error=str(exc))
-            yield 'data: {"error": "interview_failed"}\n\n'
-            return
+        async def _generate():
+            buffer = ""
+            try:
+                async for delta in next_interview_question(history_dicts, llm_client):
+                    buffer += delta
+                    yield f"data: {_json.dumps({'delta': delta})}\n\n"
+            except Exception as exc:  # noqa: BLE001
+                log.error("story_interview.stream_error", error=str(exc))
+                yield 'data: {"error": "interview_failed"}\n\n'
+                return
 
-        complete = is_interview_complete(buffer)
-        yield f"data: {_json.dumps({'done': True, 'complete': complete})}\n\n"
+            complete = is_interview_complete(buffer)
+            yield f"data: {_json.dumps({'done': True, 'complete': complete})}\n\n"
 
-    return StreamingResponse(_generate(), media_type="text/event-stream")
+        return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
 @router.post("/story/interview/submit", status_code=200)
@@ -1008,16 +1013,17 @@ async def story_interview_submit(
         exchange_count=len(body.history),
     )
 
-    llm_client = get_llm_client_for_step("story_verify")
+    with llm_accounting_context(step="story_verify", user_id=str(user.id)):
+        llm_client = get_llm_client_for_step("story_verify")
 
-    try:
-        draft_text = await story_to_resume(narrative, llm_client)
-    except Exception as exc:  # noqa: BLE001
-        log.error("story_interview.story_to_resume_failed", error=str(exc))
-        raise HTTPException(
-            status_code=502,
-            detail={"code": "interview_generation_failed", "message": str(exc)},
-        ) from exc
+        try:
+            draft_text = await story_to_resume(narrative, llm_client)
+        except Exception as exc:  # noqa: BLE001
+            log.error("story_interview.story_to_resume_failed", error=str(exc))
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "interview_generation_failed", "message": str(exc)},
+            ) from exc
 
     user_segments = [m.text for m in body.history if m.role == "user" and m.text.strip()]
     verify_items = [item.to_dict() for item in build_verify_items(user_segments, draft_text)]

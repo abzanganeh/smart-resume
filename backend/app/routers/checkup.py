@@ -13,6 +13,7 @@ from app.config import settings
 from app.db.engine import get_db
 from app.limiter import limiter, rate_limit_key
 from app.llm.factory import get_llm_client_for_step
+from app.llm.token_accounting import llm_accounting_context
 from app.models.qa import QAOutput
 from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
@@ -136,15 +137,17 @@ async def run_checkup(
                 detail="Daily checkup limit reached for this device. Try again tomorrow.",
             ) from exc
 
-    llm = get_llm_client_for_step("checkup")
-    parsed = await _structure_resume(raw_resume, llm)
-    result = await run_checkup_analysis(
-        parsed=parsed,
-        resume_text=raw_resume,
-        jd_text=jd_clean,
-        job_title=job_title.strip(),
-        llm=llm,
-        include_narrative=False,
-    )
+    accounting_user = str(user_id) if user_id else "anonymous"
+    with llm_accounting_context(step="checkup", user_id=accounting_user):
+        llm = get_llm_client_for_step("checkup")
+        parsed = await _structure_resume(raw_resume, llm)
+        result = await run_checkup_analysis(
+            parsed=parsed,
+            resume_text=raw_resume,
+            jd_text=jd_clean,
+            job_title=job_title.strip(),
+            llm=llm,
+            include_narrative=False,
+        )
     await store_cached_checkup_result(cache_key, result)
     return CheckupResponse(result=result)
