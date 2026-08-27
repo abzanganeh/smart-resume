@@ -11,6 +11,7 @@ import {
   INTRO_SCROLL_LOCK_CLASS,
   INTRO_TOTAL_MS,
   introMotionAt,
+  shouldDismissOnScroll,
   shouldPlayIntro,
   type IntroMotionFrame,
 } from "@/lib/marketing/intro";
@@ -175,19 +176,25 @@ export function IntroOverlay() {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     document.documentElement.classList.add(INTRO_SCROLL_LOCK_CLASS);
 
-    const blockScroll = (event: Event) => {
+    // Scroll is one of the four dismiss paths. The page stays pinned either
+    // way so the intro cannot animate over moving content; past the grace
+    // window the attempt also ends the intro.
+    const onScrollAttempt = (event: Event) => {
       event.preventDefault();
+      const startedAt = startRef.current;
+      if (startedAt === null) return;
+      if (shouldDismissOnScroll(performance.now() - startedAt)) finish();
     };
 
-    window.addEventListener("wheel", blockScroll, { passive: false });
-    window.addEventListener("touchmove", blockScroll, { passive: false });
+    window.addEventListener("wheel", onScrollAttempt, { passive: false });
+    window.addEventListener("touchmove", onScrollAttempt, { passive: false });
 
     return () => {
-      window.removeEventListener("wheel", blockScroll);
-      window.removeEventListener("touchmove", blockScroll);
+      window.removeEventListener("wheel", onScrollAttempt);
+      window.removeEventListener("touchmove", onScrollAttempt);
       document.documentElement.classList.remove(INTRO_SCROLL_LOCK_CLASS);
     };
-  }, [active]);
+  }, [active, finish]);
 
   if (!active) return null;
 

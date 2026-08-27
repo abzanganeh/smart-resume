@@ -461,3 +461,40 @@ test.describe("FAQ structured data", () => {
     await expect(page.getByText(/registering grants 6 AI credits/i)).toBeAttached()
   })
 })
+
+test.describe("journey stage rail without JavaScript", () => {
+  // The rail is the primary way into six of the seven stage descriptions, and
+  // those descriptions are the most keyword-rich prose on the page. If the
+  // pills only work through an onClick handler, a crawler or a reader with
+  // scripting off loses that navigation entirely.
+  test.use({ javaScriptEnabled: false })
+
+  test("navigates by real anchors that match the stage markers", async ({ page }) => {
+    await page.goto("/")
+
+    const rail = page.getByRole("navigation", { name: /stage letters/i })
+    const pills = rail.getByRole("link")
+    await expect(pills).toHaveCount(7)
+
+    const hrefs = await pills.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("href")),
+    )
+    expect(hrefs).toEqual([
+      "#stage-story",
+      "#stage-discover",
+      "#stage-jobs",
+      "#stage-capture",
+      "#stage-tailor",
+      "#stage-apply",
+      "#stage-track",
+    ])
+
+    // Every target must exist, or the anchors are decorative.
+    for (const href of hrefs) {
+      await expect(page.locator(href!)).toBeAttached()
+    }
+
+    await pills.nth(4).click()
+    await expect(page).toHaveURL(/#stage-tailor$/)
+  })
+})

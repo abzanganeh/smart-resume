@@ -6,12 +6,14 @@ import {
   INTRO_FALLBACK_TICK_MS,
   INTRO_GREETING,
   INTRO_MOTION,
+  INTRO_SCROLL_GRACE_MS,
   INTRO_SIZE_SCALE,
   INTRO_TIMING,
   INTRO_TOTAL_MS,
   introMotionAt,
   introPhaseAt,
   introPhaseProgress,
+  shouldDismissOnScroll,
   shouldPlayIntro,
 } from "@/lib/marketing/intro";
 
@@ -177,6 +179,31 @@ describe("frame-independent playback", () => {
     assert.ok(
       INTRO_FALLBACK_TICK_MS < shortestPhase,
       "fallback interval resolves finer than the shortest phase",
+    );
+  });
+});
+
+describe("shouldDismissOnScroll", () => {
+  it("ignores a scroll inside the grace window", () => {
+    assert.equal(shouldDismissOnScroll(0), false);
+    assert.equal(shouldDismissOnScroll(INTRO_SCROLL_GRACE_MS - 1), false);
+  });
+
+  it("dismisses once the grace window has elapsed", () => {
+    assert.equal(shouldDismissOnScroll(INTRO_SCROLL_GRACE_MS), true);
+    assert.equal(shouldDismissOnScroll(INTRO_TOTAL_MS), true);
+  });
+
+  it("stays total over non-finite and negative input", () => {
+    assert.equal(shouldDismissOnScroll(Number.NaN), false);
+    assert.equal(shouldDismissOnScroll(Number.POSITIVE_INFINITY), false);
+    assert.equal(shouldDismissOnScroll(-1000), false);
+  });
+
+  it("dismisses well before the intro would end on its own", () => {
+    assert.ok(
+      INTRO_SCROLL_GRACE_MS < INTRO_TOTAL_MS,
+      "scroll must be a real shortcut, not a no-op",
     );
   });
 });
