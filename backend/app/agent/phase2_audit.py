@@ -211,7 +211,7 @@ async def run(
             overall_score=fallback_score,
             summary=(
                 f"Keyword scan: {present} JD keywords found in resume, {must} must-have gaps remain. "
-                "Bullet-level audit could not be completed — try a stronger model (e.g. gpt-4o) for full analysis."
+                "Bullet-level audit could not be completed — retry for the full analysis."
             ),
             page_estimate="1 page" if len(resume_text) < 3000 else "2 pages",
         )

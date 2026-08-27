@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "List of sub-processors used by TalioCV.  Updated with 30-day notice as required by our Privacy Policy.",
 }
 
-const LAST_UPDATED = "2026-05-31"
+const LAST_UPDATED = "2026-08-27"
 
 type Subprocessor = {
   name: string
@@ -69,14 +69,14 @@ const SUBPROCESSORS: Subprocessor[] = [
   {
     name: "Google (Gemini)",
     purpose:
-      "Default LLM provider for the platform-managed tier.  Processes résumé and job-description text for keyword extraction, gap analysis, rewriting, and quality checks on the Free, Weekly, Pro, and Pro+ plans.",
+      "LLM provider for platform-managed AI on every plan.  Processes résumé and job-description text for keyword extraction, gap analysis, rewriting, and quality checks.  Plans differ by how much you can run, not by which model runs it.",
     region: "Global (US headquartered)",
     privacyUrl: "https://policies.google.com/privacy",
   },
   {
     name: "Anthropic",
     purpose:
-      "LLM provider for the Premium plan's résumé rewrite step.  Processes résumé and job-description text for that plan only.",
+      "Retained as a standby LLM provider.  No plan currently routes résumé or job-description text to Anthropic; disclosed here because the integration remains in place and may be re-enabled.",
     region: "Global (US headquartered)",
     privacyUrl: "https://www.anthropic.com/legal/privacy",
   },
