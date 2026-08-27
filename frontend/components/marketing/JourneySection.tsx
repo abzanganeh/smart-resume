@@ -81,7 +81,13 @@ export function JourneySection() {
     const travel = rect.height - window.innerHeight;
     const share = (index + 0.5) / JOURNEY_STEPS.length;
     const target = travel <= 0 ? absoluteTop : absoluteTop + share * travel;
-    window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    window.scrollTo({
+      top: Math.max(0, target),
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
   }, []);
 
   const step = JOURNEY_STEPS[activeIndex];
@@ -152,20 +158,26 @@ export function JourneySection() {
                 const isActive = index === activeIndex;
                 return (
                   <span key={item.id} className="relative">
-                    <button
-                      type="button"
+                    {/* A real anchor, not a button: the stage markers carry
+                        matching ids, so the rail still navigates with
+                        JavaScript disabled. */}
+                    <a
+                      href={`#stage-${item.id}`}
                       aria-current={isActive ? "step" : undefined}
                       aria-label={`${stageLetter(index)} — ${item.title}`}
                       data-active={isActive ? "true" : "false"}
-                      onClick={() => goToStage(index)}
-                      className={`relative z-[1] flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border font-mono text-sm font-bold transition-all duration-300 motion-reduce:transition-none motion-reduce:scale-100 ${
+                      onClick={(event) => {
+                        event.preventDefault();
+                        goToStage(index);
+                      }}
+                      className={`relative z-[1] flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border font-mono text-sm font-bold no-underline transition-all duration-300 motion-reduce:transition-none motion-reduce:scale-100 ${
                         isActive
                           ? `scale-110 shadow-lg ${letterTheme.badge} ${letterTheme.text} ${letterTheme.border}`
                           : "scale-95 border-slate-300 bg-white text-slate-500 hover:scale-100 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
                       }`}
                     >
                       {stageLetter(index)}
-                    </button>
+                    </a>
 
                     {isActive && (
                       <>
