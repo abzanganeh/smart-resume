@@ -9,6 +9,7 @@ the platform. Model choice belongs to the step registry alone.
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 
 import pytest
@@ -60,10 +61,12 @@ def test_routers_resolve_models_through_the_step_registry() -> None:
 
 
 def test_no_router_routes_on_stored_session_provider_or_model() -> None:
+    session_provider_pattern = re.compile(r"\bsession\.provider\b")
+    session_model_pattern = re.compile(r"\bsession\.model\b")
     offenders = [
         name
         for name, source in _router_sources()
-        if "session.provider" in source or "session.model " in source
+        if session_provider_pattern.search(source) or session_model_pattern.search(source)
     ]
     assert not offenders, (
         "These routers still read a session-stored provider/model: "
