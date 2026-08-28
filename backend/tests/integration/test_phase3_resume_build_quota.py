@@ -6,10 +6,9 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.main import app
 from app.models.session import PhaseStatus
 from app.models.user import AuthProvider, User, UserTier
 from app.services.billing.quota import QuotaAction
@@ -19,7 +18,10 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
-async def test_phase3_run_debits_resume_build_quota(db_session: AsyncSession) -> None:
+async def test_phase3_run_debits_resume_build_quota(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
     user = User(
         id=uuid.uuid4(),
         email=f"phase3-quota-{uuid.uuid4().hex[:8]}@example.com",
@@ -48,12 +50,10 @@ async def test_phase3_run_debits_resume_build_quota(db_session: AsyncSession) ->
         "app.routers.phases.should_skip_billing_quota",
         return_value=False,
     ):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                f"/api/sessions/{session.session_id}/phases/3/run",
-                json={"force": True},
-            )
+        response = await app_client.post(
+            f"/api/sessions/{session.session_id}/phases/3/run",
+            json={"force": True},
+        )
 
     assert response.status_code == 202
     quota_mock.assert_awaited_once()

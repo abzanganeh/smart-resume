@@ -40,6 +40,7 @@ async def get_company_intel(
     *,
     company_name: str,
     jd_text: str,
+    user_id: str | None = None,
 ) -> CompanyIntelOutput | None:
     """Return company intelligence for ``company_name``, using cache when available.
 
@@ -65,7 +66,7 @@ async def get_company_intel(
     except Exception as exc:
         log.warning("company_intel_cache_read_error", company_key=company_key, error=str(exc))
 
-    intel = await extract_from_jd(company_name, jd_text)
+    intel = await extract_from_jd(company_name, jd_text, user_id=user_id)
     if intel is None or intel.is_empty():
         return None
 
@@ -100,6 +101,7 @@ async def ensure_session_company_intel(session: Session) -> None:
                 db,
                 company_name=company_name,
                 jd_text=jd_text,
+                user_id=session.user_id,
             )
     except Exception as exc:
         log.warning("company_intel_session_fetch_failed", error=str(exc))

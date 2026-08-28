@@ -202,11 +202,15 @@ function consumeSseDataLine(
     return { done: false, complete: false };
   }
   if (evt.error) {
-    throw new Error(
-      label === "Coach"
-        ? "The coach could not respond. Please retry in a moment."
-        : "The interview could not start. Please retry in a moment.",
-    );
+    const err = new Error(
+      evt.error === "free_tier_ai_cap_reached"
+        ? "You've used up the free-plan AI allowance. Upgrade to keep using the coach."
+        : label === "Coach"
+          ? "The coach could not respond. Please retry in a moment."
+          : "The interview could not start. Please retry in a moment.",
+    ) as Error & { code?: string };
+    err.code = evt.error;
+    throw err;
   }
   if (evt.delta) onDelta(evt.delta);
   if (evt.done) {

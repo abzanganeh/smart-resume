@@ -170,6 +170,8 @@ def _build_intel(company_name: str, data: dict) -> CompanyIntelOutput:
 async def extract_from_jd(
     company_name: str,
     jd_text: str,
+    *,
+    user_id: str | None = None,
 ) -> CompanyIntelOutput | None:
     """Run cheap-model extraction on JD text.
 
@@ -214,7 +216,7 @@ async def extract_from_jd(
     )
 
     try:
-        with llm_accounting_context(step="company_intel"):
+        with llm_accounting_context(step="company_intel", user_id=user_id):
             raw = await llm.complete(messages, max_tokens=400, temperature=0.0)
     except Exception as exc:
         log.warning("company_intel_llm_error", company_name=company_name, error=str(exc))

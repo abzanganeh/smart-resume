@@ -7,7 +7,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  * `resumes_per_period`) — the landing hero renders this number, so a stale
  * value advertises an offer we do not honour.
  */
-export const FREE_TIER_STARTING_CREDITS = 6;
+export const FREE_TIER_STARTING_CREDITS = 3;
 
 export const VOICE_AVAILABILITY_COPY =
   "Live transcription is free in Chrome and Edge; Firefox and Safari use Whisper (2 credits per story).";

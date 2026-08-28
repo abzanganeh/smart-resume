@@ -18,7 +18,9 @@ from app.models.cover_letter import CoverLetterTone
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     CreditsLockedUntilVerificationError,
+    FreeTierAiBudgetExceededError,
     InsufficientCreditsError,
+    free_tier_ai_cap_detail,
 )
 from app.services.session_ownership import require_session_user
 from app.services.billing.credit_spend import credits_locked_detail
@@ -143,6 +145,13 @@ async def generate_cover_letter(
                 await event_queue.put({
                     "event": "done",
                     "output": json.loads(output.model_dump_json()),
+                })
+            except FreeTierAiBudgetExceededError:
+                await db.rollback()
+                await event_queue.put({
+                    "event": "error",
+                    **free_tier_ai_cap_detail(),
+                    "status": 402,
                 })
             except Exception as exc:
                 await db.rollback()

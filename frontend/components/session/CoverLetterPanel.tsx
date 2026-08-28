@@ -10,12 +10,17 @@ import {
   type CoverLetterTone,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { CreditChargeConfirm } from "@/components/billing/CreditChargeConfirm";
+import { CreditMeter } from "@/components/billing/CreditMeter";
 
 interface Props {
   sessionId: string;
   accessToken?: string;
   initial?: CoverLetterOutput | null;
   open: boolean;
+  isFreeUser?: boolean;
+  creditCap?: number | null;
+  creditsUsed?: number | null;
   onClose: () => void;
 }
 
@@ -25,13 +30,23 @@ const TONES: { value: CoverLetterTone; label: string; hint: string }[] = [
   { value: "warm", label: "Warm", hint: "Conversational and approachable" },
 ];
 
-export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClose }: Props) {
+export function CoverLetterPanel({
+  sessionId,
+  accessToken,
+  initial,
+  open,
+  isFreeUser = false,
+  creditCap = null,
+  creditsUsed = null,
+  onClose,
+}: Props) {
   const [tone, setTone] = useState<CoverLetterTone>("balanced");
   const [customHook, setCustomHook] = useState("");
   const [letter, setLetter] = useState<CoverLetterOutput | null>(initial ?? null);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
 
   useEffect(() => {
     if (initial) setLetter(initial);
@@ -83,6 +98,16 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
     }
   }, [accessToken, customHook, sessionId, tone]);
 
+  const generateLabel = letter ? "Regenerate cover letter" : "Generate cover letter";
+
+  const handleGenerateClick = useCallback(() => {
+    if (isFreeUser) {
+      setShowGenerateConfirm(true);
+      return;
+    }
+    void handleGenerate();
+  }, [handleGenerate, isFreeUser]);
+
   if (!open) return null;
 
   const btnCls =
@@ -113,6 +138,9 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
         </div>
 
         <div className="px-6 py-5 space-y-6">
+          {isFreeUser && creditCap != null && creditsUsed != null && (
+            <CreditMeter used={creditsUsed} cap={creditCap} label="Credits" />
+          )}
           <fieldset>
             <legend className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Tone</legend>
             <div className="space-y-2">
@@ -165,23 +193,37 @@ export function CoverLetterPanel({ sessionId, accessToken, initial, open, onClos
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-50"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {progress ?? "Generating…"}
-              </>
-            ) : letter ? (
-              "Regenerate"
-            ) : (
-              "Generate"
-            )}
-          </button>
+          {showGenerateConfirm ? (
+            <CreditChargeConfirm
+              className="w-full"
+              actionLabel={generateLabel}
+              onConfirm={() => {
+                setShowGenerateConfirm(false);
+                void handleGenerate();
+              }}
+              onCancel={() => setShowGenerateConfirm(false)}
+              disabled={generating}
+              confirmLabel={generating ? "Generating…" : "Confirm"}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={handleGenerateClick}
+              disabled={generating}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-50"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {progress ?? "Generating…"}
+                </>
+              ) : letter ? (
+                "Regenerate"
+              ) : (
+                "Generate"
+              )}
+            </button>
+          )}
 
           {letter && (
             <div className="space-y-4">

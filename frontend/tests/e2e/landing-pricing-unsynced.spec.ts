@@ -28,5 +28,5 @@ test("still shows the free tier when paid prices are unavailable", async ({
   await expect(
     page.getByRole("heading", { level: 3, name: "Free", exact: true }),
   ).toBeVisible()
-  await expect(page.getByText("6 AI credits at signup")).toBeVisible()
+  await expect(page.getByText("3 AI credits at signup")).toBeVisible()
 })

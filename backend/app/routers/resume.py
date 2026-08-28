@@ -105,7 +105,9 @@ async def upload_resume(
 
     raw_text = validate_resume_text(raw_text)
 
-    with llm_accounting_context(session_id, "resume_structure"):
+    with llm_accounting_context(
+        session_id, "resume_structure", user_id=session.user_id
+    ):
         llm = get_llm_client_for_step("resume_structure")
         parsed = await _structure_resume(raw_text, llm)
 
@@ -131,7 +133,9 @@ async def paste_resume(
 
     text = validate_resume_text(body.text)
 
-    with llm_accounting_context(session_id, "resume_structure"):
+    with llm_accounting_context(
+        session_id, "resume_structure", user_id=session.user_id
+    ):
         llm = get_llm_client_for_step("resume_structure")
         parsed = await _structure_resume(text, llm)
 
@@ -212,7 +216,9 @@ async def suggest_audit_bullet_fixes(
     if not body.indices:
         raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
 
-    with llm_accounting_context(session_id, "mechanical_fixes"):
+    with llm_accounting_context(
+        session_id, "mechanical_fixes", user_id=session.user_id
+    ):
         llm = get_llm_client_for_step("mechanical_fixes")
         fixes = await suggest_bullet_fixes(
             llm,

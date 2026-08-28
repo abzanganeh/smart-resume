@@ -55,12 +55,12 @@ def test_premium_soft_cap() -> None:
     assert premium["soft_cap_message"]
 
 
-def test_free_tier_registration_grant_is_six_credits() -> None:
-    """Free credit bump 3 -> 6 (2026-08-19) — six tailored resumes per period."""
+def test_free_tier_registration_grant_is_three_credits() -> None:
+    """Free tier grants 3 tailored-resume credits (also caps cover letters)."""
     free = seed_row_for_plan("free")
     assert free is not None
-    assert free["resumes_per_period"] == 6
-    assert free["cover_letters_per_period"] == 6
+    assert free["resumes_per_period"] == 3
+    assert free["cover_letters_per_period"] == 3
 
 
 def test_premium_tracker_active_limit_is_capped() -> None:
@@ -81,8 +81,8 @@ def test_pro_and_plus_tracker_limits_stay_unlimited() -> None:
 
 
 def test_free_tier_tracker_active_limit_is_ten() -> None:
-    """Free tier's active-slot cap sits below its per-period credit count so
-    a user cannot pile up hundreds of dead rows with six credits."""
+    """Free tier's active-slot cap sits above its per-period credit count so
+    the counter — not the tracker — is the binding constraint."""
     free = seed_row_for_plan("free")
     assert free is not None
     assert free["tracker_active_limit"] == 10

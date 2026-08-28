@@ -82,7 +82,9 @@ from app.services.billing.quota import (
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     CreditsLockedUntilVerificationError,
+    FreeTierAiBudgetExceededError,
     InsufficientCreditsError,
+    free_tier_ai_cap_detail,
 )
 from app.services.billing.credit_spend import credits_locked_detail
 from app.services.resume_validation import validate_resume_text
@@ -652,6 +654,11 @@ async def create_resume_from_story(
 
         try:
             draft_text = await story_to_resume(narrative, llm_client)
+        except FreeTierAiBudgetExceededError as exc:
+            raise HTTPException(
+                status_code=402,
+                detail=free_tier_ai_cap_detail(),
+            ) from exc
         except Exception as exc:
             log.error("story.convert_failed", error=str(exc))
             raise HTTPException(
@@ -800,6 +807,11 @@ async def polish_resume_draft(
 
         try:
             updated = await polish_resume(body.text, body.instruction, llm_client)
+        except FreeTierAiBudgetExceededError as exc:
+            raise HTTPException(
+                status_code=402,
+                detail=free_tier_ai_cap_detail(),
+            ) from exc
         except Exception as exc:
             log.error("polish.failed", error=str(exc), user_id=str(user.id))
             raise HTTPException(
@@ -892,6 +904,9 @@ async def story_coach_endpoint(
                 ):
                     buffer += delta
                     yield f"data: {json.dumps({'delta': delta})}\n\n"
+            except FreeTierAiBudgetExceededError:
+                yield f"data: {json.dumps({'error': 'free_tier_ai_cap_reached', **free_tier_ai_cap_detail()})}\n\n"
+                return
             except Exception as exc:  # noqa: BLE001
                 log.error("story_coach.stream_error", error=str(exc))
                 yield 'data: {"error": "coach_failed"}\n\n'
@@ -972,6 +987,9 @@ async def story_interview_next(
                 async for delta in next_interview_question(history_dicts, llm_client):
                     buffer += delta
                     yield f"data: {_json.dumps({'delta': delta})}\n\n"
+            except FreeTierAiBudgetExceededError:
+                yield f"data: {_json.dumps({'error': 'free_tier_ai_cap_reached', **free_tier_ai_cap_detail()})}\n\n"
+                return
             except Exception as exc:  # noqa: BLE001
                 log.error("story_interview.stream_error", error=str(exc))
                 yield 'data: {"error": "interview_failed"}\n\n'
@@ -1018,6 +1036,11 @@ async def story_interview_submit(
 
         try:
             draft_text = await story_to_resume(narrative, llm_client)
+        except FreeTierAiBudgetExceededError as exc:
+            raise HTTPException(
+                status_code=402,
+                detail=free_tier_ai_cap_detail(),
+            ) from exc
         except Exception as exc:  # noqa: BLE001
             log.error("story_interview.story_to_resume_failed", error=str(exc))
             raise HTTPException(

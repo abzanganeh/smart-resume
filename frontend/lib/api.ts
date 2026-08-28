@@ -1204,6 +1204,10 @@ export interface SubscriptionCurrentResponse {
   credit_balance: number;
   spendable_credit_balance: number;
   credits_locked_until_verification: boolean;
+  /** Total credits granted (signup + bonuses) for meter UI */
+  credit_cap?: number | null;
+  /** Credits consumed from the grant */
+  credits_used?: number | null;
   exhaustion_top_up_eligible?: boolean;
   exhaustion_top_up_amount?: number;
   free_tier_usage_note?: string;

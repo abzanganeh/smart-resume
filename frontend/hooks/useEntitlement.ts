@@ -13,6 +13,8 @@ export interface Entitlement {
   /** Free plan: actions are billed to credits and Whisper/job search are unavailable. */
   isFreeUser: boolean;
   creditBalance: number | null;
+  creditCap: number | null;
+  creditsUsed: number | null;
   subscription: Subscription | null;
   /** null limit means no per-period cap (Premium fair use). */
   whisperAvailable: boolean;
@@ -23,6 +25,8 @@ const UNRESOLVED: Entitlement = {
   isSubscribed: null,
   isFreeUser: true,
   creditBalance: null,
+  creditCap: null,
+  creditsUsed: null,
   subscription: null,
   whisperAvailable: false,
   loading: true,
@@ -57,6 +61,8 @@ export function useEntitlement(): Entitlement {
           isSubscribed: subscribed,
           isFreeUser: !subscribed,
           creditBalance: data.credit_balance,
+          creditCap: data.credit_cap ?? (subscribed ? sub?.resumes_limit ?? null : null),
+          creditsUsed: data.credits_used ?? (subscribed ? sub?.resumes_used ?? null : null),
           subscription: sub ?? null,
           whisperAvailable: subscribed,
           loading: false,

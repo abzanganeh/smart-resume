@@ -455,10 +455,10 @@ test.describe("FAQ structured data", () => {
   })
 
   test("states the real signup credit grant in the answer", async ({ page }) => {
-    // The count comes from GET /api/billing/free-tier (6 in the mock fixture),
+    // The count comes from GET /api/billing/free-tier (3 in the mock fixture),
     // so a hardcoded number in the FAQ prose would fail here. Attached rather
     // than visible: the accordion is collapsed at rest.
-    await expect(page.getByText(/registering grants 6 AI credits/i)).toBeAttached()
+    await expect(page.getByText(/registering grants 3 AI credits/i)).toBeAttached()
   })
 })
 

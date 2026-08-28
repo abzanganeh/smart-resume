@@ -14,6 +14,8 @@ export interface SSEEvent {
   provider?: string;
   model?: string;
   error_type?: string;
+  /** Structured error code (e.g. free_tier_ai_cap_reached, master_resume_required). */
+  code?: string;
   debug?: string;
 }
 
