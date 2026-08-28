@@ -18,6 +18,15 @@ def test_career_watch_user_agent_carries_flintapply_identity() -> None:
     assert "TalioCV" not in CAREER_WATCH_USER_AGENT
 
 
+def test_totp_provisioning_uri_uses_flintapply_issuer() -> None:
+    from app.services.auth.totp import ISSUER, begin_enrollment
+
+    assert ISSUER == PRODUCT_NAME
+    enrollment = begin_enrollment(account_label="admin:ops@example.com")
+    assert PRODUCT_NAME in enrollment.provisioning_uri
+    assert "TalioCV" not in enrollment.provisioning_uri
+
+
 @pytest.mark.asyncio
 async def test_verification_email_subject_uses_product_name(
     monkeypatch: pytest.MonkeyPatch,
