@@ -83,7 +83,7 @@ def test_llm_backed_handlers_accept_no_provider_or_model_argument(handler) -> No
 
 
 def test_resume_structure_step_is_pinned_to_cheap_flash_lite() -> None:
-    assert resolve_model("resume_structure") == ("gemini", "gemini-2.5-flash-lite")
+    assert resolve_model("resume_structure") == ("gemini", "gemini-3.5-flash-lite")
 
 
 def test_every_pinned_step_model_has_a_price_row() -> None:

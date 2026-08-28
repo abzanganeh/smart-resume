@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    # Alias accepted in .env (many deployments use GEMINI_API_KEY).
+    GEMINI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
@@ -284,6 +286,8 @@ class Settings(BaseSettings):
                     "TURNSTILE_SECRET_KEY",
                     "1x0000000000000000000000000000000AA",
                 )
+        if not self.GOOGLE_API_KEY and self.GEMINI_API_KEY:
+            object.__setattr__(self, "GOOGLE_API_KEY", self.GEMINI_API_KEY)
         return self
 
     # Phase 3 — LLM rewrite can take 30–120 s on large resumes; cap it so

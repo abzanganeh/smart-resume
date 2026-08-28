@@ -117,6 +117,29 @@ export interface LLMConfigPayload {
   similarity_threshold?: number
 }
 
+// ── Step LLM pins ───────────────────────────────────────────────────────────
+
+export interface StepLLMConfig {
+  step: string
+  label: string
+  provider: string
+  model_string: string
+  source: "pin" | "default"
+  pin_id: string | null
+  is_active: boolean
+  notes: string | null
+  has_price_row: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface StepLLMConfigPayload {
+  step: string
+  provider: string
+  model_string: string
+  notes?: string
+}
+
 // ── Feature Flags ─────────────────────────────────────────────────────────────
 
 export interface FeatureFlag {
