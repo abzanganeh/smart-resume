@@ -105,7 +105,7 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             whisper_enabled=False,
             whisper_uses_per_period=0,
             llm_provider="gemini",
-            llm_model_phase3="gemini-2.5-flash-lite",
+            llm_model_phase3="gemini-3.5-flash-lite",
             soft_cap_message=None,
         ),
         _paid_tier(
@@ -119,7 +119,7 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             tracker=30,
             whisper_uses=2,
             llm_provider="gemini",
-            llm_model="gemini-2.5-flash",
+            llm_model="gemini-3.5-flash",
         ),
         _paid_tier(
             plan_code="monthly_pro",
@@ -132,7 +132,7 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             tracker=None,
             whisper_uses=5,
             llm_provider="gemini",
-            llm_model="gemini-2.5-flash",
+            llm_model="gemini-3.5-flash",
         ),
         _paid_tier(
             plan_code="yearly_pro",
@@ -145,7 +145,7 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
             tracker=None,
             whisper_uses=5,
             llm_provider="gemini",
-            llm_model="gemini-2.5-flash",
+            llm_model="gemini-3.5-flash",
         ),
         _paid_tier(
             plan_code="monthly_plus",
