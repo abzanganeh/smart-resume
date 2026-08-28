@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Alias accepted in .env (many deployments use GEMINI_API_KEY).
     GEMINI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     # Platform-owned key for master-resume embeddings (IMPLEMENTATION_PLAN §6a).

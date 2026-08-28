@@ -32,6 +32,8 @@ def _get_default_key(provider: str) -> str:
             return settings.GOOGLE_API_KEY
         case "openrouter":
             return settings.OPENROUTER_API_KEY
+        case "deepseek":
+            return settings.DEEPSEEK_API_KEY
         case _:
             return ""
 
@@ -62,6 +64,9 @@ def get_llm_client(
         case "openrouter":
             from app.llm.providers.openrouter_adapter import OpenRouterAdapter
             client = OpenRouterAdapter(model=m, api_key=key)
+        case "deepseek":
+            from app.llm.providers.deepseek_adapter import DeepSeekAdapter
+            client = DeepSeekAdapter(model=m, api_key=key)
         case "ollama":
             from app.llm.providers.ollama_adapter import OllamaAdapter
             client = OllamaAdapter(model=m, base_url=settings.OLLAMA_BASE_URL)
@@ -85,6 +90,7 @@ def get_all_providers() -> list[dict]:
         ("openai", "OpenAI"),
         ("anthropic", "Anthropic Claude"),
         ("gemini", "Google Gemini"),
+        ("deepseek", "DeepSeek"),
         ("openrouter", "OpenRouter"),
         ("ollama", "Ollama (local, free)"),
     ]
@@ -101,6 +107,7 @@ def get_all_providers() -> list[dict]:
                 "openai": "https://platform.openai.com/api-keys",
                 "anthropic": "https://console.anthropic.com/",
                 "gemini": "https://aistudio.google.com/apikey",
+                "deepseek": "https://platform.deepseek.com/api_keys",
                 "openrouter": "https://openrouter.ai/keys",
             }.get(pid, ""),
             "has_env_key": _is_real_api_key(_get_default_key(pid)),
@@ -134,6 +141,8 @@ def get_configured_providers() -> list[dict]:
         _add("gemini", "Google Gemini")
     if _is_real_api_key(settings.OPENROUTER_API_KEY):
         _add("openrouter", "OpenRouter")
+    if _is_real_api_key(settings.DEEPSEEK_API_KEY):
+        _add("deepseek", "DeepSeek")
     # Ollama is always available (no key required)
     _add("ollama", "Ollama (local)")
     return providers

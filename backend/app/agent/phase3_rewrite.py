@@ -12,7 +12,9 @@ from app.config import settings
 from app.db.engine import async_session_factory
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.pricing import estimate_cost, format_cost
-from app.llm.structured import complete_structured
+from app.llm.structured import LLMParseError, complete_structured
+from app.agent.phase3_experience_fallback import apply_experience_fallback
+from app.agent.phase3_hollow import reject_hollow_phase3
 from app.agent.phase3_postprocess import (
     flatten_skill_terms,
     postprocess_tailored_output,
@@ -134,13 +136,25 @@ async def _complete_phase3_llm(
     hb_task = asyncio.create_task(_heartbeat())
     try:
         return await asyncio.wait_for(
-            complete_structured(llm, messages, TailoredResumeOutput, max_tokens=6000),
+            complete_structured(
+                llm,
+                messages,
+                TailoredResumeOutput,
+                max_tokens=6000,
+                accept_result=reject_hollow_phase3,
+            ),
             timeout=settings.PHASE3_LLM_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError as exc:
         raise TimeoutError(
             f"Phase 3 rewrite exceeded {settings.PHASE3_LLM_TIMEOUT_SECONDS}s"
         ) from exc
+    except (LLMParseError, ValueError) as exc:
+        log.warning("phase3_structured_hollow_or_parse_failed", error=str(exc))
+        return TailoredResumeOutput()
+    except Exception as exc:
+        log.warning("phase3_structured_failed", error=str(exc))
+        return TailoredResumeOutput()
     finally:
         hb_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -535,7 +549,21 @@ async def run(
         LLMMessage(role="user", content=user_content),
     ]
 
+    must_have = (
+        [k.term for k in session.phase1_output.must_have_keywords]
+        if session.phase1_output
+        else None
+    )
+
     output = await _complete_phase3_llm(llm, messages, event_queue)
+
+    output = apply_experience_fallback(
+        output,
+        resume_parsed=session.resume_parsed,
+        phase2_output=session.phase2_output,
+        prior_output=session.phase3_output,
+        must_have_keywords=must_have,
+    )
 
     if scoped and session.phase3_output:
         output = _merge_scoped_output(session.phase3_output, output, scope)
@@ -553,11 +581,6 @@ async def run(
         output.skipped_chunks = trace["skipped_chunks"]
         output.retrieval_meta = trace["retrieval_meta"]
 
-    must_have = (
-        [k.term for k in session.phase1_output.must_have_keywords]
-        if session.phase1_output
-        else None
-    )
     tone_profile = session.phase1_output.tone_profile if session.phase1_output else None
     truth_ctx = TruthfulnessContext(
         approved_metrics=list(session.approved_metrics or []),

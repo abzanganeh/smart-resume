@@ -6,9 +6,10 @@ import re
 from pathlib import Path
 
 import structlog
+from pydantic import BaseModel
 
 from app.llm.base import LLMClient, LLMMessage
-from app.llm.structured import complete_structured
+from app.llm.structured import LLMParseError, complete_structured
 from app.models.cover_letter import CoverLetterOutput, CoverLetterTone
 from app.models.session import Session
 
@@ -20,6 +21,22 @@ _COVER_LETTER = (Path(__file__).parent / "prompts" / "cover_letter.txt").read_te
 
 def _word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text))
+
+
+def _cover_letter_is_hollow(output: CoverLetterOutput) -> bool:
+    body = output.body_plain.strip()
+    if not body:
+        return True
+    return _word_count(body) < 50
+
+
+def _reject_hollow_cover_letter(output: BaseModel) -> str | None:
+    if isinstance(output, CoverLetterOutput) and _cover_letter_is_hollow(output):
+        return (
+            "Cover letter body is hollow: provide body_plain with at least 50 words "
+            "of substantive content tailored to the job."
+        )
+    return None
 
 
 async def run(
@@ -68,7 +85,24 @@ async def run(
         ),
     ]
 
-    output = await complete_structured(llm, messages, CoverLetterOutput, max_tokens=2500)
+    try:
+        output = await complete_structured(
+            llm,
+            messages,
+            CoverLetterOutput,
+            max_tokens=2500,
+            accept_result=_reject_hollow_cover_letter,
+        )
+    except (LLMParseError, ValueError) as exc:
+        raise RuntimeError(
+            "Cover letter generation failed: model returned hollow or invalid output "
+            "after retries. Try a different step pin or retry."
+        ) from exc
+
+    if _cover_letter_is_hollow(output):
+        raise RuntimeError(
+            "Cover letter generation failed: model returned hollow output after retries."
+        )
 
     if output.word_count <= 0 and output.body_plain.strip():
         output = output.model_copy(update={"word_count": _word_count(output.body_plain)})

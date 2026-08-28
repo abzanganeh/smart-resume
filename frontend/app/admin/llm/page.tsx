@@ -15,7 +15,7 @@ import {
 import type { LLMConfig, LLMConfigPayload, StepLLMConfig, StepLLMConfigPayload } from "@/lib/admin/types"
 
 const TIERS = ["standard", "better", "best"] as const
-const PROVIDERS = ["openai", "anthropic", "gemini", "openrouter", "ollama"] as const
+const PROVIDERS = ["openai", "anthropic", "gemini", "deepseek", "openrouter", "ollama"] as const
 
 // ── LLM Config Page ───────────────────────────────────────────────────────────
 

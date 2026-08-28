@@ -82,3 +82,33 @@ async def test_admin_step_llm_create_rejects_unpriced_model(
     )
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "unpriced_model"
+
+
+async def test_admin_step_llm_create_deepseek_pin(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    await seed_step_llm_configs_if_empty(db_session)
+    await db_session.commit()
+
+    admin, _secret = await make_admin(
+        db_session, email="deepseek-pin@example.com", role=AdminRole.super_admin
+    )
+    await db_session.commit()
+    token, headers = await issue_admin_session(admin.id)
+
+    resp = await app_client.post(
+        "/api/admin/llm/steps",
+        headers={**headers, "Authorization": f"Bearer {token}"},
+        json={
+            "step": "phase3_rewrite",
+            "provider": "deepseek",
+            "model_string": "deepseek-v4-flash",
+            "notes": "pre-deploy deepseek pin test",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+
+    provider, model = resolve_model("phase3_rewrite")
+    assert provider == "deepseek"
+    assert model == "deepseek-v4-flash"

@@ -151,10 +151,19 @@ def _benign_tailored_output() -> TailoredResumeOutput:
 
 
 def _benign_cover_letter() -> CoverLetterOutput:
+    body = (
+        "Dear Hiring Manager,\n\n"
+        "I am writing to express my strong interest in the Senior Engineer role. "
+        "Over the past several years I have built reliable cloud platforms, led "
+        "cross-functional delivery, and partnered closely with product and security "
+        "teams to ship resilient services. I would welcome the opportunity to bring "
+        "that experience to your organization and contribute from day one.\n\n"
+        "Thank you for your consideration."
+    )
     return CoverLetterOutput(
-        body_markdown="Dear Hiring Manager,\n\nI would like to apply.",
-        body_plain="Dear Hiring Manager,\n\nI would like to apply.",
-        word_count=8,
+        body_markdown=body,
+        body_plain=body,
+        word_count=60,
         tone="balanced",
     )
 
