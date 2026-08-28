@@ -13,10 +13,16 @@ PRICING: dict[str, dict[str, dict[str, float]]] = {
     "openai": {
         "gpt-4o": {"input": 2.50, "output": 10.00},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+        "gpt-5-mini": {"input": 0.25, "output": 2.00},
+        "gpt-4-turbo": {"input": 10.00, "output": 30.00},
         "text-embedding-3-small": {"input": 0.02, "output": 0.0},
     },
     "anthropic": {
         "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+        "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
+        "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
+        "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
     },
     "gemini": {
         "gemini-3.6-flash": {"input": 1.50, "output": 7.50},
@@ -27,7 +33,14 @@ PRICING: dict[str, dict[str, dict[str, float]]] = {
     },
     "openrouter": {
         "meta-llama/llama-3.1-70b-instruct": {"input": 0.52, "output": 0.75},
+        "meta-llama/llama-3.1-8b-instruct": {"input": 0.06, "output": 0.06},
         "mistralai/mixtral-8x7b-instruct": {"input": 0.24, "output": 0.24},
+        "anthropic/claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+        "openai/gpt-4o": {"input": 2.50, "output": 10.00},
+    },
+    "deepseek": {
+        # verified 2026-08-28 — https://api-docs.deepseek.com/quick_start/pricing
+        "deepseek-v4-flash": {"input": 0.22, "output": 0.66},
     },
     "ollama": {
         # Local — no cost

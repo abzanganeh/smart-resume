@@ -1,0 +1,34 @@
+{
+  "hollow_llm_output": {
+    "contact": {},
+    "summary": "Experienced engineer seeking a backend role.",
+    "skills": ["Python", "AWS"],
+    "experience": [],
+    "projects": [],
+    "education": [],
+    "certifications": [],
+    "rewrite_notes": [],
+    "metrics_needed": []
+  },
+  "parsed_resume": {
+    "contact": {"name": "Jane Doe"},
+    "summary": null,
+    "skills": ["Python", "Generative AI", "LLMs"],
+    "experience": [
+      {
+        "title": "Senior Software Engineer",
+        "company": "TechCo",
+        "dates": "2021-2025",
+        "bullets": [
+          "Built RAG pipelines for document search.",
+          "Deployed services on AWS with Terraform."
+        ]
+      }
+    ],
+    "projects": [],
+    "education": [],
+    "certifications": []
+  },
+  "must_have_keywords": ["Generative AI", "LLMs", "AWS"],
+  "baseline_ats_score": 50
+}

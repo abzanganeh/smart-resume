@@ -65,6 +65,7 @@ class LLMProvider(str, enum.Enum):
     gemini = "gemini"
     openrouter = "openrouter"
     ollama = "ollama"
+    deepseek = "deepseek"
 
 
 _LLM_PROVIDER_PG = PGEnum(

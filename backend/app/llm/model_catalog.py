@@ -7,6 +7,8 @@ MODEL_CATALOG: dict[str, list[dict[str, str]]] = {
     "openai": [
         {"id": "gpt-4o", "label": "GPT-4o", "note": "Best balance of quality and speed (recommended)"},
         {"id": "gpt-4o-mini", "label": "GPT-4o Mini", "note": "Fast and cheap — good for testing"},
+        {"id": "gpt-4.1-mini", "label": "GPT-4.1 Mini", "note": "Newer mini tier"},
+        {"id": "gpt-5-mini", "label": "GPT-5 Mini", "note": "Latest mini model"},
         {"id": "gpt-4-turbo", "label": "GPT-4 Turbo", "note": "Previous flagship; higher cost"},
     ],
     "anthropic": [
@@ -18,6 +20,9 @@ MODEL_CATALOG: dict[str, list[dict[str, str]]] = {
         {"id": "gemini-3.6-flash", "label": "Gemini 3.6 Flash", "note": "Recommended — current Flash workhorse"},
         {"id": "gemini-3.5-flash", "label": "Gemini 3.5 Flash", "note": "Previous Flash"},
         {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite", "note": "Fastest and cheapest"},
+    ],
+    "deepseek": [
+        {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash", "note": "Low-cost rewrite candidate"},
     ],
     "openrouter": [
         {"id": "meta-llama/llama-3.1-70b-instruct", "label": "Llama 3.1 70B", "note": "Strong open model"},

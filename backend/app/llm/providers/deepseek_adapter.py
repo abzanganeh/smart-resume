@@ -7,16 +7,21 @@ import openai
 from app.llm.base import LLMClient, LLMMessage, LLMResponse
 
 
-class OpenAIAdapter(LLMClient):
+class DeepSeekAdapter(LLMClient):
+    """OpenAI-compatible adapter for DeepSeek API."""
+
+    BASE_URL = "https://api.deepseek.com"
+
     def __init__(self, model: str, api_key: str) -> None:
         self._model = model
-        self._client = openai.AsyncOpenAI(api_key=api_key)
+        self._client = openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url=self.BASE_URL,
+        )
 
     @property
     def context_window(self) -> int:
-        if "gpt-4o" in self._model:
-            return 128_000
-        return 16_385
+        return 128_000
 
     @property
     def supports_structured_output(self) -> bool:
@@ -24,7 +29,7 @@ class OpenAIAdapter(LLMClient):
 
     @property
     def provider_name(self) -> str:
-        return "openai"
+        return "deepseek"
 
     @property
     def model_name(self) -> str:
@@ -41,17 +46,15 @@ class OpenAIAdapter(LLMClient):
         kwargs: dict = {
             "model": self._model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "max_tokens": max_tokens,
             "temperature": temperature,
-            "store": False,
         }
-        token_key = "max_completion_tokens" if self._model.startswith("gpt-5") else "max_tokens"
-        kwargs[token_key] = max_tokens
         if response_schema:
             kwargs["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "output",
-                    "strict": False,  # strict=True requires additionalProperties:false at every level
+                    "strict": False,
                     "schema": response_schema,
                 },
             }
@@ -63,7 +66,7 @@ class OpenAIAdapter(LLMClient):
             input_tokens=resp.usage.prompt_tokens if resp.usage else 0,
             output_tokens=resp.usage.completion_tokens if resp.usage else 0,
             model=self._model,
-            provider="openai",
+            provider="deepseek",
         )
 
     async def stream(
@@ -76,14 +79,9 @@ class OpenAIAdapter(LLMClient):
         stream = await self._client.chat.completions.create(
             model=self._model,
             messages=[{"role": m.role, "content": m.content} for m in messages],
-            **(
-                {"max_completion_tokens": max_tokens}
-                if self._model.startswith("gpt-5")
-                else {"max_tokens": max_tokens}
-            ),
+            max_tokens=max_tokens,
             temperature=temperature,
             stream=True,
-            store=False,
         )
         async for chunk in stream:
             delta = chunk.choices[0].delta.content
