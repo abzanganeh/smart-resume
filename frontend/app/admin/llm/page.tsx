@@ -144,7 +144,7 @@ export default function AdminLLMPage() {
                 <Th>Provider</Th>
                 <Th>Model</Th>
                 <Th>Source</Th>
-                <Th></Th>
+                <Th aria-label="Actions"> </Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">

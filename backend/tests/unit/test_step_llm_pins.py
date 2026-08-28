@@ -40,6 +40,7 @@ def test_resolve_model_falls_back_to_step_defaults() -> None:
     assert (provider, model) == STEP_DEFAULTS["phase3_rewrite"]
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_seed_step_llm_configs_if_empty(db_session: AsyncSession) -> None:
     inserted = await seed_step_llm_configs_if_empty(db_session)
@@ -52,6 +53,7 @@ async def test_seed_step_llm_configs_if_empty(db_session: AsyncSession) -> None:
     assert (provider, model) == STEP_DEFAULTS["cover_letter"]
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_admin_pin_overrides_default_after_cache_refresh(
     db_session: AsyncSession,

@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Full suite nightly — catches drift when main only ran the fast gate.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,8 +23,31 @@ concurrency:
 # security-supply-chain is blocking; pip-audit uses backend/ci/run-pip-audit.sh + allowlist.
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ci_config: ${{ steps.filter.outputs.ci_config }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            ci_config:
+              - '.github/**'
+
   backend-unit:
     name: Backend unit tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_config == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,6 +78,10 @@ jobs:
 
   backend-integration:
     name: Backend integration tests
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_config == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -98,7 +129,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://smart_resume:password@localhost:5432/smart_resume_test
 
       - name: Run integration tests
-        run: uv run pytest tests/integration tests/unit -m integration -v --tb=short
+        run: uv run pytest tests/integration tests/admin tests/unit -m integration -v --tb=short
         env:
           APP_ENV: ci
           AUTH_DISABLE: "false"
@@ -111,6 +142,10 @@ jobs:
 
   migration-safety:
     name: Migration safety
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_config == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -159,6 +194,8 @@ jobs:
 
   frontend:
     name: Frontend lint and build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci_config == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -189,6 +226,10 @@ jobs:
 
   frontend-e2e-smoke:
     name: Frontend E2E smoke
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci_config == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -229,8 +270,6 @@ jobs:
           NEXTAUTH_SECRET: ci-test-secret-not-for-production
           NEXTAUTH_URL: http://localhost:3000
 
-      # Separate invocation: Next caches the price response per URL, so the
-      # unsynced fixture needs a fresh server and a cleared fetch cache.
       - name: Run E2E unsynced-pricing fallback
         run: pnpm run test:e2e:pricing-unsynced
         env:
@@ -242,6 +281,10 @@ jobs:
 
   security-supply-chain:
     name: Security supply chain (A03)
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci_config == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -292,6 +335,10 @@ jobs:
 
   backend-security:
     name: Backend security tests
+    needs: changes
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_config == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:

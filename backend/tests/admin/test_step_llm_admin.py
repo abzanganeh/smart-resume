@@ -12,7 +12,7 @@ from app.models.admin import AdminRole
 from app.services.llm.step_config import seed_step_llm_configs_if_empty
 from tests.admin.conftest import issue_admin_session, make_admin
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
 @pytest.fixture(autouse=True)

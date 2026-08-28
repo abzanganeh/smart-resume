@@ -29,32 +29,32 @@ PipelineStep = Literal[
 
 ModelRoute = tuple[str, str]
 
-# Step→model pins (verified 2026-08-22, ai.google.dev/gemini-api/docs/pricing).
+# Step→model pins (verified 2026-08-27, ai.google.dev/gemini-api/docs/pricing).
 # One quality bar: tiers differ by volume, not output model.
-# Phase 3 stays on gemini-2.5-flash (prior pro-tier default) — not flash-lite.
+# Use gemini-3.5-* — gemini-2.5-* returns 404 on many API keys.
 STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
-    "resume_structure": ("gemini", "gemini-2.5-flash-lite"),
-    "phase1_keywords": ("gemini", "gemini-2.5-flash-lite"),
-    "phase2_audit": ("gemini", "gemini-2.5-flash-lite"),
-    "phase3_rewrite": ("gemini", "gemini-2.5-flash"),  # mid flash — paid deliverable
-    "phase3_truthfulness": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_qa": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_narrative": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_rank": ("gemini", "gemini-2.5-flash-lite"),
-    "polish": ("gemini", "gemini-2.5-flash"),
-    "tone_lint": ("gemini", "gemini-2.5-flash-lite"),
-    "mechanical_fixes": ("gemini", "gemini-2.5-flash-lite"),
-    "cover_letter": ("gemini", "gemini-2.5-flash"),
-    "job_fit": ("gemini", "gemini-2.5-flash-lite"),
-    "job_title_suggestions": ("gemini", "gemini-2.5-flash-lite"),
-    "title_fit_insights": ("gemini", "gemini-2.5-flash-lite"),
-    "story": ("gemini", "gemini-2.5-flash"),
-    "story_coach": ("gemini", "gemini-2.5-flash"),
-    "story_interview": ("gemini", "gemini-2.5-flash"),
-    "story_verify": ("gemini", "gemini-2.5-flash-lite"),
-    "chat": ("gemini", "gemini-2.5-flash-lite"),
-    "company_intel": ("gemini", "gemini-2.5-flash-lite"),
-    "checkup": ("gemini", "gemini-2.5-flash-lite"),  # pinned — never settings.LLM_MODEL
+    "resume_structure": ("gemini", "gemini-3.5-flash-lite"),
+    "phase1_keywords": ("gemini", "gemini-3.5-flash-lite"),
+    "phase2_audit": ("gemini", "gemini-3.5-flash-lite"),
+    "phase3_rewrite": ("gemini", "gemini-3.5-flash"),  # mid flash — paid deliverable
+    "phase3_truthfulness": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_qa": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_narrative": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_rank": ("gemini", "gemini-3.5-flash-lite"),
+    "polish": ("gemini", "gemini-3.5-flash"),
+    "tone_lint": ("gemini", "gemini-3.5-flash-lite"),
+    "mechanical_fixes": ("gemini", "gemini-3.5-flash-lite"),
+    "cover_letter": ("gemini", "gemini-3.5-flash"),
+    "job_fit": ("gemini", "gemini-3.5-flash-lite"),
+    "job_title_suggestions": ("gemini", "gemini-3.5-flash-lite"),
+    "title_fit_insights": ("gemini", "gemini-3.5-flash-lite"),
+    "story": ("gemini", "gemini-3.5-flash"),
+    "story_coach": ("gemini", "gemini-3.5-flash"),
+    "story_interview": ("gemini", "gemini-3.5-flash"),
+    "story_verify": ("gemini", "gemini-3.5-flash-lite"),
+    "chat": ("gemini", "gemini-3.5-flash-lite"),
+    "company_intel": ("gemini", "gemini-3.5-flash-lite"),
+    "checkup": ("gemini", "gemini-3.5-flash-lite"),  # pinned — never settings.LLM_MODEL
 }
 
 # Empty today — reintroducing a premium step override is one map entry.
