@@ -86,7 +86,7 @@ test.describe("hero", () => {
 
   test("advertises the real signup credit grant", async ({ page }) => {
     await scrollPostHeroProgress(page, 0.08)
-    await expect(page.getByText(/6 credits on signup/i).first()).toBeVisible()
+    await expect(page.getByText(/3 credits on signup/i).first()).toBeVisible()
   })
 })
 

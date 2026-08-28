@@ -247,6 +247,26 @@ async def redis_incr(key: str) -> int:
     return current
 
 
+async def redis_incrbyfloat(key: str, amount: float) -> float:
+    """Atomically increment a float counter — INCRBYFLOAT on Redis.
+
+    Fallback path preserves any existing TTL and mirrors Redis semantics.
+    """
+    if _redis_client:
+        return float(await _redis_client.incrbyfloat(key, amount))
+    current_raw = _mem_get(key)
+    try:
+        current = float(current_raw) if current_raw is not None else 0.0
+    except ValueError:
+        current = 0.0
+    new_value = current + amount
+    existing_exp = _memory_expiry.get(key)
+    _memory_store[key] = f"{new_value:.6f}"
+    if existing_exp is not None:
+        _memory_expiry[key] = existing_exp
+    return new_value
+
+
 async def reset_redis_keys_for_tests() -> None:
     """Clear in-memory Redis fallback between tests."""
     if not _redis_client:

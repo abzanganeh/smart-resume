@@ -148,7 +148,7 @@ source of truth enforced by the quota layer.
 
 | Plan | Period | Resumes & cover letters | Job searches | Fit analyses | Whisper voice | Career Watch |
 |---------|---------|---:|---:|---:|---:|---:|
-| Free | — | 6 credits at signup | — | — | — | 1 company |
+| Free | — | 3 credits at signup | — | — | — | 1 company |
 | Weekly | week | 10 | 20 | 10 | 2 | 3 companies |
 | Pro | month/year | 50 | 100 | 50 | 5 | 10 companies |
 | Pro+ | month/year | 100 | 200 | 100 | 15 | 30 companies |

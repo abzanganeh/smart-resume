@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from app.llm.base import LLMClient, LLMMessage, LLMResponse
-from app.llm.token_accounting import record_llm_response
+from app.llm.token_accounting import _llm_user_id, record_llm_response
+from app.services.billing.free_tier_budget import assert_free_user_llm_allowed
 
 
 class TrackingLLMClient(LLMClient):
@@ -20,6 +21,7 @@ class TrackingLLMClient(LLMClient):
         max_tokens: int = 4096,
         temperature: float = 0.2,
     ) -> LLMResponse:
+        await assert_free_user_llm_allowed(_llm_user_id.get())
         response = await self._inner.complete(
             messages,
             response_schema=response_schema,
@@ -36,6 +38,7 @@ class TrackingLLMClient(LLMClient):
         max_tokens: int = 4096,
         temperature: float = 0.2,
     ) -> AsyncIterator[str]:
+        await assert_free_user_llm_allowed(_llm_user_id.get())
         parts: list[str] = []
         async for chunk in self._inner.stream(
             messages,

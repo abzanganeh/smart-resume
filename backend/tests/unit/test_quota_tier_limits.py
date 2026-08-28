@@ -48,8 +48,8 @@ async def test_registration_grant_falls_back_to_seed() -> None:
     mock_session.execute.return_value = mock_result
 
     amount = await registration_grant_credits(mock_session)
-    # 2026-08-19: free-tier registration grant bumped 3 -> 6.
-    assert amount == 6
+    # Free-tier registration grant: 3 credits (tier_limits free resumes_per_period).
+    assert amount == 3
 
 
 @pytest.mark.asyncio

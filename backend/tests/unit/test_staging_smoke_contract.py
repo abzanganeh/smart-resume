@@ -14,7 +14,7 @@ pytestmark = pytest.mark.unit
 
 # Seed values checked by staging-smoke.sh (B4+). Register credits in smoke
 # compare against GET /api/billing/free-tier starting_credits, not a literal here.
-EXPECTED_FREE_STARTING_CREDITS = 6
+EXPECTED_FREE_STARTING_CREDITS = 3
 EXPECTED_FREE_TRACKER_ACTIVE_LIMIT = 10
 
 

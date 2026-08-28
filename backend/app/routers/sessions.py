@@ -20,6 +20,10 @@ from app.models.rewrite import TailoredResumeOutput
 from app.models.session import ApprovedMetric
 from app.models.user import User
 from app.services.auth.dependencies import get_current_user
+from app.services.billing.exceptions import (
+    FreeTierAiBudgetExceededError,
+    free_tier_ai_cap_detail,
+)
 from app.services.session_ownership import (
     bind_session_user_from_bearer,
     bearer_claims_or_none,
@@ -201,7 +205,13 @@ async def chat_with_resume(
         user_id=str(user_id) if user_id else None,
     ):
         llm = get_llm_client_for_step("chat")
-        return await chat_agent.run(session, body, llm)
+        try:
+            return await chat_agent.run(session, body, llm)
+        except FreeTierAiBudgetExceededError as exc:
+            raise HTTPException(
+                status_code=402,
+                detail=free_tier_ai_cap_detail(),
+            ) from exc
 
 
 @router.get("/{session_id}/resume-record", response_model=SessionResumeRecordResponse)

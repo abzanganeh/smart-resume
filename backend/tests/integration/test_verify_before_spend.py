@@ -21,7 +21,7 @@ async def test_unverified_user_sees_locked_credits_on_me(
     reg = await app_client.post("/api/auth/register", json=payload)
     assert reg.status_code == 201, reg.text
     body = reg.json()["user"]
-    assert body["credit_balance"] == 6
+    assert body["credit_balance"] == 3
     assert body["spendable_credit_balance"] == 0
     assert body["credits_locked_until_verification"] is True
     assert body["email_verified_at"] is None
@@ -50,8 +50,8 @@ async def test_verifying_email_unlocks_spendable_credits(
     )
     assert me.status_code == 200, me.text
     body = me.json()
-    assert body["credit_balance"] == 6
-    assert body["spendable_credit_balance"] == 6
+    assert body["credit_balance"] == 3
+    assert body["spendable_credit_balance"] == 3
     assert body["credits_locked_until_verification"] is False
 
 
@@ -89,13 +89,13 @@ async def test_locked_fields_present_on_subscription_and_dashboard(
     sub = await app_client.get("/api/subscriptions/current", headers=headers)
     assert sub.status_code == 200, sub.text
     sub_body = sub.json()
-    assert sub_body["credit_balance"] == 6
+    assert sub_body["credit_balance"] == 3
     assert sub_body["spendable_credit_balance"] == 0
     assert sub_body["credits_locked_until_verification"] is True
 
     dash = await app_client.get("/api/dashboard/summary", headers=headers)
     assert dash.status_code == 200, dash.text
     dash_body = dash.json()
-    assert dash_body["credit_balance"] == 6
+    assert dash_body["credit_balance"] == 3
     assert dash_body["spendable_credit_balance"] == 0
     assert dash_body["credits_locked_until_verification"] is True
