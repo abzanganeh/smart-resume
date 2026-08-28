@@ -39,6 +39,7 @@ node_modules/
 
 # Misc
 *.log
+scripts/eval_results/
 
 # Terraform
 .terraform/
