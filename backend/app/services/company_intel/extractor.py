@@ -36,7 +36,7 @@ _PROMPT = (Path(__file__).parent.parent.parent / "agent" / "prompts" / "company_
 # 12 000 chars ≈ 4 000 tokens (gemini-2.5-flash-lite input budget: fine).
 _JD_CHAR_LIMIT = 12_000
 
-_PRIMARY_MODEL = "gemini-2.5-flash-lite"
+_PRIMARY_MODEL = "gemini-3.5-flash-lite"
 _FALLBACK_MODEL = "gpt-4o-mini"
 
 # JSON field names expected in the LLM response.

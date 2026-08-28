@@ -66,5 +66,5 @@ async def test_phase3_routes_premium_tier_to_claude(db_session) -> None:
         requested_tier="best",
     )
     assert decision.provider == "gemini"
-    assert decision.model_string == "gemini-2.5-flash"
+    assert decision.model_string == "gemini-3.5-flash"
     assert decision.consumed_credit_id is None

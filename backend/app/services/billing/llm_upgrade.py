@@ -66,8 +66,8 @@ BEST_SUBSCRIPTION_SOFT_CAP: int = 100
 # IMPORTANT: never hardcode model strings outside this fallback — read
 # from :class:`LLMConfig` via :func:`resolve_phase3_model`.
 _FALLBACK_MODELS: dict[LLMUpgradeTier, tuple[LLMProvider, str]] = {
-    LLMUpgradeTier.standard: (LLMProvider.gemini, "gemini-2.5-flash-lite"),
-    LLMUpgradeTier.better: (LLMProvider.gemini, "gemini-2.5-flash"),
+    LLMUpgradeTier.standard: (LLMProvider.gemini, "gemini-3.5-flash-lite"),
+    LLMUpgradeTier.better: (LLMProvider.gemini, "gemini-3.5-flash"),
     LLMUpgradeTier.best: (LLMProvider.anthropic, "claude-sonnet-4-6"),
 }
 
@@ -408,14 +408,14 @@ _DEFAULT_LLM_CONFIGS: list[dict] = [
     {
         "tier": LLMUpgradeTier.standard,
         "provider": LLMProvider.gemini,
-        "model_string": "gemini-2.5-flash-lite",
+        "model_string": "gemini-3.5-flash-lite",
         "phases_enabled": ["1", "2", "3", "4", "fit", "cover_letter"],
         "notes": "§18.9 default — covers every phase unless an upgrade is active.",
     },
     {
         "tier": LLMUpgradeTier.better,
         "provider": LLMProvider.gemini,
-        "model_string": "gemini-2.5-flash",
+        "model_string": "gemini-3.5-flash",
         "phases_enabled": ["3"],
         "notes": "§18.9 Better — Phase 3 only; $4.49/5-pack or +$4.99/mo.",
     },

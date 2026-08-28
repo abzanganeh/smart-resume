@@ -62,6 +62,13 @@ MATRIX: list[tuple[str, str, set[AdminRole], set[AdminRole], int]] = [
     ),
     (
         "GET",
+        "/api/admin/llm/steps",
+        {AdminRole.super_admin, AdminRole.admin, AdminRole.support_agent, AdminRole.read_only_analyst},
+        set(),
+        200,
+    ),
+    (
+        "GET",
         "/api/admin/audit-log",
         {AdminRole.super_admin, AdminRole.admin, AdminRole.support_agent, AdminRole.read_only_analyst},
         set(),
@@ -110,6 +117,13 @@ MATRIX: list[tuple[str, str, set[AdminRole], set[AdminRole], int]] = [
         {AdminRole.admin, AdminRole.support_agent, AdminRole.read_only_analyst},
         201,
     ),
+    (
+        "POST",
+        "/api/admin/llm/steps",
+        {AdminRole.super_admin},
+        {AdminRole.admin, AdminRole.support_agent, AdminRole.read_only_analyst},
+        201,
+    ),
     # Credit adjustment - super-admin OR support-agent
     # We capture the dual permission elsewhere below (since the
     # MATRIX format only carries one allowed set we test the
@@ -154,6 +168,12 @@ def _payload_for(method: str, path: str) -> dict | None:
             "provider": "openai",
             "model_string": "gpt-4o",
             "phases_enabled": [],
+        }
+    if path.endswith("/llm/steps"):
+        return {
+            "step": "chat",
+            "provider": "openai",
+            "model_string": "gpt-4o-mini",
         }
     return {}
 

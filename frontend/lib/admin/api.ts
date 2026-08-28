@@ -17,6 +17,8 @@ import type {
   PlanAuditedResponse,
   LLMConfig,
   LLMConfigPayload,
+  StepLLMConfig,
+  StepLLMConfigPayload,
   FeatureFlag,
   FeatureFlagPatchPayload,
   Announcement,
@@ -381,6 +383,34 @@ export async function getAdminLLMHistory(
 ): Promise<LLMConfig[]> {
   const raw = await req<BackendLLMConfigOut[]>(`/api/admin/llm/history`, token)
   return Array.isArray(raw) ? raw.map(mapBackendLLM) : []
+}
+
+export async function getAdminStepLLMConfigs(
+  token: string,
+): Promise<StepLLMConfig[]> {
+  const raw = await req<StepLLMConfig[]>(`/api/admin/llm/steps`, token)
+  return Array.isArray(raw) ? raw : []
+}
+
+export async function createAdminStepLLMConfig(
+  token: string,
+  payload: StepLLMConfigPayload,
+): Promise<AuditedResponse<StepLLMConfig>> {
+  const raw = await req<{ step_config: StepLLMConfig; audit_log_id: string }>(
+    `/api/admin/llm/steps`,
+    token,
+    { method: "POST", body: JSON.stringify(payload) },
+  )
+  return { data: raw.step_config, audit_log_id: raw.audit_log_id }
+}
+
+export async function getAdminStepLLMHistory(
+  token: string,
+  step?: string,
+): Promise<StepLLMConfig[]> {
+  const qs = step ? `?step=${encodeURIComponent(step)}` : ""
+  const raw = await req<StepLLMConfig[]>(`/api/admin/llm/steps/history${qs}`, token)
+  return Array.isArray(raw) ? raw : []
 }
 
 export async function updateSimilarityThreshold(

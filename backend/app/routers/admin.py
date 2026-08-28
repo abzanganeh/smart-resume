@@ -51,6 +51,7 @@ from app.models.billing import (
 )
 from app.models.export import ExportJob
 from app.models.llm_config import LLMConfig, LLMProvider
+from app.models.step_llm_config import StepLLMConfig
 from app.models.user import (
     AuthAuditLog,
     CreditTransaction,
@@ -993,6 +994,266 @@ async def admin_llm_create(
         **_audit_ctx(request),
     )
     return LLMCreateResponse(llm=_serialize_llm(row), audit_log_id=audit_row.id)
+
+
+# ---------------------------------------------------------------------------
+# Per-step LLM pins (M18 / pre-deploy cost control)
+# ---------------------------------------------------------------------------
+
+
+class StepLLMConfigOut(BaseModel):
+    step: str
+    label: str
+    provider: str
+    model_string: str
+    source: str = Field(..., description="pin | default")
+    pin_id: uuid.UUID | None = None
+    is_active: bool = True
+    notes: str | None = None
+    has_price_row: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StepLLMConfigCreateRequest(BaseModel):
+    step: str = Field(..., min_length=1, max_length=64)
+    provider: str = Field(..., min_length=1, max_length=32)
+    model_string: str = Field(..., min_length=1, max_length=255)
+    notes: str | None = Field(None, max_length=500)
+
+
+class StepLLMCreateResponse(AuditedResponse):
+    step_config: StepLLMConfigOut
+
+
+def _serialize_step_llm_row(
+    step: str,
+    *,
+    provider: str,
+    model_string: str,
+    source: str,
+    pin: StepLLMConfig | None = None,
+) -> StepLLMConfigOut:
+    from app.llm.model_registry import STEP_LABELS
+    from app.llm.pricing import has_price_row
+
+    return StepLLMConfigOut(
+        step=step,
+        label=STEP_LABELS.get(step, step),  # type: ignore[arg-type]
+        provider=provider,
+        model_string=model_string,
+        source=source,
+        pin_id=pin.id if pin else None,
+        is_active=pin.is_active if pin else False,
+        notes=pin.notes if pin else None,
+        has_price_row=has_price_row(provider, model_string),
+        created_at=pin.created_at if pin else None,
+        updated_at=pin.updated_at if pin else None,
+    )
+
+
+async def _effective_step_pins(
+    db: AsyncSession,
+) -> dict[str, StepLLMConfig]:
+    rows = (
+        await db.execute(
+            select(StepLLMConfig).where(StepLLMConfig.is_active.is_(True))
+        )
+    ).scalars().all()
+    return {row.step: row for row in rows}
+
+
+@router.get("/llm/steps", response_model=list[StepLLMConfigOut])
+@limiter.limit("120/minute")
+async def admin_step_llm_list(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[
+        AdminUser,
+        Depends(
+            require_admin_role(
+                AdminRole.super_admin,
+                AdminRole.admin,
+                AdminRole.support_agent,
+                AdminRole.read_only_analyst,
+            )
+        ),
+    ],
+) -> list[StepLLMConfigOut]:
+    """Effective provider/model for every pipeline step."""
+    from app.llm.model_registry import STEP_DEFAULTS, all_pipeline_steps
+
+    active = await _effective_step_pins(db)
+    out: list[StepLLMConfigOut] = []
+    for step in all_pipeline_steps():
+        pin = active.get(step)
+        if pin is not None:
+            out.append(
+                _serialize_step_llm_row(
+                    step,
+                    provider=pin.provider.value,
+                    model_string=pin.model_string,
+                    source="pin",
+                    pin=pin,
+                )
+            )
+        else:
+            provider, model_string = STEP_DEFAULTS[step]
+            out.append(
+                _serialize_step_llm_row(
+                    step,
+                    provider=provider,
+                    model_string=model_string,
+                    source="default",
+                )
+            )
+    return out
+
+
+@router.get("/llm/steps/history", response_model=list[StepLLMConfigOut])
+@limiter.limit("120/minute")
+async def admin_step_llm_history(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[
+        AdminUser,
+        Depends(
+            require_admin_role(
+                AdminRole.super_admin,
+                AdminRole.admin,
+                AdminRole.support_agent,
+                AdminRole.read_only_analyst,
+            )
+        ),
+    ],
+    step: str | None = None,
+    limit: int = 200,
+) -> list[StepLLMConfigOut]:
+    from app.llm.model_registry import STEP_LABELS
+    from app.llm.pricing import has_price_row
+
+    stmt = (
+        select(StepLLMConfig)
+        .order_by(desc(StepLLMConfig.created_at))
+        .limit(min(limit, 500))
+    )
+    if step:
+        stmt = stmt.where(StepLLMConfig.step == step)
+    rows = list((await db.execute(stmt)).scalars().all())
+    return [
+        StepLLMConfigOut(
+            step=row.step,
+            label=STEP_LABELS.get(row.step, row.step),  # type: ignore[arg-type]
+            provider=row.provider.value,
+            model_string=row.model_string,
+            source="pin",
+            pin_id=row.id,
+            is_active=row.is_active,
+            notes=row.notes,
+            has_price_row=has_price_row(row.provider.value, row.model_string),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post(
+    "/llm/steps",
+    response_model=StepLLMCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit("30/minute")
+async def admin_step_llm_create(
+    request: Request,
+    body: StepLLMConfigCreateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[
+        AdminUser, Depends(require_admin_role(AdminRole.super_admin))
+    ],
+) -> StepLLMCreateResponse:
+    """Activate a new provider/model pin for one pipeline step."""
+    from app.llm.model_registry import STEP_DEFAULTS
+    from app.llm.pricing import has_price_row
+    from app.services.llm.step_config import refresh_step_pin_cache
+
+    if body.step not in STEP_DEFAULTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_step", "step": body.step},
+        )
+    try:
+        provider_enum = LLMProvider(body.provider)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_provider"},
+        ) from exc
+    if not has_price_row(provider_enum.value, body.model_string):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unpriced_model",
+                "provider": provider_enum.value,
+                "model_string": body.model_string,
+            },
+        )
+
+    prior = (
+        await db.execute(
+            select(StepLLMConfig)
+            .where(StepLLMConfig.step == body.step)
+            .where(StepLLMConfig.is_active.is_(True))
+            .with_for_update()
+        )
+    ).scalars().all()
+    before_snap: dict[str, Any] | None = None
+    for r in prior:
+        before_snap = before_snap or {
+            "id": str(r.id),
+            "provider": r.provider.value,
+            "model_string": r.model_string,
+        }
+        r.is_active = False
+
+    row = StepLLMConfig(
+        id=uuid.uuid4(),
+        step=body.step,
+        provider=provider_enum,
+        model_string=body.model_string,
+        is_active=True,
+        notes=body.notes,
+        created_by_admin_id=admin.id,
+    )
+    db.add(row)
+    await db.flush()
+    await refresh_step_pin_cache(db)
+
+    audit_row = await write_admin_audit(
+        db,
+        actor_admin_id=admin.id,
+        action="step_llm_config_created",
+        target_kind="step_llm_config",
+        target_id=str(row.id),
+        before=before_snap,
+        after={
+            "step": row.step,
+            "provider": row.provider.value,
+            "model_string": row.model_string,
+        },
+        **_audit_ctx(request),
+    )
+    serialized = _serialize_step_llm_row(
+        row.step,
+        provider=row.provider.value,
+        model_string=row.model_string,
+        source="pin",
+        pin=row,
+    )
+    return StepLLMCreateResponse(
+        step_config=serialized,
+        audit_log_id=audit_row.id,
+    )
 
 
 # ---------------------------------------------------------------------------

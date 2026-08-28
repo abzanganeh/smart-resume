@@ -95,7 +95,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 "promo_redemptions, promo_codes, "
                 "career_alerts, career_job_cache, user_watched_companies, watched_companies, "
                 "credit_transactions, admin_user_grants, subscriptions, plan_configs, tier_limits_config, "
-                "llm_configs, "
+                "step_llm_configs, llm_configs, "
                 "auth_audit_log, refresh_tokens, users, admin_users "
                 "RESTART IDENTITY CASCADE"
             )

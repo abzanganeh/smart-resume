@@ -50,6 +50,7 @@ from app.services.billing.bootstrap import (
     seed_plan_configs_if_empty,
 )
 from app.services.billing.llm_upgrade import seed_llm_configs_if_empty
+from app.services.llm.step_config import seed_step_llm_configs_if_empty
 from app.services.security.logging import redact_sensitive
 from app.services.session_store import close_redis, health_check, init_redis
 
@@ -97,6 +98,7 @@ async def lifespan(app: FastAPI):
                 # always resolves a (provider, model) pair without
                 # waiting for an admin write.
                 await seed_llm_configs_if_empty(db_session)
+                await seed_step_llm_configs_if_empty(db_session)
                 unresolved = await assert_canonical_codes_resolve(db_session)
                 if unresolved and settings.APP_ENV in {"ci", "staging", "production"}:
                     raise RuntimeError(

@@ -29,48 +29,83 @@ PipelineStep = Literal[
 
 ModelRoute = tuple[str, str]
 
-# Step→model pins (verified 2026-08-22, ai.google.dev/gemini-api/docs/pricing).
+# Step→model pins (verified 2026-08-27, ai.google.dev/gemini-api/docs/pricing).
 # One quality bar: tiers differ by volume, not output model.
-# Phase 3 stays on gemini-2.5-flash (prior pro-tier default) — not flash-lite.
+# Use gemini-3.5-* — gemini-2.5-* returns 404 on many API keys.
 STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
-    "resume_structure": ("gemini", "gemini-2.5-flash-lite"),
-    "phase1_keywords": ("gemini", "gemini-2.5-flash-lite"),
-    "phase2_audit": ("gemini", "gemini-2.5-flash-lite"),
-    "phase3_rewrite": ("gemini", "gemini-2.5-flash"),  # mid flash — paid deliverable
-    "phase3_truthfulness": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_qa": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_narrative": ("gemini", "gemini-2.5-flash-lite"),
-    "phase4_rank": ("gemini", "gemini-2.5-flash-lite"),
-    "polish": ("gemini", "gemini-2.5-flash"),
-    "tone_lint": ("gemini", "gemini-2.5-flash-lite"),
-    "mechanical_fixes": ("gemini", "gemini-2.5-flash-lite"),
-    "cover_letter": ("gemini", "gemini-2.5-flash"),
-    "job_fit": ("gemini", "gemini-2.5-flash-lite"),
-    "job_title_suggestions": ("gemini", "gemini-2.5-flash-lite"),
-    "title_fit_insights": ("gemini", "gemini-2.5-flash-lite"),
-    "story": ("gemini", "gemini-2.5-flash"),
-    "story_coach": ("gemini", "gemini-2.5-flash"),
-    "story_interview": ("gemini", "gemini-2.5-flash"),
-    "story_verify": ("gemini", "gemini-2.5-flash-lite"),
-    "chat": ("gemini", "gemini-2.5-flash-lite"),
-    "company_intel": ("gemini", "gemini-2.5-flash-lite"),
-    "checkup": ("gemini", "gemini-2.5-flash-lite"),  # pinned — never settings.LLM_MODEL
+    "resume_structure": ("gemini", "gemini-3.5-flash-lite"),
+    "phase1_keywords": ("gemini", "gemini-3.5-flash-lite"),
+    "phase2_audit": ("gemini", "gemini-3.5-flash-lite"),
+    "phase3_rewrite": ("gemini", "gemini-3.5-flash"),  # mid flash — paid deliverable
+    "phase3_truthfulness": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_qa": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_narrative": ("gemini", "gemini-3.5-flash-lite"),
+    "phase4_rank": ("gemini", "gemini-3.5-flash-lite"),
+    "polish": ("gemini", "gemini-3.5-flash"),
+    "tone_lint": ("gemini", "gemini-3.5-flash-lite"),
+    "mechanical_fixes": ("gemini", "gemini-3.5-flash-lite"),
+    "cover_letter": ("gemini", "gemini-3.5-flash"),
+    "job_fit": ("gemini", "gemini-3.5-flash-lite"),
+    "job_title_suggestions": ("gemini", "gemini-3.5-flash-lite"),
+    "title_fit_insights": ("gemini", "gemini-3.5-flash-lite"),
+    "story": ("gemini", "gemini-3.5-flash"),
+    "story_coach": ("gemini", "gemini-3.5-flash"),
+    "story_interview": ("gemini", "gemini-3.5-flash"),
+    "story_verify": ("gemini", "gemini-3.5-flash-lite"),
+    "chat": ("gemini", "gemini-3.5-flash-lite"),
+    "company_intel": ("gemini", "gemini-3.5-flash-lite"),
+    "checkup": ("gemini", "gemini-3.5-flash-lite"),  # pinned — never settings.LLM_MODEL
 }
 
 # Empty today — reintroducing a premium step override is one map entry.
 TIER_STEP_OVERRIDES: dict[str, dict[PipelineStep, ModelRoute]] = {}
 
+# Human-readable labels for admin UI (step id → display name).
+STEP_LABELS: dict[PipelineStep, str] = {
+    "resume_structure": "Resume parse / structure",
+    "phase1_keywords": "Phase 1 — keywords",
+    "phase2_audit": "Phase 2 — audit",
+    "phase3_rewrite": "Phase 3 — rewrite",
+    "phase3_truthfulness": "Phase 3 — truthfulness",
+    "phase4_qa": "Phase 4 — QA",
+    "phase4_narrative": "Phase 4 — narrative",
+    "phase4_rank": "Phase 4 — rank",
+    "polish": "Polish",
+    "tone_lint": "Tone lint",
+    "mechanical_fixes": "Mechanical fixes",
+    "cover_letter": "Cover letter",
+    "job_fit": "Job fit",
+    "job_title_suggestions": "Job title suggestions",
+    "title_fit_insights": "Title fit insights",
+    "story": "Story",
+    "story_coach": "Story coach",
+    "story_interview": "Story interview",
+    "story_verify": "Story verify",
+    "chat": "Session chat",
+    "company_intel": "Company intel",
+    "checkup": "Resume checkup",
+}
+
+
+def all_pipeline_steps() -> list[PipelineStep]:
+    """Return canonical step ids in stable order."""
+    return list(STEP_DEFAULTS.keys())
+
 
 def resolve_model(step: PipelineStep, tier: str | None = None) -> ModelRoute:
     """Return ``(provider, model)`` for a pipeline step.
 
-    ``tier`` is reserved for future per-plan overrides; when the override map
-    is empty every caller gets the same step default regardless of plan code.
+    Precedence: tier override map → admin DB pin cache → ``STEP_DEFAULTS``.
     """
     if tier:
         overrides = TIER_STEP_OVERRIDES.get(tier)
         if overrides and step in overrides:
             return overrides[step]
+    from app.llm.step_pin_cache import get_step_pin
+
+    pin = get_step_pin(step)
+    if pin is not None:
+        return pin
     return STEP_DEFAULTS[step]
 
 

@@ -14,7 +14,7 @@ pytestmark = pytest.mark.unit
 def test_resolve_model_returns_step_default() -> None:
     provider, model = resolve_model("phase3_rewrite")
     assert provider == "gemini"
-    assert model == "gemini-2.5-flash"
+    assert model == "gemini-3.5-flash"
 
 
 def test_tier_override_wins_over_step_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,6 +28,6 @@ def test_tier_override_wins_over_step_default(monkeypatch: pytest.MonkeyPatch) -
     assert model == "claude-sonnet-4-6"
 
     default_provider, default_model = resolve_model("phase3_rewrite", tier="free")
-    assert (default_provider, default_model) == ("gemini", "gemini-2.5-flash")
+    assert (default_provider, default_model) == ("gemini", "gemini-3.5-flash")
 
     model_registry.TIER_STEP_OVERRIDES.pop("monthly_premium", None)

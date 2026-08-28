@@ -62,6 +62,16 @@ async function mockAdminSectionApis(page: Page) {
       body: JSON.stringify({ flags: [] }),
     }),
   )
+  await page.route("**/api/admin/llm/steps**", async (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      })
+    }
+    return route.continue()
+  })
   await page.route("**/api/admin/llm/history", async (route) =>
     route.fulfill({
       status: 200,
