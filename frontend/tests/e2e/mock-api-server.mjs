@@ -57,7 +57,7 @@ const server = http.createServer(async (req, res) => {
   // Public, unauthenticated endpoints the landing page renders from on the
   // server. page.route() cannot intercept these, so they are served here.
   if (req.method === "GET" && url.pathname === "/api/billing/free-tier") {
-    return json(res, 200, { starting_credits: 6 })
+    return json(res, 200, { starting_credits: 3 })
   }
 
   if (req.method === "GET" && url.pathname === "/api/billing/prices") {

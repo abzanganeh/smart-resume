@@ -28,7 +28,7 @@ def _user(*, verified: bool) -> User:
         auth_provider=AuthProvider.email,
         password_hash="hash",
         tier=UserTier.free,
-        credit_balance=6,
+        credit_balance=3,
         email_verified_at=datetime.now(timezone.utc) if verified else None,
     )
 

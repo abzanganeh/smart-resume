@@ -131,6 +131,9 @@ export function StoryCoach({
           setError("You need at least 1 credit to start a coaching session.");
           setShowExhaustionPaywall(true);
           dispatchCreditsExhausted();
+        } else if (e.code === "free_tier_ai_cap_reached") {
+          setError("You've used up the free-plan AI allowance. Upgrade to keep using the coach.");
+          setShowExhaustionPaywall(true);
         } else {
           setError(e.message ?? "Coach request failed. Please try again.");
           setShowExhaustionPaywall(false);

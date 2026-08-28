@@ -87,6 +87,7 @@ from app.services.billing.flint_credits import (
     deduct_flint_credits,
     release_hold,
 )
+from app.services.billing.free_tier_budget import free_credit_meter
 from app.services.billing.llm_upgrade import (
     VALID_LLM_UPGRADE_CODES,
     TierStatus,
@@ -116,6 +117,9 @@ class BalanceResponse(BaseModel):
     better: int
     best: int
     legacy_credit_balance: int
+    credit_cap: int | None = None
+    credits_used: int | None = None
+    spendable_credit_balance: int | None = None
 
 
 class FreeTierResponse(BaseModel):
@@ -249,6 +253,8 @@ class SubscriptionCurrentResponse(BaseModel):
     credit_balance: int
     spendable_credit_balance: int
     credits_locked_until_verification: bool
+    credit_cap: int | None = None
+    credits_used: int | None = None
     exhaustion_top_up_eligible: bool = False
     exhaustion_top_up_amount: int = 0
     free_tier_usage_note: str = (
@@ -364,11 +370,15 @@ async def credits_balance(
     free = await get_balance(db, user_id=user.id, credit_kind=CreditKind.free)
     better = await get_balance(db, user_id=user.id, credit_kind=CreditKind.better)
     best = await get_balance(db, user_id=user.id, credit_kind=CreditKind.best)
+    meter = await free_credit_meter(db, user=user)
     return BalanceResponse(
         free=free,
         better=better,
         best=best,
         legacy_credit_balance=user.credit_balance,
+        credit_cap=int(meter["credit_cap"]),
+        credits_used=int(meter["credits_used"]),
+        spendable_credit_balance=int(meter["spendable_credit_balance"]),
     )
 
 
@@ -730,8 +740,11 @@ async def subscriptions_current(
     ).scalar_one_or_none()
     if sub is None:
         top_up = await get_exhaustion_top_up_eligibility(session=db, user=user)
+        meter = await free_credit_meter(db, user=user)
         return SubscriptionCurrentResponse(
             subscription=None,
+            credit_cap=int(meter["credit_cap"]),
+            credits_used=int(meter["credits_used"]),
             **_subscription_credit_fields(
                 user,
                 free_credits=free_credits,
@@ -774,6 +787,8 @@ async def subscriptions_current(
             paused_at=sub.paused_at,
             pause_resumes_at=sub.pause_resumes_at,
         ),
+        credit_cap=limits.resumes_per_period,
+        credits_used=sub.resumes_used,
         **_subscription_credit_fields(user, free_credits=free_credits),
     )
 

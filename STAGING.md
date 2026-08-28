@@ -245,7 +245,7 @@ Run on staging after deploy. Automated CI covers unit/integration tests and e2e 
 - [ ] Two-tone JD comparison: output register differs between JDs
 - [ ] One Inc regression: no fabricated metrics; education/projects present
 - [ ] Checkup → “Tailor this resume” handoff pre-fills resume text
-- [ ] Free-tier registration grant is **6 credits** (PR #76): `POST /api/auth/register` response contains `credit_balance: 6`
+- [ ] Free-tier registration grant is **3 credits**: `POST /api/auth/register` response contains `credit_balance: 3`. If staging still returns 6, PATCH `/api/admin/credits/free-grant` — existing `tier_limits_config` rows are not overwritten by a code-seed change.
 - [ ] Premium plans expose `tracker_active_limit: 250` on `/api/subscriptions/current` (soft cap; marketing still says "unlimited")
 
 ### Extension & autofill (manual)

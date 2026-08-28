@@ -290,6 +290,9 @@ class Settings(BaseSettings):
             object.__setattr__(self, "GOOGLE_API_KEY", self.GEMINI_API_KEY)
         return self
 
+    # Free-tier lifetime platform AI spend cap (USD). 1 credit ≈ 1¢ in product copy.
+    FREE_TIER_MAX_USD: float = 0.03
+
     # Phase 3 — LLM rewrite can take 30–120 s on large resumes; cap it so
     # the UI gets a clear timeout instead of hanging indefinitely.
     PHASE3_LLM_TIMEOUT_SECONDS: int = 240

@@ -73,7 +73,14 @@ def llm_accounting_context(
     *,
     user_id: str | None = None,
 ) -> Iterator[None]:
-    """Bind session, user, and pipeline step for downstream LLM token recording."""
+    """Bind session, user, and pipeline step for downstream LLM token recording.
+
+    Also seeds a per-request cache used by ``free_tier_budget`` so paid-plan
+    lookups are not repeated for every LLM call in a phase run.
+    """
+    # Local import to avoid a circular dependency at module load.
+    from app.services.billing.free_tier_budget import reset_paid_plan_cache
+
     tokens: list[Token[str | None]] = []
     if session_id is not None:
         tokens.append(("session", _llm_session_id.set(session_id)))
@@ -81,6 +88,7 @@ def llm_accounting_context(
         tokens.append(("step", _llm_step.set(step)))
     if user_id is not None:
         tokens.append(("user", _llm_user_id.set(user_id)))
+    reset_paid_plan_cache()
     try:
         yield
     finally:
@@ -174,6 +182,14 @@ async def record_llm_response(
             record,
             ttl_seconds=_USER_USAGE_TTL_SECONDS,
         )
+        if cost > 0:
+            # Local import: free_tier_budget imports back into token_accounting
+            # transitively via credit_spend/credits helpers.
+            from app.services.billing.free_tier_budget import (
+                record_free_tier_ai_spend,
+            )
+
+            await record_free_tier_ai_spend(uid, cost)
     if sid:
         runs = await _append_record(
             _usage_key(sid),

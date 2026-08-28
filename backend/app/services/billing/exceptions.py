@@ -36,6 +36,32 @@ class InsufficientCreditsError(BillingError):
         self.balance = balance
 
 
+class FreeTierAiBudgetExceededError(InsufficientCreditsError):
+    """Free-tier lifetime platform AI-spend cap reached.
+
+    Distinct subclass so ``orchestrator._classify_error`` can route this
+    to a user-facing ``free_tier_ai_cap_reached`` message with an
+    upgrade CTA — the generic "AI service is out of credit on our side"
+    copy is wrong for a per-user quota and blocks retries indefinitely.
+    """
+
+    def __init__(self, *, cap_usd: float, used_usd: float) -> None:
+        super().__init__("free", 0)
+        self.cap_usd = cap_usd
+        self.used_usd = used_usd
+
+
+FREE_TIER_AI_CAP_CODE = "free_tier_ai_cap_reached"
+FREE_TIER_AI_CAP_MESSAGE = (
+    "You've used up the free-plan AI allowance for your account. "
+    "Upgrade to a paid plan to keep tailoring — retrying will not help."
+)
+
+
+def free_tier_ai_cap_detail() -> dict[str, str]:
+    return {"code": FREE_TIER_AI_CAP_CODE, "message": FREE_TIER_AI_CAP_MESSAGE}
+
+
 class CreditsLockedUntilVerificationError(BillingError):
     """Free credits exist but email is not verified yet.
 
@@ -150,6 +176,10 @@ __all__ = [
     "BillingCycleMismatchError",
     "BillingError",
     "CreditsLockedUntilVerificationError",
+    "FreeTierAiBudgetExceededError",
+    "FREE_TIER_AI_CAP_CODE",
+    "FREE_TIER_AI_CAP_MESSAGE",
+    "free_tier_ai_cap_detail",
     "InsufficientCreditsError",
     "PlanLimitReachedError",
     "PriceUnresolvedError",

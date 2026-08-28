@@ -43,9 +43,12 @@ import { ProgressLog } from "@/components/session/ProgressLog";
 import { StaleBanner } from "@/components/session/StaleBanner";
 import { SessionAiControls } from "@/components/session/SessionAiControls";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ChevronRight, MessageSquare, Sparkles, Zap } from "lucide-react";
+import { AlertCircle, ChevronRight, MessageSquare, Sparkles } from "lucide-react";
 import { ResumeChat } from "@/components/session/ResumeChat";
 import { ExhaustionPaywall } from "@/components/billing/ExhaustionPaywall";
+import { CreditChargeConfirm } from "@/components/billing/CreditChargeConfirm";
+import { CreditMeter } from "@/components/billing/CreditMeter";
+import { useEntitlement } from "@/hooks/useEntitlement";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
@@ -116,7 +119,10 @@ function SessionContent() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
   const [atsRecalcRunning, setAtsRecalcRunning] = useState(false);
-  const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
+  const [pendingCreditAction, setPendingCreditAction] = useState<{
+    label: string;
+    run: () => void;
+  } | null>(null);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetter, setCoverLetter] = useState<CoverLetterOutput | null>(null);
 
@@ -180,6 +186,17 @@ function SessionContent() {
   const llmErrorActive = runErrorType?.startsWith("llm_") ?? false;
 
   const { data: authSession, update: updateAuthSession } = useSession();
+  const entitlement = useEntitlement();
+  const requestCreditAction = useCallback(
+    (label: string, run: () => void) => {
+      if (entitlement.isFreeUser) {
+        setPendingCreditAction({ label, run });
+        return;
+      }
+      run();
+    },
+    [entitlement.isFreeUser],
+  );
   const { connect, reset, lastEvent, events, isConnected, isDone, error: sseError } = useSSE();
 
   useEffect(() => {
@@ -571,6 +588,12 @@ function SessionContent() {
     await runPhase("export", { force: true });
   }, [runPhase]);
 
+  const recalculateAtsWithConfirm = useCallback(() => {
+    requestCreditAction("Recalculate ATS score", () => {
+      void recalculateAts();
+    });
+  }, [requestCreditAction, recalculateAts]);
+
   const runCurrentPhase = useCallback(
     async (options?: { force?: boolean; scope?: PhaseRunScope; auditOnly?: boolean }) => {
       if (step === "analysis") {
@@ -715,6 +738,7 @@ function SessionContent() {
       setPhase4RecalcActive(false);
       setAtsRecalcRunning(false);
       setRunErrorType(lastEvent.error_type ?? null);
+      setRunErrorCode(lastEvent.code ?? null);
       setRunError(lastEvent.message ?? "Phase failed.");
     }
   }, [
@@ -781,7 +805,7 @@ function SessionContent() {
     setRunError(null);
     setRunErrorCode(null);
     setRunErrorType(null);
-    setShowRecalcConfirm(false);
+    setPendingCreditAction(null);
     reset();
   }, [step, reset]);
 
@@ -1005,6 +1029,14 @@ function SessionContent() {
                   >
                     Upload master resume →
                   </Link>
+                ) : runErrorCode === "free_tier_ai_cap_reached" ? (
+                  <Link
+                    href="/billing"
+                    className="whitespace-nowrap underline hover:no-underline text-red-700 dark:text-red-400"
+                    onClick={() => setRunError(null)}
+                  >
+                    Upgrade to keep tailoring →
+                  </Link>
                 ) : runErrorCode === "insufficient_credits" ? (
                   !authSession?.backendAccessToken ? (
                     <Link
@@ -1178,49 +1210,70 @@ function SessionContent() {
           {step === "rewrite" && (
             <div>
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <div>
+                <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-bold mb-1">Tailored Rewrite</h1>
                   <p className="text-slate-600 dark:text-slate-400 text-sm">
                     Your resume, rewritten with exact JD phrasing and quality rules applied.
                   </p>
+                  {entitlement.isFreeUser &&
+                    entitlement.creditCap != null &&
+                    entitlement.creditsUsed != null && (
+                      <div className="mt-3 max-w-xs">
+                        <CreditMeter
+                          used={entitlement.creditsUsed}
+                          cap={entitlement.creditCap}
+                          label="Credits"
+                        />
+                      </div>
+                    )}
                 </div>
                 {tailored && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => runCurrentPhase({ force: true })}
-                      disabled={phaseRunning}
-                      className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
-                    >
-                      {phaseRunning ? "Regenerating…" : "Regenerate Resume"}
-                    </button>
-                    {showRecalcConfirm ? (
-                      <>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 text-xs text-amber-700 dark:text-amber-300">
-                          <Zap className="w-3.5 h-3.5 shrink-0" />
-                          Costs 1 credit
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setShowRecalcConfirm(false); recalculateAts(); }}
-                          disabled={atsRecalcRunning || phaseRunning}
-                          className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-40"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowRecalcConfirm(false)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700"
-                        >
-                          Cancel
-                        </button>
-                      </>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    {pendingCreditAction?.label === "Regenerate resume" ? (
+                      <CreditChargeConfirm
+                        actionLabel="Regenerate resume"
+                        onConfirm={() => {
+                          const run = pendingCreditAction.run;
+                          setPendingCreditAction(null);
+                          run();
+                        }}
+                        onCancel={() => setPendingCreditAction(null)}
+                        disabled={phaseRunning}
+                      />
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setShowRecalcConfirm(true)}
+                        onClick={() =>
+                          requestCreditAction("Regenerate resume", () =>
+                            runCurrentPhase({ force: true }),
+                          )
+                        }
+                        disabled={phaseRunning || !!pendingCreditAction}
+                        className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
+                      >
+                        {phaseRunning ? "Regenerating…" : "Regenerate Resume"}
+                      </button>
+                    )}
+                    {pendingCreditAction?.label === "Recalculate ATS score" ? (
+                      <CreditChargeConfirm
+                        actionLabel="Recalculate ATS score"
+                        onConfirm={() => {
+                          const run = pendingCreditAction.run;
+                          setPendingCreditAction(null);
+                          run();
+                        }}
+                        onCancel={() => setPendingCreditAction(null)}
                         disabled={atsRecalcRunning || phaseRunning}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requestCreditAction("Recalculate ATS score", () => {
+                            void recalculateAts();
+                          })
+                        }
+                        disabled={atsRecalcRunning || phaseRunning || !!pendingCreditAction}
                         className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40"
                       >
                         {atsRecalcRunning ? "Recalculating…" : "Recalculate ATS Score"}
@@ -1230,13 +1283,29 @@ function SessionContent() {
                 )}
               </div>
               {!tailored && !phaseRunning && sessionLoaded && (
-                <button
-                  type="button"
-                  onClick={() => runCurrentPhase()}
-                  className="mb-6 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300"
-                >
-                  Run tailored rewrite
-                </button>
+                pendingCreditAction?.label === "Run tailored rewrite" ? (
+                  <CreditChargeConfirm
+                    className="mb-6"
+                    actionLabel="Run tailored rewrite"
+                    onConfirm={() => {
+                      const run = pendingCreditAction.run;
+                      setPendingCreditAction(null);
+                      run();
+                    }}
+                    onCancel={() => setPendingCreditAction(null)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      requestCreditAction("Run tailored rewrite", () => runCurrentPhase())
+                    }
+                    disabled={!!pendingCreditAction}
+                    className="mb-6 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300 disabled:opacity-40"
+                  >
+                    Run tailored rewrite
+                  </button>
+                )
               )}
               {showProgress && (
                 <div className="mb-6">
@@ -1352,8 +1421,8 @@ function SessionContent() {
                             scoreHistory={atsScoreHistory}
                             variant="sidebar"
                             staleSince={stale["4"]}
-                            onRecalculate={recalculateAts}
-                            recalculateDisabled={atsRecalcRunning || phaseRunning}
+                            onRecalculate={recalculateAtsWithConfirm}
+                            recalculateDisabled={atsRecalcRunning || phaseRunning || !!pendingCreditAction}
                             addressedKeys={addressedAtsKeys}
                             skippedKeys={skippedAtsKeys}
                             onSkipIssue={skipAtsIssue}
@@ -1419,6 +1488,19 @@ function SessionContent() {
                   <ProgressLog messages={progressLog} done={false} />
                 </div>
               )}
+              {pendingCreditAction?.label === "Recalculate ATS score" && (
+                <CreditChargeConfirm
+                  className="mb-4"
+                  actionLabel="Recalculate ATS score"
+                  onConfirm={() => {
+                    const run = pendingCreditAction.run;
+                    setPendingCreditAction(null);
+                    run();
+                  }}
+                  onCancel={() => setPendingCreditAction(null)}
+                  disabled={atsRecalcRunning || phaseRunning}
+                />
+              )}
               <div className="mb-8">
                 <ATSGuidancePanel
                   output={qa}
@@ -1426,8 +1508,8 @@ function SessionContent() {
                   scoreHistory={atsScoreHistory}
                   variant="primary"
                   staleSince={stale["4"]}
-                  onRecalculate={recalculateAts}
-                  recalculateDisabled={atsRecalcRunning || phaseRunning}
+                  onRecalculate={recalculateAtsWithConfirm}
+                  recalculateDisabled={atsRecalcRunning || phaseRunning || !!pendingCreditAction}
                   addressedKeys={addressedAtsKeys}
                   skippedKeys={skippedAtsKeys}
                   onSkipIssue={skipAtsIssue}
@@ -1496,6 +1578,9 @@ function SessionContent() {
         accessToken={authSession?.backendAccessToken}
         initial={coverLetter}
         open={coverLetterOpen}
+        isFreeUser={entitlement.isFreeUser}
+        creditCap={entitlement.creditCap}
+        creditsUsed={entitlement.creditsUsed}
         onClose={() => setCoverLetterOpen(false)}
       />
 

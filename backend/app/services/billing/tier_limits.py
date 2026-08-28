@@ -88,12 +88,9 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
     return [
         TierLimitsSeedRow(
             plan_code="free",
-            # 2026-08-19: raised free resumes_per_period 3 -> 6.  This is the
-            # registration grant credit count; free users must still stay
-            # under tracker_active_limit which caps how many rows they can
-            # keep in the tracker at once.
-            resumes_per_period=6,
-            cover_letters_per_period=6,
+            # Registration grant credit count (also caps cover-letter debits on free).
+            resumes_per_period=3,
+            cover_letters_per_period=3,
             searches_per_period=5,
             fit_analyses_per_period=3,
             checkups_per_period=3,

@@ -21,7 +21,10 @@ from app.models.session import PhaseStatus, Session
 from app.services import session_store
 from app.services.company_intel import get_company_intel
 from app.services.dashboard.resume_record import resolve_company_name
-from app.services.billing.exceptions import InsufficientCreditsError
+from app.services.billing.exceptions import (
+    FreeTierAiBudgetExceededError,
+    InsufficientCreditsError,
+)
 from app.services.billing.llm_upgrade import (
     Phase3RouteDecision,
     apply_phase3_tier,
@@ -143,6 +146,13 @@ async def _resolve_phase3_llm(
 
 def _classify_error(exc: BaseException) -> str:
     """Return a short machine-readable error class for the frontend."""
+    # Check the typed exception first so a per-user free-tier cap is not
+    # misreported as "AI service out of credit on our side" — the generic
+    # copy tells the user to retry / contact support, which is wrong when
+    # the platform is fine but the user has spent their lifetime free-tier
+    # AI budget.
+    if isinstance(exc, FreeTierAiBudgetExceededError):
+        return "free_tier_ai_cap_reached"
     msg = str(exc).lower()
     if any(k in msg for k in ("402", "payment required", "not enough credits", "insufficient credit")):
         return "llm_insufficient_credits"
@@ -171,6 +181,10 @@ def _user_facing_error(exc: BaseException) -> str:
     """Return a clean, user-facing error message for display in the UI."""
     kind = _classify_error(exc)
     messages = {
+        "free_tier_ai_cap_reached": (
+            "You've used up the free-plan AI allowance for your account. "
+            "Upgrade to a paid plan to keep tailoring — retrying will not help."
+        ),
         "llm_insufficient_credits": (
             "The AI service is out of credit on our side (402). "
             "Retry in a moment — if it keeps failing, contact support."
@@ -229,7 +243,12 @@ async def _fetch_and_store_company_intel(session_id: str, session: Session) -> N
             return
 
         async with async_session_factory() as db:
-            intel = await get_company_intel(db, company_name=company_name, jd_text=jd_text)
+            intel = await get_company_intel(
+                db,
+                company_name=company_name,
+                jd_text=jd_text,
+                user_id=session.user_id,
+            )
 
         if intel is None or intel.is_empty():
             return
@@ -296,7 +315,11 @@ async def run_phase(
     try:
         from app.agent import phase1_keywords, phase2_audit, phase3_rewrite, phase4_qa
 
-        with llm_accounting_context(session_id, f"phase{phase}"):
+        with llm_accounting_context(
+            session_id,
+            f"phase{phase}",
+            user_id=session.user_id,
+        ):
             match phase:
                 case 1:
                     output = await phase1_keywords.run(session, llm, event_queue)
@@ -484,6 +507,29 @@ async def run_phase(
             ),
             "used_tokens": exc.used,
             "token_ceiling": exc.ceiling,
+        })
+        raise
+    except FreeTierAiBudgetExceededError as exc:
+        # Per-user free-tier AI cap — emit an explicit 402 with a
+        # dedicated ``code`` so the session UI can route to /billing
+        # instead of the generic "AI service out of credit on our side"
+        # copy (which implies a platform-side outage and prompts an
+        # endless retry).
+        await session_store.update_phase_status(session_id, phase, PhaseStatus.error)
+        log.info(
+            "phase_blocked_free_tier_ai_cap",
+            session_id=session_id,
+            phase=phase,
+            used_usd=exc.used_usd,
+            cap_usd=exc.cap_usd,
+        )
+        await event_queue.put({
+            "event": "error",
+            "phase": phase,
+            "code": "free_tier_ai_cap_reached",
+            "status": 402,
+            "message": _user_facing_error(exc),
+            "error_type": "free_tier_ai_cap_reached",
         })
         raise
     except Exception as e:

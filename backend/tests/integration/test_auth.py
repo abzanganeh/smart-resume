@@ -50,8 +50,8 @@ async def _register(client: AsyncClient) -> tuple[str, str]:
     body = r.json()
     assert body["token_type"] == "bearer"
     assert body["user"]["email"] == REGISTER_PAYLOAD["email"]
-    # 2026-08-19: free-tier registration grant bumped from 3 to 6.
-    assert body["user"]["credit_balance"] == 6
+    # Free-tier registration grant: 3 credits (tier_limits free resumes_per_period).
+    assert body["user"]["credit_balance"] == 3
     refresh_cookie = r.cookies.get(REFRESH_COOKIE_NAME)
     assert refresh_cookie, "refresh cookie must be set on register"
     return body["access_token"], refresh_cookie
@@ -67,7 +67,7 @@ async def test_register_grants_free_tier_credits_and_audit_row(
             select(User).where(User.email == REGISTER_PAYLOAD["email"])
         )
     ).scalar_one()
-    assert user.credit_balance == 6
+    assert user.credit_balance == 3
 
     grants = (
         await db_session.execute(
@@ -75,7 +75,7 @@ async def test_register_grants_free_tier_credits_and_audit_row(
         )
     ).scalars().all()
     assert len(grants) == 1
-    assert grants[0].delta == 6
+    assert grants[0].delta == 3
     assert grants[0].action == CreditTransactionAction.registration_grant
     # IMPLEMENTATION_PLAN §7.5: registration grant is partitioned under
     # ``credit_kind=free`` so SUM(delta) returns the right balance.
