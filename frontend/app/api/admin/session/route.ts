@@ -1,7 +1,7 @@
 /**
  * Next.js API route for admin session management.
  *
- * GET  /api/admin/session  → return parsed session or 401
+ * GET  /api/admin/session  → return parsed session or JSON null (200)
  * POST /api/admin/session  → set httpOnly cookie after login
  * DELETE /api/admin/session → clear cookie (logout)
  *
@@ -39,14 +39,14 @@ function cookieOptions(req: NextRequest, maxAge: number) {
 
 export async function GET(req: NextRequest) {
   const raw = req.cookies.get(COOKIE_NAME)?.value
-  if (!raw) return NextResponse.json({ error: "no session" }, { status: 401 })
+  if (!raw) return NextResponse.json(null)
 
   const session = await decodeSignedAdminSession(raw)
   if (!session) {
-    return NextResponse.json({ error: "invalid session" }, { status: 401 })
+    return NextResponse.json(null)
   }
   if (Date.now() > session.expires_at) {
-    return NextResponse.json({ error: "expired" }, { status: 401 })
+    return NextResponse.json(null)
   }
   return NextResponse.json(session)
 }

@@ -108,8 +108,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Load session once on mount; redirect to /admin/auth if none exists.
   useEffect(() => {
+    if (isAuthPage) {
+      setSession(null)
+      setLoading(false)
+      return
+    }
     getAdminSession().then((s) => {
-      if (!s && !isAuthPage) {
+      if (!s) {
         router.replace("/admin/auth")
         return
       }
