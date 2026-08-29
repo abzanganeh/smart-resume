@@ -39,6 +39,12 @@ describe("isOnboardingExempt", () => {
     assert.equal(isOnboardingExempt("/settings"), true);
     assert.equal(isOnboardingExempt("/settings/billing"), true);
   });
+
+  it("does not over-match auth or settings prefixes", () => {
+    assert.equal(isOnboardingExempt("/auth"), false);
+    assert.equal(isOnboardingExempt("/settingsfoo"), false);
+    assert.equal(isOnboardingExempt("/dashboard"), false);
+  });
 });
 
 describe("mustCompleteOnboarding", () => {

@@ -21,9 +21,9 @@ export function resolveSiteOrigin(raw: string | undefined): string {
   }
 }
 
-const RESOLVED_ORIGIN = resolveSiteOrigin(
-  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL,
-);
+const RAW_SITE_ENV = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXTAUTH_URL;
+
+const RESOLVED_ORIGIN = resolveSiteOrigin(RAW_SITE_ENV);
 
 export function siteUrl(): string {
   return RESOLVED_ORIGIN;
@@ -42,9 +42,22 @@ export function isLocalHttpOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * Whether CSP/HSTS should treat the deployment as local HTTP staging.
+ * Unset site env fails closed (production headers) even though ``siteUrl()``
+ * still falls back to localhost for metadata links.
+ */
+export function isExplicitLocalHttpSite(
+  rawSiteEnv: string | undefined,
+  resolvedOrigin: string = resolveSiteOrigin(rawSiteEnv),
+): boolean {
+  if (!rawSiteEnv?.trim()) return false;
+  return isLocalHttpOrigin(resolvedOrigin);
+}
+
 /** True when the public site is plain HTTP on loopback (local Docker staging on :3001). */
 export function isLocalHttpSite(): boolean {
-  return isLocalHttpOrigin(RESOLVED_ORIGIN);
+  return isExplicitLocalHttpSite(RAW_SITE_ENV, RESOLVED_ORIGIN);
 }
 
 /** Absolute URL for a site-relative path. */

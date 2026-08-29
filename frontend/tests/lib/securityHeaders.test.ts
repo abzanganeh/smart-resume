@@ -5,7 +5,7 @@ import {
   securityResponseHeaders,
 } from "@/lib/securityHeaders";
 import { createCspNonce } from "@/lib/csp";
-import { isLocalHttpOrigin, siteUrl } from "@/lib/siteUrl";
+import { isLocalHttpOrigin } from "@/lib/siteUrl";
 
 function headerMap(
   headers: { key: string; value: string }[],
@@ -47,10 +47,11 @@ describe("securityResponseHeaders", () => {
   it("omits upgrade-insecure-requests for local http site origins", () => {
     assert.equal(isLocalHttpOrigin("http://localhost:3001"), true);
     assert.equal(isLocalHttpOrigin("https://flintapply.com"), false);
-    if (isLocalHttpOrigin(siteUrl())) {
-      const csp = buildContentSecurityPolicy({ production: true });
-      assert.doesNotMatch(csp, /upgrade-insecure-requests/);
-    }
+    const csp = buildContentSecurityPolicy({
+      production: true,
+      localHttpSite: true,
+    });
+    assert.doesNotMatch(csp, /upgrade-insecure-requests/);
   });
 
   it("keeps upgrade-insecure-requests and HSTS on production HTTPS origins", () => {
