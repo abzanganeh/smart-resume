@@ -78,7 +78,7 @@ python3 scripts/setup-staging-env.py --local-sim   # dummy Stripe IDs for local 
 python3 scripts/setup-staging-env.py --check
 
 # 3. Start stack (postgres/redis + backend + frontend)
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.local-sim.yml up -d --build
 
 # 4. Automated smoke (HTTP)
 chmod +x scripts/staging-smoke.sh
