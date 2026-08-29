@@ -192,13 +192,20 @@ async def commit_tailored_edits(
 @router.post("/{session_id}/chat", response_model=ChatResponse)
 @limiter.limit("20/minute")
 async def chat_with_resume(
-    request: Request, session_id: str, body: ChatRequest
+    request: Request,
+    session_id: str,
+    body: ChatRequest,
+    db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     """Free-form chat to request targeted resume edits. Returns a reply and structured patches."""
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     user_id = getattr(session, "user_id", None)
+    if user_id:
+        from app.services.auth.dependencies import assert_user_email_verified
+
+        await assert_user_email_verified(db, user_id)
     with llm_accounting_context(
         session_id,
         "chat",

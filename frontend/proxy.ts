@@ -75,7 +75,12 @@ export default auth(async function proxy(req) {
   }
 
   if (session && mustCompleteOnboarding(session) && !isOnboardingExempt(pathname)) {
-    return redirectWithContentSecurityPolicy(new URL("/onboarding", req.url), nonce)
+    const onboardingUrl = new URL("/onboarding", req.url)
+    // Preserve deep links (e.g. return from email verify → settings).
+    if (pathname !== "/onboarding" && req.nextUrl.search) {
+      onboardingUrl.searchParams.set("returnTo", `${pathname}${req.nextUrl.search}`)
+    }
+    return redirectWithContentSecurityPolicy(onboardingUrl, nonce)
   }
 
   // Only bounce away from /auth when the backend token is present — a bare NextAuth

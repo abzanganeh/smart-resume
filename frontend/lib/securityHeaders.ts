@@ -8,6 +8,8 @@
  * would block every React ``style={{}}`` attribute (see SECURITY.md).
  */
 
+import { isLocalHttpSite } from "./siteUrl";
+
 const API_ORIGIN = (() => {
   const raw = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   try {
@@ -23,6 +25,8 @@ export type CspOptions = {
   nonce?: string;
   /** Override NODE_ENV detection (unit tests). */
   production?: boolean;
+  /** Override isLocalHttpSite() (unit tests for production HTTPS). */
+  localHttpSite?: boolean;
 };
 
 /** Build the enforcing CSP directive string. */
@@ -73,7 +77,7 @@ export function buildContentSecurityPolicy(options: CspOptions = {}): string {
     "object-src 'none'",
   ];
 
-  if (!isDev) {
+  if (!isDev && !(options.localHttpSite ?? isLocalHttpSite())) {
     directives.push("upgrade-insecure-requests");
   }
 
@@ -84,7 +88,20 @@ const PERMISSIONS_POLICY =
   "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(self), usb=()";
 
 /** Non-CSP security headers (CSP is set per request in proxy.ts). */
-export function securityResponseHeaders(): { key: string; value: string }[] {
+export function securityResponseHeaders(options?: {
+  /** Override NODE_ENV detection (unit tests). */
+  production?: boolean;
+  /** Override isLocalHttpSite() (unit tests for production HTTPS). */
+  localHttpSite?: boolean;
+}): { key: string; value: string }[] {
+  const isProduction =
+    options?.production === true
+      ? true
+      : options?.production === false
+        ? false
+        : process.env.NODE_ENV === "production";
+  const localHttp = options?.localHttpSite ?? isLocalHttpSite();
+
   const headers: { key: string; value: string }[] = [
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -92,7 +109,7 @@ export function securityResponseHeaders(): { key: string; value: string }[] {
     { key: "Permissions-Policy", value: PERMISSIONS_POLICY },
   ];
 
-  if (process.env.NODE_ENV === "production") {
+  if (isProduction && !localHttp) {
     headers.push({
       key: "Strict-Transport-Security",
       value: "max-age=63072000; includeSubDomains; preload",

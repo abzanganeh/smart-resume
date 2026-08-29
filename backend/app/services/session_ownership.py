@@ -154,6 +154,14 @@ async def require_session_user(
         user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
+        if not user.is_email_verified:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "email_verification_required",
+                    "message": "Verify your email before using AI features.",
+                },
+            )
         return user
     except (TokenExpiredError, TokenInvalidError):
         raise HTTPException(status_code=401, detail="Invalid access token") from None

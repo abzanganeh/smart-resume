@@ -29,6 +29,24 @@ export function siteUrl(): string {
   return RESOLVED_ORIGIN;
 }
 
+/** True when ``origin`` is plain HTTP on loopback (local Docker staging on :3001). */
+export function isLocalHttpOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    return (
+      u.protocol === "http:" &&
+      (u.hostname === "localhost" || u.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** True when the public site is plain HTTP on loopback (local Docker staging on :3001). */
+export function isLocalHttpSite(): boolean {
+  return isLocalHttpOrigin(RESOLVED_ORIGIN);
+}
+
 /** Absolute URL for a site-relative path. */
 export function absoluteUrl(path: string): string {
   return new URL(path, siteUrl()).toString();
