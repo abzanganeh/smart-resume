@@ -72,7 +72,7 @@ from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
-from app.services.auth.dependencies import get_current_user
+from app.services.auth.dependencies import VerifiedUser, get_current_user
 from app.services.billing.quota import (
     check_quota_for_story_coach,
     check_quota_for_story_generate,
@@ -275,7 +275,7 @@ async def get_resume(
 @limiter.limit("10/minute")
 async def transcribe_resume_audio(
     request: Request,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     audio: UploadFile = File(...),
 ):
@@ -372,7 +372,7 @@ async def transcribe_resume_audio(
 @limiter.limit("30/minute")
 async def create_or_replace_resume(
     request: Request,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
@@ -425,7 +425,7 @@ async def create_or_replace_resume(
 @limiter.limit("30/minute")
 async def replace_resume(
     request: Request,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
@@ -611,8 +611,8 @@ async def delete_chunk(
 async def create_resume_from_story(
     request: Request,
     body: StoryToResumeRequest,
+    user: VerifiedUser,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
 ) -> dict:
     """
     Convert a spoken career narrative to a resume draft for review.
@@ -692,7 +692,7 @@ async def create_resume_from_story(
 async def story_verify_draft(
     request: Request,
     body: StoryVerifyRequest,
-    user: User = Depends(get_current_user),
+    user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """Recompute verify hints after the user edits the draft text."""
     verify_items = [item.to_dict() for item in build_verify_items(body.segments, body.resume_text)]
@@ -707,8 +707,8 @@ async def story_verify_draft(
 async def save_resume_from_story(
     request: Request,
     body: StorySaveRequest,
+    user: VerifiedUser,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
 ) -> dict:
     """
     Save a reviewed story resume to the master profile.
@@ -789,7 +789,7 @@ async def save_resume_from_story(
 async def polish_resume_draft(
     request: Request,
     body: PolishResumeRequest,
-    user: User = Depends(get_current_user),
+    user: VerifiedUser,
 ) -> dict:
     """
     Apply a single plain-English editing instruction to a resume draft.
@@ -827,7 +827,7 @@ async def polish_resume_draft(
 async def story_coach_endpoint(
     request: Request,
     body: CoachRequest,
-    user: User = Depends(get_current_user),
+    user: VerifiedUser,
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Stream one follow-up question from the interview coach (§22).
@@ -923,7 +923,7 @@ async def story_coach_endpoint(
 async def story_interview_next(
     request: Request,
     body: InterviewNextRequest,
-    user: User = Depends(get_current_user),
+    user: VerifiedUser,
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Stream the next interview question (Coached Interview Mode, §23).
@@ -1006,7 +1006,7 @@ async def story_interview_next(
 async def story_interview_submit(
     request: Request,
     body: InterviewSubmitRequest,
-    user: User = Depends(get_current_user),
+    user: VerifiedUser,
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Compile interview Q&A and generate resume (Coached Interview Mode, §23).

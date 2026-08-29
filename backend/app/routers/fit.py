@@ -28,7 +28,7 @@ from app.models.user import User
 from app.parsers.docx_parser import extract_text_from_docx
 from app.parsers.pdf_parser import extract_text_from_pdf
 from app.parsers.text_parser import extract_text_from_txt
-from app.services.auth.dependencies import get_current_user
+from app.services.auth.dependencies import VerifiedUser, get_current_user
 from app.services.billing.exceptions import (
     AccountSuspendedError,
     PlanLimitReachedError,
@@ -227,7 +227,7 @@ async def fetch_jd(
 @limiter.limit("20/hour", key_func=_rate_limit_user_key)
 async def analyze_fit(
     request: Request,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
     jd_text: Annotated[str | None, Form()] = None,
     jd_url: Annotated[str | None, Form()] = None,

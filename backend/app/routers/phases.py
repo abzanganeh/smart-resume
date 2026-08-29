@@ -24,6 +24,7 @@ from app.models.audit import AuditOutput
 from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
 from app.models.session import PhaseRunScope, PhaseStatus
 from app.models.user import User
+from app.services.auth.dependencies import assert_user_email_verified
 from app.services.session_ownership import resolve_bearer_user_id
 from app.services.billing.exceptions import (
     AccountSuspendedError,
@@ -132,6 +133,8 @@ async def trigger_phase(
         raise HTTPException(status_code=404, detail="Session not found")
 
     user_id = await resolve_bearer_user_id(authorization, session)
+    if user_id:
+        await assert_user_email_verified(db, user_id)
 
     if phase >= 2 and getattr(session, f"phase{phase - 1}_status") != PhaseStatus.done:
         raise HTTPException(

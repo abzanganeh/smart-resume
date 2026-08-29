@@ -36,6 +36,7 @@ import { JobTitlePicker } from "@/components/jobs/JobTitlePicker"
 import { ProfileUploadZone } from "@/components/profile/ProfileUploadZone"
 import {
   FREE_TIER_CREDIT_ACTIONS,
+  FREE_TIER_NON_CREDIT_LIMITS_COPY,
   FREE_TIER_STARTING_CREDITS,
   VOICE_AVAILABILITY_COPY,
 } from "@/lib/freeTier"
@@ -65,8 +66,8 @@ function OnboardingAiStep() {
           </span>
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-          No API key needed — platform AI is included. Each credit covers one major AI action
-          below.
+          No API key needed — platform AI is included. Most items below cost one credit;
+          story generate and save are free the first time.
         </p>
       </div>
 
@@ -85,9 +86,9 @@ function OnboardingAiStep() {
           ))}
         </ul>
         <p className="text-xs text-slate-600 dark:text-slate-400 pt-1">
-          {VOICE_AVAILABILITY_COPY} You can also just upload or paste a resume. After your master
-          resume, {PRODUCT_NAME} suggests job titles to search our company job corpus. Fit analysis and
-          expanded search need a paid plan.
+          {FREE_TIER_NON_CREDIT_LIMITS_COPY} {VOICE_AVAILABILITY_COPY} You can also upload or
+          paste a resume. After your master resume, {PRODUCT_NAME} suggests job titles to search
+          our company job corpus. Fit analysis and expanded search need a paid plan.
         </p>
       </div>
     </div>
@@ -259,6 +260,16 @@ function OnboardingPageContent() {
     try {
       await uploadProfileResume(accessToken, payload)
       await advanceAfterMasterResume()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ""
+      if (
+        msg.includes("Verify your email") ||
+        msg === "email_verification_required"
+      ) {
+        setError(friendlyAuthError("email_verification_required"))
+      } else {
+        setError(msg || friendlyAuthError("Default"))
+      }
     } finally {
       setUploadingMaster(false)
     }

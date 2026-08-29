@@ -96,6 +96,7 @@ function fmtMs(ms: number): string {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const isAuthPage = pathname === "/admin/auth"
 
   const [session, setSession] = useState<StoredAdminSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -107,20 +108,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Load session once on mount; redirect to /admin/auth if none exists.
   useEffect(() => {
-    const isAuthPage = pathname === "/admin/auth"
+    if (isAuthPage) {
+      setSession(null)
+      setLoading(false)
+      return
+    }
     getAdminSession().then((s) => {
-      if (!s && !isAuthPage) {
+      if (!s) {
         router.replace("/admin/auth")
         return
       }
       setSession(s)
       setLoading(false)
     })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthPage, router])
 
   // Listen for backend session-revoked signals from req() and redirect immediately.
   useEffect(() => {
-    const isAuthPage = pathname === "/admin/auth"
     if (isAuthPage) return
     async function handleUnauthorized() {
       await clearAdminSession()
@@ -128,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     window.addEventListener("admin:unauthorized", handleUnauthorized)
     return () => window.removeEventListener("admin:unauthorized", handleUnauthorized)
-  }, [pathname, router])
+  }, [isAuthPage, router])
 
   // Countdown timer for session TTL warning
   useEffect(() => {
@@ -170,7 +174,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
     }
     await clearAdminSession()
+    setSession(null)
     router.replace("/admin/auth")
+  }
+
+  // Sign-in / 2FA enrollment is a standalone page — not inside the dashboard shell.
+  if (isAuthPage) {
+    return <>{children}</>
   }
 
   if (loading) {

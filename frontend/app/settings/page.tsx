@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, Mail } from "lucide-react";
 import { useRequireAuth } from "@/lib/auth/guards";
@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [resetSending, setResetSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const autoVerifySentRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -41,6 +42,16 @@ export default function SettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!token || verified || loading || autoVerifySentRef.current) return;
+    autoVerifySentRef.current = true;
+    void sendEmailVerification(token)
+      .then(() => setVerifySent(true))
+      .catch(() => {
+        autoVerifySentRef.current = false;
+      });
+  }, [token, verified, loading]);
 
   async function saveName() {
     if (!token || !displayName.trim()) return;
@@ -129,14 +140,18 @@ export default function SettingsPage() {
           </p>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm text-amber-700 dark:text-amber-300">Email not verified</p>
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              {verifySent
+                ? "We sent a verification link to your inbox. Open it to unlock your credits and use AI features."
+                : "Email not verified — sending a verification link…"}
+            </p>
             <button
               type="button"
               onClick={() => void resendVerification()}
               className="inline-flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
             >
               <Mail className="w-4 h-4" />
-              {verifySent ? "Verification email sent" : "Send verification email"}
+              {verifySent ? "Resend verification email" : "Send verification email"}
             </button>
           </div>
         )}

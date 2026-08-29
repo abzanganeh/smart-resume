@@ -28,8 +28,20 @@ export function friendlyAuthError(code: string): string {
       "Account temporarily locked after too many failed attempts. Try again in 15 minutes.",
     account_suspended: "This account has been suspended. Contact support.",
     turnstile_failed: "Human verification failed. Please complete the check and try again.",
+    weak_password:
+      "Please choose a stronger password (Fair or better on the strength meter).",
+    signup_rate_limited:
+      "Too many signups from your network today. Try again tomorrow or use a different network.",
     disposable_email_not_allowed:
       "Disposable email addresses cannot be used to sign up. Use a personal or work email you can receive mail at.",
+    verify_token_expired:
+      "This verification link has expired. Request a new one in Settings.",
+    verify_token_invalid:
+      "This verification link is invalid. Request a new one in Settings.",
+    email_verification_required:
+      "Verify your email before using AI features. Check your inbox or resend from Settings.",
+    credits_locked_until_verification:
+      "Verify your email to unlock your free credits.",
     reset_token_expired:
       "This reset link has expired. Request a new one to change your password.",
     reset_token_invalid:

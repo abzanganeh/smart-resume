@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client
-from app.models.user import User
-from app.services.auth.dependencies import get_current_user
+from app.services.auth.dependencies import VerifiedUser
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -44,7 +41,7 @@ def _friendly_error(exc: Exception) -> str:
 async def verify_llm_key(
     request: Request,
     body: VerifyRequest,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
 ):
     """
     Make a tiny LLM call to verify provider + model using platform keys.

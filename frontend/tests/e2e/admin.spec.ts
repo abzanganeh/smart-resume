@@ -194,6 +194,12 @@ test.describe("/admin/auth page", () => {
     await expect(page.getByText("Admin Sign-in")).toBeVisible()
   })
 
+  test("does not render admin dashboard chrome on auth page", async ({ page }) => {
+    await page.goto(`${BASE}/admin/auth`)
+    await expect(page.getByRole("button", { name: "Logout" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Plans & Pricing" })).toHaveCount(0)
+  })
+
   test("shows session-expired message when reason=expired", async ({ page }) => {
     await page.goto(`${BASE}/admin/auth?reason=expired`)
     await expect(

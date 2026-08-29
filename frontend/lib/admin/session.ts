@@ -35,7 +35,9 @@ export async function getAdminSession(): Promise<StoredAdminSession | null> {
   try {
     const res = await fetch(SESSION_ROUTE, { credentials: "include" })
     if (!res.ok) return null
-    return res.json() as Promise<StoredAdminSession>
+    const data = (await res.json()) as StoredAdminSession | null
+    if (!data || !data.access_token) return null
+    return data
   } catch {
     return null
   }

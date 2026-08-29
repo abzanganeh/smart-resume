@@ -21,6 +21,7 @@ from app.models.user import User
 from app.services.master_resume.embedding import set_fake_embedder
 from tests.integration.test_auth import REGISTER_PAYLOAD
 from tests.retrieval.fake_embedder import deterministic_embed
+from tests.conftest import verify_user_email
 
 pytestmark = pytest.mark.integration
 
@@ -76,13 +77,15 @@ def _install_fake_embedder():
         set_fake_embedder(None)
 
 
-async def _register(client: AsyncClient) -> tuple[str, str]:
+async def _register(client: AsyncClient, db_session: AsyncSession) -> tuple[str, str]:
     email = f"fit-{uuid.uuid4().hex[:8]}@example.com"
     payload = {**REGISTER_PAYLOAD, "email": email}
     r = await client.post("/api/auth/register", json=payload)
     assert r.status_code == 201, r.text
     body = r.json()
-    return body["access_token"], body["user"]["id"]
+    user_id = body["user"]["id"]
+    await verify_user_email(db_session, uuid.UUID(user_id))
+    return body["access_token"], user_id
 
 
 async def _seed_subscription(db_session: AsyncSession, user_id: str) -> None:
@@ -127,7 +130,7 @@ async def test_fit_analyze_returns_valid_output_shape(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_subscription(db_session, user_id)
     await _upload_master_resume(app_client, token)
 
@@ -154,9 +157,10 @@ async def test_fit_analyze_returns_valid_output_shape(
 
 async def test_free_user_returns_402(
     app_client: AsyncClient,
+    db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    token, _user_id = await _register(app_client)
+    token, _user_id = await _register(app_client, db_session)
     await _upload_master_resume(app_client, token)
 
     async def fake_run(db, *, user_id, jd_text, llm, event_queue):

@@ -14,17 +14,20 @@ from app.models.jobs import JobCache
 from app.models.master_resume import MasterResume
 from app.services.jobs.preferred_titles import set_preferred_titles
 from tests.integration.test_auth import REGISTER_PAYLOAD
+from tests.conftest import verify_user_email
 
 pytestmark = pytest.mark.integration
 
 
-async def _register(client: AsyncClient) -> tuple[str, str]:
+async def _register(client: AsyncClient, db_session: AsyncSession) -> tuple[str, str]:
     email = f"titles-{uuid.uuid4().hex[:8]}@example.com"
     payload = {**REGISTER_PAYLOAD, "email": email}
     r = await client.post("/api/auth/register", json=payload)
     assert r.status_code == 201, r.text
     body = r.json()
-    return body["access_token"], body["user"]["id"]
+    user_id = body["user"]["id"]
+    await verify_user_email(db_session, uuid.UUID(user_id))
+    return body["access_token"], user_id
 
 
 async def _seed_master_resume(db_session: AsyncSession, user_id: str) -> None:
@@ -72,8 +75,10 @@ async def _seed_corpus_job(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_title_suggestions_require_master_resume(app_client: AsyncClient) -> None:
-    token, _ = await _register(app_client)
+async def test_title_suggestions_require_master_resume(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    token, _ = await _register(app_client, db_session)
     r = await app_client.get(
         "/api/jobs/title-suggestions",
         headers={"Authorization": f"Bearer {token}"},
@@ -86,7 +91,7 @@ async def test_title_suggestions_from_resume(
     app_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await db_session.commit()
 
@@ -115,7 +120,7 @@ async def test_put_preferred_titles_persists_source_hash(
 ) -> None:
     """PUT /api/jobs/preferred-titles snapshots the master resume hash so that
     the next GET /preferences correctly reports stale=false immediately after."""
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await db_session.commit()
 
@@ -151,7 +156,7 @@ async def test_preferences_stale_after_master_resume_change(
     db_session: AsyncSession,
 ) -> None:
     """When the master resume text changes, /preferences must report stale=true."""
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await db_session.commit()
 
@@ -199,7 +204,7 @@ async def test_put_preferences_cannot_overwrite_reserved_metadata(
     db_session: AsyncSession,
 ) -> None:
     """Reserved keys in ``default_filters`` must be dropped, not merged."""
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await db_session.commit()
 
@@ -245,7 +250,7 @@ async def test_put_preferred_titles_accepts_twelve_titles(
     app_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await db_session.commit()
 
@@ -267,7 +272,7 @@ async def test_free_user_corpus_search_after_preferred_titles(
     app_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    token, user_id = await _register(app_client)
+    token, user_id = await _register(app_client, db_session)
     await _seed_master_resume(db_session, user_id)
     await _seed_corpus_job(db_session)
 

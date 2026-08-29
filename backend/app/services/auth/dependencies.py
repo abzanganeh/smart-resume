@@ -28,8 +28,39 @@ from app.services.auth.exceptions import (
 from app.services.auth import session as redis_session
 from app.services.auth.tokens import decode_access_token
 
-_bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
 CLOSURE_HEADER = "X-Account-Closure-Pending"
+
+EMAIL_VERIFICATION_REQUIRED_DETAIL = {
+    "code": "email_verification_required",
+    "message": "Verify your email before using AI features.",
+}
+
+
+async def assert_user_email_verified(
+    db: AsyncSession,
+    user_id: str | uuid.UUID,
+) -> None:
+    """Raise 403 when an authenticated user has not confirmed their email."""
+    try:
+        uid = uuid.UUID(str(user_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=EMAIL_VERIFICATION_REQUIRED_DETAIL,
+        ) from None
+    user = (
+        await db.execute(select(User).where(User.id == uid))
+    ).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=EMAIL_VERIFICATION_REQUIRED_DETAIL,
+        )
+
+
+_bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
 
 
 async def get_current_user(
@@ -105,4 +136,27 @@ async def get_current_user_id(
     return user.id
 
 
-__all__ = ["CLOSURE_HEADER", "get_current_user", "get_current_user_id"]
+async def require_verified_email(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Reject authenticated users who have not confirmed their email address."""
+    if not user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=EMAIL_VERIFICATION_REQUIRED_DETAIL,
+        )
+    return user
+
+
+VerifiedUser = Annotated[User, Depends(require_verified_email)]
+
+
+__all__ = [
+    "CLOSURE_HEADER",
+    "EMAIL_VERIFICATION_REQUIRED_DETAIL",
+    "VerifiedUser",
+    "assert_user_email_verified",
+    "get_current_user",
+    "get_current_user_id",
+    "require_verified_email",
+]
