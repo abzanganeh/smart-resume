@@ -321,12 +321,28 @@ Reverse proxy template: `infra/caddy/Caddyfile.production.example`.
 
 ### Deploy
 
+**Do not** use `docker-compose.local-sim.yml` on a public VM (that file blanks Resend and raises signup caps for workstation smoke only).
+
 ```bash
+# 1. Preflight (on the server, after filling production URLs in env files)
+PRODUCTION_ENV_CHECK=1 ./scripts/production-preflight.sh
+
+# 2. Boot stack (ports 3000/8000 behind Caddy — see §2)
 docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
-API_URL=https://api.flintapply.com FRONTEND_URL=https://flintapply.com ./scripts/staging-smoke.sh
+
+# 3. Automated HTTP smoke (registers a user — no Mailpit verify unlock on HTTPS)
+CONFIRM_PRODUCTION_SMOKE=1 ./scripts/production-smoke.sh
+
+# 4. Manual UI + billing + admin step pins
+#    STAGING.md §5 — confirm gemini-3.5-* pins at /admin/llm
 ```
 
-Then run manual checklist §5 on https://flintapply.com.
+Local workstation smoke (ports `3001`/`8001`, Mailpit verify flow):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.local-sim.yml up -d --build
+./scripts/staging-smoke.sh
+```
 
 ---
 
