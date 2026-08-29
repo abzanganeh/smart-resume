@@ -70,6 +70,7 @@ from app.services.admin_auth.tokens import (
     decode_admin_challenge_token,
     make_ua_fingerprint,
     revoke_admin_session,
+    revoke_all_admin_sessions,
 )
 from app.services.admin_auth.totp import (
     admin_enroll_totp,
@@ -342,6 +343,7 @@ async def admin_auth_2fa_verify(
     ua_fp = make_ua_fingerprint(
         _request_user_agent(request), request.headers.get("accept-language", "")
     )
+    await revoke_all_admin_sessions(admin.id)
     issued = await create_admin_session_token(admin.id, ip, ua_fp)
     admin.last_login_at = datetime.now(timezone.utc)
     admin.last_login_ip = ip[:64]
@@ -1024,6 +1026,32 @@ class StepLLMConfigCreateRequest(BaseModel):
 
 class StepLLMCreateResponse(AuditedResponse):
     step_config: StepLLMConfigOut
+
+
+class ModelCatalogOut(BaseModel):
+    providers: dict[str, list[dict[str, str]]]
+
+
+@router.get("/llm/model-catalog", response_model=ModelCatalogOut)
+@limiter.limit("120/minute")
+async def admin_llm_model_catalog(
+    request: Request,
+    admin: Annotated[
+        AdminUser,
+        Depends(
+            require_admin_role(
+                AdminRole.super_admin,
+                AdminRole.admin,
+                AdminRole.support_agent,
+                AdminRole.read_only_analyst,
+            )
+        ),
+    ],
+) -> ModelCatalogOut:
+    """Curated provider/model options for admin pickers (read-only)."""
+    from app.llm.model_catalog import MODEL_CATALOG
+
+    return ModelCatalogOut(providers=MODEL_CATALOG)
 
 
 def _serialize_step_llm_row(

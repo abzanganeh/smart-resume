@@ -8,6 +8,7 @@ import {
   adminLogin,
   adminVerifyTotp,
 } from "@/lib/admin/api"
+import { adminAuthReasonMessage } from "@/lib/admin/session-reason"
 import { getAdminSession, storeAdminSession } from "@/lib/admin/session"
 
 type Step = "credentials" | "totp" | "password"
@@ -49,18 +50,7 @@ export default function AdminAuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showNewPassword, setShowNewPassword] = useState(false)
 
-  const [error, setError] = useState<string | null>(() => {
-    if (reason === "expired") {
-      return "Your admin session has expired. Please sign in again."
-    }
-    if (reason === "session_revoked") {
-      return "Your admin session was revoked (server restarted or logged out elsewhere). Please sign in again."
-    }
-    if (reason === "setup_password") {
-      return "First login: choose a new password before accessing the admin panel."
-    }
-    return null
-  })
+  const [error, setError] = useState<string | null>(() => adminAuthReasonMessage(reason))
 
   // Resume password step when redirected from /admin/* with an active session.
   useEffect(() => {

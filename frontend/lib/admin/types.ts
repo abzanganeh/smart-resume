@@ -110,11 +110,12 @@ export interface LLMConfigPayload {
   tier: "standard" | "better" | "best"
   provider: string
   model_string: string
-  fallback_provider?: string
-  fallback_model_string?: string
-  cost_per_resume_usd: number
   phases_enabled: string[]
   similarity_threshold?: number
+  /** @deprecated Not persisted by backend — legacy UI field removed */
+  fallback_provider?: string
+  fallback_model_string?: string
+  cost_per_resume_usd?: number
 }
 
 // ── Step LLM pins ───────────────────────────────────────────────────────────
