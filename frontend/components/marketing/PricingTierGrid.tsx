@@ -11,8 +11,17 @@ import {
   landingPlansHaveSyncedPrice,
   planCycleSuffix,
   planHighlights,
+  planVolumeTagline,
   resolveLandingPlans,
 } from "@/lib/marketing/pricing";
+import {
+  CUSTOMIZED_TIER_CTA,
+  CUSTOMIZED_TIER_DISPLAY_NAME,
+  CUSTOMIZED_TIER_HIGHLIGHTS,
+  CUSTOMIZED_TIER_PRICE_LABEL,
+  CUSTOMIZED_TIER_SUBLINE,
+  customizedTierContactHref,
+} from "@/lib/marketing/customizedTier";
 import { FINE_PRINT, TIER_CTA, TIER_CTA_HIGHLIGHT } from "./styles";
 
 function tierCtaLabel(plan: BillingPlan): string {
@@ -93,7 +102,7 @@ export function PricingTierGrid({
 
   return (
     <div className="-mx-6 overflow-x-auto px-6 pb-2 lg:mx-0 lg:overflow-visible lg:px-0">
-      <div className="grid w-max min-w-full auto-cols-[min(15.5rem,calc(100vw-3rem))] grid-flow-col items-stretch gap-4 lg:w-auto lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-5">
+      <div className="grid w-max min-w-full auto-cols-[min(15.5rem,calc(100vw-3rem))] grid-flow-col items-stretch gap-4 lg:w-auto lg:auto-cols-auto lg:grid-flow-row lg:grid-cols-6">
         <div className="flex h-full flex-col rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 dark:border-emerald-700/50 dark:bg-emerald-900/20">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Free</h3>
           <div className="mt-2 min-h-[4.75rem]">
@@ -144,6 +153,9 @@ export function PricingTierGrid({
               <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                 {plan.display_name}
               </h3>
+              {planVolumeTagline(plan) ? (
+                <p className={`${FINE_PRINT} mt-0.5`}>{planVolumeTagline(plan)}</p>
+              ) : null}
               <TierPriceBlock plan={plan} price={price} />
               <ul className="mt-4 flex-1 space-y-2">
                 {planHighlights(plan).map((item) => (
@@ -164,6 +176,31 @@ export function PricingTierGrid({
             </div>
           );
         })}
+
+        <div className="flex h-full flex-col rounded-xl border border-violet-300/60 bg-violet-50/30 p-5 dark:border-violet-700/50 dark:bg-violet-950/20">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+            {CUSTOMIZED_TIER_DISPLAY_NAME}
+          </h3>
+          <div className="mt-2 min-h-[4.75rem]">
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              {CUSTOMIZED_TIER_PRICE_LABEL}
+            </p>
+            <p className={`${FINE_PRINT} mt-1`}>{CUSTOMIZED_TIER_SUBLINE}</p>
+          </div>
+          <ul className="mt-4 flex-1 space-y-2">
+            {CUSTOMIZED_TIER_HIGHLIGHTS.map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <Check aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-700 dark:text-violet-400" />
+                <span className="text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                  {item}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <a href={customizedTierContactHref()} className={`${TIER_CTA} mt-auto`}>
+            {CUSTOMIZED_TIER_CTA}
+          </a>
+        </div>
       </div>
     </div>
   );

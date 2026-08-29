@@ -289,3 +289,11 @@ export function planHighlights(plan: BillingPlan): string[] {
   );
   return out;
 }
+
+/** Optional marketing line under a paid tier title (volume positioning). */
+export function planVolumeTagline(plan: BillingPlan): string | null {
+  if (plan.code === "monthly_premium") {
+    return "Same AI quality · highest volume";
+  }
+  return null;
+}
