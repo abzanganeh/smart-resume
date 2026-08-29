@@ -30,6 +30,7 @@ import {
   sessionMsRemaining,
 } from "@/lib/admin/session"
 import { adminLogout } from "@/lib/admin/api"
+import { adminAuthRedirectPathForSessionCode } from "@/lib/admin/session-reason"
 import type { StoredAdminSession } from "@/lib/admin/session"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -123,12 +124,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })
   }, [isAuthPage, router])
 
-  // Listen for backend session-revoked signals from req() and redirect immediately.
+  // Listen for backend session-gone signals from req() and redirect immediately.
   useEffect(() => {
     if (isAuthPage) return
-    async function handleUnauthorized() {
+    async function handleUnauthorized(event: Event) {
+      const code =
+        (event as CustomEvent<string>).detail ?? "admin_session_revoked"
       await clearAdminSession()
-      router.replace("/admin/auth?reason=session_revoked")
+      router.replace(adminAuthRedirectPathForSessionCode(code))
     }
     window.addEventListener("admin:unauthorized", handleUnauthorized)
     return () => window.removeEventListener("admin:unauthorized", handleUnauthorized)

@@ -45,6 +45,9 @@ import type {
   SystemHealth,
   AuditLogResponse,
 } from "./types"
+import {
+  ADMIN_SESSION_GONE_CODES,
+} from "./session-reason"
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
@@ -60,22 +63,18 @@ function adminHeaders(token: string): HeadersInit {
 async function parseError(res: Response): Promise<string> {
   try {
     const body = await res.json()
-    return body?.detail?.code ?? body?.detail ?? `HTTP ${res.status}`
+    const detail = body?.detail
+    if (detail && typeof detail === "object" && "code" in detail) {
+      return String(detail.code)
+    }
+    return detail ?? `HTTP ${res.status}`
   } catch {
     return `HTTP ${res.status}`
   }
 }
 
 /** Error codes that mean the admin session is gone/invalid on the backend. */
-const SESSION_GONE_CODES = new Set([
-  "admin_session_revoked",
-  "admin_session_expired",
-  "admin_session_idle",
-  "admin_session_binding_mismatch",
-  "admin_token_invalid",
-  "admin_unauthenticated",
-  "admin_not_found",
-])
+const SESSION_GONE_CODES = ADMIN_SESSION_GONE_CODES
 
 async function req<T>(
   path: string,
@@ -411,6 +410,16 @@ export async function getAdminStepLLMHistory(
   const qs = step ? `?step=${encodeURIComponent(step)}` : ""
   const raw = await req<StepLLMConfig[]>(`/api/admin/llm/steps/history${qs}`, token)
   return Array.isArray(raw) ? raw : []
+}
+
+export async function getAdminModelCatalog(
+  token: string,
+): Promise<Record<string, Array<{ id: string; label: string; note?: string }>>> {
+  const raw = await req<{ providers: Record<string, Array<{ id: string; label: string; note?: string }>> }>(
+    `/api/admin/llm/model-catalog`,
+    token,
+  )
+  return raw.providers ?? {}
 }
 
 export async function updateSimilarityThreshold(

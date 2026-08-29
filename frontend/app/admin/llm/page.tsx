@@ -10,12 +10,18 @@ import {
   getAdminLLMHistory,
   getAdminStepLLMConfigs,
   createAdminStepLLMConfig,
+  getAdminModelCatalog,
   updateSimilarityThreshold,
 } from "@/lib/admin/api"
 import type { LLMConfig, LLMConfigPayload, StepLLMConfig, StepLLMConfigPayload } from "@/lib/admin/types"
+import {
+  ModelPicker,
+  DEFAULT_MODEL_PROVIDERS,
+  type ModelCatalog,
+} from "@/components/admin/ModelPicker"
 
 const TIERS = ["standard", "better", "best"] as const
-const PROVIDERS = ["openai", "anthropic", "gemini", "deepseek", "openrouter", "ollama"] as const
+const PROVIDERS = DEFAULT_MODEL_PROVIDERS
 
 // ── LLM Config Page ───────────────────────────────────────────────────────────
 
@@ -27,6 +33,7 @@ export default function AdminLLMPage() {
   const [threshold, setThreshold] = useState(0.72)
   const [history, setHistory] = useState<LLMConfig[]>([])
   const [stepPins, setStepPins] = useState<StepLLMConfig[]>([])
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({})
   const [editingStep, setEditingStep] = useState<StepLLMConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,15 +51,17 @@ export default function AdminLLMPage() {
     setLoading(true)
     setError(null)
     try {
-      const [res, hist, steps] = await Promise.all([
+      const [res, hist, steps, catalog] = await Promise.all([
         getAdminLLMConfigs(token!),
         getAdminLLMHistory(token!),
         getAdminStepLLMConfigs(token!),
+        getAdminModelCatalog(token!),
       ])
       setConfigs(Array.isArray(res.configs) ? res.configs : [])
       setThreshold(res.similarity_threshold ?? 0.72)
       setHistory(Array.isArray(hist) ? hist : [])
       setStepPins(Array.isArray(steps) ? steps : [])
+      setModelCatalog(catalog ?? {})
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load LLM configs")
     } finally {
@@ -81,7 +90,13 @@ export default function AdminLLMPage() {
     <div className="space-y-8 max-w-5xl">
       <PageHeader title="LLM Configuration" />
 
-      {/* ── Tier cards ───────────────────────────────────────────────── */}
+      {/* ── Tier cards (legacy metadata) ─────────────────────────────── */}
+      <div className="bg-amber-900/20 border border-amber-700/40 text-amber-200 text-sm px-4 py-3 rounded-xl">
+        <strong>Tier cards are legacy metadata.</strong> Live self-serve routing uses{" "}
+        <strong>Pipeline Step Pins</strong> below (<code className="text-amber-100">resolve_model(step)</code>).
+        Editing a tier card does not retarget cover letter, checkup, or other steps.
+      </div>
+
       <Section title="Active Configuration by Tier">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {TIERS.map((tier) => {
@@ -106,13 +121,6 @@ export default function AdminLLMPage() {
                   <div className="space-y-2 text-sm">
                     <Row label="Provider" value={cfg.provider} />
                     <Row label="Model" value={<code className="text-xs text-amber-300">{cfg.model_string}</code>} />
-                    {cfg.fallback_model_string && (
-                      <Row
-                        label="Fallback"
-                        value={<code className="text-xs text-slate-400">{cfg.fallback_model_string}</code>}
-                      />
-                    )}
-                    <Row label="Cost / resume" value={`$${cfg.cost_per_resume_usd.toFixed(4)}`} />
                     <Row
                       label="Phases"
                       value={
@@ -121,6 +129,7 @@ export default function AdminLLMPage() {
                         </span>
                       }
                     />
+                    <p className="text-[11px] text-slate-500 pt-1">Legacy — not used for routing</p>
                   </div>
                 ) : (
                   <p className="text-sm text-slate-500 italic">Not configured</p>
@@ -273,6 +282,7 @@ export default function AdminLLMPage() {
       {editingTier !== null && (
         <LLMEditModal
           initial={editingTier}
+          catalog={modelCatalog}
           token={token}
           onSave={async (payload) => {
             const res = await createAdminLLMConfig(token, payload)
@@ -287,6 +297,7 @@ export default function AdminLLMPage() {
       {editingStep !== null && (
         <StepPinEditModal
           initial={editingStep}
+          catalog={modelCatalog}
           onSave={async (payload) => {
             const res = await createAdminStepLLMConfig(token, payload)
             showAuditToast(res.audit_log_id)
@@ -304,11 +315,13 @@ export default function AdminLLMPage() {
 
 function LLMEditModal({
   initial,
+  catalog,
   token: _token,
   onSave,
   onClose,
 }: {
   initial: LLMConfig
+  catalog: ModelCatalog
   token: string
   onSave: (payload: LLMConfigPayload) => Promise<void>
   onClose: () => void
@@ -318,9 +331,6 @@ function LLMEditModal({
 
   const [provider, setProvider] = useState(initial.provider ?? "openai")
   const [model, setModel] = useState(initial.model_string ?? "")
-  const [fallbackProvider, setFallbackProvider] = useState(initial.fallback_provider ?? "")
-  const [fallbackModel, setFallbackModel] = useState(initial.fallback_model_string ?? "")
-  const [cost, setCost] = useState(String(initial.cost_per_resume_usd ?? ""))
   const phases = ["1", "2", "3", "4", "fit", "cover_letter"]
   const [enabledPhases, setEnabledPhases] = useState<string[]>(
     initial.phases_enabled ?? phases,
@@ -341,9 +351,6 @@ function LLMEditModal({
           tier: initial.tier,
           provider,
           model_string: model,
-          fallback_provider: fallbackProvider || undefined,
-          fallback_model_string: fallbackModel || undefined,
-          cost_per_resume_usd: parseFloat(cost),
           phases_enabled: enabledPhases,
         })
       } catch (e) {
@@ -361,32 +368,18 @@ function LLMEditModal({
           <TierBadge tier={initial.tier} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Provider">
-            <select value={provider} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
-              {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Model string">
-            <input type="text" required value={model} onChange={(e) => setModel(e.target.value)} className={inputCls} placeholder="gpt-4o-mini" />
-          </FormField>
-        </div>
+        <p className="text-xs text-slate-500">
+          Tier metadata only — pipeline routing uses step pins below.
+        </p>
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Fallback provider (optional)">
-            <select value={fallbackProvider} onChange={(e) => setFallbackProvider(e.target.value)} className={inputCls}>
-              <option value="">None</option>
-              {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Fallback model (optional)">
-            <input type="text" value={fallbackModel} onChange={(e) => setFallbackModel(e.target.value)} className={inputCls} placeholder="gpt-3.5-turbo" />
-          </FormField>
-        </div>
-
-        <FormField label="Cost per resume (USD)">
-          <input type="number" step="0.0001" min="0" required value={cost} onChange={(e) => setCost(e.target.value)} className={inputCls} placeholder="0.02" />
-        </FormField>
+        <ModelPicker
+          catalog={catalog}
+          provider={provider}
+          model={model}
+          onProviderChange={setProvider}
+          onModelChange={setModel}
+          providers={PROVIDERS}
+        />
 
         <div>
           <p className="text-xs text-slate-400 mb-2">Enabled phases</p>
@@ -419,10 +412,12 @@ function LLMEditModal({
 
 function StepPinEditModal({
   initial,
+  catalog,
   onSave,
   onClose,
 }: {
   initial: StepLLMConfig
+  catalog: ModelCatalog
   onSave: (payload: StepLLMConfigPayload) => Promise<void>
   onClose: () => void
 }) {
@@ -456,23 +451,14 @@ function StepPinEditModal({
         <p className="text-xs text-slate-500">
           Step id: <code className="text-slate-400">{initial.step}</code>
         </p>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Provider">
-            <select value={provider} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
-              {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Model string">
-            <input
-              type="text"
-              required
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className={inputCls}
-              placeholder="gemini-3.5-flash"
-            />
-          </FormField>
-        </div>
+        <ModelPicker
+          catalog={catalog}
+          provider={provider}
+          model={model}
+          onProviderChange={setProvider}
+          onModelChange={setModel}
+          providers={PROVIDERS}
+        />
         <FormField label="Notes (optional)">
           <input
             type="text"
