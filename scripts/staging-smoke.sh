@@ -183,7 +183,7 @@ host = (u.hostname or '').lower()
 print('1' if host in {'localhost', '127.0.0.1'} and u.scheme in {'http', 'https'} and not u.username else '0')
 " "$MAILPIT_URL" 2>/dev/null || echo 0)"
   if [[ "$mailpit_host_ok" != "1" ]]; then
-    red "FAIL  MAILPIT_URL must be localhost/mailpit when REQUIRE_MAILPIT=1"
+    red "FAIL  MAILPIT_URL must be localhost or 127.0.0.1 when REQUIRE_MAILPIT=1"
     fail=$((fail + 1))
   else
     verify_token=""
