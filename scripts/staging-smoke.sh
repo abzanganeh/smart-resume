@@ -176,7 +176,13 @@ MAILPIT_URL="${MAILPIT_URL:-http://localhost:38025}"
 verified_flag="false"
 
 if [[ -n "${smoke_token:-}" && "$REQUIRE_MAILPIT" = "1" ]]; then
-  if [[ ! "$MAILPIT_URL" =~ ^https?://(localhost|127\.0\.0\.1|mailpit)(:|/|$) ]]; then
+  mailpit_host_ok="$(python3 -c "
+import sys, urllib.parse
+u = urllib.parse.urlparse(sys.argv[1])
+host = (u.hostname or '').lower()
+print('1' if host in {'localhost', '127.0.0.1'} and u.scheme in {'http', 'https'} and not u.username else '0')
+" "$MAILPIT_URL" 2>/dev/null || echo 0)"
+  if [[ "$mailpit_host_ok" != "1" ]]; then
     red "FAIL  MAILPIT_URL must be localhost/mailpit when REQUIRE_MAILPIT=1"
     fail=$((fail + 1))
   else
@@ -196,11 +202,27 @@ if [[ -n "${smoke_token:-}" && "$REQUIRE_MAILPIT" = "1" ]]; then
       search_q="$(python3 -c "import urllib.parse; print(urllib.parse.quote('to:$smoke_email'))")"
       for _ in $(seq 1 20); do
         verify_token="$(curl -sf "$MAILPIT_URL/api/v1/search?query=$search_q" 2>/dev/null | python3 -c "
-import json, re, sys, urllib.request
+import json, re, sys, urllib.parse, urllib.request, urllib.error
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 def extract_token(blob: str) -> str:
     m = re.search(r'[?&]token=([^&\\s\"\\']+)', blob)
     return m.group(1) if m else ''
+
+def fetch_message(mailpit: str, msg_id: str) -> dict:
+    parsed = urllib.parse.urlparse(mailpit)
+    if parsed.hostname not in {'localhost', '127.0.0.1'}:
+        return {}
+    opener = urllib.request.build_opener(_NoRedirect())
+    req = urllib.request.Request(
+        f'{mailpit.rstrip(\"/\")}/api/v1/message/{msg_id}',
+        headers={'Accept': 'application/json'},
+    )
+    with opener.open(req, timeout=5) as resp:
+        return json.load(resp)
 
 try:
     data = json.load(sys.stdin)
@@ -214,16 +236,15 @@ for msg in data.get('messages', []):
         print(token)
         break
     msg_id = msg.get('ID')
-    if not msg_id:
+    if not msg_id or not re.fullmatch(r'[A-Za-z0-9_-]+', str(msg_id)):
         continue
     try:
-        with urllib.request.urlopen(f'{mailpit}/api/v1/message/{msg_id}', timeout=5) as resp:
-            full = json.load(resp)
-    except OSError:
+        full = fetch_message(mailpit, str(msg_id))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
         continue
     blob = (full.get('Text') or '') + (full.get('HTML') or '')
     token = extract_token(blob)
-    if token:
+    if token and len(token) > 40:
         print(token)
         break
 " "$MAILPIT_URL" 2>/dev/null || true)"
@@ -233,7 +254,7 @@ for msg in data.get('messages', []):
         sleep 2
       done
       if [[ -z "$verify_token" ]]; then
-        red "FAIL  Mailpit verification email for $smoke_email (unset RESEND_API_KEY in staging compose)"
+        red "FAIL  Mailpit verification email for $smoke_email (use docker-compose.local-sim.yml for Mailpit delivery)"
         fail=$((fail + 1))
       else
         encoded_token="$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$verify_token")"
