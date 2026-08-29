@@ -57,6 +57,8 @@ keys = (
     "NEXT_PUBLIC_SITE_URL",
     "NEXT_PUBLIC_API_URL",
     "FRONTEND_BASE_URL",
+    "RESEND_API_KEY",
+    "SIGNUP_IP_DAILY_LIMIT",
 )
 values: dict[str, str] = {}
 for path in sys.argv[1:]:
@@ -68,7 +70,13 @@ for path in sys.argv[1:]:
         if key in keys and key not in values:
             values[key] = val.strip().strip('"').strip("'")
 
-for key in keys:
+url_keys = (
+    "NEXTAUTH_URL",
+    "NEXT_PUBLIC_SITE_URL",
+    "NEXT_PUBLIC_API_URL",
+    "FRONTEND_BASE_URL",
+)
+for key in url_keys:
     val = values.get(key, "")
     if not val:
         print(f"FAIL:{key} unset")
@@ -79,7 +87,13 @@ for key in keys:
 
 signup = values.get("SIGNUP_IP_DAILY_LIMIT", "")
 if signup and signup != "15":
-    print(f"WARN:SIGNUP_IP_DAILY_LIMIT={signup} (production should use default 15)")
+    print(f"FAIL:SIGNUP_IP_DAILY_LIMIT must be 15 on production VM (got {signup})")
+
+resend = values.get("RESEND_API_KEY", "")
+if not resend or resend.endswith("...") or resend == "change-me-in-production":
+    print("FAIL:RESEND_API_KEY missing or placeholder — verification email requires Resend on VM")
+elif resend:
+    print("OK:RESEND_API_KEY configured")
 PY
     )
   fi

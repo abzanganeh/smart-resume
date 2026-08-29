@@ -49,3 +49,22 @@ def test_staging_smoke_script_includes_verify_unlock_flow() -> None:
     )
     for needle in required:
         assert needle in text, f"staging-smoke.sh must contain {needle!r}"
+
+
+def test_staging_smoke_localhost_defaults_require_mailpit() -> None:
+    script = (
+        Path(__file__).resolve().parents[3] / "scripts" / "staging-smoke.sh"
+    )
+    text = script.read_text()
+    assert 'REQUIRE_MAILPIT=1' in text
+    assert "localhost" in text and "127.0.0.1" in text
+
+
+def test_production_smoke_sets_require_mailpit_zero() -> None:
+    script = (
+        Path(__file__).resolve().parents[3] / "scripts" / "production-smoke.sh"
+    )
+    text = script.read_text()
+    assert "CONFIRM_PRODUCTION_SMOKE=1" in text
+    assert "REQUIRE_MAILPIT=0" in text
+    assert "staging-smoke.sh" in text
