@@ -25,7 +25,7 @@ from app.models.fit_analysis import FitAnalysis
 from app.models.billing import Subscription, SubscriptionStatus
 from app.models.jobs import AlertFrequency, SavedJob, SavedSearch
 from app.models.user import User
-from app.services.auth.dependencies import get_current_user
+from app.services.auth.dependencies import VerifiedUser, get_current_user
 from app.services.auth.tokens import decode_access_token
 from app.services.billing.exceptions import (
     AccountSuspendedError,
@@ -289,7 +289,7 @@ async def search_jobs(
 @limiter.limit("30/hour", key_func=_rate_limit_user_key)
 async def get_title_suggestions(
     request: Request,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     resume = await master_crud.get_raw_resume(db, user_id=user.id)
@@ -692,7 +692,7 @@ async def get_job(
 async def fit_job(
     request: Request,
     job_id: str,
-    user: Annotated[User, Depends(get_current_user)],
+    user: VerifiedUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:

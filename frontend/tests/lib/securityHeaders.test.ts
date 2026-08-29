@@ -5,6 +5,7 @@ import {
   securityResponseHeaders,
 } from "@/lib/securityHeaders";
 import { createCspNonce } from "@/lib/csp";
+import { isLocalHttpOrigin } from "@/lib/siteUrl";
 
 function headerMap(
   headers: { key: string; value: string }[],
@@ -41,5 +42,31 @@ describe("securityResponseHeaders", () => {
 
     assert.match(csp, new RegExp(`'nonce-${nonce}'`));
     assert.match(csp, /'unsafe-eval'/);
+  });
+
+  it("omits upgrade-insecure-requests for local http site origins", () => {
+    assert.equal(isLocalHttpOrigin("http://localhost:3001"), true);
+    assert.equal(isLocalHttpOrigin("https://flintapply.com"), false);
+    const csp = buildContentSecurityPolicy({
+      production: true,
+      localHttpSite: true,
+    });
+    assert.doesNotMatch(csp, /upgrade-insecure-requests/);
+  });
+
+  it("keeps upgrade-insecure-requests and HSTS on production HTTPS origins", () => {
+    const csp = buildContentSecurityPolicy({
+      production: true,
+      localHttpSite: false,
+    });
+    assert.match(csp, /upgrade-insecure-requests/);
+
+    const map = headerMap(
+      securityResponseHeaders({ production: true, localHttpSite: false }),
+    );
+    assert.match(
+      map.get("strict-transport-security") ?? "",
+      /max-age=63072000/,
+    );
   });
 });

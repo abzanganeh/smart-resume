@@ -14,6 +14,8 @@ Asserts:
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.master_resume import MasterResume, MasterResumeChunk
 from app.routers.auth import REFRESH_COOKIE_NAME  # noqa: F401 — kept for parity
 from app.services.master_resume.embedding import set_fake_embedder
+from tests.conftest import verify_user_email
 from tests.retrieval.fake_embedder import deterministic_embed
 
 pytestmark = pytest.mark.integration
@@ -47,11 +50,15 @@ def _install_fake_embedder():
         set_fake_embedder(None)
 
 
-async def _register_and_login(client: AsyncClient) -> str:
-    """Return a valid access token."""
+async def _register_and_login(
+    client: AsyncClient, db_session: AsyncSession
+) -> str:
+    """Return a valid access token for a verified user."""
     r = await client.post("/api/auth/register", json=REGISTER_PAYLOAD)
     assert r.status_code == 201, r.text
-    return r.json()["access_token"]
+    body = r.json()
+    await verify_user_email(db_session, uuid.UUID(body["user"]["id"]))
+    return body["access_token"]
 
 
 SAMPLE_TEXT = (
@@ -76,7 +83,7 @@ SAMPLE_TEXT_V2 = (
 async def test_upload_list_patch_delete_roundtrip(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    access = await _register_and_login(app_client)
+    access = await _register_and_login(app_client, db_session)
     headers = {"Authorization": f"Bearer {access}"}
 
     # --- POST /api/profile/resume (text body, no LLM) ---
@@ -156,7 +163,7 @@ async def test_upload_list_patch_delete_roundtrip(
 async def test_put_replaces_chunks_and_resets_count(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    access = await _register_and_login(app_client)
+    access = await _register_and_login(app_client, db_session)
     headers = {"Authorization": f"Bearer {access}"}
 
     r = await app_client.post(
@@ -198,7 +205,7 @@ async def test_put_replaces_chunks_and_resets_count(
 async def test_get_chunks_with_jd_session_returns_scores(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    access = await _register_and_login(app_client)
+    access = await _register_and_login(app_client, db_session)
     headers = {"Authorization": f"Bearer {access}"}
 
     r = await app_client.post(

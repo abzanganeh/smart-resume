@@ -1036,7 +1036,9 @@ async def test_commit_tailored_rejects_a_different_bearer(
 
 @pytest_asyncio.fixture()
 async def superseded_token(
-    app_client: AsyncClient, stub_turnstile: None
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+    stub_turnstile: None,
 ) -> tuple[str, str]:
     """``(dead_token, live_token)`` for one user whose login was replaced.
 
@@ -1059,6 +1061,10 @@ async def superseded_token(
     )
     assert register.status_code == 201, register.text
     dead_token = register.json()["access_token"]
+    from tests.conftest import verify_user_email
+
+    await verify_user_email(db_session, uuid.UUID(register.json()["user"]["id"]))
+    await db_session.commit()
 
     login = await app_client.post(
         "/api/auth/login", json={"email": email, "password": _PASSWORD}

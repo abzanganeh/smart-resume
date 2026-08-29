@@ -11,6 +11,8 @@ export const ONBOARDING_EXEMPT_PREFIXES = [
   "/session/new",
   "/jobs/setup",
   "/auth/reset",
+  "/auth/verify",
+  "/settings",
 ]
 
 export const ONBOARDING_STEP_COUNT = 5

@@ -8,6 +8,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -35,6 +36,8 @@ from app.services.bullet_fix_suggest import (
     BulletFixSuggestionItem,
     suggest_bullet_fixes,
 )
+from app.services.auth.dependencies import assert_user_email_verified
+from app.services.session_ownership import resolve_bearer_user_id
 from app.services.resume_validation import validate_resume_text
 from app.services.session_store import get_session, update_session
 
@@ -77,16 +80,31 @@ async def _structure_resume(raw_text: str, llm) -> ParsedResume:
     return await complete_structured(llm, messages, ParsedResume)
 
 
+async def _require_verified_llm_user(
+    db: AsyncSession,
+    session,
+    authorization: str | None,
+) -> None:
+    """Block LLM spend for authenticated users who have not verified email."""
+    user_id = await resolve_bearer_user_id(authorization, session)
+    if user_id:
+        await assert_user_email_verified(db, user_id)
+
+
 @router.post("/{session_id}/resume")
 @limiter.limit("10/minute")
 async def upload_resume(
     request: Request,
     session_id: str,
     file: UploadFile = File(...),
+    db: Annotated[AsyncSession, Depends(get_db)] = ...,
+    authorization: str | None = Header(default=None),
 ):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    await _require_verified_llm_user(db, session, authorization)
 
     content_type = file.content_type or ""
     if content_type not in ALLOWED_MIME:
@@ -126,10 +144,14 @@ async def paste_resume(
     request: Request,
     session_id: str,
     body: ResumeTextRequest,
+    db: Annotated[AsyncSession, Depends(get_db)] = ...,
+    authorization: str | None = Header(default=None),
 ):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    await _require_verified_llm_user(db, session, authorization)
 
     text = validate_resume_text(body.text)
 
@@ -205,6 +227,8 @@ async def suggest_audit_bullet_fixes(
     request: Request,
     session_id: str,
     body: SuggestBulletFixesRequest,
+    db: Annotated[AsyncSession, Depends(get_db)] = ...,
+    authorization: str | None = Header(default=None),
 ) -> SuggestBulletFixesResponse:
     """Generate AI rewrite suggestions for selected Phase 2 bullet issues."""
     session = await get_session(session_id)
@@ -215,6 +239,8 @@ async def suggest_audit_bullet_fixes(
         raise HTTPException(status_code=422, detail="Run the resume audit first.")
     if not body.indices:
         raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
+
+    await _require_verified_llm_user(db, session, authorization)
 
     with llm_accounting_context(
         session_id, "mechanical_fixes", user_id=session.user_id

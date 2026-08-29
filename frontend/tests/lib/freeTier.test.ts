@@ -1,9 +1,28 @@
 import { afterEach, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
+  FREE_TIER_CREDIT_ACTIONS,
   FREE_TIER_STARTING_CREDITS,
   fetchFreeTierStartingCredits,
 } from "@/lib/freeTier";
+
+describe("FREE_TIER_CREDIT_ACTIONS", () => {
+  it("matches backend free-tier quota debits", () => {
+    const labels = FREE_TIER_CREDIT_ACTIONS.map((row) => row.action);
+    assert.deepEqual(labels, [
+      "Tailored rewrite",
+      "QA & export (ATS score)",
+      "Cover letter generation",
+      "Coached story interview",
+      "Story resume regenerate",
+      "Story resume save",
+    ]);
+    assert.ok(
+      !labels.some((label) => label.toLowerCase().includes("whisper")),
+      "Whisper is gated to paid plans, not a free-tier credit price",
+    );
+  });
+});
 
 describe("FREE_TIER_STARTING_CREDITS", () => {
   it("matches the backend registration grant", () => {

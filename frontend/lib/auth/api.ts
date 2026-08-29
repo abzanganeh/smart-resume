@@ -97,8 +97,10 @@ export async function registerUser(payload: RegisterPayload): Promise<AuthSucces
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
-    const err = await parseError(res)
-    throw new Error(err)
+    const body = await res.json().catch(() => ({}))
+    const { message, code } = parseApiErrorDetail(body?.detail, res.status)
+    notifySessionRevoked(code)
+    throw new Error(code ?? message)
   }
   return res.json()
 }
@@ -229,6 +231,14 @@ export async function sendVerificationEmail(accessToken: string): Promise<{ ok: 
     credentials: "include",
     headers: authHeaders(accessToken),
   })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
+export async function confirmEmailVerification(
+  token: string,
+): Promise<{ ok: boolean; email: string }> {
+  const res = await fetch(`${BASE}/api/auth/verify/${encodeURIComponent(token)}`)
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }

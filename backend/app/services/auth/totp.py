@@ -24,10 +24,11 @@ from typing import Iterable
 
 import pyotp
 
+from app.brand import PRODUCT_NAME
 from app.services.auth.encryption import decrypt_bytes, encrypt_bytes
 from app.services.auth.password import _pwd_context  # reuse bcrypt context
 
-ISSUER = "TalioCV"
+ISSUER = PRODUCT_NAME
 RECOVERY_CODE_COUNT = 10
 RECOVERY_CODE_LENGTH = 10  # alphanumeric chars (excluding ambiguous ones)
 TOTP_WINDOW = 1  # accept ±1 step (≈ ±30 s)

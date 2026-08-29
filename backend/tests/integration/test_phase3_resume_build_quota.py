@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, patch
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +33,7 @@ async def test_phase3_run_debits_resume_build_quota(
         tier=UserTier.free,
         credit_balance=0,
         accepted_tos_version="2026-06",
+        email_verified_at=datetime.now(timezone.utc),
     )
     db_session.add(user)
     await db_session.commit()
