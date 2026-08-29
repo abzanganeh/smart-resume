@@ -187,7 +187,7 @@ test.describe("pricing", () => {
     await expect(
       page.getByRole("heading", { level: 3, name: "Free", exact: true }),
     ).toBeVisible()
-    for (const tier of ["Weekly", "Pro", "Pro+", "Premium"]) {
+    for (const tier of ["Weekly", "Pro", "Pro+", "Premium", "Customized"]) {
       await expect(
         page.getByRole("heading", { level: 3, name: tier, exact: true }),
       ).toBeVisible()
@@ -203,6 +203,19 @@ test.describe("pricing", () => {
         pricingSection.getByRole("link", { name: label, exact: true }),
       ).toBeVisible()
     }
+    await expect(
+      pricingSection.getByRole("link", { name: "Contact us", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      /^mailto:privacy@zanganehai\.com\?subject=/,
+    )
+    await expect(
+      pricingSection.getByRole("link", { name: "Choose Customized", exact: true }),
+    ).toHaveCount(0)
+    await expect(pricingSection.getByText(/custom quote/i)).toBeVisible()
+    await expect(
+      pricingSection.getByText(/not sold through self-serve checkout/i),
+    ).toBeVisible()
     const syncedWeekly = page.getByText("$9.99")
     if (await syncedWeekly.count()) {
       await expect(syncedWeekly).toBeVisible()
