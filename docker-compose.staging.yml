@@ -16,10 +16,6 @@ services:
       - DATABASE_URL=postgresql+asyncpg://smart_resume:${POSTGRES_PASSWORD:-password}@postgres:5432/smart_resume
       - ALLOWED_ORIGINS=["http://localhost:${STAGING_FRONTEND_PORT:-3001}","http://frontend:3000"]
       - FRONTEND_BASE_URL=http://localhost:${STAGING_FRONTEND_PORT:-3001}
-      # Local staging sim must deliver verification mail to Mailpit, not Resend.
-      - RESEND_API_KEY=
-      # Repeated automated smoke runs share one host IP — raise cap for local sim only.
-      - SIGNUP_IP_DAILY_LIMIT=200
     env_file:
       - path: ./backend/.env.staging
         required: true

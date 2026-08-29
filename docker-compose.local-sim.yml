@@ -1,0 +1,12 @@
+# Local simulation overlay — use ONLY for workstation smoke tests.
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-compose.local-sim.yml up -d --build
+#
+# Do NOT include this file on public staging/production VMs (STAGING.md §8).
+
+services:
+  backend:
+    environment:
+      # Force Mailpit delivery instead of Resend for verify-email smoke.
+      - RESEND_API_KEY=
+      # Repeated smoke runs share one host IP.
+      - SIGNUP_IP_DAILY_LIMIT=200
