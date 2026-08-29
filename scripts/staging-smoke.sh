@@ -86,16 +86,31 @@ check "Checkup rejects short JD (422)" test "$(http_status -X POST "$API_URL/api
 
 # Price gap probe — plans array should be non-empty when Stripe is configured
 if prices_count="$(curl -sf "$API_URL/api/billing/prices" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('plans',[])))" 2>/dev/null)"; then
-  check "Billing prices has at least one plan" test "${prices_count:-0}" -gt 0
+  if [[ "${prices_count:-0}" -gt 0 ]]; then
+    check "Billing prices has at least one plan" test "${prices_count}" -gt 0
+  else
+    skip_check "Billing plans count" "no Stripe plans (local staging sim — configure STRIPE_* for prod-like gate)"
+  fi
 else
   skip_check "Billing plans count" "could not parse /api/billing/prices"
 fi
 
 free_credits="$(http_json_field "$API_URL/api/billing/free-tier" starting_credits 2>/dev/null || true)"
 if [[ -n "$free_credits" ]]; then
-  check "Free-tier starting credits is positive" test "$free_credits" -gt 0
+  check "Free-tier starting credits is 3" test "$free_credits" = "3"
 else
   skip_check "Free-tier credits" "field missing"
+fi
+
+check "Frontend GET /auth/verify returns 200" test "$(http_status "$FRONTEND_URL/auth/verify")" = "200"
+
+# CSP: local HTTP staging must not upgrade to HTTPS
+csp_header="$(curl -sI "$FRONTEND_URL/onboarding" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-security-policy"{print $2; exit}')"
+if [[ -n "$csp_header" ]]; then
+  check "CSP omits upgrade-insecure-requests on local HTTP staging" \
+    test "${csp_header#*upgrade-insecure-requests}" = "$csp_header"
+else
+  skip_check "CSP upgrade-insecure-requests check" "no CSP header on /onboarding"
 fi
 
 # Auth register smoke (unique email per run) + authenticated tracker funnel
@@ -103,7 +118,7 @@ smoke_email="staging-smoke-$(date +%s%N)-$$@example.com"
 register_tmp="$(mktemp)"
 register_status="$(curl -s -o "$register_tmp" -w '%{http_code}' -X POST "$API_URL/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$smoke_email\",\"password\":\"StagingSmoke1!\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-01\",\"turnstile_token\":\"staging-smoke-turnstile\"}")"
+  -d "{\"email\":\"$smoke_email\",\"password\":\"tr0ub4dor&3sandwich-eats-paint\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-06\",\"turnstile_token\":\"staging-smoke-turnstile\"}")"
 register_json="$(cat "$register_tmp")"
 rm -f "$register_tmp"
 
@@ -113,12 +128,20 @@ if [[ "$register_status" = "201" && -n "$register_json" ]]; then
   check "Register response includes access_token" test "$(echo "$register_json" | python3 -c "import json,sys; print('ok' if json.load(sys.stdin).get('access_token') else '')")" = "ok"
   register_credits="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('credit_balance',''))" 2>/dev/null || true)"
   if [[ -n "$register_credits" && -n "$free_credits" ]]; then
-    check "Register credit_balance matches free-tier starting_credits" test "$register_credits" = "$free_credits"
+    check "Register credit_balance matches free-tier starting_credits (3)" test "$register_credits" = "$free_credits"
   else
     skip_check "Register credit_balance vs free-tier" "missing field(s)"
   fi
+  spendable="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('spendable_credit_balance',''))" 2>/dev/null || true)"
+  locked="$(echo "$register_json" | python3 -c "import json,sys; u=json.load(sys.stdin).get('user',{}); print('true' if u.get('credits_locked_until_verification') else 'false')" 2>/dev/null || true)"
+  check "Register spendable_credit_balance is 0 until verify" test "$spendable" = "0"
+  check "Register credits_locked_until_verification is true" test "$locked" = "true"
   smoke_token="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || true)"
   if [[ -n "$smoke_token" ]]; then
+    profile_status="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API_URL/api/profile/resume" \
+      -H "Authorization: Bearer $smoke_token" \
+      -F 'text=Jane Doe — Senior Backend Engineer with eight years building Python FastAPI services at Acme Corp serving millions of requests daily. Designed PostgreSQL schemas, Redis caching layers, and CI/CD pipelines.')"
+    check "Unverified profile resume upload returns 403" test "$profile_status" = "403"
     funnel_status="$(http_status -H "Authorization: Bearer $smoke_token" "$API_URL/api/applications/funnel")"
     check "GET /api/applications/funnel returns 200 (auth)" test "$funnel_status" = "200"
     funnel_limit="$(curl -sf -H "Authorization: Bearer $smoke_token" "$API_URL/api/applications/funnel" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tracker_active_limit',''))" 2>/dev/null || true)"
