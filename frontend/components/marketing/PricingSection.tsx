@@ -32,8 +32,9 @@ export function PricingSection({
     <section id="pricing" className={`${SECTION} scroll-mt-24 pb-24`}>
       <h2 className={SECTION_HEADING}>Start free, upgrade only if it works</h2>
       <p className={SECTION_SUBHEADING}>
-        Compare every tier side by side. Sign in with Google, GitHub, Microsoft,
-        LinkedIn, or email, then pick your plan on the billing page.
+        Compare every tier side by side — including a Customized option for teams
+        that need a quote. Sign in with Google, GitHub, Microsoft, LinkedIn, or
+        email, then pick your plan on the billing page.
       </p>
 
       <PricingTierGrid initialPricing={pricing} startingCredits={startingCredits} />

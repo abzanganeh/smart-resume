@@ -10,13 +10,17 @@ test("shows every paid tier without inventing a $0 price", async ({ page }) => {
     page.getByRole("heading", { level: 2, name: /start free, upgrade only/i }),
   ).toBeVisible()
 
-  for (const tier of ["Weekly", "Pro", "Pro+", "Premium"]) {
+  for (const tier of ["Weekly", "Pro", "Pro+", "Premium", "Customized"]) {
     await expect(
       page.getByRole("heading", { level: 3, name: tier, exact: true }),
     ).toBeVisible()
   }
 
   await expect(page.getByText("$0.00")).toHaveCount(0)
+  await expect(page.locator("#pricing").getByText(/custom quote/i)).toBeVisible()
+  await expect(
+    page.locator("#pricing").getByText(/not sold through self-serve checkout/i),
+  ).toBeVisible()
   await expect(
     page.getByText(/checkout shows the live price before you pay/i).first(),
   ).toBeVisible()

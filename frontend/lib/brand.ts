@@ -20,6 +20,9 @@ export const FLINT_DESKTOP_URL = "https://github.com/abzanganeh/flint" as const;
 
 export const PRIVACY_EMAIL = "privacy@zanganehai.com" as const;
 
+/** Customized / enterprise plan inquiries from the public pricing grid. */
+export const SALES_INQUIRY_EMAIL = "privacy@zanganehai.com" as const;
+
 /** Text wordmark PNGs — replace in place when art updates. */
 export const WORDMARK_LIGHT_SRC = "/brand/flintapply-wordmark-light.png" as const;
 export const WORDMARK_DARK_SRC = "/brand/flintapply-wordmark-dark.png" as const;
