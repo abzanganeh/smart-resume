@@ -1,11 +1,15 @@
 """Integration tests for story resume generate / save flow."""
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from unittest.mock import AsyncMock, patch
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.master_resume.embedding import set_fake_embedder
+from tests.conftest import verify_user_email
 from tests.retrieval.fake_embedder import deterministic_embed
 
 pytestmark = pytest.mark.integration
@@ -48,16 +52,25 @@ def _install_fake_embedder():
         set_fake_embedder(None)
 
 
-async def _register_and_login(client: AsyncClient) -> str:
-    r = await client.post("/api/auth/register", json=REGISTER_PAYLOAD)
+async def _register_and_login(client: AsyncClient, db_session: AsyncSession) -> str:
+    payload = {
+        **REGISTER_PAYLOAD,
+        "email": f"story-{uuid.uuid4().hex[:8]}@example.com",
+    }
+    r = await client.post("/api/auth/register", json=payload)
     assert r.status_code == 201, r.text
-    return r.json()["access_token"]
+    body = r.json()
+    await verify_user_email(db_session, uuid.UUID(body["user"]["id"]))
+    await db_session.commit()
+    return body["access_token"]
 
 
 @pytest.mark.asyncio
-async def test_story_generate_returns_preview_not_saved(app_client: AsyncClient):
+async def test_story_generate_returns_preview_not_saved(
+    app_client: AsyncClient, db_session: AsyncSession
+):
     """Generate endpoint returns draft + verify items without saving chunks."""
-    token = await _register_and_login(app_client)
+    token = await _register_and_login(app_client, db_session)
 
     with patch("app.routers.profile.story_to_resume", new_callable=AsyncMock) as mock_s2r:
         mock_s2r.return_value = MOCK_DRAFT
@@ -82,9 +95,11 @@ async def test_story_generate_returns_preview_not_saved(app_client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_story_save_requires_attestation(app_client: AsyncClient):
+async def test_story_save_requires_attestation(
+    app_client: AsyncClient, db_session: AsyncSession
+):
     """Save without attestation → 422."""
-    token = await _register_and_login(app_client)
+    token = await _register_and_login(app_client, db_session)
     response = await app_client.post(
         "/api/profile/resume/from-story/save",
         json={
@@ -98,9 +113,9 @@ async def test_story_save_requires_attestation(app_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_story_save_happy_path(app_client: AsyncClient):
+async def test_story_save_happy_path(app_client: AsyncClient, db_session: AsyncSession):
     """Attested save writes master resume chunks."""
-    token = await _register_and_login(app_client)
+    token = await _register_and_login(app_client, db_session)
 
     with patch("app.routers.profile._structure_with_llm", new_callable=AsyncMock) as mock_struct:
         mock_struct.return_value = {
@@ -128,9 +143,11 @@ async def test_story_save_happy_path(app_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_story_endpoint_too_few_words(app_client: AsyncClient):
+async def test_story_endpoint_too_few_words(
+    app_client: AsyncClient, db_session: AsyncSession
+):
     """Segments with fewer than 50 words total → 422."""
-    token = await _register_and_login(app_client)
+    token = await _register_and_login(app_client, db_session)
     response = await app_client.post(
         "/api/profile/resume/from-story",
         json={"segments": ["Hi", "I worked"], "whisper_path": False},
@@ -140,9 +157,11 @@ async def test_story_endpoint_too_few_words(app_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_story_endpoint_llm_failure(app_client: AsyncClient):
+async def test_story_endpoint_llm_failure(
+    app_client: AsyncClient, db_session: AsyncSession
+):
     """LLM RuntimeError → 502 with story_conversion_failed code."""
-    token = await _register_and_login(app_client)
+    token = await _register_and_login(app_client, db_session)
     with patch("app.routers.profile.story_to_resume", side_effect=RuntimeError("LLM failed")):
         response = await app_client.post(
             "/api/profile/resume/from-story",
