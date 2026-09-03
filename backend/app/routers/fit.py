@@ -20,6 +20,7 @@ from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.llm.token_accounting import llm_accounting_context
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
@@ -263,7 +264,8 @@ async def analyze_fit(
             },
         )
 
-    llm = get_llm_client_for_step("job_fit")
+    plan_code = await resolve_plan_code_for_llm(db, user)
+    llm = get_llm_client_for_step("job_fit", plan_code=plan_code)
 
     async def event_generator():
         _fit_locks.add(lock_key)

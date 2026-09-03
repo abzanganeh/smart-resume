@@ -2795,8 +2795,10 @@ from app.routers import admin_free_grant  # noqa: E402
 from app.routers import admin_grants  # noqa: E402
 from app.routers import admin_promo_codes  # noqa: E402
 from app.routers import admin_tier_limits  # noqa: E402
+from app.routers import admin_tier_llm  # noqa: E402
 
 router.include_router(admin_tier_limits.router)
+router.include_router(admin_tier_llm.router)
 router.include_router(admin_free_grant.router)
 router.include_router(admin_grants.router)
 router.include_router(admin_promo_codes.router)

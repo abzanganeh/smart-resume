@@ -75,9 +75,13 @@ def get_llm_client(
     return TrackingLLMClient(client)
 
 
-def get_llm_client_for_step(step: PipelineStep, *, tier: str | None = None) -> LLMClient:
+def get_llm_client_for_step(
+    step: PipelineStep,
+    *,
+    plan_code: str | None = None,
+) -> LLMClient:
     """Resolve provider/model from the step registry and return a tracking client."""
-    provider, model = resolve_model(step, tier=tier)
+    provider, model = resolve_model(step, plan_code=plan_code)
     return get_llm_client(provider=provider, model=model)
 
 

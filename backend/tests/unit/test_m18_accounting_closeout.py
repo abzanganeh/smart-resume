@@ -129,7 +129,8 @@ def test_every_registry_step_model_has_price_row() -> None:
 
 
 def test_checkup_router_pins_checkup_step_and_skips_narrative() -> None:
-    assert 'get_llm_client_for_step("checkup")' in _CHECKUP_ROUTER
+    assert 'get_llm_client_for_step("checkup"' in _CHECKUP_ROUTER
+    assert "plan_code=" in _CHECKUP_ROUTER
     assert "include_narrative=False" in _CHECKUP_ROUTER
 
 

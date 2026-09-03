@@ -16,9 +16,10 @@ import type {
   PlanUpdatePayload,
   PlanAuditedResponse,
   LLMConfig,
-  LLMConfigPayload,
   StepLLMConfig,
   StepLLMConfigPayload,
+  TierStepLLMConfig,
+  TierStepLLMConfigPayload,
   FeatureFlag,
   FeatureFlagPatchPayload,
   Announcement,
@@ -365,18 +366,6 @@ export async function getAdminLLMConfigs(
   return { configs: raw.configs ?? [], similarity_threshold: raw.similarity_threshold ?? 0.72 }
 }
 
-export async function createAdminLLMConfig(
-  token: string,
-  payload: LLMConfigPayload,
-): Promise<AuditedResponse<LLMConfig>> {
-  const raw = await req<{ llm: BackendLLMConfigOut; audit_log_id: string }>(
-    `/api/admin/llm`,
-    token,
-    { method: "POST", body: JSON.stringify(payload) },
-  )
-  return { data: mapBackendLLM(raw.llm), audit_log_id: raw.audit_log_id }
-}
-
 export async function getAdminLLMHistory(
   token: string,
 ): Promise<LLMConfig[]> {
@@ -410,6 +399,42 @@ export async function getAdminStepLLMHistory(
   const qs = step ? `?step=${encodeURIComponent(step)}` : ""
   const raw = await req<StepLLMConfig[]>(`/api/admin/llm/steps/history${qs}`, token)
   return Array.isArray(raw) ? raw : []
+}
+
+export async function getAdminTierStepLLMConfigs(
+  token: string,
+  planCode: string,
+): Promise<TierStepLLMConfig[]> {
+  const raw = await req<TierStepLLMConfig[]>(
+    `/api/admin/llm/tier-steps?plan_code=${encodeURIComponent(planCode)}`,
+    token,
+  )
+  return Array.isArray(raw) ? raw : []
+}
+
+export async function createAdminTierStepLLMConfig(
+  token: string,
+  payload: TierStepLLMConfigPayload,
+): Promise<AuditedResponse<TierStepLLMConfig[]>> {
+  const raw = await req<{ step_configs: TierStepLLMConfig[]; audit_log_id: string }>(
+    `/api/admin/llm/tier-steps`,
+    token,
+    { method: "POST", body: JSON.stringify(payload) },
+  )
+  return { data: raw.step_configs, audit_log_id: raw.audit_log_id }
+}
+
+export async function deleteAdminTierStepLLMConfig(
+  token: string,
+  planCode: string,
+  step: string,
+): Promise<AuditedResponse<{ status: string }>> {
+  const raw = await req<{ status: string; audit_log_id: string }>(
+    `/api/admin/llm/tier-steps/${encodeURIComponent(planCode)}/${encodeURIComponent(step)}`,
+    token,
+    { method: "DELETE" },
+  )
+  return { data: { status: raw.status }, audit_log_id: raw.audit_log_id }
 }
 
 export async function getAdminModelCatalog(

@@ -25,6 +25,7 @@ from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredR
 from app.models.session import PhaseRunScope, PhaseStatus
 from app.models.user import User
 from app.services.auth.dependencies import assert_user_email_verified
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.services.session_ownership import resolve_bearer_user_id
 from app.services.billing.exceptions import (
     AccountSuspendedError,
@@ -286,6 +287,18 @@ async def trigger_phase(
     session.phase_run_scope = body.scope
     if phase == 3 and body.llm_tier is not None:
         session.phase3_llm_tier = body.llm_tier
+
+    plan_code = "free"
+    if user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+        if uid is not None:
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            if user is not None:
+                plan_code = await resolve_plan_code_for_llm(db, user)
+    session.llm_plan_code = plan_code
     await update_session(session)
 
     return {
@@ -341,7 +354,10 @@ async def phase_events(request: Request, session_id: str, phase: int):
     await update_session(session)
 
     event_queue: asyncio.Queue = asyncio.Queue()
-    llm = get_llm_client_for_step(phase_step(phase))
+    llm = get_llm_client_for_step(
+        phase_step(phase),
+        plan_code=session.llm_plan_code,
+    )
 
     task = asyncio.create_task(run_phase(session_id, phase, llm, event_queue))
 

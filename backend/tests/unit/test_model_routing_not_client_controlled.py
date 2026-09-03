@@ -30,6 +30,7 @@ _ROUTERS_DIR = Path(__file__).resolve().parents[2] / "app" / "routers"
 # to 5/minute and capped at 5 output tokens, so the caller-chosen model cannot
 # amplify spend. Every other router must go through the step registry.
 _CALLER_CHOSEN_MODEL_ALLOWLIST = {"llm.py"}
+_ADMIN_ROUTER_ALLOWLIST = {"admin_tier_limits.py", "admin_tier_llm.py"}
 
 _HANDLERS_WITHOUT_MODEL_INPUT = (
     upload_resume,
@@ -71,6 +72,49 @@ def test_no_router_routes_on_stored_session_provider_or_model() -> None:
     assert not offenders, (
         "These routers still read a session-stored provider/model: "
         + ", ".join(offenders)
+    )
+
+
+def test_get_llm_client_for_step_never_uses_client_tier_hints() -> None:
+    """Model routing must not read ``body.llm_tier`` or ``session.phase3_llm_tier``."""
+    tier_hint_patterns = [
+        re.compile(r"get_llm_client_for_step\([^)]*phase3_llm_tier"),
+        re.compile(r"get_llm_client_for_step\([^)]*llm_tier"),
+        re.compile(r"resolve_model\([^)]*phase3_llm_tier"),
+        re.compile(r"resolve_model\([^)]*body\.llm_tier"),
+    ]
+    offenders = [
+        name
+        for name, source in _router_sources()
+        if name not in _CALLER_CHOSEN_MODEL_ALLOWLIST
+        and any(pattern.search(source) for pattern in tier_hint_patterns)
+    ]
+    assert not offenders, (
+        "These routers route LLM calls from client tier hints: "
+        + ", ".join(offenders)
+    )
+
+
+def test_llm_plan_code_is_server_resolved_not_from_request() -> None:
+    """``llm_plan_code`` must be set via ``resolve_plan_code_for_llm``, never from body/headers."""
+    phases_source = next(
+        source for name, source in _router_sources() if name == "phases.py"
+    )
+    assert "resolve_plan_code_for_llm" in phases_source
+    assert "session.llm_plan_code = plan_code" in phases_source
+    assert "body.llm_plan_code" not in phases_source
+    assert 'Header(default=None, alias="X-Plan-Code")' not in phases_source
+
+    body_plan_code_offenders = [
+        name
+        for name, source in _router_sources()
+        if name not in _CALLER_CHOSEN_MODEL_ALLOWLIST
+        and name not in _ADMIN_ROUTER_ALLOWLIST
+        and re.search(r"\bbody\.plan_code\b", source)
+    ]
+    assert not body_plan_code_offenders, (
+        "These routers accept caller-supplied plan_code in the body: "
+        + ", ".join(body_plan_code_offenders)
     )
 
 

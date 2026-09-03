@@ -6,14 +6,23 @@ import { clsx } from "clsx"
 import { useAdminSession, useAuditToast } from "@/app/admin/layout"
 import {
   getAdminLLMConfigs,
-  createAdminLLMConfig,
   getAdminLLMHistory,
   getAdminStepLLMConfigs,
   createAdminStepLLMConfig,
+  getAdminTierStepLLMConfigs,
+  createAdminTierStepLLMConfig,
+  deleteAdminTierStepLLMConfig,
   getAdminModelCatalog,
   updateSimilarityThreshold,
 } from "@/lib/admin/api"
-import type { LLMConfig, LLMConfigPayload, StepLLMConfig, StepLLMConfigPayload } from "@/lib/admin/types"
+import type {
+  LLMConfig,
+  StepLLMConfig,
+  StepLLMConfigPayload,
+  TierStepLLMConfig,
+  TierStepLLMConfigPayload,
+} from "@/lib/admin/types"
+import { CANONICAL_PLAN_CODES } from "@/lib/admin/types"
 import {
   ModelPicker,
   DEFAULT_MODEL_PROVIDERS,
@@ -33,11 +42,13 @@ export default function AdminLLMPage() {
   const [threshold, setThreshold] = useState(0.72)
   const [history, setHistory] = useState<LLMConfig[]>([])
   const [stepPins, setStepPins] = useState<StepLLMConfig[]>([])
+  const [tierStepPins, setTierStepPins] = useState<TierStepLLMConfig[]>([])
+  const [selectedPlanCode, setSelectedPlanCode] = useState<string>("free")
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({})
   const [editingStep, setEditingStep] = useState<StepLLMConfig | null>(null)
+  const [editingTierStep, setEditingTierStep] = useState<TierStepLLMConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [editingTier, setEditingTier] = useState<LLMConfig | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [thresholdDirty, setThresholdDirty] = useState(false)
   const [savingThreshold, setSavingThreshold] = useState(false)
@@ -46,6 +57,21 @@ export default function AdminLLMPage() {
     if (!token) return
     loadData()
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!token) return
+    void loadTierPins(selectedPlanCode)
+  }, [token, selectedPlanCode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadTierPins(planCode: string) {
+    if (!token) return
+    try {
+      const tierSteps = await getAdminTierStepLLMConfigs(token, planCode)
+      setTierStepPins(Array.isArray(tierSteps) ? tierSteps : [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load tier step pins")
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -62,6 +88,7 @@ export default function AdminLLMPage() {
       setHistory(Array.isArray(hist) ? hist : [])
       setStepPins(Array.isArray(steps) ? steps : [])
       setModelCatalog(catalog ?? {})
+      await loadTierPins(selectedPlanCode)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load LLM configs")
     } finally {
@@ -90,58 +117,146 @@ export default function AdminLLMPage() {
     <div className="space-y-8 max-w-5xl">
       <PageHeader title="LLM Configuration" />
 
-      {/* ── Tier cards (legacy metadata) ─────────────────────────────── */}
-      <div className="bg-amber-900/20 border border-amber-700/40 text-amber-200 text-sm px-4 py-3 rounded-xl">
-        <strong>Tier cards are legacy metadata.</strong> Live self-serve routing uses{" "}
-        <strong>Pipeline Step Pins</strong> below (<code className="text-amber-100">resolve_model(step)</code>).
-        Editing a tier card does not retarget cover letter, checkup, or other steps.
-      </div>
-
-      <Section title="Active Configuration by Tier">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TIERS.map((tier) => {
-            const cfg = byTier(tier)
-            return (
-              <div
-                key={tier}
-                className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <TierBadge tier={tier} />
-                  <button
-                    onClick={() => setEditingTier(cfg ?? ({ tier } as LLMConfig))}
-                    className="text-slate-500 hover:text-white transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {cfg ? (
-                  <div className="space-y-2 text-sm">
-                    <Row label="Provider" value={cfg.provider} />
-                    <Row label="Model" value={<code className="text-xs text-amber-300">{cfg.model_string}</code>} />
-                    <Row
-                      label="Phases"
-                      value={
-                        <span className="text-xs text-slate-400">
-                          {cfg.phases_enabled.join(", ")}
-                        </span>
-                      }
-                    />
-                    <p className="text-[11px] text-slate-500 pt-1">Legacy — not used for routing</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 italic">Not configured</p>
-                )}
-              </div>
-            )
-          })}
+      {/* ── Per-tier step pins ───────────────────────────────────────── */}
+      <Section title="Per-Tier Step Pins">
+        <p className="text-xs text-slate-500 mb-4">
+          Override global step pins for a billing plan. Precedence: tier pin → global pin → default.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {CANONICAL_PLAN_CODES.map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setSelectedPlanCode(code)}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                selectedPlanCode === code
+                  ? "bg-amber-600 text-white"
+                  : "bg-slate-800 text-slate-400 hover:bg-slate-700",
+              )}
+            >
+              {code}
+            </button>
+          ))}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-800">
+                <Th>Step</Th>
+                <Th>Provider</Th>
+                <Th>Model</Th>
+                <Th>Source</Th>
+                <Th aria-label="Actions"> </Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {tierStepPins.map((pin) => (
+                <tr key={pin.step} className="text-slate-300">
+                  <Td>
+                    <div className="font-medium text-slate-200">{pin.label}</div>
+                    <code className="text-xs text-slate-500">{pin.step}</code>
+                  </Td>
+                  <Td>{pin.provider}</Td>
+                  <Td><code className="text-xs text-amber-300">{pin.model_string}</code></Td>
+                  <Td>
+                    <span className={clsx(
+                      "text-xs px-2 py-0.5 rounded-full",
+                      pin.source === "tier_pin"
+                        ? "bg-emerald-900/40 text-emerald-300"
+                        : pin.source === "global_pin"
+                          ? "bg-blue-900/40 text-blue-300"
+                          : "bg-slate-800 text-slate-500",
+                    )}>
+                      {pin.source}
+                    </span>
+                  </Td>
+                  <Td className="text-right space-x-2">
+                    {pin.editable ? (
+                      <>
+                        <button
+                          onClick={() => setEditingTierStep(pin)}
+                          className="text-slate-500 hover:text-white transition-colors"
+                          title="Edit tier pin"
+                        >
+                          <Pencil className="w-3.5 h-3.5 inline" />
+                        </button>
+                        {pin.source === "tier_pin" && (
+                          <button
+                            onClick={async () => {
+                              const res = await deleteAdminTierStepLLMConfig(
+                                token,
+                                selectedPlanCode,
+                                pin.step,
+                              )
+                              showAuditToast(res.audit_log_id)
+                              await loadTierPins(selectedPlanCode)
+                            }}
+                            className="text-slate-500 hover:text-red-300 transition-colors text-xs"
+                            title="Clear tier pin"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-600">
+                        {pin.lock_reason === "global_only"
+                          ? "Global only"
+                          : "Inherited client"}
+                      </span>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Section>
 
-      {/* ── Pipeline step pins ───────────────────────────────────────── */}
-      <Section title="Pipeline Step Pins">
+      {/* ── Legacy tier cards (read-only archive) ───────────────────── */}
+      <details className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-slate-400 hover:text-slate-200">
+          Legacy standard/better/best tier cards (read-only)
+        </summary>
+        <div className="px-5 pb-5 border-t border-slate-800">
+          <p className="text-xs text-slate-500 my-4">
+            Historical metadata only — not used for live routing. Use per-tier step pins above.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {TIERS.map((tier) => {
+              const cfg = byTier(tier)
+              return (
+                <div
+                  key={tier}
+                  className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-3"
+                >
+                  <TierBadge tier={tier} />
+                  {cfg ? (
+                    <div className="space-y-2 text-sm">
+                      <Row label="Provider" value={cfg.provider} />
+                      <Row label="Model" value={<code className="text-xs text-amber-300">{cfg.model_string}</code>} />
+                      <Row
+                        label="Phases"
+                        value={
+                          <span className="text-xs text-slate-400">
+                            {cfg.phases_enabled.join(", ")}
+                          </span>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">Not configured</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </details>
+
+      {/* ── Global pipeline step pins ────────────────────────────────── */}
+      <Section title="Global Pipeline Step Pins">
         <p className="text-xs text-slate-500 mb-4">
           Controls which provider/model runs for each pipeline step. Changes take effect immediately — no deploy required.
         </p>
@@ -278,19 +393,18 @@ export default function AdminLLMPage() {
         )}
       </Section>
 
-      {/* ── Edit tier modal ───────────────────────────────────────────── */}
-      {editingTier !== null && (
-        <LLMEditModal
-          initial={editingTier}
+      {editingTierStep !== null && (
+        <TierStepPinEditModal
+          initial={editingTierStep}
+          selectedPlanCode={selectedPlanCode}
           catalog={modelCatalog}
-          token={token}
           onSave={async (payload) => {
-            const res = await createAdminLLMConfig(token, payload)
+            const res = await createAdminTierStepLLMConfig(token, payload)
             showAuditToast(res.audit_log_id)
-            setEditingTier(null)
-            await loadData()
+            setEditingTierStep(null)
+            await loadTierPins(selectedPlanCode)
           }}
-          onClose={() => setEditingTier(null)}
+          onClose={() => setEditingTierStep(null)}
         />
       )}
 
@@ -311,47 +425,49 @@ export default function AdminLLMPage() {
   )
 }
 
-// ── LLM Edit Modal ────────────────────────────────────────────────────────────
+// ── Tier step pin edit modal ──────────────────────────────────────────────────
 
-function LLMEditModal({
+function TierStepPinEditModal({
   initial,
+  selectedPlanCode,
   catalog,
-  token: _token,
   onSave,
   onClose,
 }: {
-  initial: LLMConfig
+  initial: TierStepLLMConfig
+  selectedPlanCode: string
   catalog: ModelCatalog
-  token: string
-  onSave: (payload: LLMConfigPayload) => Promise<void>
+  onSave: (payload: TierStepLLMConfigPayload) => Promise<void>
   onClose: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
+  const [provider, setProvider] = useState(initial.provider)
+  const [model, setModel] = useState(initial.model_string)
+  const [notes, setNotes] = useState(initial.notes ?? "")
+  const [planCodes, setPlanCodes] = useState<string[]>([selectedPlanCode])
 
-  const [provider, setProvider] = useState(initial.provider ?? "openai")
-  const [model, setModel] = useState(initial.model_string ?? "")
-  const phases = ["1", "2", "3", "4", "fit", "cover_letter"]
-  const [enabledPhases, setEnabledPhases] = useState<string[]>(
-    initial.phases_enabled ?? phases,
-  )
-
-  function togglePhase(p: string) {
-    setEnabledPhases((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+  function togglePlan(code: string) {
+    setPlanCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
     )
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (planCodes.length === 0) {
+      setErr("Select at least one plan code")
+      return
+    }
     setErr(null)
     startTransition(async () => {
       try {
         await onSave({
-          tier: initial.tier,
+          plan_codes: planCodes,
+          step: initial.step,
           provider,
           model_string: model,
-          phases_enabled: enabledPhases,
+          notes: notes || undefined,
         })
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Save failed")
@@ -360,18 +476,32 @@ function LLMEditModal({
   }
 
   return (
-    <Modal title={`Edit ${initial.tier} tier LLM`} onClose={onClose}>
+    <Modal title={`Tier pin: ${initial.label}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {err && <ErrorBanner msg={err} />}
-
-        <div className="flex items-center gap-2 mb-1">
-          <TierBadge tier={initial.tier} />
-        </div>
-
         <p className="text-xs text-slate-500">
-          Tier metadata only — pipeline routing uses step pins below.
+          Step id: <code className="text-slate-400">{initial.step}</code>
         </p>
-
+        <div>
+          <p className="text-xs text-slate-400 mb-2">Apply to plan codes</p>
+          <div className="flex flex-wrap gap-2">
+            {CANONICAL_PLAN_CODES.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => togglePlan(code)}
+                className={clsx(
+                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                  planCodes.includes(code)
+                    ? "bg-amber-600/80 text-white"
+                    : "bg-slate-700 text-slate-400 hover:bg-slate-600",
+                )}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
         <ModelPicker
           catalog={catalog}
           provider={provider}
@@ -380,29 +510,16 @@ function LLMEditModal({
           onModelChange={setModel}
           providers={PROVIDERS}
         />
-
-        <div>
-          <p className="text-xs text-slate-400 mb-2">Enabled phases</p>
-          <div className="flex flex-wrap gap-2">
-            {phases.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => togglePhase(p)}
-                className={clsx(
-                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                  enabledPhases.includes(p)
-                    ? "bg-amber-600/80 text-white"
-                    : "bg-slate-700 text-slate-400 hover:bg-slate-600",
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save config" />
+        <FormField label="Notes (optional)">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputCls}
+            placeholder="Why this pin changed"
+          />
+        </FormField>
+        <ModalActions onClose={onClose} isPending={isPending} submitLabel="Save tier pin" />
       </form>
     </Modal>
   )
