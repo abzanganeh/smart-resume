@@ -17,6 +17,7 @@ from app.db.engine import async_session_factory
 from app.dependencies.admin_auth import AdminDefaultDenyMiddleware
 from app.limiter import limiter
 from app.llm.factory import get_all_providers
+from app.parsers.pdf_parser import UnreadablePdfError
 from app.routers import (
     account,
     admin,
@@ -191,6 +192,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)},
+        headers=_cors_headers(request),
+    )
+
+
+@app.exception_handler(UnreadablePdfError)
+async def unreadable_pdf_exception_handler(request: Request, exc: UnreadablePdfError):
     return JSONResponse(
         status_code=422,
         content={"detail": str(exc)},
