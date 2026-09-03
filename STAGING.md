@@ -67,7 +67,7 @@ There is **no Terraform for the Next.js/FastAPI app** today. Terraform under
 
 ### Deploy sequence
 
-**Local staging simulation** (ports `3001`/`8001` so `pnpm dev` can keep `:3000`):
+**Local staging simulation** (host **3001/8001** — Kia/Trust may keep **3000**; FlintApply must never bind host 3000):
 
 ```bash
 # 1. Generate staging env (gitignored *.env files)

@@ -95,6 +95,8 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "staging-smoke.sh",
         "API_URL=http://localhost:${BACKEND_PORT}",
         "FRONTEND_URL=http://localhost:${FRONTEND_PORT}",
+        "Missing backend/.env.staging",
+        "Missing .env.staging",
     )
     for needle in required:
         assert needle in text, f"desktop-staging-local-sim-up.sh must contain {needle!r}"
@@ -103,6 +105,8 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "production-smoke",
         "PRODUCTION_ENV_CHECK",
         "stripe listen",
+        "ss -tlnp",
+        "Stop that listener",
     )
     for needle in forbidden:
         assert needle not in text, f"desktop-staging-local-sim-up.sh must not contain {needle!r}"

@@ -33,19 +33,16 @@ warn() {
 
 if [ "${STAGING_FRONTEND_PORT:-$FRONTEND_PORT}" != "$FRONTEND_PORT" ] \
   || [ "${STAGING_BACKEND_PORT:-$BACKEND_PORT}" != "$BACKEND_PORT" ]; then
-  die "Refusing non-default staging ports (require ${FRONTEND_PORT}/${BACKEND_PORT}; never 3000)."
+  die "Refusing non-default staging ports (require ${FRONTEND_PORT}/${BACKEND_PORT}; never bind host 3000 for FlintApply)."
 fi
 
-if ss -tlnp 2>/dev/null | grep -qE ':3000[[:space:]]'; then
-  die "Host port 3000 is in use (Kia/Trust). Stop that listener or use FlintApply dev on :3100 — staging uses :3001/:8001 only."
+if [ -f .env.staging ] && [ ! -f backend/.env.staging ]; then
+  die "Missing backend/.env.staging — run: python3 scripts/setup-staging-env.py --local-sim"
+elif [ ! -f .env.staging ] && [ -f backend/.env.staging ]; then
+  die "Missing .env.staging — run: python3 scripts/setup-staging-env.py --local-sim"
 fi
 
-need_env=0
 if [ ! -f .env.staging ] || [ ! -f backend/.env.staging ]; then
-  need_env=1
-fi
-
-if [ "$need_env" -eq 1 ]; then
   echo "Generating gitignored staging env files (--local-sim)..."
   python3 scripts/setup-staging-env.py --local-sim
   echo "Bootstrap admin password was printed above — save securely; do not commit."
