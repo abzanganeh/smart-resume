@@ -75,6 +75,27 @@ def test_no_router_routes_on_stored_session_provider_or_model() -> None:
     )
 
 
+def test_no_router_accepts_client_llm_headers() -> None:
+    """Callers must not override provider/model via X-Provider / X-Model."""
+    header_patterns = [
+        re.compile(r'Header\([^)]*alias="X-Provider"'),
+        re.compile(r'Header\([^)]*alias="X-Model"'),
+        re.compile(r'request\.headers\.get\("X-Provider"'),
+        re.compile(r'request\.headers\.get\("X-Model"'),
+        re.compile(r"apply_llm_request_headers"),
+    ]
+    offenders = [
+        name
+        for name, source in _router_sources()
+        if name not in _CALLER_CHOSEN_MODEL_ALLOWLIST
+        and any(pattern.search(source) for pattern in header_patterns)
+    ]
+    assert not offenders, (
+        "These routers still accept client LLM override headers: "
+        + ", ".join(offenders)
+    )
+
+
 def test_get_llm_client_for_step_never_uses_client_tier_hints() -> None:
     """Model routing must not read ``body.llm_tier`` or ``session.phase3_llm_tier``."""
     tier_hint_patterns = [

@@ -145,6 +145,11 @@ PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
 Regression coverage: `backend/tests/security/test_crypto_review.py`,
 `test_encryption_production_gate.py`, and `test_auth_asvs_l2.py`.
 
+**LLM routing:** Provider and model are resolved server-side from the step
+registry and admin tier pins (`resolve_model(step, plan_code=...)`). Clients
+cannot override routing via `X-Provider`, `X-Model`, or session fields — see
+`backend/tests/unit/test_model_routing_not_client_controlled.py`.
+
 **Accepted risk:** BYOK key rotation is operator-driven (no automatic re-wrap job
 yet). Document runbook before first production rotation.
 

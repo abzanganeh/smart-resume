@@ -171,8 +171,6 @@ async def _extract_resume_text(
 async def _structure_with_llm(
     raw_text: str,
     *,
-    provider: str | None,
-    model: str | None,
     user_id: str | None = None,
     plan_code: str = "free",
 ) -> dict[str, Any]:
@@ -378,8 +376,6 @@ async def create_or_replace_resume(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
 ):
     """Upload or paste the master resume — chunks + embeds the entire payload.
 
@@ -398,8 +394,6 @@ async def create_or_replace_resume(
     plan_code = await resolve_plan_code_for_llm(db, user)
     parsed_sections = await _structure_with_llm(
         raw,
-        provider=x_provider,
-        model=x_model,
         user_id=str(user.id),
         plan_code=plan_code,
     )
@@ -436,8 +430,6 @@ async def replace_resume(
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
 ):
     """Full replace: same shape as POST but always re-embeds every chunk."""
     return await create_or_replace_resume(
@@ -446,8 +438,6 @@ async def replace_resume(
         db=db,
         file=file,
         text=text,
-        x_provider=x_provider,
-        x_model=x_model,
     )
 
 
@@ -629,8 +619,6 @@ async def create_resume_from_story(
 
     Credit rules: first generate free; regenerates cost 1 credit (subscribers free).
     """
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
     plan_code = await resolve_plan_code_for_llm(db, user)
@@ -723,8 +711,6 @@ async def save_resume_from_story(
 
     Requires attestation. First save free; later saves cost 1 credit (subscribers free).
     """
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
     try:
@@ -751,8 +737,6 @@ async def save_resume_from_story(
     plan_code = await resolve_plan_code_for_llm(db, user)
     parsed_sections = await _structure_with_llm(
         draft_text,
-        provider=provider or None,
-        model=model or None,
         user_id=str(user.id),
         plan_code=plan_code,
     )
@@ -809,8 +793,6 @@ async def polish_resume_draft(
 
     Returns: { "text": "<updated resume text>" }
     """
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     plan_code = await resolve_plan_code_for_llm(db, user)
 
     with llm_accounting_context(step="polish", user_id=str(user.id)):
@@ -862,8 +844,6 @@ async def story_coach_endpoint(
             },
         )
 
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     plan_code = await resolve_plan_code_for_llm(db, user)
 
     # Charge 1 credit on the first coached segment of a story build session.
@@ -958,8 +938,6 @@ async def story_interview_next(
             },
         )
 
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     plan_code = await resolve_plan_code_for_llm(session, user)
 
     # Charge 1 credit on the very first question (history is empty)
@@ -1031,8 +1009,6 @@ async def story_interview_submit(
 
     Returns the same shape as POST /resume/from-story.
     """
-    provider = request.headers.get("X-Provider", "").strip()
-    model = request.headers.get("X-Model", "").strip()
     plan_code = await resolve_plan_code_for_llm(db, user)
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
