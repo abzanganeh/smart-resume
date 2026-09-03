@@ -132,7 +132,9 @@ async def lifespan(app: FastAPI):
 # FastAPI app
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="TalioCV API", version="1.0.0", lifespan=lifespan)
+from app.brand import PRODUCT_NAME
+
+app = FastAPI(title=f"{PRODUCT_NAME} API", version="1.0.0", lifespan=lifespan)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

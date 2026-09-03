@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import job_fit as job_fit_agent
+from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
@@ -71,7 +72,7 @@ async def _fetch_jd_from_url(url: str) -> str:
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             resp = await client.get(
                 url,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; TalioCV/1.0)"},
+                headers={"User-Agent": f"Mozilla/5.0 (compatible; {PRODUCT_NAME}/1.0)"},
             )
             resp.raise_for_status()
             return strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)

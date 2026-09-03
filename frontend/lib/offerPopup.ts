@@ -2,8 +2,8 @@
 
 export type OfferPopupTrigger = "exit_intent" | "post_exhaustion";
 
-export const OFFER_POPUP_SESSION_KEY = "talio_offer_popup_shown";
-export const CREDITS_EXHAUSTED_EVENT = "talio:credits-exhausted";
+export const OFFER_POPUP_SESSION_KEY = "flintapply_offer_popup_shown";
+export const CREDITS_EXHAUSTED_EVENT = "flintapply:credits-exhausted";
 
 export interface BillingPopupOffer {
   code: string;

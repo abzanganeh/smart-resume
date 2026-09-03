@@ -12,6 +12,7 @@ import structlog
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.models.notifications import Notification, NotificationPreference
 from app.models.user import User
@@ -28,7 +29,7 @@ def _wrap_html(inner: str) -> str:
         'max-width:560px;margin:0 auto;padding:24px">'
         f"{inner}"
         '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>'
-        '<p style="font-size:11px;color:#9ca3af">TalioCV — '
+        '<p style="font-size:11px;color:#9ca3af">' + PRODUCT_NAME + " — "
         "automated message, please do not reply.</p>"
         "</div>"
     )

@@ -80,7 +80,7 @@ on each dependency bump; remove IDs when upstream fixes land.
 | Vulnerability ID | Package | Compensating control |
 |---|---|---|
 | PYSEC-2026-3412 | `weasyprint` | SSRF/LFI mitigated by `app/services/export/weasyprint_safe.py` (LLM10) |
-| PYSEC-2026-1325 | `ecdsa` (via `python-jose`) | TalioCV JWTs use HS256 (`AUTH_SECRET`), not ECDSA signing |
+| PYSEC-2026-1325 | `ecdsa` (via `python-jose`) | FlintApply JWTs use HS256 (`AUTH_SECRET`), not ECDSA signing |
 | PYSEC-2026-141, 1994, 1996, 1998, 1999 | `urllib3` 1.26.x (via `botocore`) | AWS SDK pin; S3 calls are server-side to trusted AWS endpoints only |
 
 Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
@@ -124,8 +124,8 @@ PLAYWRIGHT_PORT=3100 E2E_MOCK_API=1 npm run test:e2e:smoke
 
 | Control | Baseline | Owner action | Target blocking date |
 |---|---|---|---|
-| CSP `style-src 'unsafe-inline'` | Required for M16/M22 landing motion: intro overlay, spotlight, journey rail CSS variables, and PR #116 scroll-linked hero (`HeroScrollExperience` inline `style={{ height: …vh }}`). **Blocker:** CSP Level 3 ignores `'unsafe-inline'` on any directive that also lists a nonce; adding the per-request nonce to `style-src` therefore disables inline `style` attributes and broke the landing page in CI — see `frontend/lib/securityHeaders.ts`. | Prefer hash/nonce per inline block; remove `'unsafe-inline'` in a follow-up ratchet | Ongoing |
-| CSP `script-src 'unsafe-inline'` (dev only) | Local dev (`NODE_ENV !== production`) keeps `'unsafe-inline'` + `'unsafe-eval'` with the nonce for Next.js HMR. **Production** enforces nonce + `'strict-dynamic'` only — no `'unsafe-inline'` on `script-src`. | Audit dev-only allowances; keep production ratchet strict | Ongoing |
+| CSP `style-src 'unsafe-inline'` | Required for M16/M22 landing motion: intro overlay, spotlight, journey rail CSS variables, and PR #116 scroll-linked hero (`HeroScrollExperience` inline `style={{ height: …vh }}`). **Blocker:** CSP Level 3 ignores `'unsafe-inline'` on any directive that also lists a nonce; adding the per-request nonce to `style-src` therefore disables inline `style` attributes and broke the landing page in CI — see `frontend/lib/securityHeaders.ts`. | Prefer hash/nonce per inline block; remove `'unsafe-inline'` in a follow-up ratchet | **Re-review:** 2026-12-01 · **Owner:** platform security (`@abzanganeh`) |
+| CSP `script-src 'unsafe-inline'` (dev only) | Local dev (`NODE_ENV !== production`) keeps `'unsafe-inline'` + `'unsafe-eval'` with the nonce for Next.js HMR. **Production** enforces nonce + `'strict-dynamic'` only — no `'unsafe-inline'` on `script-src`. | Audit dev-only allowances; keep production ratchet strict | **Re-review:** 2026-12-01 · **Owner:** platform security (`@abzanganeh`) |
 
 `style-src 'unsafe-inline'` remains in the **enforcing** production policy until hash/nonce migration. Production `script-src` does **not** include `'unsafe-inline'`.
 

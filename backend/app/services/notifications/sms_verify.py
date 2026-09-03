@@ -11,6 +11,7 @@ import string
 
 import structlog
 
+from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.services import session_store
 
@@ -67,7 +68,7 @@ async def send_verification_sms(phone: str, code: str) -> dict:
 
     def _send():
         return client.messages.create(
-            body=f"Your TalioCV verification code is {code}",
+            body=f"Your {PRODUCT_NAME} verification code is {code}",
             from_=settings.TWILIO_FROM_NUMBER,
             to=phone,
         )
