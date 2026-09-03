@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Copy, ExternalLink } from "lucide-react";
 
 import { ApiError, createFlintHandoff } from "@/lib/api";
+import { PRODUCT_NAME } from "@/lib/brand";
 import {
   buildFlintImportLink,
   FLINT_OPEN_FALLBACK_MS,
@@ -121,7 +122,7 @@ export function OpenInFlintButton({
           {showAutoOpenHint ? (
             <p className="text-sm text-slate-700 dark:text-slate-300">
               Flint did not open automatically (common on Linux dev builds). Paste the
-              link below into Flint → New Session → Import from TalioCV link.
+              link below into Flint → New Session → Import from {PRODUCT_NAME} link.
             </p>
           ) : (
             <p className="text-sm text-slate-700 dark:text-slate-300">

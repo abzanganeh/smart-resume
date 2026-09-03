@@ -5,6 +5,7 @@
 # Usage:
 #   ./scripts/production-preflight.sh
 #   PRODUCTION_ENV_CHECK=1 ./scripts/production-preflight.sh
+#   LOCAL_SIM_ENV_CHECK=1 ./scripts/production-preflight.sh
 
 set -euo pipefail
 
@@ -21,6 +22,8 @@ ok() { printf '\033[32mOK    %s\033[0m\n' "$*"; }
 if [[ -f backend/.env.staging ]]; then
   if python3 scripts/setup-staging-env.py --check; then
     ok "backend/.env.staging passes setup-staging-env.py --check"
+  elif [[ "${LOCAL_SIM_ENV_CHECK:-0}" = "1" ]]; then
+    warn "backend/.env.staging has gaps (local-sim may still boot; fill keys before AI features)"
   else
     fail "backend/.env.staging has gaps (run: python3 scripts/setup-staging-env.py)"
   fi
@@ -48,7 +51,6 @@ if [[ "${PRODUCTION_ENV_CHECK:-0}" = "1" ]]; then
       esac
     done < <(
       python3 - "$root_env" "$backend_env" <<'PY'
-import re
 import sys
 from pathlib import Path
 
@@ -59,16 +61,29 @@ keys = (
     "FRONTEND_BASE_URL",
     "RESEND_API_KEY",
     "SIGNUP_IP_DAILY_LIMIT",
+    "STRIPE_SECRET_KEY",
 )
 values: dict[str, str] = {}
+root_stripe = ""
+backend_stripe = ""
 for path in sys.argv[1:]:
+    is_backend = Path(path).parent.name == "backend"
     for raw in Path(path).read_text().splitlines():
         if not raw or raw.lstrip().startswith("#") or "=" not in raw:
             continue
         key, _, val = raw.partition("=")
         key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key == "STRIPE_SECRET_KEY":
+            if is_backend:
+                backend_stripe = val
+            else:
+                root_stripe = val
         if key in keys and key not in values:
-            values[key] = val.strip().strip('"').strip("'")
+            values[key] = val
+
+if root_stripe:
+    print("FAIL:STRIPE_SECRET_KEY must not be set in .env.staging (backend/.env.staging only)")
 
 url_keys = (
     "NEXTAUTH_URL",
@@ -76,6 +91,7 @@ url_keys = (
     "NEXT_PUBLIC_API_URL",
     "FRONTEND_BASE_URL",
 )
+https_prod = False
 for key in url_keys:
     val = values.get(key, "")
     if not val:
@@ -84,6 +100,7 @@ for key in url_keys:
         print(f"FAIL:{key} must use HTTPS (got {val})")
     else:
         print(f"OK:{key} uses HTTPS")
+        https_prod = True
 
 signup = values.get("SIGNUP_IP_DAILY_LIMIT", "")
 if signup and signup != "15":
@@ -94,11 +111,58 @@ if not resend or resend.endswith("...") or resend == "change-me-in-production":
     print("FAIL:RESEND_API_KEY missing or placeholder — verification email requires Resend on VM")
 elif resend:
     print("OK:RESEND_API_KEY configured")
+
+stripe = backend_stripe or values.get("STRIPE_SECRET_KEY", "")
+if https_prod and not stripe:
+    print("FAIL:STRIPE_SECRET_KEY unset on production HTTPS deploy")
+elif https_prod and stripe.startswith("sk_test_"):
+    print("FAIL:STRIPE_SECRET_KEY must not be sk_test_* on production HTTPS deploy")
+elif https_prod and stripe.startswith("sk_live_"):
+    print("OK:STRIPE_SECRET_KEY uses live key for production")
 PY
     )
   fi
 else
   warn "Skipping HTTPS env proof (set PRODUCTION_ENV_CHECK=1 after filling production URLs)"
+fi
+
+if [[ "${LOCAL_SIM_ENV_CHECK:-0}" = "1" ]]; then
+  backend_env="${ROOT}/backend/.env.staging"
+  if [[ ! -f "$backend_env" ]]; then
+    fail "LOCAL_SIM_ENV_CHECK=1 requires backend/.env.staging on disk"
+  else
+    while IFS= read -r line; do
+      case "$line" in
+        FAIL:*)
+          fail "${line#FAIL: }"
+          ;;
+        OK:*)
+          ok "${line#OK: }"
+          ;;
+      esac
+    done < <(
+      python3 - "$backend_env" <<'PY'
+import sys
+from pathlib import Path
+
+stripe = ""
+for raw in Path(sys.argv[1]).read_text().splitlines():
+    if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+        continue
+    key, _, val = raw.partition("=")
+    if key.strip() == "STRIPE_SECRET_KEY":
+        stripe = val.strip().strip('"').strip("'")
+        break
+
+if stripe.startswith("sk_live_"):
+    print("FAIL:STRIPE_SECRET_KEY must not be sk_live_* in local-sim (use sk_test_local_staging_sim)")
+elif stripe:
+    print("OK:STRIPE_SECRET_KEY is not a live key (local-sim)")
+else:
+    print("FAIL:STRIPE_SECRET_KEY unset in backend/.env.staging")
+PY
+    )
+  fi
 fi
 
 echo

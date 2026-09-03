@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: smart_resume
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     ports:
-      - "${POSTGRES_HOST_PORT:-54325}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-54325}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     # Internal only — backend reaches redis:6379 on the compose network.
     # Set REDIS_HOST_PORT (e.g. 6380) in .env if you need host access for local backend dev.
     ports:
-      - "${REDIS_HOST_PORT:-6380}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
 
@@ -30,8 +30,8 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - "${MAILPIT_SMTP_PORT:-31025}:1025"
-      - "${MAILPIT_UI_PORT:-38025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-31025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-38025}:8025"
 
   backend:
     build:
@@ -43,7 +43,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - USE_IN_MEMORY_STORE=false
-      - ALLOWED_ORIGINS=["http://localhost:3000","http://frontend:3000"]
+      - ALLOWED_ORIGINS=["http://localhost:3100","http://frontend:3000"]
       - DATABASE_URL=postgresql+asyncpg://smart_resume:${POSTGRES_PASSWORD:-password}@postgres:5432/smart_resume
       - APP_ENV=development
       - SMTP_HOST=mailpit
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
-        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        NEXT_PUBLIC_SITE_URL: http://localhost:3100
         GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
         GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
         GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
@@ -75,14 +75,14 @@ services:
         AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET:-}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3100:3000"
     env_file:
       - path: .env
         required: false
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - INTERNAL_API_URL=http://backend:8000
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=http://localhost:3100
       - AUTH_TRUST_HOST=true
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-local-docker-dev-secret-change-me}
       # OAuth — from repo root .env only (do not load backend/.env here; secrets diverge).

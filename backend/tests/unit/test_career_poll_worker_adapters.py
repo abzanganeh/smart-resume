@@ -24,10 +24,11 @@ def _load_adapters():
     return module
 
 
-def test_user_agent_is_taliocv() -> None:
+def test_user_agent_is_flintapply() -> None:
     adapters = _load_adapters()
-    assert "TalioCV" in adapters.USER_AGENT
-    assert "taliocv.com" in adapters.USER_AGENT
+    assert "FlintApply" in adapters.USER_AGENT
+    assert "flintapply.com" in adapters.USER_AGENT
+    assert "TalioCV" not in adapters.USER_AGENT
 
 
 def test_parse_greenhouse_jobs() -> None:

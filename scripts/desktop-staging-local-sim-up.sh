@@ -52,6 +52,10 @@ if ! python3 scripts/setup-staging-env.py --check; then
   warn "setup-staging-env.py --check reported gaps (e.g. missing LLM key). HTTP smoke may still pass; fill keys before AI features."
 fi
 
+if ! LOCAL_SIM_ENV_CHECK=1 ./scripts/production-preflight.sh; then
+  die "Local-sim Stripe guard failed — remove sk_live_* from backend/.env.staging before workstation smoke."
+fi
+
 echo "Starting local-sim staging stack (ports ${FRONTEND_PORT}/${BACKEND_PORT})..."
 STAGING_FRONTEND_PORT="$FRONTEND_PORT" STAGING_BACKEND_PORT="$BACKEND_PORT" \
   docker compose "${COMPOSE_FILES[@]}" up -d --build

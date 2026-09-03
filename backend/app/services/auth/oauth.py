@@ -19,6 +19,7 @@ from typing import Any, Literal, TypedDict
 
 import httpx
 
+from app.brand import PRODUCT_NAME
 from app.config import settings
 from app.services.auth.exceptions import OAuthError
 
@@ -525,7 +526,7 @@ async def verify_apple_id_token(
     if not email:
         raise OAuthError(
             "Apple did not share an email. Use a different sign-in method or "
-            "revoke TalioCV in Apple ID settings and try again."
+            "revoke FlintApply in Apple ID settings and try again."
         )
     return {
         "email": email,
