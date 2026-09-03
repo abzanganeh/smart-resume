@@ -10,7 +10,7 @@
 
 An AI-powered job-search platform. Build your master resume by speaking or uploading, tailor it to any job description in minutes, find matching jobs, write cover letters, and track every application — all in one place.
 
-> **Rebrand note:** User-facing UI may still show the legacy name *TalioCV* until the UX refresh lands. Docs and deployment targets use **Flint Apply** / `flintapply.com`.
+> **Rebrand note:** Product UI and API surfaces use **FlintApply** / `flintapply.com`. Legal pages (`/legal/*`) still reference the legacy *TalioCV* controller name until the entity charter lands (see [STAGING.md §9](./STAGING.md#9-company--legal-entity-migration-the-flint-ai)).
 
 ---
 
@@ -28,7 +28,8 @@ docker compose up
 
 | Service   | URL                          |
 |-----------|------------------------------|
-| App       | http://localhost:3000        |
+| App (Docker) | http://localhost:3100        |
+| App (`pnpm dev`) | http://localhost:3100    |
 | API       | http://localhost:8000        |
 | API docs  | http://localhost:8000/docs   |
 
@@ -47,7 +48,7 @@ uv run uvicorn app.main:app --reload --port 8000
 cd frontend
 cp .env.local.example .env.local   # fill in NEXTAUTH_* vars
 pnpm install
-pnpm dev
+pnpm dev -p 3100
 ```
 
 ---
@@ -178,7 +179,7 @@ the yearly discount from those live amounts rather than hardcoding a percentage.
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 NEXTAUTH_SECRET=...          # any random 32-char string
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=http://localhost:3100
 ```
 
 ### LLM providers

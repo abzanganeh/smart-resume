@@ -383,7 +383,7 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml -f docker-com
 
 ## 9. Company & legal entity migration (The Flint AI)
 
-**Product:** Flint Apply · **Company:** The Flint AI · **Domains:** [flintapply.com](https://flintapply.com), [theflintai.com](https://theflintai.com)
+**Product:** Flint Apply · **Company:** The Flint AI *(legal entity name TBD — see Thread 1 charter)* · **Domains:** [flintapply.com](https://flintapply.com), [theflintai.com](https://theflintai.com)
 
 This section is the operator checklist for moving from the current **personal**
 licensor/controller (`Alireza Barzin Zanganeh`, `privacy@zanganeai.com`) to
@@ -398,8 +398,8 @@ M16 task file `.cursor/skills/resume-loop-engineering/tasks/marketing-motion-and
 
 Can ship on staging while entity work is in progress.
 
-- [ ] Centralise names in `frontend/lib/brand.ts` (`FlintApply`, `by The Flint AI`, copyright line)
-- [ ] Replace user-facing **TalioCV** strings in frontend + backend copy (≈47 files)
+- [x] Centralise names in `frontend/lib/brand.ts` (`FlintApply`, `by The Flint AI`, copyright line)
+- [x] Replace user-facing **TalioCV** strings in frontend + backend copy (non-legal surfaces; `/legal/*` deferred to Phase C)
 - [ ] Footer marketing line: `© {year} The Flint AI` (not personal name)
 - [ ] Intro overlay greeting uses **FlintApply** (see `lib/marketing/intro.ts`)
 - [ ] Replace brand assets under `frontend/public/brand/` and app icons (`favicon.ico`, `icon.png`, `opengraph-image.png`)

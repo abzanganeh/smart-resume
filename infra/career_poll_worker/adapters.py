@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib import request
 
-USER_AGENT = "TalioCV-CareerWatch/1.0 (+https://taliocv.com)"
+USER_AGENT = "FlintApply-CareerWatch/1.0 (+https://flintapply.com)"
 FETCH_TIMEOUT = 10
 
 

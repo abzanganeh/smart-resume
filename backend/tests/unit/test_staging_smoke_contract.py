@@ -93,6 +93,7 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "setup-staging-env.py --local-sim",
         "setup-staging-env.py --check",
         "staging-smoke.sh",
+        "LOCAL_SIM_ENV_CHECK=1 ./scripts/production-preflight.sh",
         "API_URL=http://localhost:${BACKEND_PORT}",
         "FRONTEND_URL=http://localhost:${FRONTEND_PORT}",
         "Missing backend/.env.staging",
@@ -132,3 +133,30 @@ def test_setup_staging_env_non_local_sim_omits_local_sim_compose() -> None:
     assert local_sim_idx < else_idx
     else_block = text[else_idx : else_idx + 120]
     assert "local-sim" not in else_block
+
+
+def test_production_preflight_rejects_sk_test_on_https_prod() -> None:
+    script = _repo_root() / "scripts" / "production-preflight.sh"
+    text = script.read_text()
+    required = (
+        "STRIPE_SECRET_KEY",
+        'stripe.startswith("sk_test_")',
+        "must not be sk_test_* on production HTTPS deploy",
+        "STRIPE_SECRET_KEY must not be set in .env.staging (backend/.env.staging only)",
+        "STRIPE_SECRET_KEY unset on production HTTPS deploy",
+        "LOCAL_SIM_ENV_CHECK",
+        'stripe.startswith("sk_live_")',
+        "must not be sk_live_* in local-sim",
+    )
+    for needle in required:
+        assert needle in text, f"production-preflight.sh must contain {needle!r}"
+
+
+def test_docker_compose_loopback_binds_sensitive_services() -> None:
+    compose = (_repo_root() / "docker-compose.yml").read_text()
+    for service in ("postgres", "redis", "mailpit"):
+        assert f"  {service}:" in compose
+    assert '127.0.0.1:${POSTGRES_HOST_PORT:-54325}:5432' in compose
+    assert '127.0.0.1:${REDIS_HOST_PORT:-6380}:6379' in compose
+    assert '127.0.0.1:${MAILPIT_SMTP_PORT:-31025}:1025' in compose
+    assert '127.0.0.1:${MAILPIT_UI_PORT:-38025}:8025' in compose
