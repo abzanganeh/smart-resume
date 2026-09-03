@@ -39,6 +39,21 @@ async def test_checkup_rejects_short_jd(app_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_checkup_rejects_corrupt_pdf_upload(app_client: AsyncClient) -> None:
+    resp = await app_client.post(
+        "/api/checkup",
+        data={"jd_text": _SAMPLE_JD},
+        files={
+            "file": ("resume.pdf", b"not-a-valid-pdf", "application/pdf"),
+        },
+    )
+    assert resp.status_code == 422
+    detail = resp.json()["detail"].lower()
+    assert "pdf" in detail
+    assert "paste" in detail or "corrupt" in detail or "could not read" in detail
+
+
+@pytest.mark.asyncio
 async def test_checkup_does_not_require_auth(app_client: AsyncClient) -> None:
     """Anonymous callers reach validation — not 401."""
     resp = await app_client.post(
