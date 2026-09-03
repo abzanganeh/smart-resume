@@ -24,7 +24,7 @@ cp backend/.env.example backend/.env
 docker compose up
 ```
 
-**Staging deploy:** see [STAGING.md](./STAGING.md) for env checklist, OAuth setup, Stripe webhook, and manual smoke gates.
+**Desktop staging (local workstation):** see [STAGING.md §2](./STAGING.md#2-infrastructure-fastest-path-docker-compose-on-a-vm) — run `./scripts/desktop-staging-local-sim-up.sh` for Mailpit + dummy Stripe on host **3001/8001** (never bind **3000**; Kia/Trust uses that port). VM/production deploy uses the same runbook without `local-sim`.
 
 | Service   | URL                          |
 |-----------|------------------------------|

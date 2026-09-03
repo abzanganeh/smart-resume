@@ -40,11 +40,13 @@ def test_staging_smoke_script_includes_verify_unlock_flow() -> None:
     )
     text = script.read_text()
     required = (
+        'check "Backend /health returns 200"',
         "REQUIRE_MAILPIT",
         "/api/v1/search",
-        "/api/auth/verify/",
-        "spendable_credit_balance",
-        "email_verified_at",
+        'check "GET /api/auth/verify/{token} returns 200"',
+        'check "Register spendable_credit_balance is 0 until verify"',
+        'check "Post-verify spendable_credit_balance equals starting credits',
+        'check "Post-verify email_verified_at is set"',
         "upgrade-insecure-requests",
     )
     for needle in required:
@@ -68,3 +70,61 @@ def test_production_smoke_sets_require_mailpit_zero() -> None:
     assert "CONFIRM_PRODUCTION_SMOKE=1" in text
     assert "REQUIRE_MAILPIT=0" in text
     assert "staging-smoke.sh" in text
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def test_desktop_staging_local_sim_up_script_contract() -> None:
+    """Grep guards the local-sim helper compose triple and port pins."""
+    script = _repo_root() / "scripts" / "desktop-staging-local-sim-up.sh"
+    text = script.read_text()
+    required = (
+        "set -euo pipefail",
+        "docker-compose.yml",
+        "docker-compose.staging.yml",
+        "docker-compose.local-sim.yml",
+        'STAGING_FRONTEND_PORT="$FRONTEND_PORT"',
+        'STAGING_BACKEND_PORT="$BACKEND_PORT"',
+        "FRONTEND_PORT=3001",
+        "BACKEND_PORT=8001",
+        "127.0.0.1:38025",
+        "setup-staging-env.py --local-sim",
+        "setup-staging-env.py --check",
+        "staging-smoke.sh",
+        "API_URL=http://localhost:${BACKEND_PORT}",
+        "FRONTEND_URL=http://localhost:${FRONTEND_PORT}",
+    )
+    for needle in required:
+        assert needle in text, f"desktop-staging-local-sim-up.sh must contain {needle!r}"
+    forbidden = (
+        "3000:3000",
+        "production-smoke",
+        "PRODUCTION_ENV_CHECK",
+        "stripe listen",
+    )
+    for needle in forbidden:
+        assert needle not in text, f"desktop-staging-local-sim-up.sh must not contain {needle!r}"
+
+
+def test_setup_staging_env_local_sim_prints_three_file_compose() -> None:
+    """Source grep: --local-sim branch must print three-file compose with pinned ports."""
+    script = _repo_root() / "scripts" / "setup-staging-env.py"
+    text = script.read_text()
+    assert "if args.local_sim:" in text
+    assert "docker-compose.local-sim.yml" in text
+    assert "STAGING_FRONTEND_PORT=3001" in text
+    assert "STAGING_BACKEND_PORT=8001" in text
+    assert 'sk_test_local_staging_sim' in text
+
+
+def test_setup_staging_env_non_local_sim_omits_local_sim_compose() -> None:
+    """Non-local-sim path must not require docker-compose.local-sim.yml in the else branch."""
+    script = _repo_root() / "scripts" / "setup-staging-env.py"
+    text = script.read_text()
+    else_idx = text.index('    else:\n        print("  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build")')
+    local_sim_idx = text.index("if args.local_sim:")
+    assert local_sim_idx < else_idx
+    else_block = text[else_idx : else_idx + 120]
+    assert "local-sim" not in else_block

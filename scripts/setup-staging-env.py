@@ -239,7 +239,17 @@ def main() -> int:
     else:
         print("\nEnv looks complete. Next:")
 
-    print("  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build")
+    if args.local_sim:
+        print(
+            "  STAGING_FRONTEND_PORT=3001 STAGING_BACKEND_PORT=8001 \\"
+        )
+        print(
+            "    docker compose -f docker-compose.yml -f docker-compose.staging.yml"
+            " -f docker-compose.local-sim.yml up -d --build"
+        )
+        print("  # Or: ./scripts/desktop-staging-local-sim-up.sh")
+    else:
+        print("  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build")
     print("  ./scripts/staging-smoke.sh")
     print("\nBootstrap admin password (one-time, save securely):")
     print(f"  {backend_values.get('BOOTSTRAP_SUPER_ADMIN_PASSWORD', '(generated above)')}")
