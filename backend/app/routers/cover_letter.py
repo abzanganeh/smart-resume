@@ -32,7 +32,7 @@ from app.services.export_service import (
     render_cover_letter_txt,
 )
 from app.services.llm_session_config import apply_llm_request_headers
-from app.services.session_store import get_session, update_session
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 
 router = APIRouter(prefix="/api/sessions", tags=["cover-letter"])
 log = structlog.get_logger("cover_letter.router")
@@ -109,7 +109,8 @@ async def generate_cover_letter(
     )
     await update_session(session)
 
-    llm = get_llm_client_for_step("cover_letter")
+    plan_code = await resolve_plan_code_for_llm(db, user)
+    llm = get_llm_client_for_step("cover_letter", plan_code=plan_code)
 
     async def event_generator():
         _cover_letter_locks.add(session_id)

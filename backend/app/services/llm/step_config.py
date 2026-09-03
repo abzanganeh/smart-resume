@@ -83,8 +83,18 @@ async def refresh_step_pin_cache(session: AsyncSession) -> int:
     return await load_active_step_pins(session)
 
 
+async def refresh_llm_pin_caches(session: AsyncSession) -> tuple[int, int]:
+    """Reload global and tier step pin caches after an admin write."""
+    from app.services.llm.tier_step_config import load_active_tier_step_pins
+
+    global_count = await load_active_step_pins(session)
+    tier_count = await load_active_tier_step_pins(session)
+    return global_count, tier_count
+
+
 __all__ = [
     "load_active_step_pins",
+    "refresh_llm_pin_caches",
     "refresh_step_pin_cache",
     "seed_step_llm_configs_if_empty",
 ]

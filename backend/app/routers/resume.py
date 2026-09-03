@@ -39,6 +39,7 @@ from app.services.bullet_fix_suggest import (
 )
 from app.services.auth.dependencies import assert_user_email_verified
 from app.services.session_ownership import resolve_bearer_user_id
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm_user_id
 from app.services.resume_validation import validate_resume_text
 from app.services.session_store import get_session, update_session
 
@@ -81,6 +82,26 @@ async def _structure_resume(raw_text: str, llm) -> ParsedResume:
     return await complete_structured(llm, messages, ParsedResume)
 
 
+async def _plan_code_for_session_llm(
+    db: AsyncSession,
+    session,
+    authorization: str | None,
+) -> str:
+    user_id = await resolve_bearer_user_id(authorization, session)
+    uid: uuid.UUID | None = None
+    if user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+    elif session.user_id:
+        try:
+            uid = uuid.UUID(session.user_id)
+        except ValueError:
+            uid = None
+    return await resolve_plan_code_for_llm_user_id(db, uid)
+
+
 async def _require_verified_llm_user(
     db: AsyncSession,
     session,
@@ -106,6 +127,7 @@ async def upload_resume(
         raise HTTPException(status_code=404, detail="Session not found")
 
     await _require_verified_llm_user(db, session, authorization)
+    plan_code = await _plan_code_for_session_llm(db, session, authorization)
 
     content_type = file.content_type or ""
     if content_type not in ALLOWED_MIME:
@@ -127,7 +149,7 @@ async def upload_resume(
     with llm_accounting_context(
         session_id, "resume_structure", user_id=session.user_id
     ):
-        llm = get_llm_client_for_step("resume_structure")
+        llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
         parsed = await _structure_resume(raw_text, llm)
 
     session.resume_raw = raw_text
@@ -153,13 +175,14 @@ async def paste_resume(
         raise HTTPException(status_code=404, detail="Session not found")
 
     await _require_verified_llm_user(db, session, authorization)
+    plan_code = await _plan_code_for_session_llm(db, session, authorization)
 
     text = validate_resume_text(body.text)
 
     with llm_accounting_context(
         session_id, "resume_structure", user_id=session.user_id
     ):
-        llm = get_llm_client_for_step("resume_structure")
+        llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
         parsed = await _structure_resume(text, llm)
 
     session.resume_raw = text
@@ -242,11 +265,12 @@ async def suggest_audit_bullet_fixes(
         raise HTTPException(status_code=422, detail="Select at least one bullet to fix.")
 
     await _require_verified_llm_user(db, session, authorization)
+    plan_code = await _plan_code_for_session_llm(db, session, authorization)
 
     with llm_accounting_context(
         session_id, "mechanical_fixes", user_id=session.user_id
     ):
-        llm = get_llm_client_for_step("mechanical_fixes")
+        llm = get_llm_client_for_step("mechanical_fixes", plan_code=plan_code)
         fixes = await suggest_bullet_fixes(
             llm,
             session=session,

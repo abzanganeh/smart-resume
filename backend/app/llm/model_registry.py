@@ -57,8 +57,15 @@ STEP_DEFAULTS: dict[PipelineStep, ModelRoute] = {
     "checkup": ("gemini", "gemini-3.5-flash-lite"),  # pinned — never settings.LLM_MODEL
 }
 
-# Empty today — reintroducing a premium step override is one map entry.
-TIER_STEP_OVERRIDES: dict[str, dict[PipelineStep, ModelRoute]] = {}
+# Steps that inherit the client from an upstream orchestrator call — visible in
+# admin but not editable via tier/global step pins.
+INHERITED_CLIENT_STEPS: frozenset[PipelineStep] = frozenset({
+    "phase3_truthfulness",
+    "phase4_narrative",
+    "phase4_rank",
+    "tone_lint",
+    "title_fit_insights",
+})
 
 # Human-readable labels for admin UI (step id → display name).
 STEP_LABELS: dict[PipelineStep, str] = {
@@ -92,15 +99,17 @@ def all_pipeline_steps() -> list[PipelineStep]:
     return list(STEP_DEFAULTS.keys())
 
 
-def resolve_model(step: PipelineStep, tier: str | None = None) -> ModelRoute:
+def resolve_model(step: PipelineStep, plan_code: str | None = None) -> ModelRoute:
     """Return ``(provider, model)`` for a pipeline step.
 
-    Precedence: tier override map → admin DB pin cache → ``STEP_DEFAULTS``.
+    Precedence: tier DB pin → global DB pin → ``STEP_DEFAULTS``.
     """
-    if tier:
-        overrides = TIER_STEP_OVERRIDES.get(tier)
-        if overrides and step in overrides:
-            return overrides[step]
+    if plan_code:
+        from app.llm.tier_step_pin_cache import get_tier_step_pin
+
+        tier_pin = get_tier_step_pin(plan_code, step)
+        if tier_pin is not None:
+            return tier_pin
     from app.llm.step_pin_cache import get_step_pin
 
     pin = get_step_pin(step)
