@@ -116,6 +116,9 @@ class Session(BaseModel):
     # the user's entitled tier in the orchestrator middleware.
     phase3_llm_tier: Literal["standard", "better", "best"] | None = None
 
+    # Server-resolved billing plan_code for LLM routing (set in trigger_phase).
+    llm_plan_code: str | None = None
+
     # Stale markers — set when upstream phase output is manually edited (§18.6).
     stale_since: datetime | None = None
     phase3_stale_since: datetime | None = None

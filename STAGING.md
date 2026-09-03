@@ -226,6 +226,10 @@ Review dry-run counts before `--apply`.
 
 Run on staging after deploy. Automated CI covers unit/integration tests and e2e smoke (`legal`, `auth`, `jobs`, `tracker`) on every PR.
 
+### Admin LLM pins
+
+At `/admin/llm`, **Per-Tier Step Pins** override global step pins per `plan_code` (e.g. `monthly_pro` vs `free`). Changes apply immediately without redeploy. Precedence: tier pin → global pin → `STEP_DEFAULTS`. Empty tier table inherits global pins. After deploy, confirm source badges (`tier_pin`, `global_pin`, `default`) and run tailor + checkup as free vs paid to verify routing.
+
 ### Dashboard guided journey (B1–B8)
 
 - [ ] Dashboard step stack shows 7 steps: Master resume → Job roles → Search → Capture JD → Tailor → Apply (autofill) → Track applications; Flint desktop in a separate "Coming soon" block (not numbered)

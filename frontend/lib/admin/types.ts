@@ -141,6 +141,46 @@ export interface StepLLMConfigPayload {
   notes?: string
 }
 
+// ── Tier step LLM pins ────────────────────────────────────────────────────────
+
+export type TierStepSource = "tier_pin" | "global_pin" | "default"
+
+export interface TierStepLLMConfig {
+  plan_code: string
+  step: string
+  label: string
+  provider: string
+  model_string: string
+  source: TierStepSource
+  pin_id: string | null
+  is_active: boolean
+  notes: string | null
+  has_price_row: boolean
+  editable: boolean
+  lock_reason: "inherited_client" | "global_only" | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface TierStepLLMConfigPayload {
+  plan_codes: string[]
+  step: string
+  provider: string
+  model_string: string
+  notes?: string
+}
+
+export const CANONICAL_PLAN_CODES = [
+  "free",
+  "weekly",
+  "monthly_pro",
+  "yearly_pro",
+  "monthly_plus",
+  "yearly_plus",
+  "monthly_premium",
+  "yearly_premium",
+] as const
+
 // ── Feature Flags ─────────────────────────────────────────────────────────────
 
 export interface FeatureFlag {

@@ -29,6 +29,7 @@ from app.services.checkup_limits import (
     load_cached_checkup_result,
     store_cached_checkup_result,
 )
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.services.checkup_service import run_checkup_analysis
 
 router = APIRouter(prefix="/api/checkup", tags=["checkup"])
@@ -111,6 +112,7 @@ async def run_checkup(
         return CheckupResponse(result=cached)
 
     user_id = _optional_authenticated_user_id(authorization)
+    user: User | None = None
     if user_id:
         user = await db.get(User, user_id)
         if user is not None:
@@ -138,8 +140,9 @@ async def run_checkup(
             ) from exc
 
     accounting_user = str(user_id) if user_id else "anonymous"
+    plan_code = await resolve_plan_code_for_llm(db, user)
     with llm_accounting_context(step="checkup", user_id=accounting_user):
-        llm = get_llm_client_for_step("checkup")
+        llm = get_llm_client_for_step("checkup", plan_code=plan_code)
         parsed = await _structure_resume(raw_resume, llm)
         result = await run_checkup_analysis(
             parsed=parsed,

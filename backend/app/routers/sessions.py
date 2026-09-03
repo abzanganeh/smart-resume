@@ -12,6 +12,7 @@ from app.agent import chat as chat_agent
 from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.factory import get_llm_client_for_step
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm_user_id
 from app.llm.token_accounting import llm_accounting_context
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.dashboard import ResumeRecord
@@ -209,12 +210,20 @@ async def chat_with_resume(
     if user_id:
         await assert_user_email_verified(db, user_id)
 
+    uid: uuid.UUID | None = None
+    if user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
+    plan_code = await resolve_plan_code_for_llm_user_id(db, uid)
+
     with llm_accounting_context(
         session_id,
         "chat",
         user_id=str(user_id) if user_id else None,
     ):
-        llm = get_llm_client_for_step("chat")
+        llm = get_llm_client_for_step("chat", plan_code=plan_code)
         try:
             return await chat_agent.run(session, body, llm)
         except FreeTierAiBudgetExceededError as exc:

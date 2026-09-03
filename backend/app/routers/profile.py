@@ -54,6 +54,7 @@ from app.db.engine import get_db
 from app.limiter import limiter
 from app.llm.base import LLMMessage
 from app.llm.factory import get_llm_client_for_step
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.llm.token_accounting import llm_accounting_context
 from app.llm.structured import complete_structured
 from app.models.master_resume import MasterResumeSectionType
@@ -173,6 +174,7 @@ async def _structure_with_llm(
     provider: str | None,
     model: str | None,
     user_id: str | None = None,
+    plan_code: str = "free",
 ) -> dict[str, Any]:
     """Best-effort LLM call to turn raw text into structured sections.
 
@@ -182,7 +184,7 @@ async def _structure_with_llm(
     """
     try:
         with llm_accounting_context(step="chat", user_id=user_id):
-            llm = get_llm_client_for_step("chat")
+            llm = get_llm_client_for_step("chat", plan_code=plan_code)
             messages = [
                 LLMMessage(
                     role="system",
@@ -393,8 +395,13 @@ async def create_or_replace_resume(
         )
 
     raw = await _extract_resume_text(file=file, text_payload=text)
+    plan_code = await resolve_plan_code_for_llm(db, user)
     parsed_sections = await _structure_with_llm(
-        raw, provider=x_provider, model=x_model, user_id=str(user.id)
+        raw,
+        provider=x_provider,
+        model=x_model,
+        user_id=str(user.id),
+        plan_code=plan_code,
     )
     resume, chunks = await master_crud.replace_all_chunks(
         db,
@@ -626,8 +633,9 @@ async def create_resume_from_story(
     model = request.headers.get("X-Model", "").strip()
     story_session_id = request.headers.get("X-Story-Session-Id", "").strip() or None
 
+    plan_code = await resolve_plan_code_for_llm(db, user)
     with llm_accounting_context(step="story", user_id=str(user.id)):
-        llm_client = get_llm_client_for_step("story")
+        llm_client = get_llm_client_for_step("story", plan_code=plan_code)
 
         try:
             billing = await check_quota_for_story_generate(
@@ -740,11 +748,13 @@ async def save_resume_from_story(
         ) from exc
 
     draft_text = body.resume_text.strip()
+    plan_code = await resolve_plan_code_for_llm(db, user)
     parsed_sections = await _structure_with_llm(
         draft_text,
         provider=provider or None,
         model=model or None,
         user_id=str(user.id),
+        plan_code=plan_code,
     )
     try:
         resume, chunks = await master_crud.replace_all_chunks(
@@ -801,9 +811,10 @@ async def polish_resume_draft(
     """
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
+    plan_code = await resolve_plan_code_for_llm(db, user)
 
     with llm_accounting_context(step="polish", user_id=str(user.id)):
-        llm_client = get_llm_client_for_step("polish")
+        llm_client = get_llm_client_for_step("polish", plan_code=plan_code)
 
         try:
             updated = await polish_resume(body.text, body.instruction, llm_client)
@@ -853,6 +864,7 @@ async def story_coach_endpoint(
 
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
+    plan_code = await resolve_plan_code_for_llm(db, user)
 
     # Charge 1 credit on the first coached segment of a story build session.
     if not body.history:
@@ -888,7 +900,7 @@ async def story_coach_endpoint(
         await session.commit()
 
     with llm_accounting_context(step="story_coach", user_id=str(user.id)):
-        llm_client = get_llm_client_for_step("story_coach")
+        llm_client = get_llm_client_for_step("story_coach", plan_code=plan_code)
 
         history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -948,6 +960,7 @@ async def story_interview_next(
 
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
+    plan_code = await resolve_plan_code_for_llm(session, user)
 
     # Charge 1 credit on the very first question (history is empty)
     if not body.history:
@@ -975,7 +988,7 @@ async def story_interview_next(
         await session.commit()
 
     with llm_accounting_context(step="story_interview", user_id=str(user.id)):
-        llm_client = get_llm_client_for_step("story_interview")
+        llm_client = get_llm_client_for_step("story_interview", plan_code=plan_code)
 
         history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
 
@@ -1020,6 +1033,7 @@ async def story_interview_submit(
     """
     provider = request.headers.get("X-Provider", "").strip()
     model = request.headers.get("X-Model", "").strip()
+    plan_code = await resolve_plan_code_for_llm(db, user)
 
     history_dicts = [{"role": m.role, "text": m.text} for m in body.history]
     narrative = compile_answers_to_narrative(history_dicts)
@@ -1032,7 +1046,7 @@ async def story_interview_submit(
     )
 
     with llm_accounting_context(step="story_verify", user_id=str(user.id)):
-        llm_client = get_llm_client_for_step("story_verify")
+        llm_client = get_llm_client_for_step("story_verify", plan_code=plan_code)
 
         try:
             draft_text = await story_to_resume(narrative, llm_client)

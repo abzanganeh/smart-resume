@@ -18,6 +18,7 @@ from app.agent import job_title_suggestions
 from app.agent.title_fit_insights import enrich_title_suggestions
 from app.db.engine import get_db
 from app.llm.factory import get_llm_client_for_step
+from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.llm.token_accounting import llm_accounting_context
 from app.limiter import limiter, rate_limit_key
 from app.models.fit import FitAnalysisOutput
@@ -300,9 +301,13 @@ async def get_title_suggestions(
         )
 
     llm_client = None
+    plan_code = await resolve_plan_code_for_llm(db, user)
     try:
         with llm_accounting_context(step="job_title_suggestions", user_id=str(user.id)):
-            llm_client = get_llm_client_for_step("job_title_suggestions")
+            llm_client = get_llm_client_for_step(
+                "job_title_suggestions",
+                plan_code=plan_code,
+            )
             suggestions, held, source = await job_title_suggestions.suggest_job_titles(
                 resume_text=resume.raw_text,
                 parsed_sections=resume.parsed_sections,
@@ -709,8 +714,9 @@ async def fit_job(
         db, user=user, action=QuotaAction.fit_analysis, charge=True
     )
 
+    plan_code = await resolve_plan_code_for_llm(db, user)
     with llm_accounting_context(step="job_fit", user_id=str(user.id)):
-        llm = get_llm_client_for_step("job_fit")
+        llm = get_llm_client_for_step("job_fit", plan_code=plan_code)
         import asyncio
 
         queue: asyncio.Queue = asyncio.Queue()
