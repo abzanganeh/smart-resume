@@ -30,6 +30,7 @@ from app.services.checkup_limits import (
     store_cached_checkup_result,
 )
 from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
+from app.services.checkup_service import run_checkup_analysis
 
 router = APIRouter(prefix="/api/checkup", tags=["checkup"])
 
