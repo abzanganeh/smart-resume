@@ -67,7 +67,7 @@ There is **no Terraform for the Next.js/FastAPI app** today. Terraform under
 
 ### Deploy sequence
 
-**Local staging simulation** (ports `3001`/`8001` so `pnpm dev` can keep `:3000`):
+**Local staging simulation** (host **3001/8001** — Kia/Trust may keep **3000**; FlintApply must never bind host 3000):
 
 ```bash
 # 1. Generate staging env (gitignored *.env files)
@@ -86,6 +86,41 @@ chmod +x scripts/staging-smoke.sh
 
 # 5. Manual UI checklist — STAGING.md §5
 ```
+
+Or use the helper (same local-sim path, pins ports 3001/8001):
+
+```bash
+chmod +x scripts/desktop-staging-local-sim-up.sh
+./scripts/desktop-staging-local-sim-up.sh
+```
+
+**Production-like local staging** (same workstation, no `local-sim.yml`):
+
+Use this when you need real Stripe **test** keys, Resend delivery, and signup cap
+`SIGNUP_IP_DAILY_LIMIT=15` — still on host **3001/8001**, not a second cloud deploy.
+
+1. Run `python3 scripts/setup-staging-env.py` **without** `--local-sim` and fill
+   real `sk_test_*` keys + Stripe price IDs in `backend/.env.staging`.
+2. Boot with **two** compose files only (no `docker-compose.local-sim.yml`):
+
+```bash
+STAGING_FRONTEND_PORT=3001 STAGING_BACKEND_PORT=8001 \
+  docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+```
+
+3. Forward Stripe webhooks: `stripe listen --forward-to localhost:8001/api/billing/webhook`
+4. Run smoke with explicit URLs: `API_URL=http://localhost:8001 FRONTEND_URL=http://localhost:3001 ./scripts/staging-smoke.sh`
+
+Keep `REQUIRE_MAILPIT=1` for localhost smoke (default). Do **not** set
+`REQUIRE_MAILPIT=0` on the workstation — that skips verify-before-spend and is
+only for HTTPS production smoke (`production-smoke.sh`). For automated verify
+unlock, use **local-sim** (Mailpit) above instead of this path.
+
+Verify email goes through Resend (not Mailpit). Mailpit may still start from the
+base compose file and bind on all interfaces without the `local-sim` overlay —
+keep the workstation firewall enabled. Do **not** run `PRODUCTION_ENV_CHECK=1
+./scripts/production-preflight.sh` or `./scripts/production-smoke.sh` on localhost;
+those gates target HTTPS VM deploy (§8).
 
 **VM / public staging** (ports `3000`/`8000` behind TLS):
 
