@@ -112,6 +112,7 @@ async def run_checkup(
         return CheckupResponse(result=cached)
 
     user_id = _optional_authenticated_user_id(authorization)
+    user: User | None = None
     if user_id:
         user = await db.get(User, user_id)
         if user is not None:
@@ -139,7 +140,6 @@ async def run_checkup(
             ) from exc
 
     accounting_user = str(user_id) if user_id else "anonymous"
-    user = await db.get(User, user_id) if user_id else None
     plan_code = await resolve_plan_code_for_llm(db, user)
     with llm_accounting_context(step="checkup", user_id=accounting_user):
         llm = get_llm_client_for_step("checkup", plan_code=plan_code)

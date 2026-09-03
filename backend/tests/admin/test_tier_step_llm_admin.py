@@ -152,3 +152,27 @@ async def test_admin_tier_step_llm_create_rejects_inherited_step(
     )
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "inherited_client_step"
+
+
+async def test_admin_tier_step_llm_create_rejects_global_only_step(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin, _secret = await make_admin(
+        db_session, email="tier-global@example.com", role=AdminRole.super_admin
+    )
+    await db_session.commit()
+    token, headers = await issue_admin_session(admin.id)
+
+    resp = await app_client.post(
+        "/api/admin/llm/tier-steps",
+        headers={**headers, "Authorization": f"Bearer {token}"},
+        json={
+            "plan_codes": ["free"],
+            "step": "company_intel",
+            "provider": "openai",
+            "model_string": "gpt-4o-mini",
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "global_only_step"

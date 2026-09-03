@@ -33,14 +33,6 @@ def _audit_ctx(request: Request) -> dict[str, str]:
         "user_agent": request.headers.get("user-agent", ""),
     }
 
-INHERITED_CLIENT_STEPS = frozenset({
-    "phase3_truthfulness",
-    "phase4_narrative",
-    "phase4_rank",
-    "tone_lint",
-    "title_fit_insights",
-})
-
 
 class TierStepLLMConfigOut(BaseModel):
     plan_code: str
@@ -54,6 +46,9 @@ class TierStepLLMConfigOut(BaseModel):
     notes: str | None = None
     has_price_row: bool = True
     editable: bool = True
+    lock_reason: str | None = Field(
+        None, description="inherited_client | global_only when not editable"
+    )
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -80,9 +75,10 @@ def _serialize_tier_step_row(
     source: str,
     pin: TierStepLLMConfig | None = None,
 ) -> TierStepLLMConfigOut:
-    from app.llm.model_registry import STEP_LABELS
+    from app.llm.model_registry import STEP_LABELS, tier_step_is_editable, tier_step_lock_reason
     from app.llm.pricing import has_price_row
 
+    lock_reason = tier_step_lock_reason(step)
     return TierStepLLMConfigOut(
         plan_code=plan_code,
         step=step,
@@ -94,7 +90,8 @@ def _serialize_tier_step_row(
         is_active=pin.is_active if pin else False,
         notes=pin.notes if pin else None,
         has_price_row=has_price_row(provider, model_string),
-        editable=step not in INHERITED_CLIENT_STEPS,
+        editable=tier_step_is_editable(step),
+        lock_reason=lock_reason,
         created_at=pin.created_at if pin else None,
         updated_at=pin.updated_at if pin else None,
     )
@@ -212,7 +209,7 @@ async def admin_tier_step_llm_history(
     step: str | None = None,
     limit: int = 200,
 ) -> list[TierStepLLMConfigOut]:
-    from app.llm.model_registry import STEP_LABELS
+    from app.llm.model_registry import STEP_LABELS, tier_step_is_editable, tier_step_lock_reason
     from app.llm.pricing import has_price_row
 
     stmt = (
@@ -237,7 +234,8 @@ async def admin_tier_step_llm_history(
             is_active=row.is_active,
             notes=row.notes,
             has_price_row=has_price_row(row.provider.value, row.model_string),
-            editable=row.step not in INHERITED_CLIENT_STEPS,
+            editable=tier_step_is_editable(row.step),
+            lock_reason=tier_step_lock_reason(row.step),
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -260,17 +258,23 @@ async def admin_tier_step_llm_create(
     ],
 ) -> TierStepLLMCreateResponse:
     """Activate a new provider/model pin for plan_code(s) × one pipeline step."""
-    from app.llm.model_registry import STEP_DEFAULTS
+    from app.llm.model_registry import STEP_DEFAULTS, tier_step_lock_reason
 
     if body.step not in STEP_DEFAULTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "invalid_step", "step": body.step},
         )
-    if body.step in INHERITED_CLIENT_STEPS:
+    lock_reason = tier_step_lock_reason(body.step)
+    if lock_reason == "inherited_client":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "inherited_client_step", "step": body.step},
+        )
+    if lock_reason == "global_only":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "global_only_step", "step": body.step},
         )
     plan_codes = [code.strip() for code in body.plan_codes]
     invalid = [code for code in plan_codes if code not in CANONICAL_PLAN_CODES]

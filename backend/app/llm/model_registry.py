@@ -67,6 +67,24 @@ INHERITED_CLIENT_STEPS: frozenset[PipelineStep] = frozenset({
     "title_fit_insights",
 })
 
+# Steps that always route via global pin / default — never per-plan_code.
+GLOBAL_ONLY_STEPS: frozenset[PipelineStep] = frozenset({
+    "company_intel",
+})
+
+
+def tier_step_lock_reason(step: str) -> str | None:
+    """Why a step cannot receive a tier pin in admin (``None`` = editable)."""
+    if step in INHERITED_CLIENT_STEPS:
+        return "inherited_client"
+    if step in GLOBAL_ONLY_STEPS:
+        return "global_only"
+    return None
+
+
+def tier_step_is_editable(step: str) -> bool:
+    return tier_step_lock_reason(step) is None
+
 # Human-readable labels for admin UI (step id → display name).
 STEP_LABELS: dict[PipelineStep, str] = {
     "resume_structure": "Resume parse / structure",

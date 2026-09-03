@@ -200,7 +200,11 @@ export default function AdminLLMPage() {
                         )}
                       </>
                     ) : (
-                      <span className="text-xs text-slate-600">Inherited client</span>
+                      <span className="text-xs text-slate-600">
+                        {pin.lock_reason === "global_only"
+                          ? "Global only"
+                          : "Inherited client"}
+                      </span>
                     )}
                   </Td>
                 </tr>

@@ -157,6 +157,7 @@ export interface TierStepLLMConfig {
   notes: string | null
   has_price_row: boolean
   editable: boolean
+  lock_reason: "inherited_client" | "global_only" | null
   created_at: string | null
   updated_at: string | null
 }
