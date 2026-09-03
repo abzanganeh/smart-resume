@@ -41,7 +41,6 @@ from app.services.billing.quota import (
     QuotaAction,
 )
 from app.services.master_resume.crud import has_any_live_chunk
-from app.services.llm_session_config import apply_llm_request_headers
 from app.services.session_store import (
     get_session,
     is_phase_lock_held,
@@ -122,8 +121,6 @@ async def trigger_phase(
     phase: int,
     body: RunPhaseRequest = RunPhaseRequest(),
     authorization: str | None = Header(default=None, alias="Authorization"),
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
     db: AsyncSession = Depends(get_db),
 ):
     if phase not in (1, 2, 3, 4):
@@ -275,13 +272,6 @@ async def trigger_phase(
                             "message": "You're out of credits. ATS score recalculation costs 1 credit.",
                         },
                     ) from exc
-
-    apply_llm_request_headers(
-        session,
-        x_provider=x_provider,
-        x_model=x_model,
-    )
-    await update_session(session)
 
     session.phase_run_requested = phase
     session.phase_run_scope = body.scope

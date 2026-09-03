@@ -31,7 +31,6 @@ from app.services.export_service import (
     render_cover_letter_pdf,
     render_cover_letter_txt,
 )
-from app.services.llm_session_config import apply_llm_request_headers
 from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
 from app.services.session_store import get_session, update_session
 
@@ -69,8 +68,6 @@ async def generate_cover_letter(
     session_id: str,
     body: CoverLetterGenerateRequest,
     authorization: str | None = Header(default=None, alias="Authorization"),
-    x_provider: str | None = Header(default=None, alias="X-Provider"),
-    x_model: str | None = Header(default=None, alias="X-Model"),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a cover letter and stream progress via SSE."""
@@ -102,13 +99,6 @@ async def generate_cover_letter(
                 message="You're out of credits. Cover letter generation costs 1 credit.",
             ),
         ) from exc
-
-    apply_llm_request_headers(
-        session,
-        x_provider=x_provider,
-        x_model=x_model,
-    )
-    await update_session(session)
 
     plan_code = await resolve_plan_code_for_llm(db, user)
     llm = get_llm_client_for_step("cover_letter", plan_code=plan_code)
