@@ -33,6 +33,7 @@ from app.services.export_service import (
 )
 from app.services.llm_session_config import apply_llm_request_headers
 from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm
+from app.services.session_store import get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["cover-letter"])
 log = structlog.get_logger("cover_letter.router")
