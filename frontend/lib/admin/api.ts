@@ -20,6 +20,7 @@ import type {
   StepLLMConfigPayload,
   TierStepLLMConfig,
   TierStepLLMConfigPayload,
+  TierStepLLMConfigBulkPayload,
   FeatureFlag,
   FeatureFlagPatchPayload,
   Announcement,
@@ -421,6 +422,51 @@ export async function createAdminTierStepLLMConfig(
     token,
     { method: "POST", body: JSON.stringify(payload) },
   )
+  return { data: raw.step_configs, audit_log_id: raw.audit_log_id }
+}
+
+export class BulkTierStepValidationError extends Error {
+  readonly errors: Array<{ step: string; code: string; detail?: Record<string, unknown> }>
+
+  constructor(errors: Array<{ step: string; code: string; detail?: Record<string, unknown> }>) {
+    super("bulk_validation_failed")
+    this.name = "BulkTierStepValidationError"
+    this.errors = errors
+  }
+}
+
+export async function bulkCreateAdminTierStepLLMConfig(
+  token: string,
+  payload: TierStepLLMConfigBulkPayload,
+): Promise<AuditedResponse<TierStepLLMConfig[]>> {
+  const res = await fetch(`${BASE}/api/admin/llm/tier-steps/bulk`, {
+    credentials: "include",
+    headers: adminHeaders(token),
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    try {
+      const body = await res.json()
+      const detail = body?.detail
+      if (detail?.code === "bulk_validation_failed" && Array.isArray(detail.errors)) {
+        throw new BulkTierStepValidationError(detail.errors)
+      }
+      if (detail && typeof detail === "object" && "code" in detail) {
+        const msg = String(detail.code)
+        if (SESSION_GONE_CODES.has(msg) && typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("admin:unauthorized", { detail: msg }))
+        }
+        throw new Error(msg)
+      }
+      throw new Error(detail ?? `HTTP ${res.status}`)
+    } catch (e) {
+      if (e instanceof BulkTierStepValidationError) throw e
+      if (e instanceof Error) throw e
+      throw new Error(`HTTP ${res.status}`)
+    }
+  }
+  const raw = (await res.json()) as { step_configs: TierStepLLMConfig[]; audit_log_id: string }
   return { data: raw.step_configs, audit_log_id: raw.audit_log_id }
 }
 
