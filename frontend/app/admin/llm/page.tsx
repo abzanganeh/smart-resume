@@ -28,6 +28,7 @@ import type {
 import { CANONICAL_PLAN_CODES } from "@/lib/admin/types"
 import {
   applySelectAll,
+  editableSelectedSteps,
   selectAllState,
   selectionAfterPlanChange,
   toggleStepSelection,
@@ -544,7 +545,7 @@ function TierStepBulkEditModal({
       try {
         await onSave({
           plan_code: planCode,
-          steps,
+          steps: editableSelectedSteps(new Set(steps), tierStepPins),
           provider,
           model_string: model,
           notes: notes || undefined,

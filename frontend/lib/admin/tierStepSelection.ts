@@ -28,14 +28,21 @@ export function applySelectAll(
   pins: TierStepPinLike[],
   checked: boolean,
 ): Set<string> {
-  const next = new Set(selected)
   const editable = editableStepIds(pins)
   if (checked) {
-    for (const step of editable) next.add(step)
-  } else {
-    for (const step of editable) next.delete(step)
+    return new Set(editable)
   }
+  const next = new Set(selected)
+  for (const step of editable) next.delete(step)
   return next
+}
+
+export function editableSelectedSteps(
+  selected: ReadonlySet<string>,
+  pins: TierStepPinLike[],
+): string[] {
+  const editable = new Set(editableStepIds(pins))
+  return [...selected].filter((step) => editable.has(step))
 }
 
 export function toggleStepSelection(

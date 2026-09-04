@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import {
   applySelectAll,
+  editableSelectedSteps,
   editableStepIds,
   selectAllState,
   selectionAfterPlanChange,
@@ -27,6 +28,12 @@ describe("tierStepSelection", () => {
     assert.equal(selected.has("phase3_truthfulness"), false)
   })
 
+  it("select-all from dirty set drops locked ids", () => {
+    const selected = applySelectAll(new Set(["company_intel"]), PINS, true)
+    assert.deepEqual([...selected].sort(), ["chat", "phase3_rewrite"])
+    assert.equal(selected.has("company_intel"), false)
+  })
+
   it("select-all unchecked clears editable selections only", () => {
     const selected = applySelectAll(new Set(["phase3_rewrite", "chat", "other"]), PINS, false)
     assert.equal(selected.size, 1)
@@ -50,13 +57,18 @@ describe("tierStepSelection", () => {
     assert.equal(selected.size, 0)
   })
 
-  it("plan change clears prior editable selection", () => {
+  it("selectionAfterPlanChange clears prior selection", () => {
     const before = applySelectAll(new Set(), PINS, true)
-    assert.equal(before.size, 2)
     const after = selectionAfterPlanChange("monthly_pro", before)
+    assert.equal(before.size, 2)
     assert.equal(after.size, 0)
-    for (const step of before) {
-      assert.equal(after.has(step), false)
-    }
+  })
+
+  it("editableSelectedSteps filters locked ids before submit", () => {
+    const selected = new Set(["phase3_rewrite", "company_intel", "chat"])
+    assert.deepEqual(
+      editableSelectedSteps(selected, PINS).sort(),
+      ["chat", "phase3_rewrite"],
+    )
   })
 })
