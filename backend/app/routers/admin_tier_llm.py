@@ -66,6 +66,63 @@ class TierStepLLMCreateResponse(BaseModel):
     audit_log_id: uuid.UUID
 
 
+class TierStepLLMConfigBulkRequest(BaseModel):
+    plan_code: str = Field(..., min_length=1, max_length=64)
+    steps: list[str] = Field(..., min_length=1, max_length=22)
+    provider: str = Field(..., min_length=1, max_length=32)
+    model_string: str = Field(..., min_length=1, max_length=255)
+    notes: str | None = Field(None, max_length=500)
+
+
+class TierStepLLMConfigBulkResponse(BaseModel):
+    step_configs: list[TierStepLLMConfigOut]
+    audit_log_id: uuid.UUID
+
+
+async def _upsert_tier_step_pin(
+    db: AsyncSession,
+    *,
+    plan_code: str,
+    step: str,
+    provider: LLMProvider,
+    model_string: str,
+    notes: str | None,
+    admin: AdminUser,
+) -> tuple[TierStepLLMConfig, dict[str, Any] | None]:
+    """Deactivate prior active pin and insert a new active row for plan_code × step."""
+    prior = (
+        await db.execute(
+            select(TierStepLLMConfig)
+            .where(TierStepLLMConfig.plan_code == plan_code)
+            .where(TierStepLLMConfig.step == step)
+            .where(TierStepLLMConfig.is_active.is_(True))
+            .with_for_update()
+        )
+    ).scalars().all()
+    before_snap: dict[str, Any] | None = None
+    for row in prior:
+        if before_snap is None:
+            before_snap = {
+                "id": str(row.id),
+                "provider": row.provider.value,
+                "model_string": row.model_string,
+            }
+        row.is_active = False
+
+    created = TierStepLLMConfig(
+        id=uuid.uuid4(),
+        plan_code=plan_code,
+        step=step,
+        provider=provider,
+        model_string=model_string,
+        is_active=True,
+        notes=notes,
+        created_by_admin_id=admin.id,
+    )
+    db.add(created)
+    return created, before_snap
+
+
 def _serialize_tier_step_row(
     plan_code: str,
     step: str,
@@ -305,35 +362,17 @@ async def admin_tier_step_llm_create(
     created_rows: list[TierStepLLMConfig] = []
     before_snaps: dict[str, Any] = {}
     for plan_code in plan_codes:
-        prior = (
-            await db.execute(
-                select(TierStepLLMConfig)
-                .where(TierStepLLMConfig.plan_code == plan_code)
-                .where(TierStepLLMConfig.step == body.step)
-                .where(TierStepLLMConfig.is_active.is_(True))
-                .with_for_update()
-            )
-        ).scalars().all()
-        for r in prior:
-            key = f"{plan_code}:{body.step}"
-            before_snaps[key] = before_snaps.get(key) or {
-                "id": str(r.id),
-                "provider": r.provider.value,
-                "model_string": r.model_string,
-            }
-            r.is_active = False
-
-        row = TierStepLLMConfig(
-            id=uuid.uuid4(),
+        row, before_snap = await _upsert_tier_step_pin(
+            db,
             plan_code=plan_code,
             step=body.step,
             provider=provider_enum,
             model_string=body.model_string,
-            is_active=True,
             notes=body.notes,
-            created_by_admin_id=admin.id,
+            admin=admin,
         )
-        db.add(row)
+        if before_snap is not None:
+            before_snaps[f"{plan_code}:{body.step}"] = before_snap
         created_rows.append(row)
 
     await db.flush()
@@ -366,6 +405,125 @@ async def admin_tier_step_llm_create(
         for row in created_rows
     ]
     return TierStepLLMCreateResponse(
+        step_configs=serialized,
+        audit_log_id=audit_row.id,
+    )
+
+
+def _collect_bulk_step_validation_errors(steps: list[str]) -> list[dict[str, Any]]:
+    from app.llm.model_registry import STEP_DEFAULTS, tier_step_lock_reason
+
+    errors: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for step in steps:
+        if step in seen:
+            errors.append({"step": step, "code": "duplicate_step"})
+            continue
+        seen.add(step)
+        if step not in STEP_DEFAULTS:
+            errors.append({"step": step, "code": "invalid_step"})
+            continue
+        lock_reason = tier_step_lock_reason(step)
+        if lock_reason == "inherited_client":
+            errors.append({"step": step, "code": "inherited_client_step"})
+        elif lock_reason == "global_only":
+            errors.append({"step": step, "code": "global_only_step"})
+    return errors
+
+
+@router.post(
+    "/llm/tier-steps/bulk",
+    response_model=TierStepLLMConfigBulkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit("30/minute")
+async def admin_tier_step_llm_bulk_create(
+    request: Request,
+    body: TierStepLLMConfigBulkRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[
+        AdminUser, Depends(require_admin_role(AdminRole.super_admin))
+    ],
+) -> TierStepLLMConfigBulkResponse:
+    """Activate provider/model pins for one plan_code × multiple pipeline steps."""
+    plan_code = body.plan_code.strip()
+    if plan_code not in CANONICAL_PLAN_CODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_plan_code", "plan_code": plan_code},
+        )
+    try:
+        provider_enum = LLMProvider(body.provider)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_provider"},
+        ) from exc
+    from app.llm.pricing import has_price_row
+
+    if not has_price_row(provider_enum.value, body.model_string):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unpriced_model",
+                "provider": provider_enum.value,
+                "model_string": body.model_string,
+            },
+        )
+
+    step_errors = _collect_bulk_step_validation_errors(body.steps)
+    if step_errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "bulk_validation_failed", "errors": step_errors},
+        )
+
+    created_rows: list[TierStepLLMConfig] = []
+    before_snaps: dict[str, Any] = {}
+    for step in body.steps:
+        row, before_snap = await _upsert_tier_step_pin(
+            db,
+            plan_code=plan_code,
+            step=step,
+            provider=provider_enum,
+            model_string=body.model_string,
+            notes=body.notes,
+            admin=admin,
+        )
+        if before_snap is not None:
+            before_snaps[f"{plan_code}:{step}"] = before_snap
+        created_rows.append(row)
+
+    await db.flush()
+    await refresh_llm_pin_caches(db)
+
+    audit_row = await write_admin_audit(
+        db,
+        actor_admin_id=admin.id,
+        action="tier_step_llm_config_bulk_created",
+        target_kind="tier_step_llm_config",
+        target_id=str(created_rows[0].id) if created_rows else None,
+        before=before_snaps or None,
+        after={
+            "plan_code": plan_code,
+            "steps": body.steps,
+            "provider": provider_enum.value,
+            "model_string": body.model_string,
+        },
+        **_audit_ctx(request),
+    )
+    serialized = [
+        _serialize_tier_step_row(
+            row.plan_code,
+            row.step,
+            provider=row.provider.value,
+            model_string=row.model_string,
+            source="tier_pin",
+            pin=row,
+        )
+        for row in created_rows
+    ]
+    return TierStepLLMConfigBulkResponse(
         step_configs=serialized,
         audit_log_id=audit_row.id,
     )
