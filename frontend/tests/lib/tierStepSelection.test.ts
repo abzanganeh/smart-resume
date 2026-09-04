@@ -4,6 +4,7 @@ import {
   applySelectAll,
   editableStepIds,
   selectAllState,
+  selectionAfterPlanChange,
   toggleStepSelection,
 } from "@/lib/admin/tierStepSelection"
 
@@ -49,10 +50,13 @@ describe("tierStepSelection", () => {
     assert.equal(selected.size, 0)
   })
 
-  it("plan change clears selection via empty set", () => {
-    const beforePlanChange = applySelectAll(new Set(), PINS, true)
-    const afterPlanChange = new Set<string>()
-    assert.equal(beforePlanChange.size, 2)
-    assert.equal(afterPlanChange.size, 0)
+  it("plan change clears prior editable selection", () => {
+    const before = applySelectAll(new Set(), PINS, true)
+    assert.equal(before.size, 2)
+    const after = selectionAfterPlanChange("monthly_pro", before)
+    assert.equal(after.size, 0)
+    for (const step of before) {
+      assert.equal(after.has(step), false)
+    }
   })
 })

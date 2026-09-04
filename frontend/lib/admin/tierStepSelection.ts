@@ -47,3 +47,11 @@ export function toggleStepSelection(
   else next.add(step)
   return next
 }
+
+/** Clears bulk selection when the admin switches plan_code tabs. */
+export function selectionAfterPlanChange(
+  _planCode: string,
+  _previous: ReadonlySet<string>,
+): Set<string> {
+  return new Set()
+}

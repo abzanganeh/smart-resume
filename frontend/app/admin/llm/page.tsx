@@ -29,6 +29,7 @@ import { CANONICAL_PLAN_CODES } from "@/lib/admin/types"
 import {
   applySelectAll,
   selectAllState,
+  selectionAfterPlanChange,
   toggleStepSelection,
 } from "@/lib/admin/tierStepSelection"
 import {
@@ -76,7 +77,7 @@ export default function AdminLLMPage() {
   }, [token, selectedPlanCode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setSelectedSteps(new Set())
+    setSelectedSteps((prev) => selectionAfterPlanChange(selectedPlanCode, prev))
   }, [selectedPlanCode])
 
   const headerSelectAll = selectAllState(selectedSteps, tierStepPins)
