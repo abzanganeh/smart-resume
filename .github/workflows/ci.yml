@@ -325,7 +325,15 @@ jobs:
 
       - name: npm audit (frontend, pnpm)
         working-directory: frontend
-        run: pnpm audit --audit-level=high
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm audit --audit-level=high; then
+              exit 0
+            fi
+            echo "pnpm audit attempt ${attempt} failed; retrying in 30s..."
+            sleep 30
+          done
+          exit 1
 
       - name: gitleaks detect (PR)
         if: github.event_name == 'pull_request'
