@@ -275,7 +275,21 @@ async def test_bulk_tier_step_rejects_locked_step(
 async def test_bulk_tier_step_rejects_mixed_valid_and_locked(
     app_client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.llm.model_registry import STEP_DEFAULTS
+    from app.routers import admin_tier_llm
+
+    upsert_calls = 0
+    original = admin_tier_llm._upsert_tier_step_pin
+
+    async def _counting_upsert(*args, **kwargs):
+        nonlocal upsert_calls
+        upsert_calls += 1
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(admin_tier_llm, "_upsert_tier_step_pin", _counting_upsert)
+
     token, headers = await _bulk_headers(
         db_session, email="bulk-mixed@example.com"
     )
@@ -302,6 +316,10 @@ async def test_bulk_tier_step_rejects_mixed_valid_and_locked(
     error_codes = {(e["step"], e["code"]) for e in detail["errors"]}
     assert ("company_intel", "global_only_step") in error_codes
     assert ("phase3_truthfulness", "inherited_client_step") in error_codes
+    assert upsert_calls == 0
+
+    provider, model = resolve_model("phase3_rewrite", plan_code="monthly_pro")
+    assert (provider, model) == STEP_DEFAULTS["phase3_rewrite"]
 
     after_count = (
         await db_session.execute(
@@ -316,7 +334,21 @@ async def test_bulk_tier_step_rejects_mixed_valid_and_locked(
 async def test_bulk_tier_step_rejects_unpriced_model(
     app_client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.llm.model_registry import STEP_DEFAULTS
+    from app.routers import admin_tier_llm
+
+    upsert_calls = 0
+    original = admin_tier_llm._upsert_tier_step_pin
+
+    async def _counting_upsert(*args, **kwargs):
+        nonlocal upsert_calls
+        upsert_calls += 1
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(admin_tier_llm, "_upsert_tier_step_pin", _counting_upsert)
+
     token, headers = await _bulk_headers(
         db_session, email="bulk-unpriced@example.com"
     )
@@ -331,6 +363,10 @@ async def test_bulk_tier_step_rejects_unpriced_model(
     )
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "unpriced_model"
+    assert upsert_calls == 0
+
+    provider, model = resolve_model("phase3_rewrite", plan_code="monthly_pro")
+    assert (provider, model) == STEP_DEFAULTS["phase3_rewrite"]
 
 
 async def test_bulk_tier_step_rejects_duplicate_steps(
@@ -358,7 +394,21 @@ async def test_bulk_tier_step_rejects_duplicate_steps(
 async def test_bulk_tier_step_zero_write_on_validation_failure(
     app_client: AsyncClient,
     db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.llm.model_registry import STEP_DEFAULTS
+    from app.routers import admin_tier_llm
+
+    upsert_calls = 0
+    original = admin_tier_llm._upsert_tier_step_pin
+
+    async def _counting_upsert(*args, **kwargs):
+        nonlocal upsert_calls
+        upsert_calls += 1
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(admin_tier_llm, "_upsert_tier_step_pin", _counting_upsert)
+
     token, headers = await _bulk_headers(
         db_session, email="bulk-zero-write@example.com"
     )
@@ -379,6 +429,10 @@ async def test_bulk_tier_step_zero_write_on_validation_failure(
         },
     )
     assert resp.status_code == 400
+    assert upsert_calls == 0
+
+    provider, model = resolve_model("phase3_rewrite", plan_code="monthly_pro")
+    assert (provider, model) == STEP_DEFAULTS["phase3_rewrite"]
 
     after_rows = list(
         (
