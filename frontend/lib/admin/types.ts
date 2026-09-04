@@ -170,6 +170,20 @@ export interface TierStepLLMConfigPayload {
   notes?: string
 }
 
+export interface TierStepLLMConfigBulkPayload {
+  plan_code: string
+  steps: string[]
+  provider: string
+  model_string: string
+  notes?: string
+}
+
+export interface BulkTierStepValidationErrorItem {
+  step: string
+  code: string
+  detail?: Record<string, unknown>
+}
+
 export const CANONICAL_PLAN_CODES = [
   "free",
   "weekly",

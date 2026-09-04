@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { Pencil, ChevronDown, ChevronUp, Loader2, X } from "lucide-react"
 import { clsx } from "clsx"
 import { useAdminSession, useAuditToast } from "@/app/admin/layout"
@@ -11,6 +11,8 @@ import {
   createAdminStepLLMConfig,
   getAdminTierStepLLMConfigs,
   createAdminTierStepLLMConfig,
+  bulkCreateAdminTierStepLLMConfig,
+  BulkTierStepValidationError,
   deleteAdminTierStepLLMConfig,
   getAdminModelCatalog,
   updateSimilarityThreshold,
@@ -21,8 +23,16 @@ import type {
   StepLLMConfigPayload,
   TierStepLLMConfig,
   TierStepLLMConfigPayload,
+  TierStepLLMConfigBulkPayload,
 } from "@/lib/admin/types"
 import { CANONICAL_PLAN_CODES } from "@/lib/admin/types"
+import {
+  applySelectAll,
+  editableSelectedSteps,
+  selectAllState,
+  selectionAfterPlanChange,
+  toggleStepSelection,
+} from "@/lib/admin/tierStepSelection"
 import {
   ModelPicker,
   DEFAULT_MODEL_PROVIDERS,
@@ -35,8 +45,9 @@ const PROVIDERS = DEFAULT_MODEL_PROVIDERS
 // ── LLM Config Page ───────────────────────────────────────────────────────────
 
 export default function AdminLLMPage() {
-  const { token } = useAdminSession()
+  const { token, session } = useAdminSession()
   const { showAuditToast } = useAuditToast()
+  const isSuperAdmin = session?.admin.role === "super-admin"
 
   const [configs, setConfigs] = useState<LLMConfig[]>([])
   const [threshold, setThreshold] = useState(0.72)
@@ -44,6 +55,9 @@ export default function AdminLLMPage() {
   const [stepPins, setStepPins] = useState<StepLLMConfig[]>([])
   const [tierStepPins, setTierStepPins] = useState<TierStepLLMConfig[]>([])
   const [selectedPlanCode, setSelectedPlanCode] = useState<string>("free")
+  const [selectedSteps, setSelectedSteps] = useState<Set<string>>(() => new Set())
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
+  const selectAllRef = useRef<HTMLInputElement>(null)
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({})
   const [editingStep, setEditingStep] = useState<StepLLMConfig | null>(null)
   const [editingTierStep, setEditingTierStep] = useState<TierStepLLMConfig | null>(null)
@@ -62,6 +76,18 @@ export default function AdminLLMPage() {
     if (!token) return
     void loadTierPins(selectedPlanCode)
   }, [token, selectedPlanCode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setSelectedSteps((prev) => selectionAfterPlanChange(selectedPlanCode, prev))
+  }, [selectedPlanCode])
+
+  const headerSelectAll = selectAllState(selectedSteps, tierStepPins)
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = headerSelectAll === "indeterminate"
+    }
+  }, [headerSelectAll, selectedSteps, tierStepPins])
 
   async function loadTierPins(planCode: string) {
     if (!token) return
@@ -139,10 +165,38 @@ export default function AdminLLMPage() {
             </button>
           ))}
         </div>
+        {isSuperAdmin && selectedSteps.size >= 1 && (
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-4 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 mb-3">
+            <span className="text-sm text-slate-300">
+              {selectedSteps.size} step{selectedSteps.size === 1 ? "" : "s"} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setBulkModalOpen(true)}
+              className="bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Bulk edit provider/model
+            </button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-400 border-b border-slate-800">
+                {isSuperAdmin && (
+                  <Th>
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={headerSelectAll === "checked"}
+                      onChange={(e) => {
+                        setSelectedSteps(applySelectAll(selectedSteps, tierStepPins, e.target.checked))
+                      }}
+                      className="accent-amber-500"
+                      aria-label="Select all editable steps"
+                    />
+                  </Th>
+                )}
                 <Th>Step</Th>
                 <Th>Provider</Th>
                 <Th>Model</Th>
@@ -153,6 +207,21 @@ export default function AdminLLMPage() {
             <tbody className="divide-y divide-slate-800">
               {tierStepPins.map((pin) => (
                 <tr key={pin.step} className="text-slate-300">
+                  {isSuperAdmin && (
+                    <Td>
+                      {pin.editable ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedSteps.has(pin.step)}
+                          onChange={() => {
+                            setSelectedSteps(toggleStepSelection(selectedSteps, pin.step))
+                          }}
+                          className="accent-amber-500"
+                          aria-label={`Select ${pin.label}`}
+                        />
+                      ) : null}
+                    </Td>
+                  )}
                   <Td>
                     <div className="font-medium text-slate-200">{pin.label}</div>
                     <code className="text-xs text-slate-500">{pin.step}</code>
@@ -393,6 +462,23 @@ export default function AdminLLMPage() {
         )}
       </Section>
 
+      {bulkModalOpen && (
+        <TierStepBulkEditModal
+          planCode={selectedPlanCode}
+          steps={[...selectedSteps]}
+          tierStepPins={tierStepPins}
+          catalog={modelCatalog}
+          onSave={async (payload) => {
+            const res = await bulkCreateAdminTierStepLLMConfig(token, payload)
+            showAuditToast(res.audit_log_id)
+            setBulkModalOpen(false)
+            setSelectedSteps(new Set())
+            await loadTierPins(selectedPlanCode)
+          }}
+          onClose={() => setBulkModalOpen(false)}
+        />
+      )}
+
       {editingTierStep !== null && (
         <TierStepPinEditModal
           initial={editingTierStep}
@@ -422,6 +508,108 @@ export default function AdminLLMPage() {
         />
       )}
     </div>
+  )
+}
+
+// ── Tier step bulk edit modal ─────────────────────────────────────────────────
+
+function TierStepBulkEditModal({
+  planCode,
+  steps,
+  tierStepPins,
+  catalog,
+  onSave,
+  onClose,
+}: {
+  planCode: string
+  steps: string[]
+  tierStepPins: TierStepLLMConfig[]
+  catalog: ModelCatalog
+  onSave: (payload: TierStepLLMConfigBulkPayload) => Promise<void>
+  onClose: () => void
+}) {
+  const labelByStep = new Map(tierStepPins.map((pin) => [pin.step, pin.label]))
+  const firstSelected = tierStepPins.find((pin) => steps.includes(pin.step))
+  const [isPending, startTransition] = useTransition()
+  const [err, setErr] = useState<string | null>(null)
+  const [bulkErrors, setBulkErrors] = useState<Array<{ step: string; code: string }>>([])
+  const [provider, setProvider] = useState(firstSelected?.provider ?? "openai")
+  const [model, setModel] = useState(firstSelected?.model_string ?? "")
+  const [notes, setNotes] = useState("")
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErr(null)
+    setBulkErrors([])
+    startTransition(async () => {
+      try {
+        await onSave({
+          plan_code: planCode,
+          steps: editableSelectedSteps(new Set(steps), tierStepPins),
+          provider,
+          model_string: model,
+          notes: notes || undefined,
+        })
+      } catch (e) {
+        if (e instanceof BulkTierStepValidationError) {
+          setBulkErrors(e.errors)
+          return
+        }
+        setErr(e instanceof Error ? e.message : "Save failed")
+      }
+    })
+  }
+
+  return (
+    <Modal title={`Bulk tier pin: ${planCode}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {err && <ErrorBanner msg={err} />}
+        {bulkErrors.length > 0 && (
+          <div className="bg-red-900/30 border border-red-700/50 text-red-300 text-sm px-4 py-3 rounded-lg space-y-1">
+            <p className="font-medium">Could not apply to some steps:</p>
+            <ul className="list-disc list-inside">
+              {bulkErrors.map((item) => (
+                <li key={`${item.step}:${item.code}`}>
+                  {labelByStep.get(item.step) ?? item.step}
+                  <span className="text-red-400"> ({item.code})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p className="text-xs text-slate-500">
+          Applying to <strong className="text-slate-300">{steps.length}</strong> step
+          {steps.length === 1 ? "" : "s"} on plan <code className="text-slate-400">{planCode}</code>
+        </p>
+        <ul className="text-xs text-slate-400 list-disc list-inside max-h-32 overflow-y-auto">
+          {steps.map((step) => (
+            <li key={step}>{labelByStep.get(step) ?? step}</li>
+          ))}
+        </ul>
+        <ModelPicker
+          catalog={catalog}
+          provider={provider}
+          model={model}
+          onProviderChange={setProvider}
+          onModelChange={setModel}
+          providers={PROVIDERS}
+        />
+        <FormField label="Notes (optional)">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={inputCls}
+            placeholder="Why these pins changed"
+          />
+        </FormField>
+        <ModalActions
+          onClose={onClose}
+          isPending={isPending}
+          submitLabel={`Apply to ${steps.length} step${steps.length === 1 ? "" : "s"}`}
+        />
+      </form>
+    </Modal>
   )
 }
 
