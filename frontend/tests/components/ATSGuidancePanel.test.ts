@@ -72,6 +72,20 @@ function runTests() {
   assert(fixture.blocking_issues.length === 3, "fixture has three blocking issues");
   assert(fixture.quick_wins.length === 1, "fixture has one quick win");
 
+  const withGuidance: QAOutput = {
+    ...fixture,
+    guidance: {
+      resume_quality_score: 72,
+      role_fit_score: 41,
+      recoverable_ceiling: 68,
+      score_meaning: "Test score meaning copy.",
+      tailor_verdict: "worth_it",
+      tailor_reason: "Worth tailoring for wording.",
+      top_actions: [],
+    },
+  };
+  assert(withGuidance.guidance?.role_fit_score === 41, "guidance exposes role fit score");
+
   assert(
     scoreColor(74) === "text-green-700 dark:text-green-400",
     "score 74 uses green color in both themes",

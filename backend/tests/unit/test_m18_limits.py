@@ -58,7 +58,7 @@ def test_checkup_cache_key_is_stable() -> None:
     a = checkup_result_cache_key(resume_text="resume", jd_text="jd")
     b = checkup_result_cache_key(resume_text="resume", jd_text="jd")
     assert a == b
-    assert a.startswith("checkup:result:")
+    assert a.startswith("checkup:result:v2:")
 
 
 @pytest.mark.asyncio
