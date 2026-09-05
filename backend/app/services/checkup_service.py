@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import structlog
 
+from app.agent.checkup_guidance import build_checkup_guidance
 from app.agent.phase1_keywords import _fallback_keyword_extraction
-from app.agent.phase4_deterministic import build_blocking_issues_from_score, compute_score_result
+from app.agent.phase4_deterministic import (
+    build_blocking_issues_from_score,
+    compute_score_result,
+    scoring_terms_from_keywords,
+)
 from app.agent.phase4_narrative import synthesize_phase4_narrative
 from app.agent.phase4_rank import compute_rank_label
 from app.llm.base import LLMClient
@@ -57,7 +62,7 @@ async def run_checkup_analysis(
     """Score + narrate a resume against a JD without a session."""
     tailored = parsed_to_tailored(parsed)
     phase1 = await _fallback_keyword_extraction(llm, jd_text, resume_text)
-    must_have_terms = [k.term for k in phase1.must_have_keywords if k.term.strip()]
+    must_have_terms = scoring_terms_from_keywords(phase1.must_have_keywords)
 
     score_result = compute_score_result(
         tailored,
@@ -66,6 +71,7 @@ async def run_checkup_analysis(
         tone_profile=phase1.tone_profile,
     )
     blocking_issues = build_blocking_issues_from_score(score_result)
+    guidance = build_checkup_guidance(score_result, blocking_issues=blocking_issues)
     quick_wins = [i for i in blocking_issues if i.impact == "high" and i.fix_effort == "one_click"]
     rank_label = compute_rank_label(score_result.ats_score)
 
@@ -81,6 +87,8 @@ async def run_checkup_analysis(
         missing_keywords=score_result.missing_keywords,
         single_section_keywords=score_result.single_section_keywords,
         rank_label=rank_label,
+        headline=guidance.tailor_reason,
+        guidance=guidance,
     )
 
     target_role = job_title.strip() or phase1.role_context.primary_domain.strip()

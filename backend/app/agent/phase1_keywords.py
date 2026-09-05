@@ -8,6 +8,7 @@ from pathlib import Path
 import structlog
 from pydantic import BaseModel
 
+from app.agent.keyword_match import atomize_phrase, classify_scoring_tier, string_present
 from app.agent.tone_profile import extract_tone_profile
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.context import truncate_to_fit
@@ -22,7 +23,10 @@ _PHASE1 = (Path(__file__).parent / "prompts" / "phase1.txt").read_text()
 
 _FALLBACK_SYSTEM = (
     "Extract ATS keywords from the job description. "
-    "Return JSON with must_have_keywords and nice_to_have_keywords as arrays of exact JD phrases."
+    "Return JSON with must_have_keywords and nice_to_have_keywords as arrays of atomic skills "
+    "(1-4 words each: languages, tools, frameworks, certifications). "
+    "Split compounds: 'Python and TypeScript' → two entries. "
+    "Do NOT return full requirement sentences or soft-skill prose."
 )
 
 
@@ -66,7 +70,7 @@ def _strings_to_keywords(
     terms: list[str],
     tier: str,
     jd_text: str,
-    resume_lower: str,
+    resume_text: str,
 ) -> list[Keyword]:
     keywords: list[Keyword] = []
     seen: set[str] = set()
@@ -74,24 +78,30 @@ def _strings_to_keywords(
         cleaned = term.strip()
         if not cleaned:
             continue
-        key = cleaned.lower()
-        if key in seen:
+        if classify_scoring_tier(cleaned) == "context" and not atomize_phrase(cleaned):
             continue
-        seen.add(key)
-        keywords.append(
-            Keyword(
-                term=cleaned,
-                source_sentence=_source_sentence_for_term(cleaned, jd_text),
-                category=_infer_category(cleaned),  # type: ignore[arg-type]
-                tier=tier,  # type: ignore[arg-type]
-                reason="Extracted from job description",
-                present_in_resume=key in resume_lower or cleaned.lower() in resume_lower,
+        atoms = atomize_phrase(cleaned) or [cleaned]
+        for atom in atoms:
+            if classify_scoring_tier(atom) == "context":
+                continue
+            key = atom.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            keywords.append(
+                Keyword(
+                    term=atom,
+                    source_sentence=_source_sentence_for_term(cleaned, jd_text),
+                    category=_infer_category(atom),  # type: ignore[arg-type]
+                    tier=tier,  # type: ignore[arg-type]
+                    reason="Extracted from job description",
+                    present_in_resume=string_present(atom, resume_text),
+                )
             )
-        )
     return keywords
 
 
-def _heuristic_keywords_from_jd(jd_text: str, resume_lower: str) -> KeywordExtractionOutput:
+def _heuristic_keywords_from_jd(jd_text: str, resume_text: str) -> KeywordExtractionOutput:
     """Last-resort extraction when the LLM returns empty output."""
     must_terms: list[str] = []
     nice_terms: list[str] = []
@@ -118,11 +128,11 @@ def _heuristic_keywords_from_jd(jd_text: str, resume_lower: str) -> KeywordExtra
         if term.lower() not in {t.lower() for t in must_terms + nice_terms}:
             must_terms.append(term)
 
-    must_kw = _strings_to_keywords(must_terms[:12], "must_have", jd_text, resume_lower)
-    nice_kw = _strings_to_keywords(nice_terms[:8], "nice_to_have", jd_text, resume_lower)
+    must_kw = _strings_to_keywords(must_terms[:12], "must_have", jd_text, resume_text)
+    nice_kw = _strings_to_keywords(nice_terms[:8], "nice_to_have", jd_text, resume_text)
 
     if not must_kw and not nice_kw:
-        must_kw = _strings_to_keywords(["See job description"], "must_have", jd_text, resume_lower)
+        must_kw = _strings_to_keywords(["See job description"], "must_have", jd_text, resume_text)
 
     return KeywordExtractionOutput(
         must_have_keywords=must_kw,
@@ -151,9 +161,8 @@ async def _fallback_keyword_extraction(
         parsed = await complete_structured(
             llm, messages, KeywordStringsOutput, max_tokens=4096, max_retries=2,
         )
-        resume_lower = resume_text.lower()
-        must_kw = _strings_to_keywords(parsed.must_have_keywords, "must_have", jd_text, resume_lower)
-        nice_kw = _strings_to_keywords(parsed.nice_to_have_keywords, "nice_to_have", jd_text, resume_lower)
+        must_kw = _strings_to_keywords(parsed.must_have_keywords, "must_have", jd_text, resume_text)
+        nice_kw = _strings_to_keywords(parsed.nice_to_have_keywords, "nice_to_have", jd_text, resume_text)
         if must_kw or nice_kw:
             return KeywordExtractionOutput(
                 must_have_keywords=must_kw,
@@ -165,7 +174,7 @@ async def _fallback_keyword_extraction(
     except Exception as exc:
         log.warning("phase1_fallback_llm_failed", error=str(exc))
 
-    return _heuristic_keywords_from_jd(jd_text, resume_text.lower())
+    return _heuristic_keywords_from_jd(jd_text, resume_text)
 
 
 async def run(
@@ -235,63 +244,8 @@ async def run(
         output = await _fallback_keyword_extraction(llm, jd_text, resume_text)
 
     # Supplement LLM's present_in_resume with smarter heuristic matching.
-    resume_lower = resume_text.lower()
-    dehyphen = resume_lower.replace("-", " ")
-
-    _QUALIFIERS = re.compile(
-        r"^(?:proficient\s+in|experience\s+(?:in|with|designing(?:\s+and\s+developing)?)?|"
-        r"experienced?\s+(?:in|with)|knowledge\s+of|familiarity\s+with|skilled\s+in|"
-        r"expertise\s+in|strong\s+background\s+in|ability\s+to|"
-        r"\d+\+\s*years?\s+(?:of\s+)?(?:working\s+)?)\s*",
-        re.I,
-    )
-    _STOPWORDS = frozenset(
-        {"in", "with", "of", "and", "the", "a", "an", "for", "to", "on", "at",
-         "by", "such", "as", "is", "are", "be", "via", "using", "including"}
-    )
-    _ABBREV = {
-        "oo ": "object-oriented ",
-        "oop": "object-oriented programming",
-        "ml": "machine learning",
-        "ai": "artificial intelligence",
-        "aws": "amazon aws",
-    }
-
-    def _string_present(term: str) -> bool:
-        t = term.lower()
-        if t in dehyphen:
-            return True
-        if re.match(r"^\d+\+?\s+years?\s+", t, re.I):
-            return False
-
-        def _try_abbrev(s: str) -> bool:
-            for abbrev, full in _ABBREV.items():
-                key = abbrev.strip()
-                if re.search(r"\b" + re.escape(key) + r"\b", s):
-                    candidate = re.sub(r"\s+", " ",
-                                       re.sub(r"\b" + re.escape(key) + r"\b", full.strip(), s)).strip()
-                    if candidate in dehyphen:
-                        return True
-            return False
-
-        if _try_abbrev(t):
-            return True
-
-        core = _QUALIFIERS.sub("", t).strip()
-        if core and core != t and core in dehyphen:
-            return True
-        if core and _try_abbrev(core):
-            return True
-
-        words = [w for w in re.split(r"\W+", core or t) if len(w) > 2 and w not in _STOPWORDS]
-        if len(words) >= 2 and all(w in dehyphen for w in words):
-            return True
-        if len(words) == 1 and words[0] in dehyphen:
-            return True
-        return False
-
     for kw in output.must_have_keywords + output.nice_to_have_keywords:
-        if _string_present(kw.term):
+        if string_present(kw.term, resume_text):
             kw.present_in_resume = True
 
     # Deterministic tone profile (§Track A). LLM output cannot override this —

@@ -6,11 +6,13 @@ from pathlib import Path
 
 import structlog
 
+from app.agent.checkup_guidance import build_checkup_guidance
 from app.agent.phase3_postprocess import flatten_skill_terms
 from app.agent.phase4_deterministic import (
     build_blocking_issues_from_score,
     compute_score_result,
     issue_anchor_from_dict,
+    scoring_terms_from_keywords,
 )
 from app.agent.phase4_narrative import synthesize_phase4_narrative
 from app.agent.phase4_rank import compute_rank_label
@@ -120,7 +122,7 @@ async def run(
     existing_skills: list[str] = tailored.skills or []
     flat_skill_terms: list[str] = flatten_skill_terms(existing_skills)
     must_have_terms: list[str] = (
-        [k.term for k in session.phase1_output.must_have_keywords]
+        scoring_terms_from_keywords(session.phase1_output.must_have_keywords)
         if session.phase1_output
         else []
     )
@@ -260,6 +262,8 @@ async def run(
         flagged_keyword_terms=flagged_terms,
     )
 
+    guidance = build_checkup_guidance(score_result, blocking_issues=corrected_issues)
+
     output = output.model_copy(update={"blocking_issues": corrected_issues})
 
     # Rebuild quick_wins from the corrected blocking_issues (strict subset rule).
@@ -278,6 +282,7 @@ async def run(
             "missing_keywords": score_result.missing_keywords,
             "single_section_keywords": score_result.single_section_keywords,
             "rank_label": compute_rank_label(score_result.ats_score),
+            "guidance": guidance,
         }
     )
 

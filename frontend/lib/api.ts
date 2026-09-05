@@ -824,6 +824,18 @@ export interface NarrativeCategorySummary {
   why_it_matters: string;
 }
 
+export type TailorVerdict = "worth_it" | "maybe" | "skip" | "fix_format_only";
+
+export interface CheckupGuidance {
+  resume_quality_score: number;
+  role_fit_score: number;
+  recoverable_ceiling: number;
+  score_meaning: string;
+  tailor_verdict: TailorVerdict;
+  tailor_reason: string;
+  top_actions: string[];
+}
+
 export interface QAOutput {
   checklist: QAItem[];
   overall_status: "pass" | "warn" | "fail";
@@ -840,6 +852,7 @@ export interface QAOutput {
   rank_label?: RankLabel;
   headline?: string;
   category_summaries?: NarrativeCategorySummary[];
+  guidance?: CheckupGuidance | null;
 }
 
 export interface CheckupResponse {
