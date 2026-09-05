@@ -51,6 +51,21 @@ class NarrativeCategorySummary(BaseModel):
     why_it_matters: str = ""
 
 
+TailorVerdict = Literal["worth_it", "maybe", "skip", "fix_format_only"]
+
+
+class CheckupGuidance(BaseModel):
+    """Deterministic interpretation for checkup / QA — not LLM-generated."""
+
+    resume_quality_score: int = Field(ge=0, le=100)
+    role_fit_score: int = Field(ge=0, le=100)
+    recoverable_ceiling: int = Field(ge=0, le=100)
+    score_meaning: str = ""
+    tailor_verdict: TailorVerdict = "maybe"
+    tailor_reason: str = ""
+    top_actions: list[str] = Field(default_factory=list)
+
+
 class QAOutput(BaseModel):
     checklist: list[QAItem] = Field(default_factory=list)
     overall_status: Literal["pass", "warn", "fail"] = "warn"
@@ -67,6 +82,7 @@ class QAOutput(BaseModel):
     rank_label: RankLabel | None = None
     headline: str = ""
     category_summaries: list[NarrativeCategorySummary] = Field(default_factory=list)
+    guidance: CheckupGuidance | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -123,4 +139,6 @@ class QAOutput(BaseModel):
     def _validate_ats_guidance_invariants(self) -> "QAOutput":
         if self.score_ceiling < self.ats_score:
             raise ValueError("score_ceiling must be >= ats_score")
+        if self.guidance is not None and self.guidance.recoverable_ceiling < self.ats_score:
+            raise ValueError("guidance.recoverable_ceiling must be >= ats_score")
         return self

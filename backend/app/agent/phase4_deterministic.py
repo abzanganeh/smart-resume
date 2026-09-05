@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.agent.phase4_score import ResumeQualityResult, compute_ats_score
 from app.agent.tone_profile import JDToneProfile
+from app.models.keywords import Keyword
 from app.models.qa import BlockingIssue, IssueAnchor
 
 _AXIS_TO_CATEGORY: dict[str, tuple[str, str, str]] = {
@@ -34,6 +35,21 @@ def issue_anchor_from_dict(anchor: dict[str, int | str] | None) -> IssueAnchor |
         entry_index=int(entry_index),
         bullet_index=int(bullet_index) if bullet_index is not None else None,
     )
+
+
+def scoring_terms_from_keywords(keywords: list[Keyword]) -> list[str]:
+    """Must-have atoms used for ATS keyword axes (drops unscorable context blobs)."""
+    terms: list[str] = []
+    seen: set[str] = set()
+    for kw in keywords:
+        if kw.tier != "must_have" or not kw.term.strip():
+            continue
+        key = kw.term.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(kw.term.strip())
+    return terms
 
 
 def compute_score_result(

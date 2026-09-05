@@ -604,6 +604,32 @@ export function ATSGuidancePanel({
           {output.headline && (
             <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{output.headline}</p>
           )}
+          {output.guidance && (
+            <div className="space-y-2 pt-1">
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                {output.guidance.score_meaning}
+              </p>
+              <div className="flex flex-wrap gap-3 text-xs">
+                <span className="text-slate-700 dark:text-slate-300">
+                  Resume quality: <strong>{output.guidance.resume_quality_score}</strong>/100
+                </span>
+                <span className="text-slate-700 dark:text-slate-300">
+                  Role fit: <strong>{output.guidance.role_fit_score}</strong>/100
+                </span>
+                {output.guidance.recoverable_ceiling > output.ats_score && (
+                  <span className="text-amber-700 dark:text-amber-400">
+                    Recoverable to ~{output.guidance.recoverable_ceiling}/100
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                {output.guidance.tailor_verdict === "worth_it" && "Tailoring is likely worth it for this role."}
+                {output.guidance.tailor_verdict === "maybe" && "Tailoring may help if you have the missing skills."}
+                {output.guidance.tailor_verdict === "skip" && "This role may be a stretch — consider a better-matched posting."}
+                {output.guidance.tailor_verdict === "fix_format_only" && "Focus on polish — keyword alignment is already decent."}
+              </p>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-sm">
             <span className="text-slate-600 dark:text-slate-400">Ceiling</span>
             <span className="text-amber-700 dark:text-amber-400 font-semibold">{output.score_ceiling ?? "—"}/100</span>

@@ -17,9 +17,12 @@ from app.services.billing.tier_limits_lookup import get_active_tier_limits
 from app.services import session_store
 
 
+_CHECKUP_CACHE_VERSION = "v2"
+
+
 def checkup_result_cache_key(*, resume_text: str, jd_text: str) -> str:
     digest = hashlib.sha256(f"{resume_text}\0{jd_text}".encode()).hexdigest()
-    return f"checkup:result:{digest}"
+    return f"checkup:result:{_CHECKUP_CACHE_VERSION}:{digest}"
 
 
 def checkup_device_counter_key(*, user_agent: str, client_ip: str) -> str:

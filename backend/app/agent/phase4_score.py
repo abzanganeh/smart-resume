@@ -30,6 +30,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
+from app.agent.keyword_match import keyword_present_in_section
 from app.agent.phase3_postprocess import flatten_skill_terms
 from app.agent.tone_profile import Formality, JDToneProfile
 
@@ -334,8 +335,9 @@ def _axis_keyword_presence(
     present_count = 0
     dual_count = 0
     for kw in keywords:
-        kw_lower = _normalize(kw)
-        sections_present = [s for s, text in sections.items() if kw_lower and kw_lower in text]
+        sections_present = [
+            s for s, text in sections.items() if keyword_present_in_section(kw, text)
+        ]
         section_map[kw] = sections_present
         if sections_present:
             present_count += 1
