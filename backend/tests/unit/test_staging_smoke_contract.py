@@ -47,6 +47,7 @@ def test_staging_smoke_script_includes_verify_unlock_flow() -> None:
         'check "Register spendable_credit_balance is 0 until verify"',
         'check "Post-verify spendable_credit_balance equals starting credits',
         'check "Post-verify email_verified_at is set"',
+        'check "POST /api/jobs/search returns 200 after titles confirmed"',
         "upgrade-insecure-requests",
     )
     for needle in required:
@@ -96,6 +97,8 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "LOCAL_SIM_ENV_CHECK=1 ./scripts/production-preflight.sh",
         "API_URL=http://localhost:${BACKEND_PORT}",
         "FRONTEND_URL=http://localhost:${FRONTEND_PORT}",
+        "--env-file .env.staging",
+        "seed_staging_job_cache.py",
         "Missing backend/.env.staging",
         "Missing .env.staging",
     )

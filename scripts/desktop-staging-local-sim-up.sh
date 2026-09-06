@@ -57,8 +57,26 @@ if ! LOCAL_SIM_ENV_CHECK=1 ./scripts/production-preflight.sh; then
 fi
 
 echo "Starting local-sim staging stack (ports ${FRONTEND_PORT}/${BACKEND_PORT})..."
+# Use .env.staging for ${GOOGLE_CLIENT_ID} etc. — root .env is dev (:3100) and must not override.
 STAGING_FRONTEND_PORT="$FRONTEND_PORT" STAGING_BACKEND_PORT="$BACKEND_PORT" \
-  docker compose "${COMPOSE_FILES[@]}" up -d --build
+  docker compose --env-file .env.staging "${COMPOSE_FILES[@]}" up -d --build
+
+echo "Waiting for backend before seeding sample job corpus..."
+ready=0
+for _ in $(seq 1 40); do
+  if curl -sf "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+if [ "$ready" -ne 1 ]; then
+  warn "Backend not ready — skip job corpus seed (run: docker compose exec backend uv run python scripts/seed_staging_job_cache.py)"
+else
+  echo "Seeding sample job_cache rows for local corpus search..."
+  docker compose --env-file .env.staging "${COMPOSE_FILES[@]}" exec -T backend \
+    uv run python scripts/seed_staging_job_cache.py || warn "Job corpus seed failed — /jobs may return empty results until re-run."
+fi
 
 echo
 echo "=== Local-sim desktop staging ==="
