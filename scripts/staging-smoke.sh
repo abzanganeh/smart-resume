@@ -275,6 +275,31 @@ for msg in data.get('messages', []):
             -H "Authorization: Bearer $smoke_token" \
             -F 'text=Jane Doe — Senior Backend Engineer with eight years building Python FastAPI services at Acme Corp serving millions of requests daily. Designed PostgreSQL schemas, Redis caching layers, and CI/CD pipelines.')"
           check "Verified profile resume upload not blocked (not 403)" test "$profile_after" != "403"
+
+          titles_status="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$API_URL/api/jobs/preferred-titles" \
+            -H "Authorization: Bearer $smoke_token" \
+            -H 'Content-Type: application/json' \
+            -d '{"titles":["Software Engineer"]}')"
+          check "PUT /api/jobs/preferred-titles returns 200 (auth)" test "$titles_status" = "200"
+
+          search_tmp="$(mktemp)"
+          search_status="$(curl -s -o "$search_tmp" -w '%{http_code}' -X POST "$API_URL/api/jobs/search" \
+            -H "Authorization: Bearer $smoke_token" \
+            -H 'Content-Type: application/json' \
+            -d '{"query":"software engineer","page":1,"page_size":5}')"
+          search_json="$(cat "$search_tmp")"
+          rm -f "$search_tmp"
+          check "POST /api/jobs/search returns 200 after titles confirmed" test "$search_status" = "200"
+          if [[ "$search_status" = "200" && "$API_URL" =~ ^https?://(localhost|127\.0\.0\.1)(:|/|$) ]]; then
+            job_count="$(echo "$search_json" | python3 -c "import json,sys; print(len(json.load(sys.stdin).get('jobs',[])))" 2>/dev/null || echo 0)"
+            if [[ "${job_count:-0}" -gt 0 ]]; then
+              green "PASS  Corpus search returns jobs on localhost staging ($job_count)"
+              pass=$((pass + 1))
+            else
+              yellow "SKIP  Corpus search job rows on localhost — run: docker compose exec backend uv run python scripts/seed_staging_job_cache.py"
+              skip=$((skip + 1))
+            fi
+          fi
         else
           red "FAIL  GET /api/auth/me after verify"
           fail=$((fail + 1))
