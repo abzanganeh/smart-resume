@@ -151,7 +151,8 @@ function OnboardingPageContent() {
   const [uploadingMaster, setUploadingMaster] = useState(false)
   const stepRef = useRef(step)
   const updateRef = useRef(update)
-  const skipUrlHydrateRef = useRef(false)
+  const initialHydrateDoneRef = useRef(false)
+  const urlStepAtMountRef = useRef<string | null>(searchParams.get("step"))
   useEffect(() => {
     stepRef.current = step
   }, [step])
@@ -160,27 +161,21 @@ function OnboardingPageContent() {
   }, [update])
 
   const token = session?.backendAccessToken
-  const urlStepParam = searchParams.get("step")
 
   useEffect(() => {
     if (status === "loading" || !session) return
-
-    if (skipUrlHydrateRef.current) {
-      skipUrlHydrateRef.current = false
-      return
-    }
+    if (initialHydrateDoneRef.current) return
 
     if (status === "authenticated" && !token) {
       setError(
         friendlyAuthError(session.error ?? "missing_api_token"),
       )
+      initialHydrateDoneRef.current = true
       setHydrated(true)
       return
     }
 
     if (!token) return
-    // Re-fetch when landing with ?step=… (e.g. returning from profile); otherwise hydrate once.
-    if (hydrated && !urlStepParam) return
 
     let cancelled = false
 
@@ -193,10 +188,6 @@ function OnboardingPageContent() {
         ])
         if (cancelled) return
 
-        // Fire-and-forget: awaiting update() causes NextAuth to briefly flip
-        // status to "loading", which cancels this effect before setHydrated(true)
-        // runs, creating an infinite loop. The session sync is best-effort here;
-        // completeOnboarding() does a proper await before navigating away.
         void updateRef.current({ backendUser: user })
 
         if (!needsOnboarding(user)) {
@@ -204,7 +195,7 @@ function OnboardingPageContent() {
           return
         }
 
-        const urlStep = parseOnboardingStepParam(urlStepParam)
+        const urlStep = parseOnboardingStepParam(urlStepAtMountRef.current)
         const hasMaster = liveChunkCount(chunks) > 0
         const hasJobTitles = Boolean(prefs?.preferred_titles_confirmed)
         const stepIndex = resolveOnboardingStepIndex(user, {
@@ -223,20 +214,22 @@ function OnboardingPageContent() {
           setError((err as Error).message || "Could not load onboarding progress.")
         }
       } finally {
-        if (!cancelled) setHydrated(true)
+        if (!cancelled) {
+          initialHydrateDoneRef.current = true
+          setHydrated(true)
+        }
       }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [status, token, urlStepParam, hydrated, router])
+  }, [status, token, router, session])
 
   useEffect(() => {
     if (!hydrated) return
     const stepOneBased = String(step + 1)
     if (searchParams.get("step") !== stepOneBased) {
-      skipUrlHydrateRef.current = true
       router.replace(`/onboarding?step=${stepOneBased}`, { scroll: false })
     }
   }, [step, hydrated, router, searchParams])
