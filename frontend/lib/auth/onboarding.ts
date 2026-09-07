@@ -63,7 +63,10 @@ export function postOnboardingDestination(_user?: BackendUser | null): string {
     const stored = sessionStorage.getItem("sr_auth_return_url")
     if (stored && !stored.startsWith("/auth") && stored !== "/onboarding") {
       sessionStorage.removeItem("sr_auth_return_url")
-      return stored
+      // Marketing home is not a post-onboarding destination for signed-in users.
+      if (stored !== "/") {
+        return stored
+      }
     }
     const handoff = getExtensionHandoff()
     if (handoff) return buildSessionNewUrl(handoff)

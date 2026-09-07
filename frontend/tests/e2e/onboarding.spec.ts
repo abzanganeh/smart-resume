@@ -187,4 +187,19 @@ test.describe("onboarding inline master resume", () => {
     expect(page.url()).toContain("/onboarding")
     expect(page.url()).not.toContain("/profile")
   })
+
+  test("skip master resume advances to job titles without completing onboarding", async ({
+    page,
+  }) => {
+    await mockOnboardingBackend(page)
+    await loginToOnboarding(page)
+    await advanceToMasterStep(page)
+
+    await page.getByRole("button", { name: "Skip for now" }).click()
+    await expect(
+      page.getByRole("heading", { name: /Which roles should we search for/i }),
+    ).toBeVisible({ timeout: 10_000 })
+    expect(page.url()).toContain("/onboarding")
+    expect(page.url()).not.toMatch(/\/$|\/dashboard/)
+  })
 })

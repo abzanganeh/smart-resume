@@ -301,7 +301,7 @@ function OnboardingPageContent() {
         }
         if (isMasterStep) {
           if (hasMasterResume) {
-            setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+            await advancePastMasterStep()
             return
           }
           setError("Upload or paste your master resume above, or skip for now.")
@@ -318,11 +318,18 @@ function OnboardingPageContent() {
     })
   }
 
-  function handleSkipMaster() {
+  async function advancePastMasterStep() {
+    if (!session?.backendUser?.onboarding_ai_choice) {
+      await saveAiChoice(aiChoice)
+    }
+    setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+  }
+
+  async function handleSkipMaster() {
     setError(null)
     startTransition(async () => {
       try {
-        await completeOnboarding(aiChoice)
+        await advancePastMasterStep()
       } catch (err: unknown) {
         setError((err as Error).message || "Something went wrong. Please try again.")
       }
