@@ -105,7 +105,7 @@ const STEPS = [
   },
   {
     title: "How do you want to use AI?",
-    subtitle: "Pick one — you can switch later.",
+    subtitle: "Platform AI is included — here's what your free credits cover.",
     icon: Zap,
     bodyKey: "ai" as const,
     cta: "Continue",

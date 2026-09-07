@@ -248,6 +248,44 @@ async def _require_subscription_quota(
 class FitJobResponse(BaseModel):
     analysis_id: str
     result: FitAnalysisOutput
+    cached: bool = False
+
+
+def _fit_output_from_row(row: FitAnalysis) -> FitAnalysisOutput:
+    try:
+        return FitAnalysisOutput.model_validate(row.result_json)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Stored fit analysis is invalid.",
+        ) from exc
+
+
+async def _existing_job_fit_analysis(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    job_id: uuid.UUID,
+) -> FitAnalysis | None:
+    return (
+        await db.execute(
+            select(FitAnalysis)
+            .where(
+                FitAnalysis.user_id == user_id,
+                FitAnalysis.jd_hash == str(job_id),
+            )
+            .order_by(FitAnalysis.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+def _fit_job_response(row: FitAnalysis, *, cached: bool) -> FitJobResponse:
+    return FitJobResponse(
+        analysis_id=str(row.id),
+        result=_fit_output_from_row(row),
+        cached=cached,
+    )
 
 
 @router.post("/search", response_model=JobSearchResponse)
@@ -692,6 +730,29 @@ async def get_job(
     return results[0]
 
 
+@router.get("/{job_id}/fit", response_model=FitJobResponse)
+@limiter.limit("60/minute", key_func=_rate_limit_user_key)
+async def get_job_fit(
+    request: Request,
+    job_id: str,
+    user: VerifiedUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        jid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job id.") from None
+
+    row = await get_job_by_id(db, jid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    existing = await _existing_job_fit_analysis(db, user_id=user.id, job_id=jid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail={"code": "fit_not_found"})
+    return _fit_job_response(existing, cached=True)
+
+
 @router.post("/{job_id}/fit", response_model=FitJobResponse)
 @limiter.limit("20/hour", key_func=_rate_limit_user_key)
 async def fit_job(
@@ -710,6 +771,11 @@ async def fit_job(
         raise HTTPException(status_code=404, detail="Job not found.")
 
     await _require_active_subscription(db, user_id=user.id)
+
+    existing = await _existing_job_fit_analysis(db, user_id=user.id, job_id=jid)
+    if existing is not None:
+        return _fit_job_response(existing, cached=True)
+
     await _require_subscription_quota(
         db, user=user, action=QuotaAction.fit_analysis, charge=True
     )
@@ -752,7 +818,7 @@ async def fit_job(
     )
     db.add(fit_row)
     await db.commit()
-    return FitJobResponse(analysis_id=str(analysis_id), result=output)
+    return _fit_job_response(fit_row, cached=False)
 
 
 @router.post("/{job_id}/save", status_code=201)

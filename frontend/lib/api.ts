@@ -38,14 +38,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // getSession() may throw during SSR or in non-browser contexts; ignore.
   }
 
+  const { headers: initHeaders, ...restInit } = init ?? {};
   const res = await fetch(`${BASE}${path}`, {
+    ...restInit,
     headers: {
       "Content-Type": "application/json",
       ...byokHeaders(),
       ...authHeader,
-      ...(init?.headers ?? {}),
+      ...(initHeaders ?? {}),
     },
-    ...init,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

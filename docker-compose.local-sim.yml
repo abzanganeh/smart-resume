@@ -5,6 +5,9 @@
 
 services:
   backend:
+    volumes:
+      # Local smoke: pick up backend search/auth fixes without a full image rebuild.
+      - ./backend/app:/app/app
     environment:
       # Force Mailpit delivery instead of Resend for verify-email smoke.
       - RESEND_API_KEY=

@@ -183,6 +183,7 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/api/admin/auth/accept-invite"): "authenticated by the invite token",
     # --- webhooks (verified by provider signature, not by session) ------
     ("POST", "/api/webhooks/stripe"): "Stripe signature verification; see test_exceptional_conditions",
+    ("POST", "/api/billing/webhook"): "Stripe webhook alias; same signature verification as /api/webhooks/stripe",
     ("POST", "/api/notifications/webhooks/resend"): "Resend signature verification",
     # --- scheduler (shared secret, not a user session) ------------------
     ("DELETE", "/api/account"): "X-Scheduler-Secret shared secret; covered below",
@@ -246,6 +247,7 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
 HIDDEN_FROM_SCHEMA: frozenset[tuple[str, str]] = frozenset(
     {
         ("POST", "/api/webhooks/stripe"),
+        ("POST", "/api/billing/webhook"),
         ("POST", "/api/notifications/webhooks/resend"),
     }
 )

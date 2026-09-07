@@ -1,4 +1,7 @@
+import { getSession } from "next-auth/react"
 import type { FitAnalysisOutput } from "./api"
+import { ApiError } from "./api"
+import { notifySessionRevoked, parseApiErrorDetail } from "./parseApiError"
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
@@ -27,28 +30,29 @@ async function jobsRequest<T>(
   token: string,
   init?: RequestInit,
 ): Promise<T> {
+  const session = await getSession()
+  const sessionToken = (session as { backendAccessToken?: string } | null)
+    ?.backendAccessToken
+  const bearer = sessionToken || token
+
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${bearer}`,
       ...(init?.headers ?? {}),
     },
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const detail = body?.detail
-    const code =
-      typeof detail === "object" && detail !== null && !Array.isArray(detail)
-        ? (detail as { code?: string }).code
-        : undefined
-    const err = new Error(formatJobsApiError(detail, res.status)) as Error & {
-      code?: string
-      status?: number
-    }
-    err.code = code
-    err.status = res.status
-    throw err
+    const { message, code } = parseApiErrorDetail(detail, res.status)
+    notifySessionRevoked(code)
+    throw new ApiError(
+      message || formatJobsApiError(detail, res.status),
+      res.status,
+      code,
+    )
   }
   if (res.status === 204) {
     return undefined as T
@@ -168,6 +172,7 @@ export const MAX_PREFERRED_JOB_TITLES = 12
 export interface JobFitResponse {
   analysis_id: string
   result: FitAnalysisOutput
+  cached?: boolean
 }
 
 export interface JobSearchRequest {
@@ -319,6 +324,18 @@ export async function matchJobs(
 
 export async function getJob(token: string, jobId: string): Promise<JobResult> {
   return jobsRequest(`/api/jobs/${jobId}`, token)
+}
+
+export async function getJobFit(
+  token: string,
+  jobId: string,
+): Promise<JobFitResponse | null> {
+  try {
+    return await jobsRequest(`/api/jobs/${jobId}/fit`, token)
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  }
 }
 
 export async function fitJob(token: string, jobId: string): Promise<JobFitResponse> {

@@ -127,6 +127,14 @@ async def _ensure_linked_app_user(
         if existing.email_verified_at is None:
             existing.email_verified_at = _utcnow()
             changed = True
+        # Linked app user may exist without a password (e.g. created on a prior
+        # bootstrap skip before admin password was wired). Backfill from bootstrap
+        # credentials so email/password login works in staging.
+        if password_hash and existing.password_hash is None:
+            existing.password_hash = password_hash
+            if existing.auth_provider != AuthProvider.email:
+                existing.auth_provider = AuthProvider.email
+            changed = True
         if changed:
             log.info("admin.bootstrap.app_user_upgraded", email=email)
         else:
@@ -168,7 +176,14 @@ async def bootstrap_super_admin(session: AsyncSession) -> BootstrapResult:
         )
         # Even when skipping admin creation, ensure a linked app User exists
         # so the owner can log in to the app with the same credentials.
-        await _ensure_linked_app_user(session, email)
+        skip_password = settings.BOOTSTRAP_SUPER_ADMIN_PASSWORD.strip()
+        skip_hash = hash_password(skip_password) if skip_password else None
+        await _ensure_linked_app_user(
+            session,
+            email,
+            password_hash=skip_hash,
+            display_name=settings.BOOTSTRAP_SUPER_ADMIN_DISPLAY_NAME or email,
+        )
         return BootstrapResult(
             False, "bootstrap_skipped_existing_admin", None, None
         )

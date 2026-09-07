@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -43,6 +43,79 @@ def normalize_query(query: str) -> str:
     """Collapse whitespace and strip decorative punctuation."""
     text = re.sub(r"\s+", " ", query.strip())
     return text[:500]
+
+
+_SEARCH_STOPWORDS = frozenset(
+    {"a", "an", "the", "and", "or", "for", "to", "of", "in", "on", "at", "by"}
+)
+
+# Short role tokens expand to common title variants (e.g. QA rarely appears verbatim).
+_JOB_SEARCH_TERM_ALIASES: dict[str, tuple[str, ...]] = {
+    "qa": (
+        "qa",
+        "quality assurance",
+        "quality engineering",
+        "quality engineer",
+        "sdet",
+        "qe",
+        "test engineer",
+    ),
+    "sde": ("software engineer", "sde"),
+    "pm": ("product manager", "pm"),
+}
+
+
+def tokenize_job_search_terms(query: str) -> list[str]:
+    """Split a job search query into lowercase terms (min length 2; keeps QA, PM, etc.)."""
+    terms: list[str] = []
+    for piece in re.split(r"\s+", query.lower().strip()):
+        term = re.sub(r"^[^\w+#]+|[^\w+#]+$", "", piece)
+        if len(term) < 2 or term in _SEARCH_STOPWORDS:
+            continue
+        terms.append(term)
+    return terms[:6]
+
+
+def _search_variants_for_term(term: str) -> tuple[str, ...]:
+    return _JOB_SEARCH_TERM_ALIASES.get(term, (term,))
+
+
+def _job_cache_term_clause(term: str):
+    """Match a search term (plus aliases) against title, company, or description."""
+    clauses = []
+    for variant in _search_variants_for_term(term):
+        pattern = f"%{variant}%"
+        clauses.append(
+            or_(
+                JobCache.title.ilike(pattern),
+                JobCache.company.ilike(pattern),
+                JobCache.description.ilike(pattern),
+            )
+        )
+    return or_(*clauses)
+
+
+def _apply_job_search_terms(stmt, terms: list[str], *, match_all_terms: bool):
+    """Keyword search uses AND; resume-text fallback uses OR across terms."""
+    if not terms:
+        return stmt
+    if match_all_terms:
+        for term in terms:
+            stmt = stmt.where(_job_cache_term_clause(term))
+        return stmt
+    return stmt.where(or_(*[_job_cache_term_clause(term) for term in terms]))
+
+
+def _job_cache_relevance_score(terms: list[str]):
+    """Higher when terms hit the title; used to rank corpus search results."""
+    score = literal(0)
+    for term in terms:
+        for variant in _search_variants_for_term(term):
+            pattern = f"%{variant}%"
+            score = score + case((JobCache.title.ilike(pattern), 10), else_=0)
+            score = score + case((JobCache.company.ilike(pattern), 4), else_=0)
+            score = score + case((JobCache.description.ilike(pattern), 1), else_=0)
+    return score
 
 
 def job_cache_to_result(row: JobCache, *, score: float | None = None) -> JobResult:
@@ -108,10 +181,11 @@ async def search_active_job_cache(
     page: int,
     page_size: int,
     blocked_companies: list[str],
+    match_all_terms: bool = True,
 ) -> tuple[list[JobResult], int]:
     """Search active corpus rows in ``job_cache`` (DB-first path)."""
     now = datetime.now(timezone.utc)
-    terms = [t for t in query.lower().split() if len(t) > 2]
+    terms = tokenize_job_search_terms(query)
     stmt = (
         select(JobCache)
         .where(JobCache.is_active.is_(True))
@@ -120,28 +194,21 @@ async def search_active_job_cache(
             | JobCache.sources.contains(["corpus"])
         )
     )
-    if terms:
-        clauses = [
-            or_(
-                JobCache.title.ilike(f"%{term}%"),
-                JobCache.company.ilike(f"%{term}%"),
-                JobCache.description.ilike(f"%{term}%"),
-            )
-            for term in terms[:6]
-        ]
-        stmt = stmt.where(or_(*clauses))
+    stmt = _apply_job_search_terms(stmt, terms, match_all_terms=match_all_terms)
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
     if filters.get("remote"):
         stmt = stmt.where(JobCache.remote.is_(True))
 
+    relevance = _job_cache_relevance_score(terms) if terms else literal(0)
     offset = (page - 1) * page_size
     count_stmt = stmt.with_only_columns(func.count()).order_by(None)
     total = int((await session.execute(count_stmt)).scalar_one())
     rows = (
         await session.execute(
             stmt.order_by(
+                relevance.desc(),
                 JobCache.first_seen_at.desc().nullslast(),
                 JobCache.posted_date.desc(),
             )
@@ -166,31 +233,29 @@ async def search_cache(
     page: int,
     page_size: int,
     blocked_companies: list[str],
+    match_all_terms: bool = True,
 ) -> tuple[list[JobResult], int]:
     """Search non-expired ``job_cache`` rows (circuit-open fallback)."""
     now = datetime.now(timezone.utc)
-    terms = [t for t in query.lower().split() if len(t) > 2]
+    terms = tokenize_job_search_terms(query)
     stmt = select(JobCache).where(JobCache.expires_at > now)
-    if terms:
-        clauses = [
-            or_(
-                JobCache.title.ilike(f"%{term}%"),
-                JobCache.company.ilike(f"%{term}%"),
-                JobCache.description.ilike(f"%{term}%"),
-            )
-            for term in terms[:6]
-        ]
-        stmt = stmt.where(or_(*clauses))
+    stmt = _apply_job_search_terms(stmt, terms, match_all_terms=match_all_terms)
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
     if filters.get("remote"):
         stmt = stmt.where(JobCache.remote.is_(True))
 
+    relevance = _job_cache_relevance_score(terms) if terms else literal(0)
     offset = (page - 1) * page_size
     rows = (
         await session.execute(
-            stmt.order_by(JobCache.posted_date.desc()).offset(offset).limit(page_size)
+            stmt.order_by(
+                relevance.desc(),
+                JobCache.posted_date.desc(),
+            )
+            .offset(offset)
+            .limit(page_size)
         )
     ).scalars().all()
 
@@ -550,6 +615,7 @@ async def run_resume_match(
             page=page,
             page_size=page_size,
             blocked_companies=blocked_companies,
+            match_all_terms=False,
         )
         if jobs:
             return jobs, total, True, _STALE_MESSAGE, False
@@ -571,6 +637,7 @@ async def run_resume_match(
             page=page,
             page_size=page_size,
             blocked_companies=blocked_companies,
+            match_all_terms=False,
         )
         if jobs:
             return jobs, total, True, _STALE_MESSAGE, False
@@ -607,6 +674,7 @@ __all__ = [
     "list_saved_jobs",
     "log_search",
     "normalize_query",
+    "tokenize_job_search_terms",
     "run_keyword_search",
     "run_resume_match",
     "search_active_job_cache",
