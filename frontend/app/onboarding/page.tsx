@@ -141,6 +141,7 @@ function OnboardingPageContent() {
   const [isPending, startTransition] = useTransition()
   const [hydrated, setHydrated] = useState(false)
   const updateRef = useRef(update)
+  const hydratedKeyRef = useRef<string | null>(null)
   useEffect(() => {
     updateRef.current = update
   }, [update])
@@ -149,18 +150,20 @@ function OnboardingPageContent() {
   const urlStepParam = searchParams.get("step")
 
   useEffect(() => {
-    if (status === "loading" || !session) return
+    if (status === "loading") return
 
     if (status === "authenticated" && !token) {
       setError(
-        friendlyAuthError(session.error ?? "missing_api_token"),
+        friendlyAuthError(session?.error ?? "missing_api_token"),
       )
       setHydrated(true)
       return
     }
 
-    if (!token) return
-    if (hydrated && !urlStepParam) return
+    if (status !== "authenticated" || !token) return
+
+    const hydrateKey = `${token}:${urlStepParam ?? ""}`
+    if (hydratedKeyRef.current === hydrateKey) return
 
     let cancelled = false
 
@@ -185,6 +188,7 @@ function OnboardingPageContent() {
           setAiChoice("platform")
         }
         setStep(Math.max(0, stepIndex))
+        hydratedKeyRef.current = hydrateKey
       } catch (err: unknown) {
         if (!cancelled) {
           setError((err as Error).message || "Could not load onboarding progress.")
@@ -197,7 +201,7 @@ function OnboardingPageContent() {
     return () => {
       cancelled = true
     }
-  }, [status, token, urlStepParam, hydrated, router, session])
+  }, [status, token, urlStepParam, router, session?.error])
 
   async function syncSession(user: Awaited<ReturnType<typeof patchOnboarding>>) {
     await update({ backendUser: user })
