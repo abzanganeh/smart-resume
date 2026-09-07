@@ -95,6 +95,17 @@ def _job_cache_term_clause(term: str):
     return or_(*clauses)
 
 
+def _apply_job_search_terms(stmt, terms: list[str], *, match_all_terms: bool):
+    """Keyword search uses AND; resume-text fallback uses OR across terms."""
+    if not terms:
+        return stmt
+    if match_all_terms:
+        for term in terms:
+            stmt = stmt.where(_job_cache_term_clause(term))
+        return stmt
+    return stmt.where(or_(*[_job_cache_term_clause(term) for term in terms]))
+
+
 def _job_cache_relevance_score(terms: list[str]):
     """Higher when terms hit the title; used to rank corpus search results."""
     score = literal(0)
@@ -170,6 +181,7 @@ async def search_active_job_cache(
     page: int,
     page_size: int,
     blocked_companies: list[str],
+    match_all_terms: bool = True,
 ) -> tuple[list[JobResult], int]:
     """Search active corpus rows in ``job_cache`` (DB-first path)."""
     now = datetime.now(timezone.utc)
@@ -182,8 +194,7 @@ async def search_active_job_cache(
             | JobCache.sources.contains(["corpus"])
         )
     )
-    for term in terms:
-        stmt = stmt.where(_job_cache_term_clause(term))
+    stmt = _apply_job_search_terms(stmt, terms, match_all_terms=match_all_terms)
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
@@ -222,13 +233,13 @@ async def search_cache(
     page: int,
     page_size: int,
     blocked_companies: list[str],
+    match_all_terms: bool = True,
 ) -> tuple[list[JobResult], int]:
     """Search non-expired ``job_cache`` rows (circuit-open fallback)."""
     now = datetime.now(timezone.utc)
     terms = tokenize_job_search_terms(query)
     stmt = select(JobCache).where(JobCache.expires_at > now)
-    for term in terms:
-        stmt = stmt.where(_job_cache_term_clause(term))
+    stmt = _apply_job_search_terms(stmt, terms, match_all_terms=match_all_terms)
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
@@ -604,6 +615,7 @@ async def run_resume_match(
             page=page,
             page_size=page_size,
             blocked_companies=blocked_companies,
+            match_all_terms=False,
         )
         if jobs:
             return jobs, total, True, _STALE_MESSAGE, False
@@ -625,6 +637,7 @@ async def run_resume_match(
             page=page,
             page_size=page_size,
             blocked_companies=blocked_companies,
+            match_all_terms=False,
         )
         if jobs:
             return jobs, total, True, _STALE_MESSAGE, False
