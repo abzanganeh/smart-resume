@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, Loader2, Plus, X } from "lucide-react"
+import { AlertCircle, Loader2, Plus, X } from "lucide-react"
 import {
   getJobPreferences,
   getJobTitleSuggestions,
@@ -29,6 +29,16 @@ function titleKey(title: string): string {
   return normalizeTitle(title).toLowerCase()
 }
 
+function dedupeSuggestions(rows: JobTitleSuggestion[]): JobTitleSuggestion[] {
+  const seen = new Set<string>()
+  return rows.filter((row) => {
+    const key = titleKey(row.title)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function JobTitlePicker({
   accessToken,
   onComplete,
@@ -54,7 +64,7 @@ export function JobTitlePicker({
         getJobTitleSuggestions(accessToken),
         getJobPreferences(accessToken).catch(() => null),
       ])
-      setSuggestions(res.suggestions)
+      setSuggestions(dedupeSuggestions(res.suggestions))
       setHeldTitles(res.held_titles)
       const maxTitles = prefs?.max_preferred_titles ?? MAX_PREFERRED_JOB_TITLES
       setTitleLimit(maxTitles)
@@ -212,30 +222,31 @@ export function JobTitlePicker({
         </button>
       </div>
 
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        Suggested roles
+      </p>
+
       <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1" data-testid="job-title-suggestions">
-        {suggestions.map((row) => {
-          const selected = isSelected(row.title)
-          return (
+        {suggestions.filter((row) => !isSelected(row.title)).length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+            All suggestions are in your target list. Add a custom title above or continue.
+          </p>
+        ) : null}
+        {suggestions
+          .filter((row) => !isSelected(row.title))
+          .map((row) => (
             <button
               key={row.title}
               type="button"
               onClick={() => toggleSuggestion(row.title)}
-              disabled={!selected && atMax}
+              disabled={atMax}
               data-testid={`job-title-option-${row.title}`}
-              className={clsx(
-                "w-full text-left rounded-xl border p-4 transition-colors disabled:opacity-50",
-                selected
-                  ? "border-amber-400 bg-amber-400/10 ring-1 ring-amber-400/40"
-                  : "border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 hover:border-amber-400/50",
-              )}
+              className="w-full text-left rounded-xl border p-4 transition-colors border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 hover:border-amber-400/50 disabled:opacity-50"
             >
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {row.title}
                 </h3>
-                {selected ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                ) : null}
               </div>
 
               <p
@@ -274,8 +285,7 @@ export function JobTitlePicker({
                 </ul>
               )}
             </button>
-          )
-        })}
+          ))}
       </div>
 
       <p className="text-center text-xs text-slate-500 dark:text-slate-500">

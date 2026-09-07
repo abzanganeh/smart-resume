@@ -132,21 +132,22 @@ def score_title_fit(
 
     blob = _resume_blob(resume_text)
     tokens = _title_tokens(title)
-    score = 58
+    matched_skills = _matched_skill_labels(title, resume_text)
 
     if _held_match(title, held_titles):
-        score += 32
+        score = 90
     elif _held_partial_match(title, held_titles):
-        score += 18
+        score = 72
+    else:
+        score = 55
 
     if tokens:
         hits = sum(1 for tok in tokens if tok in blob)
         ratio = hits / len(tokens)
-        score += int(ratio * 22)
+        score += int(ratio * 8) - 2
 
-    matched_skills = _matched_skill_labels(title, resume_text)
     if matched_skills:
-        score += min(12, 4 * len(matched_skills))
+        score += min(10, 3 * len(matched_skills))
 
     title_level = _seniority_level(title)
     resume_level = _resume_seniority(resume_text, held_titles)
@@ -155,7 +156,9 @@ def score_title_fit(
     elif title_level == "junior" and resume_level == "senior":
         score -= 6
 
-    score = max(45, min(98, score))
+    # Exact held titles can reach the top band; adjacent roles should not all cluster at 98%.
+    score_cap = 98 if _held_match(title, held_titles) else 92
+    score = max(45, min(score_cap, score))
 
     strengths: list[str] = []
     if _held_match(title, held_titles):
