@@ -25,6 +25,7 @@ import { fetchMe, patchOnboarding } from "@/lib/auth/api"
 import {
   needsOnboarding,
   onboardingStepAfterMasterUpload,
+  ONBOARDING_JOB_TITLES_STEP_INDEX,
   ONBOARDING_MASTER_STEP_INDEX,
   parseOnboardingStepParam,
   postOnboardingDestination,
@@ -121,7 +122,8 @@ const STEPS = [
   },
   {
     title: "Which roles should we search for?",
-    subtitle: "Pick job titles that match your experience — we'll find openings from our company corpus.",
+    subtitle:
+      "Add at least one target title now, or skip and set them later on Jobs.",
     icon: Search,
     bodyKey: "jobTitles" as const,
     cta: "Continue",
@@ -149,6 +151,7 @@ function OnboardingPageContent() {
   const [uploadingMaster, setUploadingMaster] = useState(false)
   const stepRef = useRef(step)
   const updateRef = useRef(update)
+  const skipUrlHydrateRef = useRef(false)
   useEffect(() => {
     stepRef.current = step
   }, [step])
@@ -161,6 +164,11 @@ function OnboardingPageContent() {
 
   useEffect(() => {
     if (status === "loading" || !session) return
+
+    if (skipUrlHydrateRef.current) {
+      skipUrlHydrateRef.current = false
+      return
+    }
 
     if (status === "authenticated" && !token) {
       setError(
@@ -223,6 +231,15 @@ function OnboardingPageContent() {
       cancelled = true
     }
   }, [status, token, urlStepParam, hydrated, router])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const stepOneBased = String(step + 1)
+    if (searchParams.get("step") !== stepOneBased) {
+      skipUrlHydrateRef.current = true
+      router.replace(`/onboarding?step=${stepOneBased}`, { scroll: false })
+    }
+  }, [step, hydrated, router, searchParams])
 
   async function syncSession(user: Awaited<ReturnType<typeof patchOnboarding>>) {
     await update({ backendUser: user })
@@ -290,7 +307,7 @@ function OnboardingPageContent() {
   const Icon = current.icon
   const isLast = step === STEPS.length - 1
   const isMasterStep = step === 2
-  const isJobTitlesStep = step === 3
+  const isJobTitlesStep = step === ONBOARDING_JOB_TITLES_STEP_INDEX
 
   function handlePrimary() {
     setError(null)
@@ -385,6 +402,9 @@ function OnboardingPageContent() {
           <JobTitlePicker
             accessToken={token}
             submitLabel="Continue"
+            manualTitlesOnly={!hasMasterResume}
+            onBack={() => setStep(ONBOARDING_MASTER_STEP_INDEX)}
+            onSkip={() => setStep(4)}
             onComplete={async () => {
               setStep(4)
             }}
