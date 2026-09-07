@@ -159,7 +159,7 @@ async function loginToOnboarding(page: Page) {
 async function advanceToMasterStep(page: Page) {
   await expect(page.getByRole("heading", { name: /Welcome/i })).toBeVisible()
   await page.getByRole("button", { name: "Continue" }).click()
-  await expect(page.getByRole("heading", { name: /How do you want to use AI/i })).toBeVisible()
+  await expect(page.getByRole("heading", { name: /How AI works on/i })).toBeVisible()
   await page.getByRole("button", { name: "Continue" }).click()
   await expect(page.getByRole("heading", { name: /Build your master resume/i })).toBeVisible()
 }

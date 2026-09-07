@@ -48,11 +48,12 @@ function OnboardingAiStep() {
   return (
     <div className="space-y-5 text-left max-w-md mx-auto">
       <p className="text-slate-600 dark:text-slate-400 text-sm text-center leading-relaxed">
-        {PRODUCT_NAME} runs the AI for you. Free accounts start with{" "}
+        {PRODUCT_NAME} runs platform AI for you — no API key and no setup. Free accounts
+        start with{" "}
         <strong className="text-slate-900 dark:text-slate-200">
           {FREE_TIER_STARTING_CREDITS} credits
         </strong>
-        ; subscribers use monthly plan limits instead.
+        ; paid plans use monthly limits instead of the credit wallet.
       </p>
 
       <div className="rounded-xl border border-amber-400/60 bg-amber-500/5 dark:bg-amber-400/5 ring-1 ring-amber-400/30 p-4">
@@ -66,8 +67,9 @@ function OnboardingAiStep() {
           </span>
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-          No API key needed — platform AI is included. Most items below cost one credit;
-          story generate and save are free the first time.
+          Every self-serve plan uses our hosted models. Most actions below cost one credit;
+          story generate and save are free the first time. Need custom limits or routing? The
+          Customized tier on our pricing page is contact-us only.
         </p>
       </div>
 
@@ -104,8 +106,8 @@ const STEPS = [
     cta: "Continue",
   },
   {
-    title: "How do you want to use AI?",
-    subtitle: "Platform AI is included — here's what your free credits cover.",
+    title: `How AI works on ${PRODUCT_NAME}`,
+    subtitle: "Platform AI is included on every self-serve plan — here's how credits work.",
     icon: Zap,
     bodyKey: "ai" as const,
     cta: "Continue",
