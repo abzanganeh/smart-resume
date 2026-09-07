@@ -109,29 +109,29 @@ describe("resolveOnboardingStepIndex", () => {
     );
   });
 
-  it("honors step=4 after master resume exists (job titles step)", () => {
+  it("honors step=4 after ai choice (job titles intro)", () => {
     assert.equal(
       resolveOnboardingStepIndex(
         { ...baseUser, onboarding_ai_choice: "platform" },
-        { urlStepIndex: 3, hasMasterResume: true },
+        { urlStepIndex: 3 },
       ),
       3,
     );
   });
 
-  it("lands on done after job titles confirmed", () => {
+  it("lands on done step via url after ai choice", () => {
     assert.equal(
       resolveOnboardingStepIndex(
         { ...baseUser, onboarding_ai_choice: "platform" },
-        { hasMasterResume: true, hasJobTitles: true },
+        { urlStepIndex: 4 },
       ),
       4,
     );
   });
 
-  it("does not skip ahead without prerequisites", () => {
+  it("does not skip ahead without ai choice", () => {
     assert.equal(
-      resolveOnboardingStepIndex(baseUser, { urlStepIndex: 3, hasMasterResume: false }),
+      resolveOnboardingStepIndex(baseUser, { urlStepIndex: 3 }),
       0,
     );
   });

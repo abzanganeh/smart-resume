@@ -2,6 +2,9 @@
 
 /**
  * Onboarding — first-run flow after registration.
+ *
+ * All five steps are intro-only: setup (master resume, job titles, tailoring)
+ * happens from the dashboard and dedicated routes after onboarding completes.
  */
 import { Suspense, useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
@@ -24,16 +27,10 @@ import { friendlyAuthError } from "@/lib/auth/errors"
 import { fetchMe, patchOnboarding } from "@/lib/auth/api"
 import {
   needsOnboarding,
-  onboardingStepAfterMasterUpload,
-  ONBOARDING_MASTER_STEP_INDEX,
   parseOnboardingStepParam,
   postOnboardingDestination,
   resolveOnboardingStepIndex,
 } from "@/lib/auth/onboarding"
-import { getProfileChunks, liveChunkCount, uploadProfileResume } from "@/lib/profile"
-import { getJobPreferences } from "@/lib/jobs"
-import { JobTitlePicker } from "@/components/jobs/JobTitlePicker"
-import { ProfileUploadZone } from "@/components/profile/ProfileUploadZone"
 import {
   FREE_TIER_CREDIT_ACTIONS,
   FREE_TIER_NON_CREDIT_LIMITS_COPY,
@@ -112,14 +109,14 @@ const STEPS = [
   },
   {
     title: "Build your master resume",
-    subtitle: "Generate it by speaking, or upload an existing file.",
+    subtitle: "One resume you maintain — tailored versions for every job.",
     icon: Mic,
     bodyKey: "master" as const,
     cta: "Continue",
   },
   {
     title: "Which roles should we search for?",
-    subtitle: "Pick job titles that match your experience — we'll find openings from our company corpus.",
+    subtitle: "We'll suggest titles from your resume — search our company job corpus for free.",
     icon: Search,
     bodyKey: "jobTitles" as const,
     cta: "Continue",
@@ -143,13 +140,7 @@ function OnboardingPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [hydrated, setHydrated] = useState(false)
-  const [hasMasterResume, setHasMasterResume] = useState(false)
-  const [uploadingMaster, setUploadingMaster] = useState(false)
-  const stepRef = useRef(step)
   const updateRef = useRef(update)
-  useEffect(() => {
-    stepRef.current = step
-  }, [step])
   useEffect(() => {
     updateRef.current = update
   }, [update])
@@ -169,24 +160,15 @@ function OnboardingPageContent() {
     }
 
     if (!token) return
-    // Re-fetch when landing with ?step=… (e.g. returning from profile); otherwise hydrate once.
     if (hydrated && !urlStepParam) return
 
     let cancelled = false
 
     void (async () => {
       try {
-        const [user, chunks, prefs] = await Promise.all([
-          fetchMe(token),
-          getProfileChunks(token).catch(() => []),
-          getJobPreferences(token).catch(() => null),
-        ])
+        const user = await fetchMe(token)
         if (cancelled) return
 
-        // Fire-and-forget: awaiting update() causes NextAuth to briefly flip
-        // status to "loading", which cancels this effect before setHydrated(true)
-        // runs, creating an infinite loop. The session sync is best-effort here;
-        // completeOnboarding() does a proper await before navigating away.
         void updateRef.current({ backendUser: user })
 
         if (!needsOnboarding(user)) {
@@ -195,18 +177,13 @@ function OnboardingPageContent() {
         }
 
         const urlStep = parseOnboardingStepParam(urlStepParam)
-        const hasMaster = liveChunkCount(chunks) > 0
-        const hasJobTitles = Boolean(prefs?.preferred_titles_confirmed)
         const stepIndex = resolveOnboardingStepIndex(user, {
           urlStepIndex: urlStep,
-          hasMasterResume: hasMaster,
-          hasJobTitles,
         })
 
         if (user.onboarding_ai_choice === "platform") {
           setAiChoice("platform")
         }
-        setHasMasterResume(hasMaster)
         setStep(Math.max(0, stepIndex))
       } catch (err: unknown) {
         if (!cancelled) {
@@ -220,16 +197,16 @@ function OnboardingPageContent() {
     return () => {
       cancelled = true
     }
-  }, [status, token, urlStepParam, hydrated, router])
+  }, [status, token, urlStepParam, hydrated, router, session])
 
   async function syncSession(user: Awaited<ReturnType<typeof patchOnboarding>>) {
     await update({ backendUser: user })
   }
 
   async function saveAiChoice(choice: AiChoice) {
-    const token = session?.backendAccessToken
-    if (!token) throw new Error("Not signed in")
-    const user = await patchOnboarding(token, { ai_choice: choice })
+    const accessToken = session?.backendAccessToken
+    if (!accessToken) throw new Error("Not signed in")
+    const user = await patchOnboarding(accessToken, { ai_choice: choice })
     await syncSession(user)
   }
 
@@ -238,41 +215,7 @@ function OnboardingPageContent() {
     if (!accessToken) throw new Error("Not signed in")
     const user = await patchOnboarding(accessToken, { ai_choice: choice, complete: true })
     await syncSession(user)
-    // Hard navigation so middleware reads the updated JWT (avoids race with client session).
     window.location.assign(postOnboardingDestination(user))
-  }
-
-  async function advanceAfterMasterResume() {
-    setHasMasterResume(true)
-    if (!session?.backendUser?.onboarding_ai_choice) {
-      await saveAiChoice(aiChoice)
-    }
-    if (stepRef.current === ONBOARDING_MASTER_STEP_INDEX) {
-      setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
-    }
-  }
-
-  async function handleMasterUpload(payload: { file?: File; text?: string }) {
-    const accessToken = session?.backendAccessToken
-    if (!accessToken) throw new Error("Not signed in")
-    setUploadingMaster(true)
-    setError(null)
-    try {
-      await uploadProfileResume(accessToken, payload)
-      await advanceAfterMasterResume()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : ""
-      if (
-        msg.includes("Verify your email") ||
-        msg === "email_verification_required"
-      ) {
-        setError(friendlyAuthError("email_verification_required"))
-      } else {
-        setError(msg || friendlyAuthError("Default"))
-      }
-    } finally {
-      setUploadingMaster(false)
-    }
   }
 
   if (status === "loading" || !session || !hydrated) {
@@ -287,8 +230,6 @@ function OnboardingPageContent() {
   const current = STEPS[step]
   const Icon = current.icon
   const isLast = step === STEPS.length - 1
-  const isMasterStep = step === 2
-  const isJobTitlesStep = step === 3
 
   function handlePrimary() {
     setError(null)
@@ -299,30 +240,11 @@ function OnboardingPageContent() {
           setStep((s) => s + 1)
           return
         }
-        if (isMasterStep) {
-          if (hasMasterResume) {
-            setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
-            return
-          }
-          setError("Upload or paste your master resume above, or skip for now.")
-          return
-        }
         if (isLast) {
           await completeOnboarding(aiChoice)
           return
         }
         setStep((s) => s + 1)
-      } catch (err: unknown) {
-        setError((err as Error).message || "Something went wrong. Please try again.")
-      }
-    })
-  }
-
-  function handleSkipMaster() {
-    setError(null)
-    startTransition(async () => {
-      try {
-        await completeOnboarding(aiChoice)
       } catch (err: unknown) {
         setError((err as Error).message || "Something went wrong. Please try again.")
       }
@@ -358,29 +280,39 @@ function OnboardingPageContent() {
       case "ai":
         return <OnboardingAiStep />
       case "master":
-        return token ? (
-          <ProfileUploadZone
-            token={token}
-            compact
-            loading={uploadingMaster}
-            onSubmit={handleMasterUpload}
-            onStoryComplete={() => {
-              void advanceAfterMasterResume().catch((err: unknown) => {
-                setError((err as Error).message || "Could not continue after saving your story.")
-              })
-            }}
-          />
-        ) : null
+        return (
+          <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2 text-left max-w-md mx-auto">
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              Upload a file, paste text, or speak your career story on your profile
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              We chunk and embed it once — every tailored resume draws from it
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              Job-title suggestions and fit scores use this resume after you add it
+            </li>
+          </ul>
+        )
       case "jobTitles":
-        return token ? (
-          <JobTitlePicker
-            accessToken={token}
-            submitLabel="Continue"
-            onComplete={async () => {
-              setStep(4)
-            }}
-          />
-        ) : null
+        return (
+          <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2 text-left max-w-md mx-auto">
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              {PRODUCT_NAME} ranks realistic titles from your master resume
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              Pick up to 12 target roles to search our company job corpus
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+              Expanded search and fit scoring are available on paid plans
+            </li>
+          </ul>
+        )
       case "done":
         return (
           <div className="space-y-4 max-w-md mx-auto">
@@ -389,11 +321,18 @@ function OnboardingPageContent() {
               subscription from the dashboard.
             </p>
             <Link
-              href="/jobs"
+              href="/profile"
+              className="flex items-center justify-center gap-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100/40 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-200 transition-colors"
+            >
+              <FileText className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+              Add your master resume
+            </Link>
+            <Link
+              href="/jobs/setup"
               className="flex items-center justify-center gap-2 w-full rounded-xl border border-slate-300 dark:border-slate-700 hover:border-amber-400/50 bg-slate-100/40 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3 text-sm text-slate-800 dark:text-slate-200 transition-colors"
             >
               <Search className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-              Search jobs from your titles
+              Choose job titles to search
             </Link>
             <Link
               href="/session/new"
@@ -442,12 +381,11 @@ function OnboardingPageContent() {
           </p>
         )}
 
-        {!isJobTitlesStep && (
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           {step > 0 && (
             <button
               type="button"
-              disabled={isPending || (isMasterStep && uploadingMaster)}
+              disabled={isPending}
               onClick={() => setStep((s) => s - 1)}
               className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 px-4 py-2.5 disabled:opacity-50"
             >
@@ -456,7 +394,7 @@ function OnboardingPageContent() {
           )}
           <button
             type="button"
-            disabled={isPending || (isMasterStep && uploadingMaster)}
+            disabled={isPending}
             onClick={handlePrimary}
             className="inline-flex items-center gap-2 bg-amber-400 text-slate-900 font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-amber-300 transition-colors disabled:opacity-60"
           >
@@ -472,18 +410,7 @@ function OnboardingPageContent() {
               </>
             )}
           </button>
-          {isMasterStep && (
-            <button
-              type="button"
-              disabled={isPending || uploadingMaster}
-              onClick={handleSkipMaster}
-              className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 underline underline-offset-4 disabled:opacity-50"
-            >
-              Skip for now
-            </button>
-          )}
         </div>
-        )}
       </div>
     </main>
   )

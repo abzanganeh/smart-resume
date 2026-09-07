@@ -81,33 +81,31 @@ export function parseOnboardingStepParam(raw: string | null): number | null {
 
 /**
  * Pick the onboarding wizard step from server user state.
- * URL step is honored only when prerequisites are met (no skipping ahead).
+ *
+ * Steps 3–4 are intro-only (no master upload or title picker in the wizard).
+ * URL step is honored after AI choice; otherwise resume at the first post-AI step.
  */
 export function resolveOnboardingStepIndex(
   user: BackendUser | null | undefined,
   options?: {
     urlStepIndex?: number | null
+    /** @deprecated Intro onboarding no longer gates on resume data. */
     hasMasterResume?: boolean
+    /** @deprecated Intro onboarding no longer gates on job titles. */
     hasJobTitles?: boolean
   },
 ): number {
   if (!user || user.onboarding_completed_at) return -1
 
   const url = options?.urlStepIndex
-  const hasMaster = Boolean(options?.hasMasterResume)
-  const hasJobTitles = Boolean(options?.hasJobTitles)
   const hasAiChoice = user.onboarding_ai_choice === "platform"
 
   if (url != null && url >= 0 && url < ONBOARDING_STEP_COUNT) {
-    if (url >= 4 && hasAiChoice && hasMaster && hasJobTitles) return 4
-    if (url >= 3 && hasAiChoice && hasMaster) return 3
-    if (url >= 2 && hasAiChoice) return 2
+    if (url >= 2 && hasAiChoice) return url
     if (url === 1) return 1
     if (url === 0) return 0
   }
 
-  if (hasMaster && hasAiChoice && hasJobTitles) return 4
-  if (hasMaster && hasAiChoice) return 3
   if (hasAiChoice) return 2
   return 0
 }
