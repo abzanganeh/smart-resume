@@ -98,7 +98,8 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "API_URL=http://localhost:${BACKEND_PORT}",
         "FRONTEND_URL=http://localhost:${FRONTEND_PORT}",
         "--env-file .env.staging",
-        "seed_staging_job_cache.py",
+        "load_job_corpus_seed.py",
+        "poll_job_corpus_once.py",
         "Missing backend/.env.staging",
         "Missing .env.staging",
     )

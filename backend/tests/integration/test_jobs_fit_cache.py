@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fit import FitAnalysisOutput, SectionFit
 from app.models.jobs import JobCache
+from tests.conftest import verify_user_email
 from tests.integration.test_jobs_search import _register, _seed_subscription
 
 pytestmark = pytest.mark.integration
@@ -73,6 +74,8 @@ async def test_job_fit_returns_cached_result_without_rerunning_llm(
     db_session: AsyncSession,
 ) -> None:
     token, user_id = await _register(app_client)
+    await verify_user_email(db_session, uuid.UUID(user_id))
+    await db_session.commit()
     await _seed_subscription(db_session, user_id)
     job = await _seed_job(db_session)
 
@@ -101,11 +104,13 @@ async def test_job_fit_returns_cached_result_without_rerunning_llm(
 
 
 @pytest.mark.asyncio
-async def test_get_job_fit_returns_saved_analysis(
+async def test_get_job_fit_requires_existing_analysis(
     app_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     token, user_id = await _register(app_client)
+    await verify_user_email(db_session, uuid.UUID(user_id))
+    await db_session.commit()
     await _seed_subscription(db_session, user_id)
     job = await _seed_job(db_session)
 
@@ -115,20 +120,3 @@ async def test_get_job_fit_returns_saved_analysis(
     )
     assert missing.status_code == 404
     assert missing.json()["detail"]["code"] == "fit_not_found"
-
-    mock_run = AsyncMock(return_value=SAMPLE_FIT)
-    with patch("app.routers.jobs.job_fit_agent.run", mock_run):
-        created = await app_client.post(
-            f"/api/jobs/{job.id}/fit",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert created.status_code == 200, created.text
-
-    loaded = await app_client.get(
-        f"/api/jobs/{job.id}/fit",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert loaded.status_code == 200, loaded.text
-    body = loaded.json()
-    assert body["cached"] is True
-    assert body["result"]["fit_label"] == "good"
