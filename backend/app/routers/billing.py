@@ -973,6 +973,7 @@ async def subscriptions_refund_request(
 
 
 @router.post("/api/webhooks/stripe", include_in_schema=False)
+@router.post("/api/billing/webhook", include_in_schema=False)
 @limiter.exempt
 async def stripe_webhook(
     request: Request,
@@ -1221,15 +1222,32 @@ def _stripe_event_to_dict(event: Any) -> dict[str, Any]:
 
     The SDK exposes both attribute-style and dict-style access; we
     normalize to dict so downstream handlers don't depend on the SDK
-    surface.
+    surface.  Stripe's newer API versions may include ``Decimal`` values
+    that PostgreSQL JSONB cannot store without coercion.
     """
     if isinstance(event, dict):
-        return event
-    if hasattr(event, "to_dict_recursive"):
-        return event.to_dict_recursive()
-    if hasattr(event, "to_dict"):
-        return event.to_dict()
-    raise WebhookSignatureError("could not normalize verified event payload")
+        raw = event
+    elif hasattr(event, "to_dict_recursive"):
+        raw = event.to_dict_recursive()
+    elif hasattr(event, "to_dict"):
+        raw = event.to_dict()
+    else:
+        raise WebhookSignatureError("could not normalize verified event payload")
+    return _json_safe_stripe_payload(raw)
+
+
+def _json_safe_stripe_payload(value: Any) -> Any:
+    """Recursively coerce Stripe payload values for JSONB persistence."""
+    from decimal import Decimal
+
+    if isinstance(value, Decimal):
+        # Preserve precision; JSON numbers are fine for billing metadata.
+        return float(value)
+    if isinstance(value, dict):
+        return {k: _json_safe_stripe_payload(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_stripe_payload(v) for v in value]
+    return value
 
 
 __all__ = ["router"]

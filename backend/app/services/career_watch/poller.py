@@ -95,6 +95,9 @@ async def poll_enabled_aggregators(
     """Fetch enabled free aggregators and upsert into shared job_cache."""
     now = now or datetime.now(timezone.utc)
     stats = PollStats()
+    companies_polled = 0
+    jobs_upserted = 0
+    failures = 0
     for source in enabled_aggregator_sources():
         try:
             jobs = await source.fetch(client=client)
@@ -104,16 +107,20 @@ async def poll_enabled_aggregators(
                 jobs=jobs,
                 now=now,
             )
-            stats.aggregators_polled += 1
-            stats.aggregator_jobs_upserted += count
+            companies_polled += 1
+            jobs_upserted += count
         except Exception as exc:  # noqa: BLE001
-            stats.aggregator_failures += 1
+            failures += 1
             log.warning(
                 "career_watch_aggregator_poll_failed",
                 aggregator=source.id,
                 error=str(exc),
             )
-    return stats
+    return PollStats(
+        aggregators_polled=companies_polled,
+        aggregator_jobs_upserted=jobs_upserted,
+        aggregator_failures=failures,
+    )
 
 
 async def poll_due_companies(
@@ -127,22 +134,24 @@ async def poll_due_companies(
     companies = await _due_companies_global_then_watchlist(
         session, limit=limit, now=now
     )
-    stats = PollStats()
+    companies_polled = 0
+    jobs_upserted = 0
+    failures = 0
     async with httpx.AsyncClient() as client:
         for company in companies:
             try:
                 count = await poll_company(session, company, client=client, now=now)
-                stats.companies_polled += 1
-                stats.jobs_upserted += count
+                companies_polled += 1
+                jobs_upserted += count
             except Exception:
-                stats.failures += 1
+                failures += 1
         agg_stats = await poll_enabled_aggregators(
             session, client=client, now=now
         )
         stats = PollStats(
-            companies_polled=stats.companies_polled,
-            jobs_upserted=stats.jobs_upserted,
-            failures=stats.failures,
+            companies_polled=companies_polled,
+            jobs_upserted=jobs_upserted,
+            failures=failures,
             aggregators_polled=agg_stats.aggregators_polled,
             aggregator_jobs_upserted=agg_stats.aggregator_jobs_upserted,
             aggregator_failures=agg_stats.aggregator_failures,

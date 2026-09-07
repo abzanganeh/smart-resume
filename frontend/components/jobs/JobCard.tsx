@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -17,6 +17,7 @@ import {
 import { clsx } from "clsx"
 import {
   fitJob,
+  getJobFit,
   formatMatchScore,
   formatPostedDate,
   formatSalaryRange,
@@ -59,7 +60,10 @@ export function JobCard({
 }: Props) {
   const router = useRouter()
   const [fitResult, setFitResult] = useState<FitAnalysisOutput | null>(null)
+  const [fitAnalysisId, setFitAnalysisId] = useState<string | null>(null)
+  const [fitExpanded, setFitExpanded] = useState(false)
   const [fitLoading, setFitLoading] = useState(false)
+  const [fitHydrating, setFitHydrating] = useState(false)
   const [fitError, setFitError] = useState<string | null>(null)
   const [saveLoading, setSaveLoading] = useState(false)
   const [trackLoading, setTrackLoading] = useState(false)
@@ -69,14 +73,43 @@ export function JobCard({
   const salary = formatSalaryRange(job)
   const showNewBadge = isJobNew(job)
   const matchScoreLabel = formatMatchScore(job.score)
+  const hasFit = fitResult !== null
+
+  useEffect(() => {
+    if (!accessToken || blurred) return
+    let cancelled = false
+    setFitHydrating(true)
+    void getJobFit(accessToken, job.id)
+      .then((res) => {
+        if (cancelled || !res) return
+        setFitResult(res.result)
+        setFitAnalysisId(res.analysis_id)
+      })
+      .catch(() => {
+        // Non-fatal — user can still run Check Fit once.
+      })
+      .finally(() => {
+        if (!cancelled) setFitHydrating(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, blurred, job.id])
 
   const handleCheckFit = async () => {
-    if (blurred || fitLoading) return
+    if (blurred || fitLoading || fitHydrating) return
+    if (hasFit) {
+      setFitExpanded(true)
+      return
+    }
     setFitLoading(true)
     setFitError(null)
+    setFitExpanded(false)
     try {
       const res = await fitJob(accessToken, job.id)
       setFitResult(res.result)
+      setFitAnalysisId(res.analysis_id)
+      setFitExpanded(true)
     } catch (e) {
       setFitError(userFacingError(e).message)
     } finally {
@@ -201,7 +234,7 @@ export function JobCard({
         {fitResult && (
           <div
             data-testid={`job-fit-score-${job.id}`}
-            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 px-4 py-3"
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 px-4 py-3 space-y-2"
           >
             <p className="text-sm text-slate-700 dark:text-slate-300">
               Fit score:{" "}
@@ -209,7 +242,54 @@ export function JobCard({
                 {fitResult.overall_fit_score}/100 ({fitResult.fit_label})
               </span>
             </p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">{fitResult.recommendation}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {fitResult.recommendation}
+            </p>
+            {fitExpanded && (
+              <div className="grid gap-3 sm:grid-cols-2 pt-1 border-t border-slate-200/80 dark:border-slate-800/80">
+                {fitResult.key_strengths.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500 mb-1">
+                      Strengths
+                    </p>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                      {fitResult.key_strengths.map((item) => (
+                        <li key={item}>+ {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {fitResult.key_gaps.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500 mb-1">
+                      Gaps
+                    </p>
+                    <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                      {fitResult.key_gaps.map((item) => (
+                        <li key={item}>− {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setFitExpanded((open) => !open)}
+                className="text-xs font-medium text-amber-800 dark:text-amber-300 hover:underline"
+              >
+                {fitExpanded ? "Hide details" : "Show strengths & gaps"}
+              </button>
+              {fitAnalysisId && (
+                <Link
+                  href={`/fit?analysis=${fitAnalysisId}`}
+                  className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
+                  Full report →
+                </Link>
+              )}
+            </div>
           </div>
         )}
 
@@ -220,15 +300,15 @@ export function JobCard({
           <button
             type="button"
             onClick={handleCheckFit}
-            disabled={fitLoading || blurred}
+            disabled={fitLoading || fitHydrating || blurred}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm hover:border-slate-600 disabled:opacity-40"
           >
-            {fitLoading ? (
+            {fitLoading || fitHydrating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Target className="w-4 h-4" />
             )}
-            Check Fit
+            {hasFit ? "View fit" : "Check Fit"}
           </button>
           <Link
             href={`/session/new?jd_id=${job.id}&source=jobs`}

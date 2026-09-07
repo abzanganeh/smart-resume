@@ -712,6 +712,26 @@ def _first_price_id(stripe_subscription_obj: dict[str, Any]) -> str | None:
     return price.get("id") if isinstance(price, dict) else getattr(price, "id", None)
 
 
+def _subscription_period_bounds(
+    obj: dict[str, Any],
+) -> tuple[datetime | None, datetime | None]:
+    """Read billing period from subscription or first subscription item.
+
+    Stripe API 2026+ often omits ``current_period_*`` on the subscription
+    object and places them on ``items.data[0]`` instead.
+    """
+    start = _ts_to_dt(obj.get("current_period_start"))
+    end = _ts_to_dt(obj.get("current_period_end"))
+    if start is not None and end is not None:
+        return start, end
+    items = (obj.get("items") or {}).get("data") or []
+    if items:
+        item = items[0] if isinstance(items[0], dict) else {}
+        start = start or _ts_to_dt(item.get("current_period_start"))
+        end = end or _ts_to_dt(item.get("current_period_end"))
+    return start, end
+
+
 def _subscription_fields_from_event(obj: dict[str, Any]) -> dict[str, Any]:
     """Translate the Stripe subscription payload into ORM-ready fields.
 
@@ -734,13 +754,14 @@ def _subscription_fields_from_event(obj: dict[str, Any]) -> dict[str, Any]:
     elif cancel_at_period_end and status == SubscriptionStatus.active:
         status = SubscriptionStatus.cancel_at_period_end
 
+    period_start, period_end = _subscription_period_bounds(obj)
+    now = datetime.now(timezone.utc)
+
     return {
         "status": status,
         "trial_ends_at": _ts_to_dt(obj.get("trial_end")),
-        "period_start": _ts_to_dt(obj.get("current_period_start"))
-        or datetime.now(timezone.utc),
-        "period_end": _ts_to_dt(obj.get("current_period_end"))
-        or datetime.now(timezone.utc),
+        "period_start": period_start or now,
+        "period_end": period_end or now,
         "cancel_at_period_end": cancel_at_period_end,
         "paused_at": _ts_to_dt(
             (pause_collection or {}).get("paused_at")

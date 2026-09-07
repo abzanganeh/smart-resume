@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -375,6 +375,8 @@ function HistoryPanel({
 
 function FitPageContent() {
   const { session, status } = useRequireAuth("/fit");
+  const searchParams = useSearchParams();
+  const analysisFromUrl = searchParams.get("analysis");
   const [pageTab, setPageTab] = useState<PageTab>("analyze");
   const [inputTab, setInputTab] = useState<InputTab>("paste");
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
@@ -479,6 +481,28 @@ function FitPageContent() {
       setError(e instanceof Error ? e.message : "Failed to load analysis.");
     }
   };
+
+  useEffect(() => {
+    if (!token || !analysisFromUrl || subscribed !== true) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const detail = await getFitDetail(token, analysisFromUrl);
+        if (cancelled) return;
+        setResult(detail.result);
+        setResultJd(detail.jd_text);
+        setPageTab("analyze");
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load analysis.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, analysisFromUrl, subscribed]);
 
   if (status === "loading" || !session || subscribed === null) {
     return (

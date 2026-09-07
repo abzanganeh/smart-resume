@@ -82,6 +82,45 @@ async def test_bootstrap_creates_super_admin_once(
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_backfills_app_user_password_on_skip(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When super-admin already exists, linked User rows missing password_hash get backfilled."""
+    from app.models.user import AuthProvider, User
+
+    monkeypatch.setattr(settings, "BOOTSTRAP_SUPER_ADMIN_EMAIL", "boot@example.com")
+    monkeypatch.setattr(
+        settings, "BOOTSTRAP_SUPER_ADMIN_PASSWORD", "S3cur3-Test-Password!"
+    )
+    monkeypatch.setattr(settings, "APP_ENV", "staging")
+
+    res1 = await bootstrap_super_admin(db_session)
+    assert res1.created is True
+    await db_session.commit()
+
+    app_user = (
+        await db_session.execute(
+            select(User).where(User.email == "boot@example.com")
+        )
+    ).scalar_one()
+    app_user.password_hash = None
+    await db_session.commit()
+
+    res2 = await bootstrap_super_admin(db_session)
+    assert res2.created is False
+    assert res2.skipped_reason == "bootstrap_skipped_existing_admin"
+    await db_session.commit()
+
+    app_user = (
+        await db_session.execute(
+            select(User).where(User.email == "boot@example.com")
+        )
+    ).scalar_one()
+    assert app_user.password_hash is not None
+    assert app_user.auth_provider == AuthProvider.email
+
+
+@pytest.mark.asyncio
 async def test_bootstrap_skipped_when_email_unset(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
