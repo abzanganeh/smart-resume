@@ -46,6 +46,7 @@ import { getProfileResume, type ProfileResume } from "@/lib/profile"
 import { getJobPreferences } from "@/lib/jobs"
 import { getApplicationFunnel } from "@/lib/tracker"
 import { DashboardStepStack } from "@/components/dashboard/DashboardStepStack"
+import { summarizeMasterResume } from "@/lib/masterResumeSummary"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -194,6 +195,7 @@ export function DashboardView({ token }: { token: string }) {
   const masterChunkCount =
     masterProfile?.chunk_count ?? summary?.counts.master_chunks ?? 0
   const hasMasterResume = masterChunkCount > 0
+  const masterResumeDetail = summarizeMasterResume(masterProfile?.parsed_sections)
 
   const loadSummary = useCallback(async () => {
     const data = await getDashboardSummary(token)
@@ -495,7 +497,7 @@ export function DashboardView({ token }: { token: string }) {
 
       <DashboardStepStack
         hasMasterResume={hasMasterResume}
-        masterChunkCount={masterChunkCount}
+        masterResumeDetail={masterResumeDetail}
         masterUpdatedAt={masterProfile?.last_embedded_at ?? null}
         jobRolesReady={jobRolesReady}
         jobRolesStale={jobRolesStale}

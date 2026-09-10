@@ -10,6 +10,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.master_resume import MasterResume
+from app.services.master_resume.summary import summarize_parsed_sections
 from app.models.notifications import Notification
 from app.models.dashboard import AtsRecalcType, AtsScoreHistory, ResumeRecord
 from app.models.jobs import JobSearchLog, SavedJob
@@ -31,12 +32,13 @@ async def build_recent_activity(
         )
     ).scalar_one_or_none()
     if master is not None and master.chunk_count > 0:
+        detail = summarize_parsed_sections(master.parsed_sections) or "indexed"
         events.append(
             {
                 "type": "master_resume",
                 "at": master.updated_at or master.created_at,
                 "title": "Master resume indexed",
-                "subtitle": f"{master.chunk_count} searchable segment{'s' if master.chunk_count != 1 else ''} indexed",
+                "subtitle": detail,
                 "meta": {"chunk_count": master.chunk_count},
             }
         )
