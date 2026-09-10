@@ -6,10 +6,43 @@ import { formatMatchScore, matchJobs } from "@/lib/jobs"
 let mockResponses: Array<{ status: number; body: unknown }> = []
 let lastFetch: { url: string; init?: RequestInit } | null = null
 const originalFetch = globalThis.fetch
+const OriginalBroadcastChannel = globalThis.BroadcastChannel
+
+function hrefOf(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
 
 before(() => {
-  globalThis.fetch = ((url: string, init?: RequestInit) => {
-    lastFetch = { url, init }
+  // Node 20's BroadcastChannel keeps the test process alive after getSession().
+  globalThis.BroadcastChannel = class {
+    readonly name: string
+    onmessage: ((ev: MessageEvent) => void) | null = null
+    onmessageerror: ((ev: MessageEvent) => void) | null = null
+    constructor(name: string) {
+      this.name = name
+    }
+    postMessage(): void {}
+    addEventListener(): void {}
+    removeEventListener(): void {}
+    close(): void {}
+    dispatchEvent(): boolean {
+      return false
+    }
+  } as unknown as typeof BroadcastChannel
+
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const href = hrefOf(input)
+    // next-auth getSession() fetches /api/auth/session before jobsRequest().
+    if (href.includes("/api/auth/") || href.endsWith("/session")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      } as unknown as Response)
+    }
+    lastFetch = { url: href, init }
     const next = mockResponses.shift()
     if (!next) throw new Error("no mock response queued")
     return Promise.resolve({
@@ -27,6 +60,7 @@ afterEach(() => {
 
 after(() => {
   globalThis.fetch = originalFetch
+  globalThis.BroadcastChannel = OriginalBroadcastChannel
 })
 
 describe("formatMatchScore", () => {
