@@ -90,7 +90,7 @@ Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
 
 | Scanner | Baseline (2026-08-22) | Owner action |
 |---|---|---|
-| `pnpm audit --audit-level=high` (frontend) | **Blocking** (2026-08-22): `next@16.2.11`, `next-auth@5.0.0-beta.32`, pnpm overrides for transitive `nanoid`, `postcss`, `sharp`, `js-yaml`, `brace-expansion` | Re-run audit on each frontend dep bump | Ongoing Dependabot |
+| `pnpm audit --audit-level=high` (frontend) | **Blocking** (2026-09-10): `next@16.3.3`, `next-auth@5.0.0-beta.32`, pnpm overrides for transitive `nanoid`, `postcss`, `sharp>=0.35.4`, `js-yaml`, `brace-expansion` | Re-run audit on each frontend dep bump | Ongoing Dependabot |
 | `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately |
 | Container image scan (Trivy) | **N/A** — CI does not build or publish Docker images | Add Trivy when a container build job lands in CI |
 | Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates |
