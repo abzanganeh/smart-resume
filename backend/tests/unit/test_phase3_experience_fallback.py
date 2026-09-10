@@ -98,7 +98,31 @@ def test_empty_parsed_resume_still_records_fallback_note() -> None:
     assert any("fallback" in n.lower() for n in result.rewrite_notes)
 
 
-def test_non_hollow_output_unchanged() -> None:
+def test_partial_hollow_entry_gets_bullets_from_parsed() -> None:
+    output = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(company="Acme", bullets=["Existing bullet."]),
+            TailoredExperienceEntry(company="Acceptto", bullets=[]),
+        ]
+    )
+    parsed = ParsedResume(
+        experience=[
+            ExperienceEntry(company="Acceptto", bullets=["Parsed Acceptto bullet."]),
+        ]
+    )
+    result = apply_experience_fallback(
+        output,
+        resume_parsed=parsed,
+        phase2_output=None,
+        prior_output=None,
+        must_have_keywords=None,
+    )
+    assert result.experience[0].bullets == ["Existing bullet."]
+    assert result.experience[1].bullets == ["Parsed Acceptto bullet."]
+    assert any("restored bullets" in n.lower() for n in result.rewrite_notes)
+
+
+def test_non_hollow_output_with_all_bullets_unchanged() -> None:
     output = TailoredResumeOutput(
         experience=[TailoredExperienceEntry(company="Acme", bullets=["Existing bullet."])]
     )

@@ -68,15 +68,11 @@ def _rate_limit_user_key(request: Request) -> str:
 
 
 async def _fetch_jd_from_url(url: str) -> str:
-    from app.parsers.html_parser import strip_html_to_text
+    from app.services.jd_fetch import fetch_jd_from_url
+
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(
-                url,
-                headers={"User-Agent": f"Mozilla/5.0 (compatible; {PRODUCT_NAME}/1.0)"},
-            )
-            resp.raise_for_status()
-            return strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)
+        fetched = await fetch_jd_from_url(url, max_chars=settings.MAX_JD_CHARS)
+        return fetched.text
     except Exception as exc:
         log.warning("fit.jd_fetch_failed", url=url, error=str(exc))
         raise HTTPException(status_code=422, detail="Could not fetch JD from URL.") from exc

@@ -149,6 +149,62 @@ async def test_subscriber_search_limit_from_tier_limits() -> None:
 
 
 @pytest.mark.asyncio
+async def test_subscriber_resume_limit_raises_not_credit_fallback() -> None:
+    """Pro at resume cap must hard-stop — not fall through to free credits."""
+    from app.services.billing.exceptions import PlanLimitReachedError
+
+    now = datetime.now(timezone.utc)
+    mock_sub = MagicMock()
+    mock_sub.id = uuid4()
+    mock_sub.status = SubscriptionStatus.active
+    mock_sub.period_start = now - timedelta(days=1)
+    mock_sub.period_end = now + timedelta(days=29)
+    mock_sub.plan = SubscriptionPlan.monthly
+    mock_sub.billing_cycle = SubscriptionBillingCycle.recurring
+    mock_sub.stripe_price_id = "price_pro"
+    mock_sub.resumes_used = 50
+    mock_sub.searches_used = 0
+
+    mock_user = MagicMock(is_suspended=False, id=uuid4())
+    mock_db = AsyncMock()
+
+    limits = TierLimits(
+        plan_code="monthly_pro",
+        resumes_per_period=50,
+        cover_letters_per_period=50,
+        searches_per_period=100,
+        fit_analyses_per_period=50,
+        checkups_per_period=None,
+        story_sessions=None,
+        coached_sessions=None,
+        whisper_enabled=True,
+        whisper_uses_per_period=5,
+        tracker_active_limit=None,
+        soft_cap_message=None,
+    )
+
+    with patch(
+        "app.services.billing.quota._active_subscription_for",
+        return_value=mock_sub,
+    ), patch(
+        "app.services.billing.quota._tier_limits_for_user",
+        new_callable=AsyncMock,
+        return_value=limits,
+    ), patch(
+        "app.services.billing.quota.consume_credit",
+        new_callable=AsyncMock,
+    ) as mock_consume:
+        with pytest.raises(PlanLimitReachedError) as exc_info:
+            await check_and_increment_quota(
+                mock_db, user=mock_user, action=QuotaAction.ats_recalc
+            )
+
+    assert exc_info.value.used == 50
+    assert exc_info.value.limit == 50
+    mock_consume.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_story_byok_path_removed_whisper_gated() -> None:
     """Whisper path invokes tier gate before story quota."""
     mock_db = AsyncMock()

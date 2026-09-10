@@ -585,8 +585,18 @@ function SessionContent() {
     if (runInFlightRef.current) return;
     setPhase4RecalcActive(true);
     setAtsRecalcRunning(true);
+    if (tailored) {
+      try {
+        await persistTailoredBeforeExport();
+      } catch {
+        setRunError("Could not save resume changes before recalculating. Please try again.");
+        setAtsRecalcRunning(false);
+        setPhase4RecalcActive(false);
+        return;
+      }
+    }
     await runPhase("export", { force: true });
-  }, [runPhase]);
+  }, [runPhase, persistTailoredBeforeExport, tailored]);
 
   const recalculateAtsWithConfirm = useCallback(() => {
     requestCreditAction("Recalculate ATS score", () => {
@@ -658,7 +668,10 @@ function SessionContent() {
       setProgressLog((prev) => [...prev, lastEvent.message!]);
     }
     if (lastEvent.event === "partial" && lastEvent.data && lastEvent.phase !== undefined) {
-      applyPhaseOutputByNumber(lastEvent.phase, lastEvent.data);
+      // Phase 4 partial can briefly carry pre-override LLM scores; wait for done.
+      if (lastEvent.phase !== 4) {
+        applyPhaseOutputByNumber(lastEvent.phase, lastEvent.data);
+      }
     }
     if (lastEvent.event === "cost_estimate" && lastEvent.cost_formatted) {
       setCostInfo({

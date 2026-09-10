@@ -32,6 +32,11 @@ RULES FOR PATCHES:
 2. For experience bullets: copy bullet_old EXACTLY as it appears — even one character difference breaks matching.
 3. For experience title or date changes: set company to the exact company name from the JSON (copy from experience[].company). Set new_title and/or new_dates only — never put dates in bullet_old/bullet_new. Use en-dash format for dates (e.g. "2016 – 2022", "2025 – Present").
 3a. For education changes: set institution to the exact education[].institution string. Use new_institution to rename (e.g. Interview Kickstart → IK). Use add_education_bullets to append bullets (e.g. capstone score). Never use section=education with only a description — always set institution plus the field you are changing.
+3b. For adding a NEW experience row not yet in experience[]: section="experience", new_experience={title, company, dates, bullets[]}.
+3c. For reordering experience: section="experience", company=EXACT experience[].company, move_direction="up" or "down".
+3d. For appending a bullet under an existing role: section="experience", company=EXACT experience[].company, add_bullet="..." (do not use bullet_old when adding).
+3e. For adding a NEW education row: section="education", new_education={degree, institution, year, bullets[]}.
+3f. For reordering education: section="education", institution=EXACT education[].institution, move_direction="up" or "down".
 4. For skills: use add_skills / remove_skills only for skills changes.
 5. For summary rewrites: provide the full new_summary text.
 6. For removing projects: section="projects", remove_projects=[...] with names copied EXACTLY from projects[].name in the JSON.
@@ -58,7 +63,7 @@ RULES FOR PATCHES:
 9. If the user asks to quantify a bullet: if they provide the numbers, incorporate them. If not, ask.
 10. If the request cannot become a patch (target not in resume JSON, already removed, or ambiguous): set patches=[] and explain clearly in reply — e.g. "I don't see Awards in your resume; it may already be removed. Use the trash icon on an experience row to delete entries manually."
 11. Keep patches minimal — only change what was asked.
-12. NEVER emit a patch that references a section, company, project, or institution that is not present in the resume JSON above.
+12. NEVER emit a patch that references a company, project, or institution for edits/deletes/reorders unless it is present in the resume JSON — except new_experience and new_education which intentionally add rows.
 
 PATCH LIMITS:
 - Maximum 3 patches per reply.

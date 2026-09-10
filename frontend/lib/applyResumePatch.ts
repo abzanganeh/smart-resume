@@ -353,6 +353,68 @@ export function applyResumePatch(
     }
   }
 
+  if (effectivePatch.section === "experience" && effectivePatch.new_experience) {
+    const raw = effectivePatch.new_experience;
+    const entry: TailoredExperience = {
+      title: (raw.title ?? "").trim() || "Role",
+      company: (raw.company ?? "").trim() || "Company",
+      dates: (raw.dates ?? "").trim(),
+      bullets: (raw.bullets ?? []).map((b) => b.trim()).filter(Boolean),
+      removed_bullets: [],
+      keywords_injected: [],
+    };
+    updated.experience = [...updated.experience, entry];
+    return { updated, applied: true };
+  }
+
+  if (
+    effectivePatch.section === "experience" &&
+    effectivePatch.company?.trim() &&
+    effectivePatch.move_direction
+  ) {
+    const idx = findExperienceIndex(updated.experience, effectivePatch.company);
+    if (idx < 0) {
+      return {
+        updated,
+        applied: false,
+        failureReason: "Company name did not match any experience entry.",
+      };
+    }
+    const swapWith =
+      effectivePatch.move_direction === "up" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= updated.experience.length) {
+      return { updated, applied: false, failureReason: "Cannot move entry further in that direction." };
+    }
+    const next = [...updated.experience];
+    [next[idx], next[swapWith]] = [next[swapWith]!, next[idx]!];
+    updated.experience = next;
+    return { updated, applied: true };
+  }
+
+  if (
+    effectivePatch.section === "experience" &&
+    effectivePatch.company?.trim() &&
+    effectivePatch.add_bullet?.trim()
+  ) {
+    const idx = findExperienceIndex(updated.experience, effectivePatch.company);
+    if (idx < 0) {
+      return {
+        updated,
+        applied: false,
+        failureReason: "Company name did not match any experience entry.",
+      };
+    }
+    const exp = updated.experience[idx]!;
+    const bullet = effectivePatch.add_bullet.trim();
+    if (exp.bullets.includes(bullet)) {
+      return { updated, applied: false, failureReason: "That bullet already exists under this role." };
+    }
+    updated.experience = updated.experience.map((e, i) =>
+      i === idx ? { ...e, bullets: [...e.bullets, bullet] } : e,
+    );
+    return { updated, applied: true };
+  }
+
   if (effectivePatch.section === "experience" && effectivePatch.company?.trim()) {
     const idx = findExperienceIndex(updated.experience, effectivePatch.company);
     if (idx >= 0) {
@@ -403,6 +465,42 @@ export function applyResumePatch(
         failureReason: "Company name did not match any experience entry.",
       };
     }
+  }
+
+  if (effectivePatch.section === "education" && effectivePatch.new_education) {
+    const raw = effectivePatch.new_education;
+    const entry: TailoredEducation = {
+      degree: (raw.degree ?? "").trim(),
+      institution: (raw.institution ?? "").trim() || "Institution",
+      year: (raw.year ?? "").trim(),
+      bullets: (raw.bullets ?? []).map((b) => b.trim()).filter(Boolean),
+    };
+    updated.education = [...updated.education, entry];
+    return { updated, applied: true };
+  }
+
+  if (
+    effectivePatch.section === "education" &&
+    effectivePatch.institution?.trim() &&
+    effectivePatch.move_direction
+  ) {
+    const idx = findEducationIndex(updated.education, effectivePatch.institution);
+    if (idx < 0) {
+      return {
+        updated,
+        applied: false,
+        failureReason: "Institution name did not match any education entry.",
+      };
+    }
+    const swapWith =
+      effectivePatch.move_direction === "up" ? idx - 1 : idx + 1;
+    if (swapWith < 0 || swapWith >= updated.education.length) {
+      return { updated, applied: false, failureReason: "Cannot move entry further in that direction." };
+    }
+    const next = [...updated.education];
+    [next[idx], next[swapWith]] = [next[swapWith]!, next[idx]!];
+    updated.education = next;
+    return { updated, applied: true };
   }
 
   if (effectivePatch.section === "education" && effectivePatch.institution?.trim()) {

@@ -23,9 +23,17 @@ export const PRIVACY_EMAIL = "privacy@zanganehai.com" as const;
 /** Customized / enterprise plan inquiries from the public pricing grid. */
 export const SALES_INQUIRY_EMAIL = "privacy@zanganehai.com" as const;
 
-/** Text wordmark PNGs — replace in place when art updates. */
+/** FlintApply text wordmark PNGs — replace in place when art updates. */
 export const WORDMARK_LIGHT_SRC = "/brand/flintapply-wordmark-light.png" as const;
 export const WORDMARK_DARK_SRC = "/brand/flintapply-wordmark-dark.png" as const;
+
+/** FlintApply square app icon (`mark.png` is the canonical path used by `BrandLogo`). */
+export const FLINTAPPLY_ICON_SRC = "/brand/mark.png" as const;
+
+/** The Flint AI company brand assets (umbrella org behind FlintApply). */
+export const COMPANY_WORDMARK_SRC = "/brand/flint-ai-wordmark.png" as const;
+export const COMPANY_LOCKUP_SRC = "/brand/flint-ai-lockup.png" as const;
+export const COMPANY_ICON_SRC = "/brand/flint-ai-icon.png" as const;
 
 /**
  * Framed product marketing shot — used by `ProductScreenshot` in inline
@@ -66,17 +74,3 @@ export function productScreenshotAlt(): string {
   return `${PRODUCT_NAME} — AI resume tailoring and ATS optimization, framed brand mockup`;
 }
 
-/**
- * Legacy TalioCV filenames still served until FlintApply art ships.
- * Replace each path and remove the row when the new asset lands.
- */
-export const LEGACY_ASSET_REPLACEMENTS = [
-  { path: "/brand/taliocv-2-lockup.png", replaceWith: "Retired — use flintapply-wordmark-*.png" },
-  { path: "/brand/taliocv-2.svg", replaceWith: "FlintApply vector lockup" },
-  { path: "/brand/mark.png", replaceWith: "FlintApply app icon" },
-  { path: "/brand/mark.svg", replaceWith: "FlintApply icon SVG" },
-  { path: "/marketing/taliocv-hero.jpg", replaceWith: "Retired — use flintapply-hero.jpg" },
-  { path: "/brand/taliocv-mini.svg", replaceWith: "FlintApply compact mark" },
-  { path: "/brand/taliocv-1.svg", replaceWith: "Retire or replace with FlintApply mark set" },
-  { path: "/brand/taliocv-2-mini.svg", replaceWith: "FlintApply mini lockup" },
-] as const;

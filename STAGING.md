@@ -289,7 +289,32 @@ At `/admin/llm`, **Per-Tier Step Pins** override global step pins per `plan_code
 
 ### Extension & autofill (manual)
 
-Requires `EXTENSION_AUTH_ENABLED=true` and a browser with the Flint Apply browser extension loaded.
+Requires `EXTENSION_AUTH_ENABLED=true` (default) and the **Flint Apply browser extension** built for the same API/frontend URLs as staging.
+
+**Local staging sim — extension env** (repo `flint-extension`, sibling of `smart-resume`):
+
+```bash
+# From smart-resume (copies GOOGLE_CLIENT_ID from backend/.env.staging when set)
+./scripts/sync-extension-staging-env.sh
+
+cd ../flint-extension
+npm run build
+# chrome://extensions → Reload unpacked extension (dist/)
+```
+
+Or manually: `cp .env.staging .env && npm run build` in `flint-extension`.
+
+| Variable | Local staging value |
+|----------|---------------------|
+| `VITE_API_BASE_URL` | `http://localhost:8001` |
+| `VITE_WEB_APP_BASE_URL` | `http://localhost:3001` |
+| `VITE_GOOGLE_CLIENT_ID` | same as `GOOGLE_CLIENT_ID` in `backend/.env.staging` |
+
+**Email/password:** use `BOOTSTRAP_SUPER_ADMIN_EMAIL` + `BOOTSTRAP_SUPER_ADMIN_PASSWORD` from `backend/.env.staging` (linked app user), or the password you set when registering on the web app. Extension hits `POST /api/auth/extension/login` — not the admin console.
+
+**Google SSO:** register `{FRONTEND_BASE_URL}/auth/extension/google/callback` on the same OAuth client (for local sim: `http://localhost:3001/auth/extension/google/callback`).
+
+Checklist:
 
 - [ ] Extension OAuth callback registered; sign-in from extension yields valid backend token
 - [ ] Capture JD on Greenhouse → tailor in web app → return to apply form

@@ -83,6 +83,16 @@ export default auth(async function proxy(req) {
     return redirectWithContentSecurityPolicy(onboardingUrl, nonce)
   }
 
+  if (
+    pathname === "/" &&
+    session?.backendAccessToken
+  ) {
+    return redirectWithContentSecurityPolicy(
+      new URL(postAuthLandingPath(session), req.url),
+      nonce,
+    )
+  }
+
   // Only bounce away from /auth when the backend token is present — a bare NextAuth
   // OAuth session without backend sync must stay here to show the error banner.
   if (

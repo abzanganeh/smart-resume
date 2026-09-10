@@ -13,6 +13,24 @@ class NewProject(BaseModel):
     bullets: list[str] = Field(default_factory=list)
 
 
+class NewExperienceEntry(BaseModel):
+    """A new experience row to append."""
+
+    title: str = ""
+    company: str = ""
+    dates: str = ""
+    bullets: list[str] = Field(default_factory=list)
+
+
+class NewEducationEntry(BaseModel):
+    """A new education row to append."""
+
+    degree: str = ""
+    institution: str = ""
+    year: str = ""
+    bullets: list[str] = Field(default_factory=list)
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -90,6 +108,27 @@ class ResumePatch(BaseModel):
             "Use for deleting manual rows (e.g. Awards). Only set when section='experience'."
         ),
     )
+    new_experience: NewExperienceEntry | None = Field(
+        default=None,
+        description=(
+            "Append a brand-new experience row. Use when the company is not yet in experience[]. "
+            "Only set when section='experience'."
+        ),
+    )
+    add_bullet: str | None = Field(
+        default=None,
+        description=(
+            "Append a bullet to the experience entry matched by company. "
+            "Only set when section='experience'."
+        ),
+    )
+    move_direction: Literal["up", "down"] | None = Field(
+        default=None,
+        description=(
+            "Move the matched experience or education entry one position up/down. "
+            "Pair with company (experience) or institution (education)."
+        ),
+    )
 
     # ── Certifications ───────────────────────────────────────────────────────
     remove_certifications: list[str] = Field(
@@ -132,6 +171,13 @@ class ResumePatch(BaseModel):
     education_bullet_new: str | None = Field(
         default=None,
         description="Replacement education bullet text.",
+    )
+    new_education: NewEducationEntry | None = Field(
+        default=None,
+        description=(
+            "Append a brand-new education row. Use when the institution is not yet in education[]. "
+            "Only set when section='education'."
+        ),
     )
 
     # ── Projects ─────────────────────────────────────────────────────────────

@@ -261,7 +261,9 @@ export interface AdminUser {
 }
 
 export interface AdminUserDetail extends AdminUser {
-  resume_count: number
+  resume_count?: number | null
+  subscription_resumes_used?: number | null
+  subscription_resumes_limit?: number | null
   credit_transactions: CreditTransaction[]
   login_history: LoginHistoryEntry[]
   signup_ip?: string | null

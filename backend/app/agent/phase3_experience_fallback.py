@@ -113,33 +113,68 @@ def apply_experience_fallback(
     must_have_keywords: list[str] | None,
 ) -> TailoredResumeOutput:
     del phase2_output  # reserved for future section-scoped hints
-    if not phase3_is_hollow(output):
-        return output
+    if phase3_is_hollow(output):
+        experience: list[TailoredExperienceEntry] = []
+        for norm_key in _company_keys(resume_parsed, prior_output):
+            bullets, title, company, dates = _bullets_for_company(
+                norm_key,
+                prior=prior_output,
+                parsed=resume_parsed,
+                must_have_keywords=must_have_keywords,
+            )
+            if not bullets:
+                continue
+            experience.append(
+                TailoredExperienceEntry(
+                    title=title,
+                    company=company,
+                    dates=dates,
+                    bullets=bullets,
+                )
+            )
 
-    experience: list[TailoredExperienceEntry] = []
-    for norm_key in _company_keys(resume_parsed, prior_output):
+        notes = list(output.rewrite_notes)
+        if _FALLBACK_NOTE not in notes:
+            notes.append(_FALLBACK_NOTE)
+
+        return output.model_copy(update={"experience": experience, "rewrite_notes": notes})
+
+    # Partial hollow: some roles exist but individual entries have no bullets.
+    notes = list(output.rewrite_notes)
+    updated: list[TailoredExperienceEntry] = []
+    changed = False
+    for entry in output.experience:
+        if any(b.strip() for b in entry.bullets):
+            updated.append(entry)
+            continue
         bullets, title, company, dates = _bullets_for_company(
-            norm_key,
+            _normalize_company(entry.company),
             prior=prior_output,
             parsed=resume_parsed,
             must_have_keywords=must_have_keywords,
         )
-        if not bullets:
-            continue
-        experience.append(
-            TailoredExperienceEntry(
-                title=title,
-                company=company,
-                dates=dates,
-                bullets=bullets,
+        if bullets:
+            changed = True
+            notes.append(
+                f"Restored bullets for {entry.company or company} — "
+                "LLM output left this role empty."
             )
-        )
+            updated.append(
+                entry.model_copy(
+                    update={
+                        "title": title or entry.title,
+                        "company": company or entry.company,
+                        "dates": dates or entry.dates,
+                        "bullets": bullets,
+                    }
+                )
+            )
+        else:
+            updated.append(entry)
 
-    notes = list(output.rewrite_notes)
-    if _FALLBACK_NOTE not in notes:
-        notes.append(_FALLBACK_NOTE)
-
-    return output.model_copy(update={"experience": experience, "rewrite_notes": notes})
+    if not changed:
+        return output
+    return output.model_copy(update={"experience": updated, "rewrite_notes": notes})
 
 
 __all__ = ["apply_experience_fallback"]
