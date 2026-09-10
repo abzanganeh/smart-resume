@@ -39,6 +39,7 @@ from app.services.bullet_fix_suggest import (
 )
 from app.services.auth.dependencies import assert_user_email_verified
 from app.services.session_ownership import resolve_bearer_user_id
+from app.services.session_store import get_session, update_session
 from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm_user_id
 from app.services.contact_normalize import sanitize_contact_url
 from app.services.resume_validation import validate_resume_text
