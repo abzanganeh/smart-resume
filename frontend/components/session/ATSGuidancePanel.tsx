@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, X, Zap } from "lucide-react";
-import { type BlockingIssue, type IssueAnchor, type QAOutput } from "@/lib/api";
+import { type BlockingIssue, type IssueAnchor, type QAOutput, type TailoredResumeOutput } from "@/lib/api";
+import { canApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
 
@@ -10,6 +11,10 @@ interface Props {
   output: QAOutput | null;
   streaming?: boolean;
   scoreHistory?: number[];
+  /** Same-rubric ATS score for the original resume before tailoring. */
+  originalAtsScore?: number | null;
+  /** Current tailored resume — used to decide if Apply fix can run. */
+  tailored?: TailoredResumeOutput | null;
   /** Issue keys greyed out after the user accepted a chat patch for them. */
   addressedKeys?: ReadonlySet<string>;
   /** Issue keys hidden after the user clicked Skip. */
@@ -156,26 +161,39 @@ function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
   );
 }
 
-function ScoreHistory({ scores }: { scores: number[] }) {
-  if (scores.length < 2) return null;
-
-  const baseline = scores[0];
+function ScoreHistory({
+  scores,
+  originalAtsScore,
+}: {
+  scores: number[];
+  originalAtsScore?: number | null;
+}) {
   const latest = scores[scores.length - 1];
+  const baseline =
+    typeof originalAtsScore === "number" ? originalAtsScore : scores[0];
+  if (latest === undefined || baseline === undefined) return null;
+  if (scores.length < 2 && typeof originalAtsScore !== "number") return null;
+  if (typeof originalAtsScore === "number" && latest === originalAtsScore) return null;
+
   const delta = latest - baseline;
   const trendUp = delta > 0;
   const unchanged = delta === 0;
+  const trendScores =
+    typeof originalAtsScore === "number"
+      ? [originalAtsScore, ...scores.filter((score) => score !== originalAtsScore)]
+      : scores;
 
   // Mini sparkline
   const w = 80;
   const h = 24;
   const pad = 3;
-  const min = Math.min(...scores, 0);
-  const max = Math.max(...scores, 100);
+  const min = Math.min(...trendScores, 0);
+  const max = Math.max(...trendScores, 100);
   const range = max - min || 1;
 
-  const points = scores
+  const points = trendScores
     .map((s, i) => {
-      const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+      const x = pad + (i / (trendScores.length - 1)) * (w - pad * 2);
       const y = h - pad - ((s - min) / range) * (h - pad * 2);
       return `${x},${y}`;
     })
@@ -188,7 +206,9 @@ function ScoreHistory({ scores }: { scores: number[] }) {
       {/* Baseline → current comparison */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-slate-600 dark:text-slate-400">Baseline</span>
+          <span className="text-slate-600 dark:text-slate-400">
+            {typeof originalAtsScore === "number" ? "Original resume" : "Baseline"}
+          </span>
           <span className="font-bold tabular-nums text-slate-600 dark:text-slate-400">{baseline}</span>
           <span className="text-slate-600 dark:text-slate-400">→</span>
           <span className="font-bold tabular-nums text-slate-800 dark:text-slate-200">Now {latest}</span>
@@ -223,8 +243,8 @@ function ScoreHistory({ scores }: { scores: number[] }) {
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {scores.map((s, i) => {
-            const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+          {trendScores.map((s, i) => {
+            const x = pad + (i / (trendScores.length - 1)) * (w - pad * 2);
             const y = h - pad - ((s - min) / range) * (h - pad * 2);
             return (
               <circle
@@ -232,12 +252,16 @@ function ScoreHistory({ scores }: { scores: number[] }) {
                 cx={x}
                 cy={y}
                 r={2.5}
-                fill={i === scores.length - 1 ? lineColor : "#475569"}
+                fill={i === trendScores.length - 1 ? lineColor : "#475569"}
               />
             );
           })}
         </svg>
-        <span className="text-[10px] text-slate-600 dark:text-slate-400">{scores.length} recalculations</span>
+        {scores.length >= 2 && (
+          <span className="text-[10px] text-slate-600 dark:text-slate-400">
+            {scores.length - 1} recalculation{scores.length - 1 === 1 ? "" : "s"} on this version
+          </span>
+        )}
       </div>
     </div>
   );
@@ -491,7 +515,11 @@ export function issueKey(issue: BlockingIssue): string {
 }
 
 function buildQuickWinChatMessage(issue: BlockingIssue): string {
-  return `Apply this quick win to my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nHow to fix: ${issue.suggestion}`;
+  const keywordHint =
+    issue.category === "keyword"
+      ? "\n\nPatch hint: use an existing employer/project from my resume — prefer section \"experience\" with add_bullet (or summary with new_summary). Do not invent company names like Asar unless that exact name is already on my resume."
+      : "";
+  return `Apply this quick win to my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nHow to fix: ${issue.suggestion}${keywordHint}`;
 }
 
 function buildBlockingChatMessage(issue: BlockingIssue): string {
@@ -510,6 +538,8 @@ export function ATSGuidancePanel({
   output,
   streaming = false,
   scoreHistory = [],
+  originalAtsScore = null,
+  tailored = null,
   addressedKeys = new Set<string>(),
   skippedKeys = new Set<string>(),
   onSkipIssue,
@@ -678,8 +708,8 @@ export function ATSGuidancePanel({
               </span>
             )}
           </div>
-          {scoreHistory.length >= 2 && (
-            <ScoreHistory scores={scoreHistory} />
+          {(scoreHistory.length >= 2 || typeof originalAtsScore === "number") && (
+            <ScoreHistory scores={scoreHistory} originalAtsScore={originalAtsScore} />
           )}
         </div>
       </div>
@@ -754,7 +784,10 @@ export function ATSGuidancePanel({
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
                 onApplyMechanical={
-                  onApplyMechanicalFix && !addressed
+                  onApplyMechanicalFix &&
+                  !addressed &&
+                  tailored &&
+                  canApplyMechanicalQuickWin(tailored, issue)
                     ? () => onApplyMechanicalFix(issue)
                     : undefined
                 }

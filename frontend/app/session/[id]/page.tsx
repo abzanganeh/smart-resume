@@ -32,7 +32,10 @@ import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
 import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
-import { tryApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
+import {
+  canApplyMechanicalQuickWin,
+  tryApplyMechanicalQuickWin,
+} from "@/lib/mechanicalFix";
 import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
@@ -59,8 +62,13 @@ import {
 } from "@/lib/trackApplicationFlow";
 import { TrackerApiError } from "@/lib/tracker";
 import { dispatchCreditsExhausted } from "@/lib/offerPopup";
+import {
+  defaultSessionStep,
+  normalizeSessionStep,
+  type SessionTailoringStep,
+} from "@/lib/sessionStep";
 
-type Step = "analysis" | "rewrite" | "export";
+type Step = SessionTailoringStep;
 
 const PHASE_FOR_STEP: Record<Exclude<Step, "analysis">, number> = {
   rewrite: 3,
@@ -75,17 +83,13 @@ const STEP_LABELS: Record<Step, string> = {
 
 type AnalysisPipeline = { mode: "full" | "audit-only"; phase: 1 | 2 };
 
-function normalizeStep(raw: string | null): Step {
-  if (raw === "keywords" || raw === "audit") return "analysis";
-  if (raw === "rewrite" || raw === "export") return raw;
-  return "analysis";
-}
-
 function SessionContent() {
   const { id: sessionId } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>(() => normalizeStep(searchParams.get("step")));
+  const [step, setStep] = useState<Step>(() =>
+    normalizeSessionStep(searchParams.get("step")),
+  );
 
   const [keywords, setKeywords] = useState<KeywordExtractionOutput | null>(null);
   const [audit, setAudit] = useState<AuditOutput | null>(null);
@@ -115,6 +119,7 @@ function SessionContent() {
   const [phase1Complete, setPhase1Complete] = useState(false);
   const [stale, setStale] = useState<Record<string, string | null>>({ "3": null, "4": null });
   const [atsScoreHistory, setAtsScoreHistory] = useState<number[]>([]);
+  const [originalAtsScore, setOriginalAtsScore] = useState<number | null>(null);
   const [pendingSuggestions, setPendingSuggestions] = useState<ResumeSuggestion[]>([]);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
@@ -149,8 +154,12 @@ function SessionContent() {
     (issue: import("@/lib/api").BlockingIssue) => {
       if (!tailored) return;
       const updated = tryApplyMechanicalQuickWin(tailored, issue);
-      if (!updated) return;
+      if (!updated) {
+        setRunError("Use Fix with AI for this item — Apply fix could not update your resume.");
+        return;
+      }
       setTailored(updated);
+      setEditorSyncKey((k) => k + 1);
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
       setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
       void saveTailoredResume(sessionId, updated).catch((err) => {
@@ -275,6 +284,9 @@ function SessionContent() {
     setPhase1Complete(!!s.phase1_complete);
     setHasJd(!!s.has_jd);
     setExportCompany(s.export_company ?? null);
+    setOriginalAtsScore(
+      typeof s.original_ats_score === "number" ? s.original_ats_score : null,
+    );
 
     const applyCached = (phaseNum: string) => {
       const cached = s.phases?.[phaseNum];
@@ -786,11 +798,19 @@ function SessionContent() {
     let cancelled = false;
     setSessionLoaded(false);
     setAtsScoreHistory([]);
+    setOriginalAtsScore(null);
 
     checkSession(sessionId)
       .then((s) => {
         if (cancelled) return;
         hydrateFromSession(s);
+        if (!searchParams.get("step")) {
+          const initial = defaultSessionStep(s);
+          if (initial !== "analysis") {
+            setStep(initial);
+            router.replace(`/session/${sessionId}?step=${initial}`, { scroll: false });
+          }
+        }
         trackRecentSession(sessionId, s.resume_raw?.slice(0, 40) || undefined);
         getVersions(sessionId)
           .then((r) => {
@@ -808,7 +828,7 @@ function SessionContent() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, hydrateFromSession]);
+  }, [sessionId, hydrateFromSession, router, searchParams]);
 
   useEffect(() => {
     runInFlightRef.current = false;
@@ -1191,6 +1211,7 @@ function SessionContent() {
                       output={audit}
                       streaming={auditStreaming}
                       sessionId={sessionId}
+                      originalAtsScore={originalAtsScore}
                       initialClaimedKeywords={sessionClaimedKeywords}
                       initialExtraNotes={sessionExtraNotes}
                       initialBulletFixes={sessionBulletFixes}
@@ -1432,6 +1453,8 @@ function SessionContent() {
                             output={qa}
                             streaming={atsRecalcRunning}
                             scoreHistory={atsScoreHistory}
+                            originalAtsScore={originalAtsScore}
+                            tailored={tailored}
                             variant="sidebar"
                             staleSince={stale["4"]}
                             onRecalculate={recalculateAtsWithConfirm}
@@ -1519,6 +1542,8 @@ function SessionContent() {
                   output={qa}
                   streaming={isStreaming && !showProgress}
                   scoreHistory={atsScoreHistory}
+                  originalAtsScore={originalAtsScore}
+                  tailored={tailored}
                   variant="primary"
                   staleSince={stale["4"]}
                   onRecalculate={recalculateAtsWithConfirm}
