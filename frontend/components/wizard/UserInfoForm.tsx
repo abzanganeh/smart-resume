@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Pencil } from "lucide-react";
 import { type ParsedResume, type UserInfoPayload } from "@/lib/api";
+import { sanitizeContactUrl } from "@/lib/contactUrls";
+import { inferJdTargetRole } from "@/lib/jdTargetRole";
 
 interface Props {
   onSubmit: (info: UserInfoPayload) => void;
@@ -11,6 +13,8 @@ interface Props {
   parsedResume?: ParsedResume | null;
   /** Raw JD text — used to detect AI/ML roles and show the transition toggle. */
   jdText?: string;
+  /** Structured title from JD fetch (e.g. Lever API), when available. */
+  jdTitle?: string | null;
 }
 
 const CAREER_STAGES: { value: UserInfoPayload["career_stage"]; label: string; hint: string }[] = [
@@ -44,16 +48,18 @@ function FilledBadge() {
   );
 }
 
-export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: Props) {
+export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "", jdTitle = null }: Props) {
   const contact = parsedResume?.contact;
   const resumeCerts = parsedResume?.certifications ?? [];
+  const linkedinFromResume = sanitizeContactUrl("linkedin", contact?.linkedin);
+  const githubFromResume = sanitizeContactUrl("github", contact?.github);
 
   const [form, setForm] = useState<UserInfoPayload>({
     name: contact?.name ?? "",
     email: contact?.email ?? "",
     phone: contact?.phone ?? "",
-    linkedin: contact?.linkedin ?? "",
-    github: contact?.github ?? "",
+    linkedin: linkedinFromResume,
+    github: githubFromResume,
     location: contact?.location ?? "",
     website: contact?.website ?? "",
     career_stage: "mid",
@@ -74,8 +80,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
       name:     f.name     || c.name     || "",
       email:    f.email    || c.email    || "",
       phone:    f.phone    || c.phone    || "",
-      linkedin: f.linkedin || c.linkedin || "",
-      github:   f.github   || c.github   || "",
+      linkedin: f.linkedin || sanitizeContactUrl("linkedin", c.linkedin) || "",
+      github:   f.github   || sanitizeContactUrl("github", c.github) || "",
       location: f.location || c.location || "",
       website:  f.website  || c.website  || "",
       certifications: f.certifications.length ? f.certifications : parsedResume.certifications,
@@ -83,18 +89,11 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
     if (!certsInput) setCertsInput(parsedResume.certifications.join(", "));
   }, [parsedResume]);
 
-  // Extension JD captures often lead with the role title on line 1.
   useEffect(() => {
-    if (!jdText.trim()) return;
-    const firstLine = jdText.trim().split("\n")[0]?.trim() ?? "";
-    const looksLikeTitle =
-      firstLine.length > 0 &&
-      firstLine.length <= 80 &&
-      !firstLine.includes("|") &&
-      !/^salary:/i.test(firstLine);
-    if (!looksLikeTitle) return;
-    setForm((f) => (f.target_role ? f : { ...f, target_role: firstLine }));
-  }, [jdText]);
+    const role = inferJdTargetRole(jdText, jdTitle);
+    if (!role) return;
+    setForm((f) => (f.target_role ? f : { ...f, target_role: role }));
+  }, [jdText, jdTitle]);
 
   const set = <K extends keyof UserInfoPayload>(key: K, value: UserInfoPayload[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -116,8 +115,8 @@ export function UserInfoForm({ onSubmit, loading, parsedResume, jdText = "" }: P
     name:     !!contact?.name,
     email:    !!contact?.email,
     phone:    !!contact?.phone,
-    linkedin: !!contact?.linkedin,
-    github:   !!contact?.github,
+    linkedin: !!linkedinFromResume,
+    github:   !!githubFromResume,
     certs:    resumeCerts.length > 0,
   };
 

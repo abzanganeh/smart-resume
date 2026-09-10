@@ -135,16 +135,14 @@ async def check_and_increment_quota(
         if action in RESUME_COUNTER_ACTIONS:
             limit = limits.resumes_per_period
             if sub.resumes_used >= limit:
-                if action not in FREE_CREDIT_ACTIONS:
-                    raise PlanLimitReachedError(action.value, sub.resumes_used, limit)
-            else:
-                sub.resumes_used += 1
-                await session.flush()
-                return QuotaDecision(
-                    action=action,
-                    charged_to="subscription_resume",
-                    subscription_id=sub.id,
-                )
+                raise PlanLimitReachedError(action.value, sub.resumes_used, limit)
+            sub.resumes_used += 1
+            await session.flush()
+            return QuotaDecision(
+                action=action,
+                charged_to="subscription_resume",
+                subscription_id=sub.id,
+            )
         elif action in SEARCH_COUNTER_ACTIONS:
             limit = limits.searches_per_period
             if sub.searches_used >= limit:

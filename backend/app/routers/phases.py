@@ -21,7 +21,12 @@ from app.llm.factory import get_llm_client_for_step
 from app.llm.model_registry import phase_step
 from app.limiter import limiter
 from app.models.audit import AuditOutput
-from app.models.rewrite import ResumeVersion, TailoredExperienceEntry, TailoredResumeOutput
+from app.models.rewrite import (
+    ResumeVersion,
+    TailoredEducationEntry,
+    TailoredExperienceEntry,
+    TailoredResumeOutput,
+)
 from app.models.session import PhaseRunScope, PhaseStatus
 from app.models.user import User
 from app.services.auth.dependencies import assert_user_email_verified
@@ -33,6 +38,7 @@ from app.services.billing.exceptions import (
     InsufficientCreditsError,
     PlanLimitReachedError,
     SubscriptionRequiredError,
+    plan_limit_reached_detail,
 )
 from app.services.billing.credit_spend import credits_locked_detail
 from app.services.billing.quota import (
@@ -229,15 +235,29 @@ async def trigger_phase(
                         status_code=403,
                         detail=credits_locked_detail(balance=exc.balance),
                     ) from exc
-                except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError):
+                except PlanLimitReachedError as exc:
+                    raise HTTPException(
+                        status_code=402,
+                        detail=plan_limit_reached_detail(exc),
+                    ) from exc
+                except SubscriptionRequiredError as exc:
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "subscription_required",
+                            "action": "resume_build",
+                            "message": "This feature requires an active subscription.",
+                        },
+                    ) from exc
+                except InsufficientCreditsError as exc:
                     raise HTTPException(
                         status_code=402,
                         detail={
                             "code": "insufficient_credits",
                             "action": "resume_build",
-                            "message": "You're out of credits or plan resume slots for this period.",
+                            "message": "You're out of credits. Resume tailoring costs 1 credit.",
                         },
-                    )
+                    ) from exc
 
     # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
     if phase == 4 and user_id and not should_skip_billing_quota():
@@ -263,7 +283,21 @@ async def trigger_phase(
                         status_code=403,
                         detail=credits_locked_detail(balance=exc.balance),
                     ) from exc
-                except (InsufficientCreditsError, PlanLimitReachedError, SubscriptionRequiredError) as exc:
+                except PlanLimitReachedError as exc:
+                    raise HTTPException(
+                        status_code=402,
+                        detail=plan_limit_reached_detail(exc),
+                    ) from exc
+                except SubscriptionRequiredError as exc:
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "subscription_required",
+                            "action": "ats_recalc",
+                            "message": "This feature requires an active subscription.",
+                        },
+                    ) from exc
+                except InsufficientCreditsError as exc:
                     raise HTTPException(
                         status_code=402,
                         detail={
@@ -589,6 +623,38 @@ async def patch_tailored_resume(session_id: str, body: dict):
             contact["name"] = str(body["new_name"]).strip()
             output.contact = contact
             label = "User edit: contact/name"
+        elif section == "experience" and body.get("add_experience") is not None:
+            raw = body["add_experience"]
+            if isinstance(raw, dict):
+                bullets_raw = raw.get("bullets") or []
+                bullets = [
+                    str(b).strip()
+                    for b in bullets_raw
+                    if isinstance(b, str) and str(b).strip()
+                ]
+                output.experience.append(
+                    TailoredExperienceEntry(
+                        title=str(raw.get("title", "")).strip() or "Role",
+                        company=str(raw.get("company", "")).strip() or "Company",
+                        dates=str(raw.get("dates", "")).strip(),
+                        bullets=bullets,
+                    )
+                )
+                label = "User edit: experience/add"
+        elif (
+            section == "experience"
+            and body.get("move_index") is not None
+            and body.get("move_direction") in ("up", "down")
+        ):
+            idx = int(body["move_index"])
+            swap_with = idx - 1 if body["move_direction"] == "up" else idx + 1
+            if 0 <= idx < len(output.experience) and 0 <= swap_with < len(
+                output.experience
+            ):
+                exp = list(output.experience)
+                exp[idx], exp[swap_with] = exp[swap_with], exp[idx]
+                output.experience = exp
+            label = f"User edit: experience/move/{body['move_direction']}"
         elif section == "experience" and company is not None and bullet_index is not None:
             for entry in output.experience:
                 if entry.company != company:
@@ -643,6 +709,38 @@ async def patch_tailored_resume(session_id: str, body: dict):
             output.skills = body.get("skills", output.skills)
             skills_edited = True
             label = "User edit: skills"
+        elif section == "education" and body.get("add_education") is not None:
+            raw = body["add_education"]
+            if isinstance(raw, dict):
+                bullets_raw = raw.get("bullets") or []
+                bullets = [
+                    str(b).strip()
+                    for b in bullets_raw
+                    if isinstance(b, str) and str(b).strip()
+                ]
+                output.education.append(
+                    TailoredEducationEntry(
+                        degree=str(raw.get("degree", "")).strip(),
+                        institution=str(raw.get("institution", "")).strip() or "School",
+                        year=str(raw.get("year", "")).strip(),
+                        bullets=bullets,
+                    )
+                )
+                label = "User edit: education/add"
+        elif (
+            section == "education"
+            and body.get("move_index") is not None
+            and body.get("move_direction") in ("up", "down")
+        ):
+            idx = int(body["move_index"])
+            swap_with = idx - 1 if body["move_direction"] == "up" else idx + 1
+            if 0 <= idx < len(output.education) and 0 <= swap_with < len(
+                output.education
+            ):
+                edu = list(output.education)
+                edu[idx], edu[swap_with] = edu[swap_with], edu[idx]
+                output.education = edu
+            label = f"User edit: education/move/{body['move_direction']}"
         elif section == "education" and bullet_index is not None:
             institution = body.get("institution")
             for entry in output.education:
@@ -687,7 +785,20 @@ async def patch_tailored_resume(session_id: str, body: dict):
                     label = f"User edit: certifications/delete/{idx}"
         elif section == "projects":
             project_index = body.get("project_index")
-            if body.get("delete") is True and project_index is not None:
+            if (
+                body.get("move_index") is not None
+                and body.get("move_direction") in ("up", "down")
+            ):
+                idx = int(body["move_index"])
+                swap_with = idx - 1 if body["move_direction"] == "up" else idx + 1
+                if 0 <= idx < len(output.projects) and 0 <= swap_with < len(
+                    output.projects
+                ):
+                    projs = list(output.projects)
+                    projs[idx], projs[swap_with] = projs[swap_with], projs[idx]
+                    output.projects = projs
+                label = f"User edit: projects/move/{body['move_direction']}"
+            elif body.get("delete") is True and project_index is not None:
                 idx = int(project_index)
                 if 0 <= idx < len(output.projects):
                     output.projects.pop(idx)

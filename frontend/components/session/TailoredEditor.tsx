@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronDown,
   ChevronUp,
@@ -64,6 +66,7 @@ import {
 } from "./SuggestionHighlight";
 import { EntryIssueBadgePill } from "./EntryIssueBadge";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { filterStaleRewriteNotes } from "@/lib/filterRewriteNotes";
 import { entryAnchorKey, resumeAnchorDomId, type EntryIssueBadge } from "@/lib/issueAnchors";
 
 interface Props {
@@ -523,6 +526,10 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
 
   const { present: data, push, replace, reset, undo, redo, canUndo, canRedo } = useVersionStack(initial);
+  const rewriteNotes = useMemo(
+    () => filterStaleRewriteNotes(data.rewrite_notes, data.experience),
+    [data.rewrite_notes, data.experience],
+  );
   const [draftText, setDraftText] = useState(suggestionDraft ?? "");
 
   useEffect(() => {
@@ -542,6 +549,16 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [newProjectBullets, setNewProjectBullets] = useState("");
+  const [addingExperience, setAddingExperience] = useState(false);
+  const [newExpTitle, setNewExpTitle] = useState("");
+  const [newExpCompany, setNewExpCompany] = useState("");
+  const [newExpDates, setNewExpDates] = useState("");
+  const [newExpBullets, setNewExpBullets] = useState("");
+  const [addingEducation, setAddingEducation] = useState(false);
+  const [newEduDegree, setNewEduDegree] = useState("");
+  const [newEduInstitution, setNewEduInstitution] = useState("");
+  const [newEduYear, setNewEduYear] = useState("");
+  const [newEduBullets, setNewEduBullets] = useState("");
   const [editingEduField, setEditingEduField] = useState<string | null>(null);
   const [editingEduValue, setEditingEduValue] = useState("");
   const [expandedEdu, setExpandedEdu] = useState<string | null>(null);
@@ -921,6 +938,74 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       projects: [...p.projects, project],
     }));
     dismissNewProjectSuggestions(suggestions, onDismissSuggestion, name);
+  }
+
+  async function addExperience(
+    title: string,
+    company: string,
+    dates: string,
+    bullets: string[],
+  ) {
+    const entry = {
+      title,
+      company,
+      dates,
+      bullets,
+      removed_bullets: [] as string[],
+      keywords_injected: [] as string[],
+    };
+    await patch({ section: "experience", add_experience: entry });
+    updateLocal((p) => ({
+      ...p,
+      experience: [...p.experience, entry],
+    }));
+  }
+
+  async function moveExperience(index: number, direction: "up" | "down") {
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= data.experience.length) return;
+    await patch({ section: "experience", move_index: index, move_direction: direction });
+    updateLocal((p) => {
+      const exp = [...p.experience];
+      [exp[index], exp[swapWith]] = [exp[swapWith], exp[index]];
+      return { ...p, experience: exp };
+    });
+  }
+
+  async function addEducation(
+    degree: string,
+    institution: string,
+    year: string,
+    bullets: string[],
+  ) {
+    const entry = { degree, institution, year, bullets };
+    await patch({ section: "education", add_education: entry });
+    updateLocal((p) => ({
+      ...p,
+      education: [...p.education, entry],
+    }));
+  }
+
+  async function moveEducation(index: number, direction: "up" | "down") {
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= data.education.length) return;
+    await patch({ section: "education", move_index: index, move_direction: direction });
+    updateLocal((p) => {
+      const edu = [...p.education];
+      [edu[index], edu[swapWith]] = [edu[swapWith], edu[index]];
+      return { ...p, education: edu };
+    });
+  }
+
+  async function moveProject(index: number, direction: "up" | "down") {
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= data.projects.length) return;
+    await patch({ section: "projects", move_index: index, move_direction: direction });
+    updateLocal((p) => {
+      const projects = [...p.projects];
+      [projects[index], projects[swapWith]] = [projects[swapWith], projects[index]];
+      return { ...p, projects };
+    });
   }
 
   async function deleteExpBullet(company: string, idx: number) {
@@ -1515,9 +1600,83 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       </section>
 
       {/* ── Experience ───────────────────────────────────────────────────── */}
-      {data.experience.length > 0 && (
-        <section>
+      <section>
+        <div className="flex items-center justify-between mb-3">
           <SectionHeader title="Experience" count={data.experience.length} />
+          <button
+            type="button"
+            onClick={() => setAddingExperience((v) => !v)}
+            className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-300"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add experience
+          </button>
+        </div>
+
+        {addingExperience && (
+          <div className="mb-4 border border-emerald-500/30 rounded-xl p-4 bg-emerald-50 dark:bg-emerald-950/10 space-y-2">
+            <input
+              autoFocus
+              value={newExpTitle}
+              onChange={(e) => setNewExpTitle(e.target.value)}
+              placeholder="Job title"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <input
+              value={newExpCompany}
+              onChange={(e) => setNewExpCompany(e.target.value)}
+              placeholder="Company"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <input
+              value={newExpDates}
+              onChange={(e) => setNewExpDates(e.target.value)}
+              placeholder="Dates (e.g. Jan 2020 – Present)"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <textarea
+              value={newExpBullets}
+              onChange={(e) => setNewExpBullets(e.target.value)}
+              placeholder="One bullet per line…"
+              rows={4}
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const bullets = newExpBullets
+                    .split("\n")
+                    .map((b) => b.trim())
+                    .filter(Boolean);
+                  if (!newExpCompany.trim()) return;
+                  await addExperience(
+                    newExpTitle.trim() || "Role",
+                    newExpCompany.trim(),
+                    newExpDates.trim(),
+                    bullets,
+                  );
+                  setNewExpTitle("");
+                  setNewExpCompany("");
+                  setNewExpDates("");
+                  setNewExpBullets("");
+                  setAddingExperience(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500"
+              >
+                Save experience
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingExperience(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {data.experience.length > 0 && (
           <div className="space-y-3">
             {data.experience.map((exp, expIndex) => {
               const open = expandedExp === exp.company;
@@ -1732,6 +1891,32 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           {exp.keywords_injected.length} kw injected
                         </span>
                       )}
+                      {expIndex > 0 && (
+                        <button
+                          type="button"
+                          title="Move up"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveExperience(expIndex, "up");
+                          }}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                      )}
+                      {expIndex < data.experience.length - 1 && (
+                        <button
+                          type="button"
+                          title="Move down"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveExperience(expIndex, "down");
+                          }}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Delete this entry (e.g. manual Awards section)"
@@ -1804,13 +1989,88 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               );
             })}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* ── Education ────────────────────────────────────────────────────── */}
-      {data.education.length > 0 && (
-        <section>
+      <section>
+        <div className="flex items-center justify-between mb-3">
           <SectionHeader title="Education" count={data.education.length} />
+          <button
+            type="button"
+            onClick={() => setAddingEducation((v) => !v)}
+            className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-300"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add education
+          </button>
+        </div>
+
+        {addingEducation && (
+          <div className="mb-4 border border-emerald-500/30 rounded-xl p-4 bg-emerald-50 dark:bg-emerald-950/10 space-y-2">
+            <input
+              autoFocus
+              value={newEduDegree}
+              onChange={(e) => setNewEduDegree(e.target.value)}
+              placeholder="Degree or program"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <input
+              value={newEduInstitution}
+              onChange={(e) => setNewEduInstitution(e.target.value)}
+              placeholder="School or university"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <input
+              value={newEduYear}
+              onChange={(e) => setNewEduYear(e.target.value)}
+              placeholder="Year or date range"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
+            <textarea
+              value={newEduBullets}
+              onChange={(e) => setNewEduBullets(e.target.value)}
+              placeholder="One bullet per line (coursework, GPA, thesis…) — optional"
+              rows={3}
+              className="w-full bg-white dark:bg-slate-900 border border-slate-400 dark:border-slate-600 rounded px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const bullets = newEduBullets
+                    .split("\n")
+                    .map((b) => b.trim())
+                    .filter(Boolean);
+                  if (!newEduInstitution.trim()) return;
+                  await addEducation(
+                    newEduDegree.trim(),
+                    newEduInstitution.trim(),
+                    newEduYear.trim(),
+                    bullets,
+                  );
+                  setNewEduDegree("");
+                  setNewEduInstitution("");
+                  setNewEduYear("");
+                  setNewEduBullets("");
+                  setAddingEducation(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500"
+              >
+                Save education
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingEducation(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {data.education.length > 0 && (
+          <>
           <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-3 -mt-2">
             Click a row to expand bullets · use the pencil to edit degree, school, or year
           </p>
@@ -2042,6 +2302,32 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           {edu.bullets.length} bullet{edu.bullets.length !== 1 ? "s" : ""}
                         </span>
                       )}
+                      {eduIndex > 0 && (
+                        <button
+                          type="button"
+                          title="Move up"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveEducation(eduIndex, "up");
+                          }}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                      )}
+                      {eduIndex < data.education.length - 1 && (
+                        <button
+                          type="button"
+                          title="Move down"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveEducation(eduIndex, "down");
+                          }}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      )}
                       {open ? (
                         <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                       ) : (
@@ -2119,8 +2405,9 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
               );
             })}
           </div>
-        </section>
-      )}
+          </>
+        )}
+      </section>
 
       {/* ── Projects ─────────────────────────────────────────────────────── */}
       <section>
@@ -2344,6 +2631,26 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                           {String(p.url)}
                         </a>
                       )}
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          title="Move up"
+                          onClick={() => void moveProject(i, "up")}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                      )}
+                      {i < data.projects.length - 1 && (
+                        <button
+                          type="button"
+                          title="Move down"
+                          onClick={() => void moveProject(i, "down")}
+                          className="p-1.5 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Delete this project"
@@ -2472,24 +2779,24 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
       )}
 
       {/* ── Rewrite notes ────────────────────────────────────────────────── */}
-      {data.rewrite_notes.length > 0 && hasGuardRewriteNotes(data.rewrite_notes) && (
+      {rewriteNotes.length > 0 && hasGuardRewriteNotes(rewriteNotes) && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
           {PRODUCT_NAME} auto-corrected parts of the AI draft for accuracy (metrics, titles, or
           missing sections). Review the rewrite notes below.
         </div>
       )}
-      {data.rewrite_notes.length > 0 && (
+      {rewriteNotes.length > 0 && (
         <section>
           <button
             onClick={() => setShowNotes((v) => !v)}
             className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 transition mb-2"
           >
             {showNotes ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {showNotes ? "Hide" : "Show"} AI rewrite notes ({data.rewrite_notes.length})
+            {showNotes ? "Hide" : "Show"} AI rewrite notes ({rewriteNotes.length})
           </button>
           {showNotes && (
             <div className="space-y-1.5">
-              {data.rewrite_notes.map((note, i) => (
+              {rewriteNotes.map((note, i) => (
                 <p key={i} className="text-slate-600 dark:text-slate-400 text-xs flex gap-2">
                   <span className="text-slate-700 shrink-0">·</span>
                   {note}

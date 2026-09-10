@@ -31,6 +31,20 @@ export function parseApiErrorDetail(
         message: "You're out of credits. Subscribe from Billing to keep going.",
       };
     }
+    if (code === "plan_limit_reached") {
+      const message =
+        typeof d.message === "string"
+          ? d.message
+          : "You've used all resume actions for this billing period.";
+      return { code, message };
+    }
+    if (code === "free_tier_ai_cap_reached") {
+      const message =
+        typeof d.message === "string"
+          ? d.message
+          : "You've used up the free-plan AI allowance for your account.";
+      return { code, message };
+    }
     if (code === "subscription_required") {
       return { code, message: "This feature requires an active subscription." };
     }

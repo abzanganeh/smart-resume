@@ -7,8 +7,8 @@ import { getExtensionJobDescription } from "@/lib/extensionJobDescription";
 import {
   captureExtensionHandoffFromParams,
   getExtensionHandoff,
-  buildSessionNewUrl,
   saveExtensionHandoff,
+  replaceSessionNewUrlIfNeeded,
 } from "@/lib/extensionHandoff";
 import { clearCheckupHandoff, getCheckupHandoff } from "@/lib/checkupHandoff";
 import { shouldReviewExtensionJd } from "@/lib/jdCompleteness";
@@ -48,6 +48,7 @@ function NewSessionContent() {
   // Carry forward between steps
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jdText, setJdText] = useState("");
+  const [jdTitle, setJdTitle] = useState<string | null>(null);
   const [jdSourceUrl, setJdSourceUrl] = useState<string | null>(null);
   const [jdReviewRecommended, setJdReviewRecommended] = useState(false);
   const [infoHydrating, setInfoHydrating] = useState(false);
@@ -55,6 +56,7 @@ function NewSessionContent() {
   const [loading, setLoading] = useState(false);
   const jdLoadedRef = useRef(false);
   const checkupResumeAppliedRef = useRef(false);
+  const sessionBootstrapRef = useRef(false);
   const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
 
   // Restore extension handoff if OAuth stripped jd_id from the URL.
@@ -64,15 +66,16 @@ function NewSessionContent() {
 
     const stored = getExtensionHandoff();
     if (stored && !searchParams.get("jd_id")) {
-      router.replace(buildSessionNewUrl(stored));
+      replaceSessionNewUrlIfNeeded(router, stored);
     }
   }, [searchParams, router]);
 
+  // Bootstrap wizard session once — not on every ?step= / jd_review URL tweak.
   useEffect(() => {
-    async function initSession() {
-      // No ?step= param means the user explicitly navigated to /session/new
-      // (e.g. clicked "New session" in the nav while mid-wizard).  Always
-      // create a fresh session in that case — never reuse the in-progress one.
+    if (sessionBootstrapRef.current) return;
+    sessionBootstrapRef.current = true;
+
+    void (async () => {
       const isFreshStart = !searchParams.get("step");
 
       if (!isFreshStart) {
@@ -92,7 +95,6 @@ function NewSessionContent() {
           sessionStorage.removeItem("smart_resume_session_id");
         }
       } else {
-        // Discard any in-progress session so the new one starts clean.
         sessionStorage.removeItem("smart_resume_session_id");
       }
 
@@ -103,10 +105,11 @@ function NewSessionContent() {
       } catch {
         // backend not running — will show error when user tries to upload
       }
-    }
+    })();
+  }, [searchParams]);
 
-    initSession();
-
+  // Deep-link query params (paste JD, checkup funnel) — may change without new session.
+  useEffect(() => {
     const jdFromQuery = searchParams.get("jd");
     if (jdFromQuery) {
       try {
@@ -135,7 +138,7 @@ function NewSessionContent() {
         clearCheckupHandoff();
       }
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
   // Checkup funnel: auto-apply resume text saved before auth redirect.
   useEffect(() => {
@@ -168,20 +171,14 @@ function NewSessionContent() {
       searchParams.get("jd_review") === "1" || storedHandoff?.jd_review === true;
 
     if (jdId && !urlJdId) {
-      saveExtensionHandoff({
+      const handoff = {
         jd_id: jdId,
         source: jdSource,
         step: storedHandoff?.step ?? "jd",
         jd_review: jdReviewFlag,
-      });
-      router.replace(
-        buildSessionNewUrl({
-          jd_id: jdId,
-          source: jdSource,
-          step: storedHandoff?.step ?? "jd",
-          jd_review: jdReviewFlag,
-        }),
-      );
+      };
+      saveExtensionHandoff(handoff);
+      replaceSessionNewUrlIfNeeded(router, handoff);
     }
 
     void (async () => {
@@ -233,16 +230,24 @@ function NewSessionContent() {
             }
 
             setJdText(saved.text);
+            if (saved.title?.trim()) {
+              setJdTitle(saved.title.trim());
+            }
             const urlStep = searchParams.get("step");
             const onLaterWizardStep = urlStep === "info" || urlStep === "resume";
             if (!onLaterWizardStep) {
               setStep("jd");
-              const reviewParams = shouldReviewExtensionJd(jdSource, saved.url, jdReviewFlag)
-                ? "&jd_review=1"
-                : "";
-              router.replace(
-                `/session/new?step=jd&jd_id=${jdId}&source=extension${reviewParams}`,
+              const reviewRecommended = shouldReviewExtensionJd(
+                jdSource,
+                saved.url,
+                jdReviewFlag,
               );
+              replaceSessionNewUrlIfNeeded(router, {
+                jd_id: jdId,
+                source: jdSource,
+                step: "jd",
+                jd_review: reviewRecommended,
+              });
             }
           }
           return;
@@ -251,8 +256,15 @@ function NewSessionContent() {
         if (job.description?.trim()) {
           jdLoadedRef.current = true;
           setJdText(job.description);
+          if (job.title?.trim()) {
+            setJdTitle(job.title.trim());
+          }
           setStep("jd");
-          router.replace(`/session/new?step=jd&jd_id=${jdId}&source=jobs`);
+          replaceSessionNewUrlIfNeeded(router, {
+            jd_id: jdId,
+            source: "jobs",
+            step: "jd",
+          });
         }
       } catch {
         // User can paste JD manually if fetch fails
@@ -366,9 +378,11 @@ function NewSessionContent() {
   const handleJD = async (payload: JDPayload) => {
     if (!sessionId) return;
     setLoading(true);
-    setJdText(payload.jd_text);
     try {
-      await submitJD(sessionId, payload);
+      const result = await submitJD(sessionId, payload);
+      if (result.jd_text) setJdText(result.jd_text);
+      else if (payload.jd_text) setJdText(payload.jd_text);
+      setJdTitle(result.jd_title ?? null);
 
       let resumeData: ParsedResume | null = parsedResume;
 
@@ -550,6 +564,7 @@ function NewSessionContent() {
                   loading={loading}
                   parsedResume={parsedResume}
                   jdText={jdText}
+                  jdTitle={jdTitle}
                 />
               )}
             </div>

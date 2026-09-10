@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, MessageSquare, Sparkles, X, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, X, Zap } from "lucide-react";
 import { type BlockingIssue, type IssueAnchor, type QAOutput } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
@@ -80,6 +80,37 @@ function scoreColor(score: number): string {
   if (score >= 70) return "text-green-700 dark:text-green-400";
   if (score >= 45) return "text-amber-700 dark:text-amber-400";
   return "text-red-700 dark:text-red-400";
+}
+
+const HEADLINE_PREVIEW_LENGTH = 220;
+
+function truncateHeadlinePreview(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const clipped = text.slice(0, max).trimEnd();
+  const lastSpace = clipped.lastIndexOf(" ");
+  if (lastSpace > max * 0.5) return `${clipped.slice(0, lastSpace)}…`;
+  return `${clipped}…`;
+}
+
+function ExpandableHeadline({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsToggle = text.length > HEADLINE_PREVIEW_LENGTH;
+  const display = expanded || !needsToggle ? text : truncateHeadlinePreview(text, HEADLINE_PREVIEW_LENGTH);
+
+  return (
+    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+      {display}
+      {needsToggle && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="ml-1 inline text-amber-700 dark:text-amber-400 font-medium hover:underline"
+        >
+          {expanded ? "See less" : "See more…"}
+        </button>
+      )}
+    </p>
+  );
 }
 
 function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
@@ -590,6 +621,12 @@ export function ATSGuidancePanel({
             <h2 className={cn("font-bold text-slate-900 dark:text-slate-100", variant === "primary" ? "text-lg" : "text-base")}>
               ATS Score
             </h2>
+            <span
+              title="Deterministic score for your tailored resume vs this job's keywords and structure. The Phase 2 audit score measures your original resume holistically — the two numbers are not directly comparable."
+              className="cursor-help text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </span>
             {output.rank_label && (
               <span
                 className={cn(
@@ -602,7 +639,7 @@ export function ATSGuidancePanel({
             )}
           </div>
           {output.headline && (
-            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{output.headline}</p>
+            <ExpandableHeadline key={output.headline} text={output.headline} />
           )}
           {output.guidance && (
             <div className="space-y-2 pt-1">
@@ -869,4 +906,4 @@ export function ATSGuidancePanel({
 }
 
 /** Exported for component tests and page-level usage. */
-export { sortBlockingIssues, scoreColor, CATEGORY_LABELS };
+export { sortBlockingIssues, scoreColor, CATEGORY_LABELS, truncateHeadlinePreview, HEADLINE_PREVIEW_LENGTH };

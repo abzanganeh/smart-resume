@@ -21,6 +21,8 @@ import { useAdminSession, useAuditToast } from "@/app/admin/layout"
 import {
   getAdminUsers,
   getAdminUserDetail,
+  getAdminUserTransactions,
+  getAdminUserAuthLog,
   adjustUserCredits,
   createAdminPromoCode,
   listAdminUserPromoCodes,
@@ -280,6 +282,9 @@ function UserDetailDrawer({
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "history">("overview")
   const [actionError, setActionError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([])
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([])
+  const [tabLoading, setTabLoading] = useState(false)
 
   const DRAWER_TABS = ["overview", "credits", "history"] as const
 
@@ -289,6 +294,25 @@ function UserDetailDrawer({
       .then(setUserPromos)
       .catch(() => setUserPromos([]))
   }, [user?.id, token])
+
+  useEffect(() => {
+    if (!user || !token) return
+    if (activeTab === "credits") {
+      setTabLoading(true)
+      void getAdminUserTransactions(token, user.id)
+        .then(setCreditTransactions)
+        .catch(() => setCreditTransactions([]))
+        .finally(() => setTabLoading(false))
+      return
+    }
+    if (activeTab === "history") {
+      setTabLoading(true)
+      void getAdminUserAuthLog(token, user.id)
+        .then(setLoginHistory)
+        .catch(() => setLoginHistory([]))
+        .finally(() => setTabLoading(false))
+    }
+  }, [activeTab, user?.id, token])
 
   function runAction(fn: () => Promise<void>) {
     setActionError(null)
@@ -344,7 +368,15 @@ function UserDetailDrawer({
                 <InfoRow label="Tier" value={<TierBadge tier={user.tier} />} />
                 <InfoRow label="Credits" value={<span className="font-mono text-white">{user.credit_balance}</span>} />
                 <InfoRow label="Plan" value={user.subscription_status ?? "—"} />
-                <InfoRow label="Resumes" value={String(user.resume_count ?? "—")} />
+                <InfoRow
+                  label="Resumes"
+                  value={
+                    user.subscription_resumes_used != null &&
+                    user.subscription_resumes_limit != null
+                      ? `${user.subscription_resumes_used} / ${user.subscription_resumes_limit} this period`
+                      : "—"
+                  }
+                />
                 {user.signup_ip && (
                   <InfoRow label="Signup IP" value={<code className="text-xs text-slate-400">{user.signup_ip}</code>} />
                 )}
@@ -372,6 +404,7 @@ function UserDetailDrawer({
               {DRAWER_TABS.map((t) => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => setActiveTab(t)}
                   className={clsx(
                     "py-3 mr-4 text-sm border-b-2 transition-colors capitalize",
@@ -417,12 +450,17 @@ function UserDetailDrawer({
                       disabled={!creditAmount || !creditReason || isPending}
                       onClick={() =>
                         runAction(async () => {
+                          const delta = parseInt(creditAmount, 10)
                           const res = await adjustUserCredits(token, user.id, {
-                            amount: parseInt(creditAmount),
+                            amount: delta,
                             reason: creditReason,
                           })
                           showAuditToast(res.audit_log_id)
-                          onRefresh({ id: user.id, credit_balance: res.data.new_balance })
+                          onRefresh({
+                            id: user.id,
+                            credit_balance:
+                              res.data?.new_balance ?? user.credit_balance + delta,
+                          })
                           setCreditAmount("")
                           setCreditReason("")
                         })
@@ -627,6 +665,11 @@ function UserDetailDrawer({
             {/* Credits tab */}
             {activeTab === "credits" && (
               <div className="p-5">
+                {tabLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+                  </div>
+                ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -637,12 +680,12 @@ function UserDetailDrawer({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {user.credit_transactions.length === 0 && (
+                    {creditTransactions.length === 0 && (
                       <tr>
                         <td colSpan={4} className="py-6 text-center text-slate-500 text-xs">No transactions.</td>
                       </tr>
                     )}
-                    {user.credit_transactions.map((tx: CreditTransaction) => (
+                    {creditTransactions.map((tx: CreditTransaction) => (
                       <tr key={tx.id}>
                         <Td className={clsx("font-mono", tx.amount > 0 ? "text-emerald-400" : "text-red-400")}>
                           {tx.amount > 0 ? "+" : ""}{tx.amount}
@@ -654,12 +697,18 @@ function UserDetailDrawer({
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             )}
 
             {/* Login history tab */}
             {activeTab === "history" && (
               <div className="p-5">
+                {tabLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+                  </div>
+                ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -669,12 +718,12 @@ function UserDetailDrawer({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {user.login_history.length === 0 && (
+                    {loginHistory.length === 0 && (
                       <tr>
                         <td colSpan={3} className="py-6 text-center text-slate-500 text-xs">No login history.</td>
                       </tr>
                     )}
-                    {user.login_history.map((e: LoginHistoryEntry) => (
+                    {loginHistory.map((e: LoginHistoryEntry) => (
                       <tr key={e.id}>
                         <Td>
                           <span className={clsx(
@@ -692,6 +741,7 @@ function UserDetailDrawer({
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             )}
           </div>

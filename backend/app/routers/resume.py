@@ -40,8 +40,12 @@ from app.services.bullet_fix_suggest import (
 from app.services.auth.dependencies import assert_user_email_verified
 from app.services.session_ownership import resolve_bearer_user_id
 from app.services.llm.plan_code_for_llm import resolve_plan_code_for_llm_user_id
+from app.services.contact_normalize import sanitize_contact_url
 from app.services.resume_validation import validate_resume_text
-from app.services.session_store import get_session, update_session
+from app.services.billing.exceptions import (
+    FreeTierAiBudgetExceededError,
+    free_tier_ai_cap_detail,
+)
 
 router = APIRouter(prefix="/api/sessions", tags=["resume"])
 
@@ -66,6 +70,13 @@ class JDRequest(BaseModel):
     jd_id: str | None = None
 
 
+def _sanitize_parsed_resume(parsed: ParsedResume) -> ParsedResume:
+    contact = parsed.contact
+    contact.linkedin = sanitize_contact_url("linkedin", contact.linkedin)
+    contact.github = sanitize_contact_url("github", contact.github)
+    return parsed
+
+
 async def _structure_resume(raw_text: str, llm) -> ParsedResume:
     """Use an LLM call to structure raw resume text into ParsedResume."""
     messages = [
@@ -74,12 +85,16 @@ async def _structure_resume(raw_text: str, llm) -> ParsedResume:
             content=(
                 "You are a resume parser. Extract the structured data from the following resume text "
                 "and return it as valid JSON conforming exactly to the given schema. "
-                "If a field is not found, use an empty string or empty list."
+                "If a field is not found, use an empty string or empty list. "
+                "For linkedin and github, extract the full URL (https://...) only. "
+                "If the resume shows only a label like \"LinkedIn\" or \"GitHub\" without a URL, "
+                "leave that field empty."
             ),
         ),
         LLMMessage(role="user", content=f"RESUME TEXT:\n{raw_text}"),
     ]
-    return await complete_structured(llm, messages, ParsedResume)
+    parsed = await complete_structured(llm, messages, ParsedResume)
+    return _sanitize_parsed_resume(parsed)
 
 
 async def _plan_code_for_session_llm(
@@ -146,11 +161,17 @@ async def upload_resume(
 
     raw_text = validate_resume_text(raw_text)
 
-    with llm_accounting_context(
-        session_id, "resume_structure", user_id=session.user_id
-    ):
-        llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
-        parsed = await _structure_resume(raw_text, llm)
+    try:
+        with llm_accounting_context(
+            session_id, "resume_structure", user_id=session.user_id
+        ):
+            llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
+            parsed = await _structure_resume(raw_text, llm)
+    except FreeTierAiBudgetExceededError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail=free_tier_ai_cap_detail(),
+        ) from exc
 
     session.resume_raw = raw_text
     session.resume_parsed = parsed
@@ -179,11 +200,17 @@ async def paste_resume(
 
     text = validate_resume_text(body.text)
 
-    with llm_accounting_context(
-        session_id, "resume_structure", user_id=session.user_id
-    ):
-        llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
-        parsed = await _structure_resume(text, llm)
+    try:
+        with llm_accounting_context(
+            session_id, "resume_structure", user_id=session.user_id
+        ):
+            llm = get_llm_client_for_step("resume_structure", plan_code=plan_code)
+            parsed = await _structure_resume(text, llm)
+    except FreeTierAiBudgetExceededError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail=free_tier_ai_cap_detail(),
+        ) from exc
 
     session.resume_raw = text
     session.resume_parsed = parsed
@@ -350,23 +377,24 @@ async def submit_jd(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    import httpx
     from app.parsers.html_parser import strip_html_to_text
+    from app.services.jd_fetch import fetch_jd_from_url, infer_jd_title_from_text
 
     jd_text = body.jd_text
+    jd_title: str | None = None
     if body.jd_url and not jd_text:
         try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                resp = await client.get(
-                    body.jd_url,
-                    headers={"User-Agent": f"Mozilla/5.0 (compatible; {PRODUCT_NAME}/1.0)"},
-                )
-                jd_text = strip_html_to_text(resp.text, max_chars=settings.MAX_JD_CHARS)
+            fetched = await fetch_jd_from_url(
+                body.jd_url,
+                max_chars=settings.MAX_JD_CHARS,
+            )
+            jd_text = fetched.text
+            jd_title = fetched.title
         except Exception:
             raise HTTPException(status_code=422, detail="Could not fetch JD from URL.")
 
         # Catch JS-rendered pages that return a thin HTML shell with no
-        # readable text (Jobright, Greenhouse, Lever, etc.).
+        # readable text (Jobright, Greenhouse, etc.).
         if len(jd_text.strip()) < 200:
             raise HTTPException(
                 status_code=422,
@@ -380,6 +408,8 @@ async def submit_jd(
     # Strip HTML even from manually-pasted text (belt-and-suspenders).
     if jd_text:
         jd_text = strip_html_to_text(jd_text, max_chars=settings.MAX_JD_CHARS)
+        if not jd_title:
+            jd_title = infer_jd_title_from_text(jd_text)
 
     if len(jd_text) > settings.MAX_JD_CHARS:
         raise HTTPException(
@@ -408,4 +438,9 @@ async def submit_jd(
 
     await sync_dashboard_record_from_session(session)
 
-    return {"ok": True, "jd_changed": jd_changed}
+    return {
+        "ok": True,
+        "jd_changed": jd_changed,
+        "jd_text": jd_text,
+        "jd_title": jd_title,
+    }
