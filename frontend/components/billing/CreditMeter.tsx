@@ -7,6 +7,8 @@ interface CreditMeterProps {
   cap: number;
   label?: string;
   compact?: boolean;
+  /** When true, show remaining/cap instead of consumed/cap (for “Credits left”). */
+  showRemaining?: boolean;
   className?: string;
 }
 
@@ -15,11 +17,14 @@ export function CreditMeter({
   cap,
   label = "Credits",
   compact = false,
+  showRemaining = false,
   className,
 }: CreditMeterProps) {
   const safeCap = Math.max(cap, 1);
-  const pct = Math.min(100, Math.round((used / safeCap) * 100));
-  const remaining = Math.max(0, cap - used);
+  const consumed = Math.min(safeCap, Math.max(0, used));
+  const remaining = Math.max(0, safeCap - consumed);
+  const displayNumerator = showRemaining ? remaining : consumed;
+  const pct = Math.min(100, Math.round((displayNumerator / safeCap) * 100));
 
   return (
     <div className={cn("min-w-0", className)}>
@@ -31,7 +36,7 @@ export function CreditMeter({
       >
         <span className="truncate">{label}</span>
         <span className="tabular-nums shrink-0 ml-2">
-          {used}/{cap}
+          {displayNumerator}/{cap}
           {!compact && <span className="text-slate-500 dark:text-slate-500 ml-1">({pct}%)</span>}
         </span>
       </div>
@@ -41,7 +46,7 @@ export function CreditMeter({
           compact ? "h-1.5" : "h-2",
         )}
         role="progressbar"
-        aria-valuenow={used}
+        aria-valuenow={showRemaining ? remaining : consumed}
         aria-valuemin={0}
         aria-valuemax={cap}
         aria-label={`${label}: ${remaining} remaining`}

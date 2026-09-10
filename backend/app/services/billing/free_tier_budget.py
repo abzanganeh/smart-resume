@@ -207,12 +207,15 @@ async def free_credit_meter(
 ) -> dict[str, int | bool]:
     """Return credit cap/used/spendable for the usage meter UI."""
     free_balance = await get_balance(session, user_id=user.id, credit_kind=CreditKind.free)
-    cap = await _total_free_credits_granted(session, user_id=user.id)
     spendable = spendable_free_credits(user, balance=free_balance)
-    used = max(0, cap - free_balance)
+    reg_grant = await registration_grant_credits(session)
+    # Progress cap tracks spendable balance + consumption this period, not the
+    # lifetime sum of every admin/bootstrap grant (which breaks the nav meter).
+    meter_cap = max(spendable, reg_grant)
+    meter_used = max(0, meter_cap - spendable)
     return {
-        "credit_cap": cap,
-        "credits_used": used,
+        "credit_cap": meter_cap,
+        "credits_used": meter_used,
         "spendable_credit_balance": spendable,
         "credits_locked_until_verification": free_balance > 0
         and not user.is_email_verified,

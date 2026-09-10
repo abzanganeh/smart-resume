@@ -27,6 +27,8 @@ import type {
   AnnouncementPayload,
   AdminUser,
   AdminUserDetail,
+  CreditTransaction,
+  LoginHistoryEntry,
   UserListResponse,
   CreditAdjustPayload,
   FreeGrant,
@@ -67,6 +69,9 @@ async function parseError(res: Response): Promise<string> {
     const body = await res.json()
     const detail = body?.detail
     if (detail && typeof detail === "object" && "code" in detail) {
+      if ("message" in detail && typeof detail.message === "string") {
+        return detail.message
+      }
       return String(detail.code)
     }
     return detail ?? `HTTP ${res.status}`
@@ -645,6 +650,8 @@ interface BackendUserSummary {
   email: string
   display_name: string
   tier: string
+  credit_balance?: number
+  subscription_status?: string | null
   suspended_at?: string | null
   closure_requested_at?: string | null
   created_at: string
@@ -656,14 +663,50 @@ function mapBackendUser(row: BackendUserSummary): AdminUser {
     email: row.email,
     display_name: row.display_name,
     tier: row.tier,
-    credit_balance: 0,
-    subscription_status: null,
+    credit_balance: row.credit_balance ?? 0,
+    subscription_status: row.subscription_status ?? null,
     stripe_customer_id: null,
     suspended_at: row.suspended_at ?? null,
     closure_requested_at: row.closure_requested_at ?? null,
     email_verified_at: null,
     created_at: row.created_at,
     last_login_at: null,
+  }
+}
+
+interface BackendCreditTransaction {
+  id: string
+  delta: number
+  reason: string
+  admin_id: string | null
+  created_at: string
+}
+
+interface BackendAuthLogEntry {
+  id: string
+  event: string
+  ip: string | null
+  created_at: string
+}
+
+function mapCreditTransaction(row: BackendCreditTransaction): CreditTransaction {
+  return {
+    id: row.id,
+    amount: row.delta,
+    reason: row.reason,
+    initiated_by: row.admin_id ? "admin" : "system",
+    admin_id: row.admin_id,
+    created_at: row.created_at,
+  }
+}
+
+function mapAuthLogEntry(row: BackendAuthLogEntry): LoginHistoryEntry {
+  return {
+    id: row.id,
+    event: row.event,
+    ip: row.ip ?? "—",
+    user_agent: "",
+    created_at: row.created_at,
   }
 }
 
@@ -695,7 +738,39 @@ export async function getAdminUserDetail(
   token: string,
   userId: string,
 ): Promise<AdminUserDetail> {
-  return req(`/api/admin/users/${userId}`, token)
+  const row = await req<
+    AdminUserDetail & {
+      subscription_resumes_used?: number | null
+      subscription_resumes_limit?: number | null
+    }
+  >(`/api/admin/users/${userId}`, token)
+  return {
+    ...row,
+    credit_transactions: [],
+    login_history: [],
+  }
+}
+
+export async function getAdminUserTransactions(
+  token: string,
+  userId: string,
+): Promise<CreditTransaction[]> {
+  const body = await req<{ items: BackendCreditTransaction[] }>(
+    `/api/admin/users/${userId}/transactions`,
+    token,
+  )
+  return (body.items ?? []).map(mapCreditTransaction)
+}
+
+export async function getAdminUserAuthLog(
+  token: string,
+  userId: string,
+): Promise<LoginHistoryEntry[]> {
+  const body = await req<{ items: BackendAuthLogEntry[] }>(
+    `/api/admin/users/${userId}/auth-log`,
+    token,
+  )
+  return (body.items ?? []).map(mapAuthLogEntry)
 }
 
 export async function adjustUserCredits(
@@ -705,7 +780,11 @@ export async function adjustUserCredits(
 ): Promise<AuditedResponse<{ new_balance: number }>> {
   return req(`/api/admin/users/${userId}/credits`, token, {
     method: "PATCH",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      delta: payload.amount,
+      credit_kind: "free",
+      reason: payload.reason,
+    }),
   })
 }
 

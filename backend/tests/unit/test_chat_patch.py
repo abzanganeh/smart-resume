@@ -35,3 +35,28 @@ def test_projects_remove_patch_fields() -> None:
         remove_projects=["ENTROS — Mobile Companion for Asar", "IDME24"],
     )
     assert len(patch.remove_projects) == 2
+
+
+def test_experience_add_and_move_patch_fields() -> None:
+    from app.models.chat import NewExperienceEntry
+
+    add_patch = ResumePatch(
+        section="experience",
+        description="Add IdMe24 role",
+        new_experience=NewExperienceEntry(
+            title="Founder",
+            company="IdMe24",
+            dates="2024 – Present",
+            bullets=["Built identity platform."],
+        ),
+    )
+    assert add_patch.new_experience is not None
+    assert add_patch.new_experience.company == "IdMe24"
+
+    move_patch = ResumePatch(
+        section="experience",
+        description="Move SecureAuth up",
+        company="SecureAuth",
+        move_direction="up",
+    )
+    assert move_patch.move_direction == "up"

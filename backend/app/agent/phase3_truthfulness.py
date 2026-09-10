@@ -58,6 +58,38 @@ def _normalize_company(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
+def _companies_match(left: str, right: str) -> bool:
+    """True when two company strings refer to the same employer (alias-tolerant)."""
+    a = _normalize_company(left)
+    b = _normalize_company(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) >= 4 and (longer.startswith(shorter) or shorter in longer):
+        return True
+    return False
+
+
+def _lookup_parsed_company(
+    lookup: dict[str, tuple[str, str, str]], company: str
+) -> tuple[str, str, str] | None:
+    key = _normalize_company(company)
+    if key in lookup:
+        return lookup[key]
+    for _lk, value in lookup.items():
+        if _companies_match(company, value[1]):
+            return value
+    return None
+
+
+def _prior_has_company(prior: TailoredResumeOutput | None, company: str) -> bool:
+    if prior is None:
+        return False
+    return any(_companies_match(entry.company, company) for entry in prior.experience)
+
+
 def _company_lookup(parsed: ParsedResume | None) -> dict[str, tuple[str, str, str]]:
     """Map normalized company → (title, company, dates) from parsed resume."""
     lookup: dict[str, tuple[str, str, str]] = {}
@@ -68,12 +100,6 @@ def _company_lookup(parsed: ParsedResume | None) -> dict[str, tuple[str, str, st
         if key:
             lookup[key] = (entry.title, entry.company, entry.dates)
     return lookup
-
-
-def _prior_companies(prior: TailoredResumeOutput | None) -> set[str]:
-    if prior is None:
-        return set()
-    return {_normalize_company(e.company) for e in prior.experience if e.company}
 
 
 def _metrics_by_scope(approved: list[ApprovedMetric]) -> dict[str, list[str]]:
@@ -204,6 +230,94 @@ def validate_bullet_metrics(
     )
 
 
+def _bullets_for_company(
+    company: str,
+    *,
+    resume_parsed: ParsedResume | None,
+    prior: TailoredResumeOutput | None,
+) -> list[str]:
+    if prior is not None:
+        for entry in prior.experience:
+            if _companies_match(entry.company, company) and entry.bullets:
+                return [b.strip() for b in entry.bullets if b.strip()]
+    if resume_parsed is not None:
+        for entry in resume_parsed.experience:
+            if _companies_match(entry.company, company) and entry.bullets:
+                return [b.strip() for b in entry.bullets if b.strip()]
+    return []
+
+
+def backfill_empty_experience_bullets(
+    output: TailoredResumeOutput,
+    resume_parsed: ParsedResume | None,
+    *,
+    prior: TailoredResumeOutput | None = None,
+) -> TailoredResumeOutput:
+    """Restore bullets for matched roles when the LLM left them empty."""
+    notes = list(output.rewrite_notes)
+    updated: list[TailoredExperienceEntry] = []
+
+    for entry in output.experience:
+        if any(b.strip() for b in entry.bullets):
+            updated.append(entry)
+            continue
+        bullets = _bullets_for_company(
+            entry.company, resume_parsed=resume_parsed, prior=prior
+        )
+        if bullets:
+            notes.append(
+                f"Restored bullets for {entry.company} — LLM output left this role empty."
+            )
+            updated.append(entry.model_copy(update={"bullets": bullets}))
+        else:
+            updated.append(entry)
+
+    return output.model_copy(update={"experience": updated, "rewrite_notes": notes})
+
+
+def _output_has_company(output: TailoredResumeOutput, company: str) -> bool:
+    return any(_companies_match(entry.company, company) for entry in output.experience)
+
+
+def restore_missing_experience(
+    output: TailoredResumeOutput,
+    resume_parsed: ParsedResume | None,
+    *,
+    prior: TailoredResumeOutput | None = None,
+) -> TailoredResumeOutput:
+    """Re-inject experience entries silently dropped by the LLM (incl. manual edits)."""
+    if resume_parsed is None and prior is None:
+        return output
+
+    notes = list(output.rewrite_notes)
+    experience = list(output.experience)
+
+    source_entries: list[TailoredExperienceEntry] = []
+    if prior and prior.experience:
+        source_entries.extend(prior.experience)
+    if resume_parsed:
+        for entry in resume_parsed.experience:
+            if not any(_companies_match(entry.company, src.company) for src in source_entries):
+                source_entries.append(
+                    TailoredExperienceEntry(
+                        title=entry.title,
+                        company=entry.company,
+                        dates=entry.dates,
+                        bullets=list(entry.bullets or []),
+                    )
+                )
+
+    for entry in source_entries:
+        if _output_has_company(output, entry.company):
+            continue
+        experience.append(entry)
+        notes.append(
+            f"Restored experience entry for '{entry.company}' — LLM output omitted it."
+        )
+
+    return output.model_copy(update={"experience": experience, "rewrite_notes": notes})
+
+
 def enforce_entry_integrity(
     output: TailoredResumeOutput,
     resume_parsed: ParsedResume | None,
@@ -212,14 +326,13 @@ def enforce_entry_integrity(
 ) -> TailoredResumeOutput:
     """Restore title/company/dates for existing roles; drop invented employers."""
     lookup = _company_lookup(resume_parsed)
-    allowed_prior = _prior_companies(prior)
     notes = list(output.rewrite_notes)
     kept: list[TailoredExperienceEntry] = []
 
     for entry in output.experience:
-        key = _normalize_company(entry.company)
-        if key in lookup:
-            orig_title, orig_company, orig_dates = lookup[key]
+        parsed_match = _lookup_parsed_company(lookup, entry.company)
+        if parsed_match is not None:
+            orig_title, orig_company, orig_dates = parsed_match
             updates: dict[str, str] = {}
             if entry.title != orig_title:
                 notes.append(
@@ -233,10 +346,10 @@ def enforce_entry_integrity(
                 updates["dates"] = orig_dates
             kept.append(entry.model_copy(update=updates) if updates else entry)
             continue
-        if key in allowed_prior:
+        if _prior_has_company(prior, entry.company):
             kept.append(entry)
             continue
-        if key:
+        if entry.company.strip():
             notes.append(
                 f"Dropped experience entry for '{entry.company}' — company not "
                 f"found in original resume."
@@ -400,6 +513,12 @@ def apply_truthfulness_guards(
     result = enforce_entry_integrity(
         result, ctx.resume_parsed, prior=ctx.prior_output
     )
+    result = backfill_empty_experience_bullets(
+        result, ctx.resume_parsed, prior=ctx.prior_output
+    )
+    result = restore_missing_experience(
+        result, ctx.resume_parsed, prior=ctx.prior_output
+    )
     result = restore_missing_sections(
         result, ctx.resume_parsed, prior=ctx.prior_output
     )
@@ -424,7 +543,9 @@ __all__ = [
     "TruthfulnessContext",
     "annotate_bullet_provenance",
     "apply_truthfulness_guards",
+    "backfill_empty_experience_bullets",
     "enforce_entry_integrity",
+    "restore_missing_experience",
     "restore_missing_sections",
     "validate_bullet_metrics",
 ]

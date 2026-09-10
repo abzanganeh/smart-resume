@@ -12,6 +12,7 @@ import {
   titleFitLabel,
   type JobTitleSuggestion,
 } from "@/lib/jobs"
+import { ApiError } from "@/lib/api"
 import { clsx } from "clsx"
 
 interface JobTitlePickerProps {
@@ -19,6 +20,11 @@ interface JobTitlePickerProps {
   onComplete: (titles: string[]) => void | Promise<void>
   submitLabel?: string
   className?: string
+  /** When true, skip resume-based suggestions and let the user type titles manually. */
+  manualTitlesOnly?: boolean
+  onBack?: () => void
+  onSkip?: () => void
+  skipLabel?: string
 }
 
 function normalizeTitle(title: string): string {
@@ -34,6 +40,10 @@ export function JobTitlePicker({
   onComplete,
   submitLabel = "Continue to job search",
   className,
+  manualTitlesOnly = false,
+  onBack,
+  onSkip,
+  skipLabel = "Skip for now",
 }: JobTitlePickerProps) {
   const [suggestions, setSuggestions] = useState<JobTitleSuggestion[]>([])
   const [heldTitles, setHeldTitles] = useState<string[]>([])
@@ -50,20 +60,35 @@ export function JobTitlePicker({
     setLoading(true)
     setError(null)
     try {
-      const [res, prefs] = await Promise.all([
-        getJobTitleSuggestions(accessToken),
-        getJobPreferences(accessToken).catch(() => null),
-      ])
-      setSuggestions(res.suggestions)
-      setHeldTitles(res.held_titles)
+      const prefs = await getJobPreferences(accessToken).catch(() => null)
+      let suggestions: JobTitleSuggestion[] = []
+      let held: string[] = []
+      if (!manualTitlesOnly) {
+        try {
+          const res = await getJobTitleSuggestions(accessToken)
+          suggestions = res.suggestions
+          held = res.held_titles
+        } catch (e) {
+          const noResume =
+            e instanceof ApiError &&
+            (e.status === 422 ||
+              e.message.toLowerCase().includes("master resume"))
+          if (!noResume) {
+            throw e
+          }
+        }
+      }
+
       const maxTitles = prefs?.max_preferred_titles ?? MAX_PREFERRED_JOB_TITLES
       setTitleLimit(maxTitles)
+      setSuggestions(suggestions)
+      setHeldTitles(held)
 
       const saved = prefs?.preferred_titles?.filter(Boolean) ?? []
       if (saved.length > 0) {
         setSelectedTitles(saved.slice(0, maxTitles))
-      } else if (res.suggestions.length > 0) {
-        setSelectedTitles([res.suggestions[0].title])
+      } else if (suggestions.length > 0) {
+        setSelectedTitles([suggestions[0].title])
       } else {
         setSelectedTitles([])
       }
@@ -72,7 +97,7 @@ export function JobTitlePicker({
     } finally {
       setLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, manualTitlesOnly])
 
   useEffect(() => {
     void load()
@@ -136,18 +161,22 @@ export function JobTitlePicker({
     return (
       <div className={clsx("flex items-center justify-center py-12 text-slate-600 dark:text-slate-400", className)}>
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Analyzing your resume for job titles…
+        {manualTitlesOnly
+          ? "Loading your job search preferences…"
+          : "Analyzing your resume for job titles…"}
       </div>
     )
   }
+
+  const introCopy = manualTitlesOnly
+    ? `Add at least ${MIN_PREFERRED_JOB_TITLES} role you want to search for (up to ${titleLimit}). You can upload a master resume later for ranked suggestions.`
+    : `Based on your master resume, we ranked roles by fit. Pick at least ${MIN_PREFERRED_JOB_TITLES} (up to ${titleLimit}) — remove suggestions you do not want and add your own anytime.`
 
   return (
     <form onSubmit={handleSubmit} className={clsx("space-y-5", className)}>
       <div className="text-center space-y-2">
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-          Based on your master resume, we ranked roles by fit. Pick at least{" "}
-          <strong className="text-slate-900 dark:text-slate-200">{MIN_PREFERRED_JOB_TITLES}</strong>{" "}
-          (up to {titleLimit}) — remove suggestions you do not want and add your own anytime.
+          {introCopy}
         </p>
         {heldTitles.length > 0 && (
           <p className="text-xs text-slate-500 dark:text-slate-500">
@@ -194,7 +223,11 @@ export function JobTitlePicker({
               addTitle(customDraft)
             }
           }}
-          placeholder="Add your own job title"
+          placeholder={
+            manualTitlesOnly
+              ? "e.g. Software QA Engineer"
+              : "Add your own job title"
+          }
           disabled={atMax}
           maxLength={200}
           data-testid="job-title-custom-input"
@@ -305,6 +338,31 @@ export function JobTitlePicker({
           submitLabel
         )}
       </button>
+
+      {(onBack || onSkip) && (
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
+          {onBack ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onBack}
+              className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 px-4 py-2.5 disabled:opacity-50"
+            >
+              Back
+            </button>
+          ) : null}
+          {onSkip ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onSkip}
+              className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 underline underline-offset-4 disabled:opacity-50"
+            >
+              {skipLabel}
+            </button>
+          ) : null}
+        </div>
+      )}
     </form>
   )
 }

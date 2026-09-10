@@ -6,6 +6,8 @@
 import {
   sortBlockingIssues,
   scoreColor,
+  truncateHeadlinePreview,
+  HEADLINE_PREVIEW_LENGTH,
 } from "../../components/session/ATSGuidancePanel";
 import type { BlockingIssue, QAOutput } from "../../lib/api";
 
@@ -110,6 +112,13 @@ function runTests() {
   });
   assert(applied === suggestion, "Apply button passes suggestion text to callback");
   assert(applied.includes("Kubernetes"), "applied suggestion contains actionable keyword text");
+
+  const long = `${"Word ".repeat(60)}interview readiness.`;
+  assert(long.length > HEADLINE_PREVIEW_LENGTH, "fixture headline exceeds preview length");
+  const preview = truncateHeadlinePreview(long, HEADLINE_PREVIEW_LENGTH);
+  assert(preview.endsWith("…"), "long headline preview ends with ellipsis");
+  assert(preview.length < long.length, "preview is shorter than full headline");
+  assert(!preview.includes("interview readiness"), "preview truncates before the tail");
 
   console.log("\nAll tests passed.\n");
 }

@@ -200,8 +200,8 @@ export async function saveUserInfo(
 export async function submitJD(
   sessionId: string,
   payload: JDPayload
-): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/api/sessions/${sessionId}/jd`, {
+): Promise<{ ok: boolean; jd_changed?: boolean; jd_text?: string; jd_title?: string | null }> {
+  return request<{ ok: boolean; jd_changed?: boolean; jd_text?: string; jd_title?: string | null }>(`/api/sessions/${sessionId}/jd`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -1248,6 +1248,9 @@ export interface ResumePatch {
   dates_old?: string;
   new_dates?: string;
   delete_experience?: boolean;
+  new_experience?: { title?: string; company?: string; dates?: string; bullets?: string[] };
+  add_bullet?: string;
+  move_direction?: "up" | "down";
   // Certifications
   remove_certifications?: string[];
   add_certifications?: string[];
@@ -1259,6 +1262,7 @@ export interface ResumePatch {
   add_education_bullets?: string[];
   education_bullet_old?: string;
   education_bullet_new?: string;
+  new_education?: { degree?: string; institution?: string; year?: string; bullets?: string[] };
   // Projects
   remove_projects?: string[];
   project_name?: string;

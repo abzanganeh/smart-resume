@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -82,8 +83,9 @@ def axis_hash(axes: list[AxisScore]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def narrative_cache_key(ats_score: int, axes: list[AxisScore]) -> str:
-    return f"{ats_score}:{axis_hash(axes)}"
+def narrative_cache_key(ats_score: int, axes: list[AxisScore], target_role: str = "") -> str:
+    role_key = hashlib.sha256((target_role or "").encode()).hexdigest()[:8]
+    return f"{ats_score}:{axis_hash(axes)}:{role_key}"
 
 
 def _severity_for_axes(axes: list[AxisScore]) -> CategorySeverity:
@@ -130,6 +132,87 @@ def _merge_llm_narrative(
     return merged
 
 
+_HEADLINE_HARD_CAP = 600
+_HEADLINE_MAX_SENTENCES = 2
+
+
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _has_degenerate_repetition(text: str) -> bool:
+    words = text.lower().split()
+    if len(words) < 12:
+        return False
+    for size in (3, 4, 5):
+        if len(words) < size * 3:
+            continue
+        for start in range(0, len(words) - size * 2):
+            chunk = " ".join(words[start : start + size])
+            rest = " ".join(words[start + size :])
+            if rest.count(chunk) >= 2:
+                return True
+    return False
+
+
+def _fallback_headline(
+    *,
+    score_result: ResumeQualityResult,
+    target_role: str,
+    categories: list[NarrativeCategorySummary],
+) -> str:
+    role = target_role.strip() or "this role"
+    urgent = next((c for c in categories if c.severity in ("urgent", "critical")), None)
+    if urgent and urgent.label:
+        return (
+            f"Your resume scores {score_result.ats_score}/100 for {role}. "
+            f"Focus next on {urgent.label.lower()} to improve ATS fit."
+        )
+    return (
+        f"Your resume scores {score_result.ats_score}/100 for {role}. "
+        "Address the highlighted guidance categories to raise your score."
+    )
+
+
+def _sanitize_headline(
+    headline: str,
+    *,
+    score_result: ResumeQualityResult,
+    target_role: str,
+    categories: list[NarrativeCategorySummary],
+) -> str:
+    cleaned = " ".join((headline or "").split()).strip()
+    if not cleaned:
+        return _fallback_headline(
+            score_result=score_result, target_role=target_role, categories=categories
+        )
+
+    sentences = _split_sentences(cleaned)
+    if len(sentences) > _HEADLINE_MAX_SENTENCES:
+        cleaned = " ".join(sentences[:_HEADLINE_MAX_SENTENCES])
+
+    if len(cleaned) > _HEADLINE_HARD_CAP:
+        clipped = cleaned[: _HEADLINE_HARD_CAP - 1].rstrip()
+        last_space = clipped.rfind(" ")
+        if last_space > _HEADLINE_HARD_CAP // 2:
+            clipped = clipped[:last_space]
+        cleaned = clipped
+
+    category_copy = " ".join(c.why_it_matters.lower() for c in categories if c.why_it_matters)
+    if category_copy and cleaned.lower() in category_copy:
+        return _fallback_headline(
+            score_result=score_result, target_role=target_role, categories=categories
+        )
+
+    if _has_degenerate_repetition(cleaned):
+        return _fallback_headline(
+            score_result=score_result, target_role=target_role, categories=categories
+        )
+
+    return cleaned
+
+
 async def synthesize_phase4_narrative(
     *,
     llm: LLMClient,
@@ -139,7 +222,9 @@ async def synthesize_phase4_narrative(
 ) -> Phase4NarrativeResult:
     """Generate headline + category copy for a deterministic score snapshot."""
     resolved_rank = rank_label or compute_rank_label(score_result.ats_score)
-    cache_key = narrative_cache_key(score_result.ats_score, score_result.axes)
+    cache_key = narrative_cache_key(
+        score_result.ats_score, score_result.axes, target_role
+    )
     cached = _narrative_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -180,7 +265,12 @@ async def synthesize_phase4_narrative(
     )
     result = Phase4NarrativeResult(
         rank_label=resolved_rank,
-        headline=(llm_output.headline or "").strip(),
+        headline=_sanitize_headline(
+            (llm_output.headline or "").strip(),
+            score_result=score_result,
+            target_role=target_role,
+            categories=base_categories,
+        ),
         category_summaries=_merge_llm_narrative(base_categories, llm_output),
     )
     _narrative_cache[cache_key] = result

@@ -33,6 +33,20 @@ describe("navPillars", () => {
     assert.ok(!MOBILE_NAV_LINKS.some((l) => l.href === "#"))
   })
 
+  it("navPathIsActive matches dashboard hash anchors", () => {
+    assert.equal(
+      navPathIsActive("/dashboard", "/dashboard#tailored-resumes", "#tailored-resumes"),
+      true,
+    )
+    assert.equal(navPathIsActive("/dashboard", "/dashboard", "#tailored-resumes"), false)
+    assert.equal(navPathIsActive("/dashboard", "/dashboard", ""), true)
+  })
+
+  it("resume pillar includes tailored resumes dashboard link", () => {
+    const resume = NAV_PILLARS.find((p) => p.id === "resume")
+    assert.ok(resume?.links.some((l) => l.href === "/dashboard#tailored-resumes"))
+  })
+
   it("navPathIsActive matches dashboard and nested routes", () => {
     assert.equal(navPathIsActive("/dashboard", "/dashboard"), true)
     assert.equal(navPathIsActive("/tracker/abc", "/tracker"), true)

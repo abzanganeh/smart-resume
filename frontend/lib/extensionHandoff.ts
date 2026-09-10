@@ -88,3 +88,16 @@ export function buildSessionNewUrl(handoff: ExtensionHandoff): string {
   if (handoff.jd_review) params.set("jd_review", "1")
   return `/session/new?${params.toString()}`
 }
+
+/** Avoid router.replace when the wizard URL already matches (prevents UI flash). */
+export function replaceSessionNewUrlIfNeeded(
+  router: { replace: (url: string) => void },
+  handoff: ExtensionHandoff,
+): void {
+  const target = buildSessionNewUrl(handoff)
+  if (typeof window !== "undefined") {
+    const current = `${window.location.pathname}${window.location.search}`
+    if (current === target) return
+  }
+  router.replace(target)
+}

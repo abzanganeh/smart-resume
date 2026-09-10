@@ -62,6 +62,19 @@ def free_tier_ai_cap_detail() -> dict[str, str]:
     return {"code": FREE_TIER_AI_CAP_CODE, "message": FREE_TIER_AI_CAP_MESSAGE}
 
 
+def plan_limit_reached_detail(exc: PlanLimitReachedError) -> dict[str, str | int]:
+    return {
+        "code": "plan_limit_reached",
+        "action": exc.action,
+        "used": exc.used,
+        "limit": exc.limit,
+        "message": (
+            f"You've used all {exc.limit} resume actions for this billing period "
+            f"({exc.used}/{exc.limit}). Wait for renewal or upgrade to continue."
+        ),
+    }
+
+
 class CreditsLockedUntilVerificationError(BillingError):
     """Free credits exist but email is not verified yet.
 
@@ -180,6 +193,7 @@ __all__ = [
     "FREE_TIER_AI_CAP_CODE",
     "FREE_TIER_AI_CAP_MESSAGE",
     "free_tier_ai_cap_detail",
+    "plan_limit_reached_detail",
     "InsufficientCreditsError",
     "PlanLimitReachedError",
     "PriceUnresolvedError",

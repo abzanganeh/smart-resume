@@ -21,6 +21,7 @@ export const NAV_PILLARS: readonly NavPillar[] = [
     links: [
       { href: "/profile", label: "Master resume" },
       { href: "/session/new", label: "Tailor for a job" },
+      { href: "/dashboard#tailored-resumes", label: "Tailored resumes" },
       { href: "/cover-letter/new", label: "Cover letter" },
       { href: "/fit", label: "Job fit" },
     ],
@@ -80,13 +81,28 @@ export function landingNavLinkIsActive(
   return navPathIsActive(pathname, href)
 }
 
-export function navPathIsActive(pathname: string, href: string): boolean {
+export function navPathIsActive(
+  pathname: string,
+  href: string,
+  hash: string = "",
+): boolean {
   if (href === "#") return false
-  if (href === "/dashboard") return pathname === "/dashboard"
+  const normalizedHash = hash.startsWith("#") ? hash : hash ? `#${hash}` : ""
+  if (href.startsWith("/dashboard#")) {
+    if (pathname !== "/dashboard") return false
+    return normalizedHash === href.slice(href.indexOf("#"))
+  }
+  if (href === "/dashboard") {
+    return pathname === "/dashboard" && normalizedHash !== "#tailored-resumes"
+  }
   if (href === "/jobs/setup") return pathname.startsWith("/jobs/setup")
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function navPillarIsActive(pathname: string, pillar: NavPillar): boolean {
-  return pillar.links.some((link) => navPathIsActive(pathname, link.href))
+export function navPillarIsActive(
+  pathname: string,
+  pillar: NavPillar,
+  hash: string = "",
+): boolean {
+  return pillar.links.some((link) => navPathIsActive(pathname, link.href, hash))
 }

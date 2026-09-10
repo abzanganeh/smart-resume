@@ -79,7 +79,7 @@ on each dependency bump; remove IDs when upstream fixes land.
 
 | Vulnerability ID | Package | Compensating control |
 |---|---|---|
-| PYSEC-2026-3412 | `weasyprint` | SSRF/LFI mitigated by `app/services/export/weasyprint_safe.py` (LLM10) |
+| PYSEC-2026-3412, CVE-2026-55073 | `weasyprint` | SSRF/LFI mitigated by `app/services/export/weasyprint_safe.py` (LLM10) |
 | PYSEC-2026-1325 | `ecdsa` (via `python-jose`) | FlintApply JWTs use HS256 (`AUTH_SECRET`), not ECDSA signing |
 | PYSEC-2026-141, 1994, 1996, 1998, 1999 | `urllib3` 1.26.x (via `botocore`) | AWS SDK pin; S3 calls are server-side to trusted AWS endpoints only |
 
@@ -90,7 +90,7 @@ Upgraded in the 2026-08-22 ratchet: `aiohttp`, `cryptography`, `httplib2`,
 
 | Scanner | Baseline (2026-08-22) | Owner action |
 |---|---|---|
-| `pnpm audit --audit-level=high` (frontend) | **Blocking** (2026-08-22): `next@16.2.11`, `next-auth@5.0.0-beta.32`, pnpm overrides for transitive `nanoid`, `postcss`, `sharp`, `js-yaml`, `brace-expansion` | Re-run audit on each frontend dep bump | Ongoing Dependabot |
+| `pnpm audit --audit-level=high` (frontend) | **Blocking** (2026-09-10): `next@16.3.3`, `next-auth@5.0.0-beta.32`, pnpm overrides for transitive `nanoid`, `postcss`, `sharp>=0.35.4`, `js-yaml`, `brace-expansion` | Re-run audit on each frontend dep bump | Ongoing Dependabot |
 | `gitleaks detect` (PR) | No confirmed leaks in repo history on 2026-08-21 | Rotate any surfaced credential immediately |
 | Container image scan (Trivy) | **N/A** — CI does not build or publish Docker images | Add Trivy when a container build job lands in CI |
 | Dependabot grouping | Weekly Monday PRs for backend + frontend | Review and merge grouped updates |

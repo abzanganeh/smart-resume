@@ -25,6 +25,7 @@ import { fetchMe, patchOnboarding } from "@/lib/auth/api"
 import {
   needsOnboarding,
   onboardingStepAfterMasterUpload,
+  ONBOARDING_JOB_TITLES_STEP_INDEX,
   ONBOARDING_MASTER_STEP_INDEX,
   parseOnboardingStepParam,
   postOnboardingDestination,
@@ -48,11 +49,12 @@ function OnboardingAiStep() {
   return (
     <div className="space-y-5 text-left max-w-md mx-auto">
       <p className="text-slate-600 dark:text-slate-400 text-sm text-center leading-relaxed">
-        {PRODUCT_NAME} runs the AI for you. Free accounts start with{" "}
+        {PRODUCT_NAME} runs platform AI for you — no API key and no setup. Free accounts
+        start with{" "}
         <strong className="text-slate-900 dark:text-slate-200">
           {FREE_TIER_STARTING_CREDITS} credits
         </strong>
-        ; subscribers use monthly plan limits instead.
+        ; paid plans use monthly limits instead of the credit wallet.
       </p>
 
       <div className="rounded-xl border border-amber-400/60 bg-amber-500/5 dark:bg-amber-400/5 ring-1 ring-amber-400/30 p-4">
@@ -66,8 +68,9 @@ function OnboardingAiStep() {
           </span>
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-          No API key needed — platform AI is included. Most items below cost one credit;
-          story generate and save are free the first time.
+          Every self-serve plan uses our hosted models. Most actions below cost one credit;
+          story generate and save are free the first time. Need custom limits or routing? The
+          Customized tier on our pricing page is contact-us only.
         </p>
       </div>
 
@@ -104,8 +107,8 @@ const STEPS = [
     cta: "Continue",
   },
   {
-    title: "How do you want to use AI?",
-    subtitle: "Platform AI is included — here's what your free credits cover.",
+    title: `How AI works on ${PRODUCT_NAME}`,
+    subtitle: "Platform AI is included on every self-serve plan — here's how credits work.",
     icon: Zap,
     bodyKey: "ai" as const,
     cta: "Continue",
@@ -119,7 +122,8 @@ const STEPS = [
   },
   {
     title: "Which roles should we search for?",
-    subtitle: "Pick job titles that match your experience — we'll find openings from our company corpus.",
+    subtitle:
+      "Add at least one target title now, or skip and set them later on Jobs.",
     icon: Search,
     bodyKey: "jobTitles" as const,
     cta: "Continue",
@@ -147,6 +151,8 @@ function OnboardingPageContent() {
   const [uploadingMaster, setUploadingMaster] = useState(false)
   const stepRef = useRef(step)
   const updateRef = useRef(update)
+  const initialHydrateDoneRef = useRef(false)
+  const urlStepAtMountRef = useRef<string | null>(searchParams.get("step"))
   useEffect(() => {
     stepRef.current = step
   }, [step])
@@ -155,22 +161,21 @@ function OnboardingPageContent() {
   }, [update])
 
   const token = session?.backendAccessToken
-  const urlStepParam = searchParams.get("step")
 
   useEffect(() => {
     if (status === "loading" || !session) return
+    if (initialHydrateDoneRef.current) return
 
     if (status === "authenticated" && !token) {
       setError(
         friendlyAuthError(session.error ?? "missing_api_token"),
       )
+      initialHydrateDoneRef.current = true
       setHydrated(true)
       return
     }
 
     if (!token) return
-    // Re-fetch when landing with ?step=… (e.g. returning from profile); otherwise hydrate once.
-    if (hydrated && !urlStepParam) return
 
     let cancelled = false
 
@@ -183,10 +188,6 @@ function OnboardingPageContent() {
         ])
         if (cancelled) return
 
-        // Fire-and-forget: awaiting update() causes NextAuth to briefly flip
-        // status to "loading", which cancels this effect before setHydrated(true)
-        // runs, creating an infinite loop. The session sync is best-effort here;
-        // completeOnboarding() does a proper await before navigating away.
         void updateRef.current({ backendUser: user })
 
         if (!needsOnboarding(user)) {
@@ -194,7 +195,7 @@ function OnboardingPageContent() {
           return
         }
 
-        const urlStep = parseOnboardingStepParam(urlStepParam)
+        const urlStep = parseOnboardingStepParam(urlStepAtMountRef.current)
         const hasMaster = liveChunkCount(chunks) > 0
         const hasJobTitles = Boolean(prefs?.preferred_titles_confirmed)
         const stepIndex = resolveOnboardingStepIndex(user, {
@@ -213,14 +214,25 @@ function OnboardingPageContent() {
           setError((err as Error).message || "Could not load onboarding progress.")
         }
       } finally {
-        if (!cancelled) setHydrated(true)
+        if (!cancelled) {
+          initialHydrateDoneRef.current = true
+          setHydrated(true)
+        }
       }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [status, token, urlStepParam, hydrated, router])
+  }, [status, token, router, session])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const stepOneBased = String(step + 1)
+    if (searchParams.get("step") !== stepOneBased) {
+      router.replace(`/onboarding?step=${stepOneBased}`, { scroll: false })
+    }
+  }, [step, hydrated, router, searchParams])
 
   async function syncSession(user: Awaited<ReturnType<typeof patchOnboarding>>) {
     await update({ backendUser: user })
@@ -288,7 +300,7 @@ function OnboardingPageContent() {
   const Icon = current.icon
   const isLast = step === STEPS.length - 1
   const isMasterStep = step === 2
-  const isJobTitlesStep = step === 3
+  const isJobTitlesStep = step === ONBOARDING_JOB_TITLES_STEP_INDEX
 
   function handlePrimary() {
     setError(null)
@@ -301,7 +313,7 @@ function OnboardingPageContent() {
         }
         if (isMasterStep) {
           if (hasMasterResume) {
-            setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+            await advancePastMasterStep()
             return
           }
           setError("Upload or paste your master resume above, or skip for now.")
@@ -318,11 +330,18 @@ function OnboardingPageContent() {
     })
   }
 
-  function handleSkipMaster() {
+  async function advancePastMasterStep() {
+    if (!session?.backendUser?.onboarding_ai_choice) {
+      await saveAiChoice(aiChoice)
+    }
+    setStep(onboardingStepAfterMasterUpload(ONBOARDING_MASTER_STEP_INDEX))
+  }
+
+  async function handleSkipMaster() {
     setError(null)
     startTransition(async () => {
       try {
-        await completeOnboarding(aiChoice)
+        await advancePastMasterStep()
       } catch (err: unknown) {
         setError((err as Error).message || "Something went wrong. Please try again.")
       }
@@ -376,6 +395,9 @@ function OnboardingPageContent() {
           <JobTitlePicker
             accessToken={token}
             submitLabel="Continue"
+            manualTitlesOnly={!hasMasterResume}
+            onBack={() => setStep(ONBOARDING_MASTER_STEP_INDEX)}
+            onSkip={() => setStep(4)}
             onComplete={async () => {
               setStep(4)
             }}

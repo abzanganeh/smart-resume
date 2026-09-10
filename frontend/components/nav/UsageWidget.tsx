@@ -130,6 +130,7 @@ export function UsageWidget() {
         used={creditsUsed}
         cap={creditCap}
         label={locked ? "Verify email" : "Credits left"}
+        showRemaining
         compact
         className="flex-1 min-w-[5rem] max-w-[9rem]"
       />

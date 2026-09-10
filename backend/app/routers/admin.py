@@ -82,7 +82,11 @@ from app.services.auth.password import (
     hash_password,
     verify_password,
 )
-from app.services.billing.credits import grant_credit
+from app.services.billing.credits import get_balance, grant_credit, _refresh_user_credit_balance_cache
+from app.services.billing.plan_code import resolve_plan_code_for_subscription
+from app.services.billing.price_resolver import reverse_lookup_code
+from app.services.billing.public_prices import display_name_for_plan_code
+from app.services.billing.tier_limits_lookup import get_active_tier_limits
 from app.services.export.closure import (
     execute_closure,
     schedule_closure,
@@ -1787,6 +1791,8 @@ class AdminUserSummary(BaseModel):
     email: str
     display_name: str
     tier: str
+    credit_balance: int = 0
+    subscription_status: str | None = None
     suspended_at: datetime | None = None
     closure_requested_at: datetime | None = None
     created_at: datetime
@@ -1794,7 +1800,6 @@ class AdminUserSummary(BaseModel):
 
 class AdminUserDetail(AdminUserSummary):
     email_verified_at: datetime | None = None
-    credit_balance: int
     has_totp: bool
     auth_provider: str
     blocked_companies: list[str] = []
@@ -1803,6 +1808,10 @@ class AdminUserDetail(AdminUserSummary):
     signup_ip: str | None = None
     signup_abuse_review_flag: str | None = None
     suspension_reason: str | None = None
+    stripe_customer_id: str | None = None
+    subscription_resumes_used: int | None = None
+    subscription_resumes_limit: int | None = None
+    resume_count: int | None = None
 
 
 class AdminUserListResponse(BaseModel):
@@ -1842,18 +1851,26 @@ async def admin_users_list(
     base = base.order_by(desc(User.created_at)).limit(limit).offset(offset)
     rows = list((await db.execute(base)).scalars().all())
     total = int((await db.execute(count_stmt)).scalar() or 0)
-    items = [
-        AdminUserSummary(
-            id=u.id,
-            email=u.email,
-            display_name=u.display_name,
-            tier=u.tier.value if hasattr(u.tier, "value") else str(u.tier),
-            suspended_at=u.suspended_at,
-            closure_requested_at=u.closure_requested_at,
-            created_at=u.created_at,
+    user_ids = [u.id for u in rows]
+    balances = await _ledger_balances_for_users(db, user_ids)
+    subs_by_user = await _latest_subscriptions_for_users(db, user_ids)
+    items = []
+    for u in rows:
+        sub = subs_by_user.get(u.id)
+        plan_label, _, _, _ = await _subscription_admin_fields(db, sub)
+        items.append(
+            AdminUserSummary(
+                id=u.id,
+                email=u.email,
+                display_name=u.display_name,
+                tier=u.tier.value if hasattr(u.tier, "value") else str(u.tier),
+                credit_balance=balances.get(u.id, 0),
+                subscription_status=plan_label,
+                suspended_at=u.suspended_at,
+                closure_requested_at=u.closure_requested_at,
+                created_at=u.created_at,
+            )
         )
-        for u in rows
-    ]
     return AdminUserListResponse(items=items, total=total)
 
 
@@ -1867,6 +1884,59 @@ async def _load_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
             detail={"code": "user_not_found"},
         )
     return user
+
+
+async def _ledger_balances_for_users(
+    db: AsyncSession, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    if not user_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(CreditTransaction.user_id, func.coalesce(func.sum(CreditTransaction.delta), 0))
+            .where(CreditTransaction.user_id.in_(user_ids))
+            .where(CreditTransaction.credit_kind == CreditKind.free)
+            .group_by(CreditTransaction.user_id)
+        )
+    ).all()
+    return {uid: int(total or 0) for uid, total in rows}
+
+
+async def _latest_subscriptions_for_users(
+    db: AsyncSession, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, Subscription]:
+    if not user_ids:
+        return {}
+    rows = list(
+        (
+            await db.execute(
+                select(Subscription)
+                .where(Subscription.user_id.in_(user_ids))
+                .where(Subscription.status != SubscriptionStatus.expired)
+                .order_by(desc(Subscription.created_at))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_user: dict[uuid.UUID, Subscription] = {}
+    for sub in rows:
+        if sub.user_id not in by_user:
+            by_user[sub.user_id] = sub
+    return by_user
+
+
+async def _subscription_admin_fields(
+    db: AsyncSession, sub: Subscription | None
+) -> tuple[str | None, int | None, int | None, str | None]:
+    if sub is None:
+        return None, None, None, None
+    plan_code = resolve_plan_code_for_subscription(
+        sub, plan_config_code=await reverse_lookup_code(db, sub.stripe_price_id)
+    )
+    limits = await get_active_tier_limits(db, plan_code)
+    label = f"{display_name_for_plan_code(plan_code)} ({sub.status.value})"
+    return label, sub.resumes_used, limits.resumes_per_period, sub.stripe_customer_id
 
 
 @router.get("/users/{user_id}", response_model=AdminUserDetail)
@@ -1888,13 +1958,24 @@ async def admin_users_detail(
     ],
 ) -> AdminUserDetail:
     u = await _load_user_or_404(db, user_id)
+    ledger_balance = await get_balance(
+        db, user_id=u.id, credit_kind=CreditKind.free, for_share=False
+    )
+    subs_by_user = await _latest_subscriptions_for_users(db, [u.id])
+    sub = subs_by_user.get(u.id)
+    plan_label, resumes_used, resumes_limit, stripe_customer_id = (
+        await _subscription_admin_fields(db, sub)
+    )
+    if admin.role == AdminRole.read_only_analyst:
+        stripe_customer_id = None
     return AdminUserDetail(
         id=u.id,
         email=u.email,
         display_name=u.display_name,
         tier=u.tier.value if hasattr(u.tier, "value") else str(u.tier),
+        credit_balance=ledger_balance,
+        subscription_status=plan_label,
         email_verified_at=u.email_verified_at,
-        credit_balance=u.credit_balance,
         has_totp=u.has_totp,
         auth_provider=u.auth_provider.value if hasattr(u.auth_provider, "value") else str(u.auth_provider),
         blocked_companies=list(u.blocked_companies or []),
@@ -1906,6 +1987,10 @@ async def admin_users_detail(
         signup_ip=u.signup_ip,
         signup_abuse_review_flag=u.signup_abuse_review_flag,
         created_at=u.created_at,
+        stripe_customer_id=stripe_customer_id,
+        subscription_resumes_used=resumes_used,
+        subscription_resumes_limit=resumes_limit,
+        resume_count=resumes_used,
     )
 
 
@@ -1915,7 +2000,17 @@ class AdminUserCreditsRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=200)
 
 
-@router.patch("/users/{user_id}/credits", response_model=AuditedResponse)
+class AdminUserCreditsData(BaseModel):
+    new_balance: int
+
+
+class AdminUserCreditsResponse(BaseModel):
+    ok: bool = True
+    audit_log_id: uuid.UUID
+    data: AdminUserCreditsData
+
+
+@router.patch("/users/{user_id}/credits", response_model=AdminUserCreditsResponse)
 @limiter.limit("30/minute")
 async def admin_users_credits(
     request: Request,
@@ -1928,7 +2023,7 @@ async def admin_users_credits(
             require_admin_role(AdminRole.super_admin, AdminRole.support_agent)
         ),
     ],
-) -> AuditedResponse:
+) -> AdminUserCreditsResponse:
     user = await _load_user_or_404(db, user_id)
     if body.delta == 0:
         raise HTTPException(
@@ -1946,6 +2041,21 @@ async def admin_users_credits(
             admin_id=admin.id,
         )
     else:
+        current = await get_balance(
+            db, user_id=user.id, credit_kind=kind, for_share=False
+        )
+        if current + body.delta < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "revoke_exceeds_balance",
+                    "message": (
+                        f"Cannot remove {abs(body.delta)} credits; "
+                        f"ledger balance is {current}."
+                    ),
+                    "current_balance": current,
+                },
+            )
         # Negative deltas are recorded directly so refunds / clawbacks
         # show up as a single ledger row even when the projected
         # balance is already zero.
@@ -1960,6 +2070,8 @@ async def admin_users_credits(
         )
         db.add(row)
         await db.flush()
+        if kind == CreditKind.free:
+            await _refresh_user_credit_balance_cache(db, user_id=user.id)
     audit_row = await write_admin_audit(
         db,
         actor_admin_id=admin.id,
@@ -1973,7 +2085,13 @@ async def admin_users_credits(
         },
         **_audit_ctx(request),
     )
-    return AuditedResponse(audit_log_id=audit_row.id)
+    new_balance = await get_balance(
+        db, user_id=user.id, credit_kind=kind, for_share=False
+    )
+    return AdminUserCreditsResponse(
+        audit_log_id=audit_row.id,
+        data=AdminUserCreditsData(new_balance=new_balance),
+    )
 
 
 class AdminUserSubscriptionRequest(BaseModel):

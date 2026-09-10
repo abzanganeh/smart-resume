@@ -3,6 +3,7 @@
 #
 # weasyprint — SSRF/LFI mitigated by app/services/export/weasyprint_safe.py (LLM10)
 PYSEC-2026-3412
+CVE-2026-55073
 #
 # ecdsa — transitive via python-jose; TalioCV signs JWTs with HS256 (AUTH_SECRET),
 # not ECDSA. Minimize exposure until python-jose removes/replaces ecdsa.

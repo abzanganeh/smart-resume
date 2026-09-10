@@ -83,7 +83,11 @@ def test_pip_audit_allowlist_entries_are_documented() -> None:
         if stripped:
             vuln_ids.append(stripped)
 
-    assert vuln_ids, "allowlist must contain at least one PYSEC id"
+    assert vuln_ids, "allowlist must contain at least one vulnerability id"
     for vid in vuln_ids:
-        assert vid.startswith("PYSEC-"), f"unexpected allowlist entry: {vid}"
-        assert vid in security_md or vid in raw, f"{vid} must be documented in SECURITY.md or allowlist comments"
+        assert vid.startswith("PYSEC-") or vid.startswith("CVE-"), (
+            f"unexpected allowlist entry: {vid}"
+        )
+        assert vid in security_md or vid in raw, (
+            f"{vid} must be documented in SECURITY.md or allowlist comments"
+        )

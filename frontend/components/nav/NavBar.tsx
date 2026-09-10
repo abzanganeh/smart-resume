@@ -35,6 +35,7 @@ export function NavBar() {
   const pillarRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [hadUserMenu, setHadUserMenu] = useState(false)
   const [activeLandingHref, setActiveLandingHref] = useState<string | null>(null)
+  const [locationHash, setLocationHash] = useState("")
 
   const accessToken =
     session?.error === "TokenExpired" ? undefined : session?.backendAccessToken
@@ -55,6 +56,10 @@ export function NavBar() {
     setActiveLandingHref(
       landingNavHrefFromLocation(pathname, window.location.hash),
     )
+    setLocationHash(window.location.hash)
+    const onHashChange = () => setLocationHash(window.location.hash)
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
   }, [pathname])
 
   function isLandingNavActive(href: string) {
@@ -102,11 +107,11 @@ export function NavBar() {
   }
 
   function isActive(href: string) {
-    return navPathIsActive(pathname, href)
+    return navPathIsActive(pathname, href, locationHash)
   }
 
   function pillarIsActive(pillar: (typeof NAV_PILLARS)[number]) {
-    return navPillarIsActive(pathname, pillar)
+    return navPillarIsActive(pathname, pillar, locationHash)
   }
 
   return (

@@ -43,11 +43,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import is_production_grade, settings
 from app.models.admin import AdminRole, AdminUser
-from app.models.user import AuthProvider, User, UserTier
+from app.models.user import AuthProvider, CreditKind, User, UserTier
 from app.services.admin_auth.audit import write_admin_audit
 from app.services.auth.password import hash_password
+from app.services.billing.credits import get_balance, grant_credit
 
 log = structlog.get_logger("admin.bootstrap")
+
+_STAGING_BOOTSTRAP_CREDITS = 999_999
+
+
+async def _top_up_bootstrap_ledger(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+) -> None:
+    """Keep bootstrap staging accounts topped up via the credit ledger."""
+    ledger = await get_balance(
+        session, user_id=user_id, credit_kind=CreditKind.free, for_share=False
+    )
+    if ledger < _STAGING_BOOTSTRAP_CREDITS:
+        await grant_credit(
+            session,
+            user_id=user_id,
+            credit_kind=CreditKind.free,
+            delta=_STAGING_BOOTSTRAP_CREDITS - ledger,
+            reason="bootstrap_staging",
+        )
 
 
 def _utcnow() -> datetime:
@@ -109,11 +131,13 @@ async def _ensure_linked_app_user(
             accepted_tos_version="bootstrap",
         )
         session.add(user)
+        await session.flush()
+        await _top_up_bootstrap_ledger(session, user_id=user.id)
         log.info(
             "admin.bootstrap.app_user_created",
             email=email,
             tier="pro",
-            credits=999_999,
+            credits=_STAGING_BOOTSTRAP_CREDITS,
         )
     else:
         # Upgrade existing user but never downgrade.
@@ -121,8 +145,20 @@ async def _ensure_linked_app_user(
         if existing.tier != UserTier.pro:
             existing.tier = UserTier.pro
             changed = True
-        if existing.credit_balance < 999_999:
-            existing.credit_balance = 999_999
+        ledger_before = await get_balance(
+            session,
+            user_id=existing.id,
+            credit_kind=CreditKind.free,
+            for_share=False,
+        )
+        await _top_up_bootstrap_ledger(session, user_id=existing.id)
+        ledger_after = await get_balance(
+            session,
+            user_id=existing.id,
+            credit_kind=CreditKind.free,
+            for_share=False,
+        )
+        if ledger_after > ledger_before:
             changed = True
         if existing.email_verified_at is None:
             existing.email_verified_at = _utcnow()

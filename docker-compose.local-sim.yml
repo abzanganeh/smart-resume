@@ -9,10 +9,12 @@ services:
       # Local smoke: pick up backend search/auth fixes without a full image rebuild.
       - ./backend/app:/app/app
     environment:
+      # Workstation smoke: avoid slowapi 429s while clicking through onboarding.
+      APP_ENV: local
       # Force Mailpit delivery instead of Resend for verify-email smoke.
-      - RESEND_API_KEY=
+      RESEND_API_KEY:
       # Repeated smoke runs share one host IP.
-      - SIGNUP_IP_DAILY_LIMIT=200
+      SIGNUP_IP_DAILY_LIMIT: 200
 
   mailpit:
     ports: !override

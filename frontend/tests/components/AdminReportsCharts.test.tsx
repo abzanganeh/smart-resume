@@ -8,6 +8,7 @@
  *   npx tsx tests/components/AdminReportsCharts.test.tsx
  */
 
+import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
   Bar,

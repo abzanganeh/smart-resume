@@ -5,7 +5,9 @@ from __future__ import annotations
 from app.agent.phase3_truthfulness import (
     TruthfulnessContext,
     apply_truthfulness_guards,
+    backfill_empty_experience_bullets,
     enforce_entry_integrity,
+    restore_missing_experience,
     restore_missing_sections,
     validate_bullet_metrics,
 )
@@ -112,6 +114,85 @@ def test_enforce_entry_integrity_drops_invented_company() -> None:
     result = enforce_entry_integrity(output, parsed)
     assert result.experience == []
     assert any("dropped experience entry" in n.lower() for n in result.rewrite_notes)
+
+
+def test_enforce_entry_integrity_keeps_prior_manual_entry_with_alias() -> None:
+    prior = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(
+                title="Founder",
+                company="IdMe24",
+                dates="2024",
+                bullets=["Built identity platform."],
+            )
+        ]
+    )
+    output = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(
+                title="Founder",
+                company="IdMe24 — Identity Platforms",
+                dates="2024",
+                bullets=["Built identity platform."],
+            )
+        ]
+    )
+    result = enforce_entry_integrity(output, ParsedResume(), prior=prior)
+    assert len(result.experience) == 1
+    assert "IdMe24" in result.experience[0].company
+
+
+def test_restore_missing_experience_re_injects_prior_only_role() -> None:
+    prior = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(
+                title="Founder",
+                company="IdMe24",
+                dates="2024",
+                bullets=["Built identity platform."],
+            )
+        ]
+    )
+    output = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(
+                title="Engineer",
+                company="SecureAuth",
+                dates="2020-2024",
+                bullets=["Tested flows."],
+            )
+        ]
+    )
+    result = restore_missing_experience(output, ParsedResume(), prior=prior)
+    companies = {entry.company for entry in result.experience}
+    assert "IdMe24" in companies
+    assert "SecureAuth" in companies
+
+
+def test_backfill_empty_experience_bullets_from_parsed() -> None:
+    parsed = ParsedResume(
+        experience=[
+            ExperienceEntry(
+                title="Engineer",
+                company="Acceptto",
+                dates="2018-2020",
+                bullets=["Shipped auth flows."],
+            )
+        ]
+    )
+    output = TailoredResumeOutput(
+        experience=[
+            TailoredExperienceEntry(
+                title="Engineer",
+                company="Acceptto",
+                dates="2018-2020",
+                bullets=[],
+            )
+        ]
+    )
+    result = backfill_empty_experience_bullets(output, parsed)
+    assert result.experience[0].bullets == ["Shipped auth flows."]
+    assert any("restored bullets" in n.lower() for n in result.rewrite_notes)
 
 
 def test_restore_missing_sections_re_injects_education_and_projects() -> None:
