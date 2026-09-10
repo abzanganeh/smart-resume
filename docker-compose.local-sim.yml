@@ -10,7 +10,7 @@ services:
       - ./backend/app:/app/app
     environment:
       # Workstation smoke: avoid slowapi 429s while clicking through onboarding.
-      APP_ENV: development
+      APP_ENV: local
       # Force Mailpit delivery instead of Resend for verify-email smoke.
       RESEND_API_KEY:
       # Repeated smoke runs share one host IP.

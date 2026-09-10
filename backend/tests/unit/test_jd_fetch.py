@@ -44,7 +44,31 @@ def test_assert_safe_fetch_url_blocks_loopback() -> None:
         assert_safe_fetch_url("http://127.0.0.1/jobs")
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://10.0.0.1/jobs",
+        "http://192.168.1.20/jobs",
+        "http://169.254.169.254/latest/meta-data",
+        "http://[::1]/jobs",
+        "http://localhost/jobs",
+        "http://metadata.google.internal/",
+        "file:///etc/passwd",
+        "ftp://jobs.lever.co/acme/x",
+    ],
+)
+def test_assert_safe_fetch_url_blocks_private_and_metadata(url: str) -> None:
+    with pytest.raises(ValueError, match="http\\(s\\)|not allowed|private|restricted"):
+        assert_safe_fetch_url(url)
+
+
+def test_parse_lever_posting_url_rejects_non_lever() -> None:
+    assert parse_lever_posting_url("https://example.com/jobs/123") is None
+    assert parse_lever_posting_url("not-a-url") is None
+
+
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="live Lever network; covered by parse + SSRF unit tests")
 async def test_fetch_jd_from_url_lever_api() -> None:
     from app.services.jd_fetch import fetch_jd_from_url
 

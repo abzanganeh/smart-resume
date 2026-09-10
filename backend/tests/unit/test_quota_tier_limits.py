@@ -202,6 +202,10 @@ async def test_subscriber_resume_limit_raises_not_credit_fallback() -> None:
     assert exc_info.value.used == 50
     assert exc_info.value.limit == 50
     mock_consume.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_story_byok_path_removed_whisper_gated() -> None:
     """Whisper path invokes tier gate before story quota."""
     mock_db = AsyncMock()
     mock_user = MagicMock(is_suspended=False, id=uuid4())

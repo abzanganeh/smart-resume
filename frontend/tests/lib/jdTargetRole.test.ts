@@ -24,3 +24,10 @@ test("sanitizeContactUrl normalizes bare URLs", () => {
   assert.equal(sanitizeContactUrl("linkedin", "linkedin.com/in/jane"), "https://linkedin.com/in/jane");
   assert.equal(sanitizeContactUrl("github", "github.com/jane"), "https://github.com/jane");
 });
+
+test("sanitizeContactUrl rejects dangerous schemes", () => {
+  assert.equal(sanitizeContactUrl("linkedin", "javascript:alert(1)//x.com"), "");
+  assert.equal(sanitizeContactUrl("github", "data:text/html,evil"), "");
+  assert.equal(sanitizeContactUrl("linkedin", "file:///etc/passwd"), "");
+  assert.equal(sanitizeContactUrl("github", "vbscript:msgbox(1)"), "");
+});

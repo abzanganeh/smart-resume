@@ -11,6 +11,8 @@ export function sanitizeContactUrl(
   const trimmed = (value ?? "").trim();
   if (!trimmed) return "";
 
+  if (/^(javascript|data|file|vbscript):/i.test(trimmed)) return "";
+
   if (LABEL_ONLY[kind].test(trimmed)) return "";
 
   if (/^https?:\/\//i.test(trimmed)) return trimmed;

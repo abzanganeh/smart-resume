@@ -165,7 +165,7 @@ async def fetch_jd_from_url(url: str, *, max_chars: int) -> FetchedJD:
     headers = {"User-Agent": f"Mozilla/5.0 (compatible; {PRODUCT_NAME}/1.0)"}
 
     async with httpx.AsyncClient(
-        timeout=15,
+        timeout=httpx.Timeout(15.0, connect=5.0),
         follow_redirects=True,
         event_hooks={"request": [_validate_request]},
     ) as client:

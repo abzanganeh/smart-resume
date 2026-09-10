@@ -115,8 +115,13 @@ async def test_admin_user_list_shows_ledger_balance(
     _, headers = await issue_admin_session(admin.id)
 
     resp = await app_client.get(
-        f"/api/admin/users/{user.id}",
+        "/api/admin/users",
+        params={"q": user.email},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["credit_balance"] == 4
+    items = resp.json()["items"]
+    match = next((row for row in items if row["id"] == str(user.id)), None)
+    assert match is not None
+    assert match["credit_balance"] == 4
+    assert "subscription_status" in match

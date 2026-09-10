@@ -1966,6 +1966,8 @@ async def admin_users_detail(
     plan_label, resumes_used, resumes_limit, stripe_customer_id = (
         await _subscription_admin_fields(db, sub)
     )
+    if admin.role == AdminRole.read_only_analyst:
+        stripe_customer_id = None
     return AdminUserDetail(
         id=u.id,
         email=u.email,
