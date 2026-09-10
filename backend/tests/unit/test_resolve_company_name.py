@@ -61,3 +61,17 @@ def test_resolve_company_name_from_at_pattern() -> None:
 def test_resolve_company_name_unknown_when_no_signal() -> None:
     session = _session("Looking for a strong communicator.")
     assert resolve_company_name(session) == "Unknown"
+
+
+WATCHER_JD = """Forward Deployed Engineer (Product)
+
+We are building Watcher, a coding agent security product. Watcher is deployed in production and monitors billions of agent tokens per month across engineering teams at agent-building scale-ups and multinational enterprises.
+
+THE OPPORTUNITY
+You will work directly with customers.
+"""
+
+
+def test_resolve_company_name_rejects_prose_second_line() -> None:
+    session = _session(WATCHER_JD)
+    assert resolve_company_name(session) == "Unknown"

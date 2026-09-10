@@ -258,6 +258,23 @@ export function DashboardView({ token }: { token: string }) {
     }
   }, [token, search, statusFilters, dateFrom, dateTo, atsMin, atsMax, sort, page])
 
+  // Nav uses /dashboard#tailored-resumes; Next.js client routing does not auto-scroll.
+  useEffect(() => {
+    if (loading) return
+
+    const scrollToTailoredResumes = () => {
+      if (window.location.hash !== "#tailored-resumes") return
+      document.getElementById("tailored-resumes")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    }
+
+    scrollToTailoredResumes()
+    window.addEventListener("hashchange", scrollToTailoredResumes)
+    return () => window.removeEventListener("hashchange", scrollToTailoredResumes)
+  }, [loading, listLoading, total])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {

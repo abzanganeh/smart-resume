@@ -86,7 +86,7 @@ export function DashboardStepStack({
         <DashboardStepCard
           step={1}
           icon={FileText}
-          title={`Master resume ready · ${masterChunkCount} section${masterChunkCount === 1 ? "" : "s"}${masterUpdatedAt ? ` (${formatDate(masterUpdatedAt)})` : ""}`}
+          title={`Master resume ready · ${masterChunkCount} searchable segment${masterChunkCount === 1 ? "" : "s"}${masterUpdatedAt ? ` (${formatDate(masterUpdatedAt)})` : ""}`}
           description=""
           ready
           primaryHref="/session/new"

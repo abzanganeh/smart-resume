@@ -36,7 +36,7 @@ async def build_recent_activity(
                 "type": "master_resume",
                 "at": master.updated_at or master.created_at,
                 "title": "Master resume indexed",
-                "subtitle": f"{master.chunk_count} section{'s' if master.chunk_count != 1 else ''} embedded",
+                "subtitle": f"{master.chunk_count} searchable segment{'s' if master.chunk_count != 1 else ''} indexed",
                 "meta": {"chunk_count": master.chunk_count},
             }
         )
