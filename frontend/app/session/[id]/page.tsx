@@ -31,8 +31,16 @@ import { MetricsGate } from "@/components/session/MetricsGate";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
+import {
+  mechanicalOutcomeFromResult,
+  type QuickWinMechanicalOutcome,
+} from "@/components/session/QuickWinCard";
 import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
-import { tryApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
+import {
+  canApplyMechanicalQuickWin,
+  tryApplyMechanicalQuickWin,
+  tryApplyMechanicalReinforceAt,
+} from "@/lib/mechanicalFix";
 import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
@@ -59,8 +67,13 @@ import {
 } from "@/lib/trackApplicationFlow";
 import { TrackerApiError } from "@/lib/tracker";
 import { dispatchCreditsExhausted } from "@/lib/offerPopup";
+import {
+  defaultSessionStep,
+  normalizeSessionStep,
+  type SessionTailoringStep,
+} from "@/lib/sessionStep";
 
-type Step = "analysis" | "rewrite" | "export";
+type Step = SessionTailoringStep;
 
 const PHASE_FOR_STEP: Record<Exclude<Step, "analysis">, number> = {
   rewrite: 3,
@@ -75,17 +88,13 @@ const STEP_LABELS: Record<Step, string> = {
 
 type AnalysisPipeline = { mode: "full" | "audit-only"; phase: 1 | 2 };
 
-function normalizeStep(raw: string | null): Step {
-  if (raw === "keywords" || raw === "audit") return "analysis";
-  if (raw === "rewrite" || raw === "export") return raw;
-  return "analysis";
-}
-
 function SessionContent() {
   const { id: sessionId } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState<Step>(() => normalizeStep(searchParams.get("step")));
+  const [step, setStep] = useState<Step>(() =>
+    normalizeSessionStep(searchParams.get("step")),
+  );
 
   const [keywords, setKeywords] = useState<KeywordExtractionOutput | null>(null);
   const [audit, setAudit] = useState<AuditOutput | null>(null);
@@ -115,6 +124,7 @@ function SessionContent() {
   const [phase1Complete, setPhase1Complete] = useState(false);
   const [stale, setStale] = useState<Record<string, string | null>>({ "3": null, "4": null });
   const [atsScoreHistory, setAtsScoreHistory] = useState<number[]>([]);
+  const [originalAtsScore, setOriginalAtsScore] = useState<number | null>(null);
   const [pendingSuggestions, setPendingSuggestions] = useState<ResumeSuggestion[]>([]);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [phase4RecalcActive, setPhase4RecalcActive] = useState(false);
@@ -136,6 +146,10 @@ function SessionContent() {
   const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
   const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
   const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
+  const [mechanicalOutcomes, setMechanicalOutcomes] = useState<
+    Record<string, QuickWinMechanicalOutcome>
+  >({});
+  const mechanicalUndoRef = useRef<Record<string, TailoredResumeOutput>>({});
   const entryIssueBadges = useMemo(() => {
     const visible = (qa?.blocking_issues ?? []).filter(
       (issue) => !skippedAtsKeys.has(issueKey(issue)),
@@ -148,16 +162,81 @@ function SessionContent() {
   const applyMechanicalFix = useCallback(
     (issue: import("@/lib/api").BlockingIssue) => {
       if (!tailored) return;
-      const updated = tryApplyMechanicalQuickWin(tailored, issue);
-      if (!updated) return;
-      setTailored(updated);
+      const key = issueKey(issue);
+      const result = tryApplyMechanicalQuickWin(tailored, issue);
+      const outcome = mechanicalOutcomeFromResult(result);
+      if (outcome.status === "failed") {
+        setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+        return;
+      }
+
+      const updatedResume = result!.resume;
+      mechanicalUndoRef.current[key] = tailored;
+      setTailored(updatedResume);
+      setEditorSyncKey((k) => k + 1);
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-      setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
-      void saveTailoredResume(sessionId, updated).catch((err) => {
+      setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+      if (outcome.status === "applied") {
+        setAddressedAtsKeys((prev) => new Set(prev).add(key));
+      }
+
+      void saveTailoredResume(sessionId, updatedResume).catch((err) => {
         setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
       });
     },
     [tailored, sessionId],
+  );
+  const applyMechanicalFixAtRole = useCallback(
+    (issue: import("@/lib/api").BlockingIssue, experienceIndex: number) => {
+      if (!tailored) return;
+      const key = issueKey(issue);
+      const result = tryApplyMechanicalReinforceAt(tailored, issue, experienceIndex);
+      const outcome = mechanicalOutcomeFromResult(result);
+      if (outcome.status === "failed") {
+        setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+        return;
+      }
+
+      const updatedResume = result!.resume;
+      mechanicalUndoRef.current[key] = tailored;
+      setTailored(updatedResume);
+      setEditorSyncKey((k) => k + 1);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+      if (outcome.status === "applied") {
+        setAddressedAtsKeys((prev) => new Set(prev).add(key));
+      }
+
+      void saveTailoredResume(sessionId, updatedResume).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
+      });
+    },
+    [tailored, sessionId],
+  );
+  const undoMechanicalFix = useCallback(
+    (issue: import("@/lib/api").BlockingIssue) => {
+      const key = issueKey(issue);
+      const snapshot = mechanicalUndoRef.current[key];
+      if (!snapshot) return;
+      setTailored(snapshot);
+      setEditorSyncKey((k) => k + 1);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setMechanicalOutcomes((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      delete mechanicalUndoRef.current[key];
+      setAddressedAtsKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      void saveTailoredResume(sessionId, snapshot).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save undo.");
+      });
+    },
+    [sessionId],
   );
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
@@ -275,6 +354,9 @@ function SessionContent() {
     setPhase1Complete(!!s.phase1_complete);
     setHasJd(!!s.has_jd);
     setExportCompany(s.export_company ?? null);
+    setOriginalAtsScore(
+      typeof s.original_ats_score === "number" ? s.original_ats_score : null,
+    );
 
     const applyCached = (phaseNum: string) => {
       const cached = s.phases?.[phaseNum];
@@ -469,6 +551,8 @@ function SessionContent() {
     pendingAtsFixRef.current = [];
     setAddressedAtsKeys(new Set());
     setSkippedAtsKeys(new Set());
+    setMechanicalOutcomes({});
+    mechanicalUndoRef.current = {};
   }
 
   function addSuggestions(patches: ResumePatch[]) {
@@ -535,6 +619,35 @@ function SessionContent() {
       () => setPendingSuggestions((prev) => prev.filter((s) => s.id !== id)),
       1200,
     );
+  }
+
+  function retargetOrphanSuggestion(id: string, experienceIndex: number) {
+    const sug = pendingSuggestions.find((s) => s.id === id);
+    if (!sug || !tailored) return;
+    const entry = tailored.experience[experienceIndex];
+    const company = entry?.company?.trim();
+    if (!company) return;
+    setSuggestionError(null);
+    const patch = normalizeResumePatch(tailored, {
+      ...sug.patch,
+      company,
+    });
+    const { updated, applied, failureReason } = applyResumePatch(tailored, patch);
+    if (!applied) {
+      setSuggestionError(
+        failureReason ?? "Could not apply this suggestion to the selected role.",
+      );
+      return;
+    }
+    setTailored(updated);
+    setEditorSyncKey((k) => k + 1);
+    setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+    saveTailoredResume(sessionId, updated).catch((err) => {
+      setRunError(
+        err instanceof Error ? err.message : "Could not save this edit. Please try again.",
+      );
+    });
+    setPendingSuggestions((prev) => prev.filter((s) => s.id !== id));
   }
 
   function acceptAllSuggestions() {
@@ -786,11 +899,21 @@ function SessionContent() {
     let cancelled = false;
     setSessionLoaded(false);
     setAtsScoreHistory([]);
+    setOriginalAtsScore(null);
+    setMechanicalOutcomes({});
+    mechanicalUndoRef.current = {};
 
     checkSession(sessionId)
       .then((s) => {
         if (cancelled) return;
         hydrateFromSession(s);
+        if (!searchParams.get("step")) {
+          const initial = defaultSessionStep(s);
+          if (initial !== "analysis") {
+            setStep(initial);
+            router.replace(`/session/${sessionId}?step=${initial}`, { scroll: false });
+          }
+        }
         trackRecentSession(sessionId, s.resume_raw?.slice(0, 40) || undefined);
         getVersions(sessionId)
           .then((r) => {
@@ -808,7 +931,7 @@ function SessionContent() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, hydrateFromSession]);
+  }, [sessionId, hydrateFromSession, router, searchParams]);
 
   useEffect(() => {
     runInFlightRef.current = false;
@@ -1191,6 +1314,7 @@ function SessionContent() {
                       output={audit}
                       streaming={auditStreaming}
                       sessionId={sessionId}
+                      originalAtsScore={originalAtsScore}
                       initialClaimedKeywords={sessionClaimedKeywords}
                       initialExtraNotes={sessionExtraNotes}
                       initialBulletFixes={sessionBulletFixes}
@@ -1388,6 +1512,7 @@ function SessionContent() {
                       onAcceptAllSuggestions={acceptAllSuggestions}
                       onRejectSuggestion={rejectSuggestion}
                       onDismissSuggestion={dismissSuggestion}
+                      onRetargetOrphanSuggestion={retargetOrphanSuggestion}
                       entryIssueBadges={entryIssueBadges}
                     />
                   </>
@@ -1432,6 +1557,8 @@ function SessionContent() {
                             output={qa}
                             streaming={atsRecalcRunning}
                             scoreHistory={atsScoreHistory}
+                            originalAtsScore={originalAtsScore}
+                            tailored={tailored}
                             variant="sidebar"
                             staleSince={stale["4"]}
                             onRecalculate={recalculateAtsWithConfirm}
@@ -1443,6 +1570,9 @@ function SessionContent() {
                             onSendToChat={openChatForAtsIssues}
                             onScrollToAnchor={scrollToIssueAnchor}
                             onApplyMechanicalFix={applyMechanicalFix}
+                            mechanicalOutcomes={mechanicalOutcomes}
+                            onUndoMechanicalFix={undoMechanicalFix}
+                            onApplyMechanicalFixAtRole={applyMechanicalFixAtRole}
                           />
                         ) : (
                           <p className="text-slate-600 dark:text-slate-400 text-xs py-4 text-center">
@@ -1519,6 +1649,8 @@ function SessionContent() {
                   output={qa}
                   streaming={isStreaming && !showProgress}
                   scoreHistory={atsScoreHistory}
+                  originalAtsScore={originalAtsScore}
+                  tailored={tailored}
                   variant="primary"
                   staleSince={stale["4"]}
                   onRecalculate={recalculateAtsWithConfirm}
@@ -1533,6 +1665,9 @@ function SessionContent() {
                   }}
                   onScrollToAnchor={scrollToIssueAnchor}
                   onApplyMechanicalFix={applyMechanicalFix}
+                  mechanicalOutcomes={mechanicalOutcomes}
+                  onUndoMechanicalFix={undoMechanicalFix}
+                  onApplyMechanicalFixAtRole={applyMechanicalFixAtRole}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

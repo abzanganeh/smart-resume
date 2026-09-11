@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, X, Zap } from "lucide-react";
-import { type BlockingIssue, type IssueAnchor, type QAOutput } from "@/lib/api";
+import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, Zap } from "lucide-react";
+import { type BlockingIssue, type IssueAnchor, type QAOutput, type TailoredResumeOutput } from "@/lib/api";
+import { canApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
+import { QuickWinCard, shouldShowUndoButton, type QuickWinMechanicalOutcome } from "./QuickWinCard";
 
 interface Props {
   output: QAOutput | null;
   streaming?: boolean;
   scoreHistory?: number[];
+  /** Same-rubric ATS score for the original resume before tailoring. */
+  originalAtsScore?: number | null;
+  /** Current tailored resume — used to decide if Apply fix can run. */
+  tailored?: TailoredResumeOutput | null;
   /** Issue keys greyed out after the user accepted a chat patch for them. */
   addressedKeys?: ReadonlySet<string>;
   /** Issue keys hidden after the user clicked Skip. */
@@ -34,6 +40,11 @@ interface Props {
   onScrollToAnchor?: (anchor: IssueAnchor) => void;
   /** Apply a mechanical one-click fix (e.g. insert missing keyword into Skills). */
   onApplyMechanicalFix?: (issue: BlockingIssue) => void;
+  /** Per-issue mechanical apply outcome shown on the quick-win card. */
+  mechanicalOutcomes?: Readonly<Record<string, QuickWinMechanicalOutcome>>;
+  /** Revert the last mechanical apply for a quick-win issue. */
+  onUndoMechanicalFix?: (issue: BlockingIssue) => void;
+  onApplyMechanicalFixAtRole?: (issue: BlockingIssue, experienceIndex: number) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -156,26 +167,39 @@ function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
   );
 }
 
-function ScoreHistory({ scores }: { scores: number[] }) {
-  if (scores.length < 2) return null;
-
-  const baseline = scores[0];
+function ScoreHistory({
+  scores,
+  originalAtsScore,
+}: {
+  scores: number[];
+  originalAtsScore?: number | null;
+}) {
   const latest = scores[scores.length - 1];
+  const baseline =
+    typeof originalAtsScore === "number" ? originalAtsScore : scores[0];
+  if (latest === undefined || baseline === undefined) return null;
+  if (scores.length < 2 && typeof originalAtsScore !== "number") return null;
+  if (typeof originalAtsScore === "number" && latest === originalAtsScore) return null;
+
   const delta = latest - baseline;
   const trendUp = delta > 0;
   const unchanged = delta === 0;
+  const trendScores =
+    typeof originalAtsScore === "number"
+      ? [originalAtsScore, ...scores.filter((score) => score !== originalAtsScore)]
+      : scores;
 
   // Mini sparkline
   const w = 80;
   const h = 24;
   const pad = 3;
-  const min = Math.min(...scores, 0);
-  const max = Math.max(...scores, 100);
+  const min = Math.min(...trendScores, 0);
+  const max = Math.max(...trendScores, 100);
   const range = max - min || 1;
 
-  const points = scores
+  const points = trendScores
     .map((s, i) => {
-      const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+      const x = pad + (i / (trendScores.length - 1)) * (w - pad * 2);
       const y = h - pad - ((s - min) / range) * (h - pad * 2);
       return `${x},${y}`;
     })
@@ -188,7 +212,9 @@ function ScoreHistory({ scores }: { scores: number[] }) {
       {/* Baseline → current comparison */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-slate-600 dark:text-slate-400">Baseline</span>
+          <span className="text-slate-600 dark:text-slate-400">
+            {typeof originalAtsScore === "number" ? "Original resume" : "Baseline"}
+          </span>
           <span className="font-bold tabular-nums text-slate-600 dark:text-slate-400">{baseline}</span>
           <span className="text-slate-600 dark:text-slate-400">→</span>
           <span className="font-bold tabular-nums text-slate-800 dark:text-slate-200">Now {latest}</span>
@@ -223,8 +249,8 @@ function ScoreHistory({ scores }: { scores: number[] }) {
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          {scores.map((s, i) => {
-            const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+          {trendScores.map((s, i) => {
+            const x = pad + (i / (trendScores.length - 1)) * (w - pad * 2);
             const y = h - pad - ((s - min) / range) * (h - pad * 2);
             return (
               <circle
@@ -232,112 +258,21 @@ function ScoreHistory({ scores }: { scores: number[] }) {
                 cx={x}
                 cy={y}
                 r={2.5}
-                fill={i === scores.length - 1 ? lineColor : "#475569"}
+                fill={i === trendScores.length - 1 ? lineColor : "#475569"}
               />
             );
           })}
         </svg>
-        <span className="text-[10px] text-slate-600 dark:text-slate-400">{scores.length} recalculations</span>
-      </div>
-    </div>
-  );
-}
-
-
-function QuickWinCard({
-  issue,
-  addressed = false,
-  onSkip,
-  onFixWithAI,
-  onApplyMechanical,
-}: {
-  issue: BlockingIssue;
-  addressed?: boolean;
-  onSkip: () => void;
-  onFixWithAI?: () => void;
-  onApplyMechanical?: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "border rounded-xl p-3 space-y-2 transition-colors",
-        addressed
-          ? "bg-slate-100/50 dark:bg-slate-800/50 border-slate-400 dark:border-slate-600/60 opacity-75"
-          : "bg-emerald-400/5 border-emerald-400/20",
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <Zap
-          className={cn(
-            "w-4 h-4 shrink-0 mt-0.5",
-            addressed ? "text-slate-600 dark:text-slate-400" : "text-emerald-700 dark:text-emerald-400",
-          )}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={cn(
-                "text-[10px] uppercase tracking-wide font-semibold",
-                addressed ? "text-slate-600 dark:text-slate-400" : "text-emerald-700 dark:text-emerald-400/80",
-              )}
-            >
-              {CATEGORY_LABELS[issue.category]}
-            </span>
-            {addressed && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-400 border border-slate-400 dark:border-slate-600/60">
-                Addressed
-              </span>
-            )}
-          </div>
-          <p className={cn("text-sm mt-0.5", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-800 dark:text-slate-200")}>
-            {issue.description}
-          </p>
-          <p className={cn("text-xs mt-1", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-600 dark:text-slate-400")}>
-            {issue.suggestion}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        {onApplyMechanical && !addressed && (
-          <button
-            type="button"
-            onClick={onApplyMechanical}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-500/25 transition-colors"
-          >
-            <Check className="w-3 h-3" />
-            Apply fix
-          </button>
-        )}
-        {onFixWithAI && (
-          <button
-            type="button"
-            onClick={onFixWithAI}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-              addressed
-                ? "bg-slate-200/60 dark:bg-slate-700/60 border border-slate-400 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600/60 hover:text-slate-900 dark:hover:text-slate-200"
-                : "bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 text-amber-700 dark:text-amber-400 hover:bg-amber-400/20",
-            )}
-          >
-            <MessageSquare className="w-3 h-3" />
-            {addressed ? "Fix again" : "Fix with AI"}
-          </button>
-        )}
-        {!addressed && (
-          <button
-            type="button"
-            onClick={onSkip}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-400 transition-colors"
-          >
-            <X className="w-3 h-3" />
-            Skip
-          </button>
+        {scores.length >= 2 && (
+          <span className="text-[10px] text-slate-600 dark:text-slate-400">
+            {scores.length - 1} recalculation{scores.length - 1 === 1 ? "" : "s"} on this version
+          </span>
         )}
       </div>
     </div>
   );
 }
+
 
 function BlockingIssueRow({
   issue,
@@ -491,7 +426,11 @@ export function issueKey(issue: BlockingIssue): string {
 }
 
 function buildQuickWinChatMessage(issue: BlockingIssue): string {
-  return `Apply this quick win to my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nHow to fix: ${issue.suggestion}`;
+  const keywordHint =
+    issue.category === "keyword"
+      ? "\n\nPatch hint: use an existing employer/project from my resume — prefer section \"experience\" with add_bullet (or summary with new_summary). Do not invent company names like Asar unless that exact name is already on my resume."
+      : "";
+  return `Apply this quick win to my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\n\nHow to fix: ${issue.suggestion}${keywordHint}`;
 }
 
 function buildBlockingChatMessage(issue: BlockingIssue): string {
@@ -510,6 +449,8 @@ export function ATSGuidancePanel({
   output,
   streaming = false,
   scoreHistory = [],
+  originalAtsScore = null,
+  tailored = null,
   addressedKeys = new Set<string>(),
   skippedKeys = new Set<string>(),
   onSkipIssue,
@@ -521,6 +462,9 @@ export function ATSGuidancePanel({
   recalculateDisabled = false,
   onScrollToAnchor,
   onApplyMechanicalFix,
+  mechanicalOutcomes = {},
+  onUndoMechanicalFix,
+  onApplyMechanicalFixAtRole,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -678,8 +622,8 @@ export function ATSGuidancePanel({
               </span>
             )}
           </div>
-          {scoreHistory.length >= 2 && (
-            <ScoreHistory scores={scoreHistory} />
+          {(scoreHistory.length >= 2 || typeof originalAtsScore === "number") && (
+            <ScoreHistory scores={scoreHistory} originalAtsScore={originalAtsScore} />
           )}
         </div>
       </div>
@@ -736,8 +680,8 @@ export function ATSGuidancePanel({
             Quick wins
           </h3>
           <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
-            Fix with AI opens chat and proposes resume edits — accept each patch on your resume to apply it.
-            Items grey out after a patch is accepted. Use Skip if you do not want to fix one.
+            Quick wins are small edits that raise your ATS score. Apply fix edits your resume right away
+            and can be undone. Items without it open chat — accept each highlight on the resume to apply it.
             {addressedCount > 0 && (
               <span className="text-slate-600 dark:text-slate-400"> · {addressedCount} addressed</span>
             )}
@@ -746,16 +690,35 @@ export function ATSGuidancePanel({
             {quickWins.map((issue) => {
               const key = issueKey(issue);
               const addressed = addressedKeys.has(key);
+              const canApplyMechanical = Boolean(
+                tailored && canApplyMechanicalQuickWin(tailored, issue),
+              );
               return (
               <QuickWinCard
                 key={key}
                 issue={issue}
+                tailored={tailored}
                 addressed={addressed}
+                outcome={mechanicalOutcomes[key] ?? null}
+                canApplyMechanical={canApplyMechanical}
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
                 onApplyMechanical={
-                  onApplyMechanicalFix && !addressed
+                  onApplyMechanicalFix &&
+                  !addressed &&
+                  !mechanicalOutcomes[key] &&
+                  canApplyMechanical
                     ? () => onApplyMechanicalFix(issue)
+                    : undefined
+                }
+                onUndoMechanical={
+                  onUndoMechanicalFix && shouldShowUndoButton(mechanicalOutcomes[key])
+                    ? () => onUndoMechanicalFix(issue)
+                    : undefined
+                }
+                onApplyMechanicalAtRole={
+                  onApplyMechanicalFixAtRole
+                    ? (experienceIndex) => onApplyMechanicalFixAtRole(issue, experienceIndex)
                     : undefined
                 }
               />
