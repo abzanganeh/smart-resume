@@ -142,27 +142,76 @@ export function applyKeywordToSummary(
   return { ...tailored, summary: addition };
 }
 
-export function applyKeywordToExperience(
+export function applyKeywordToExperienceAt(
   tailored: TailoredResumeOutput,
   keyword: string,
+  experienceIndex: number,
 ): TailoredResumeOutput | null {
   const term = keyword.trim();
   if (!term) return null;
   const experience = [...(tailored.experience ?? [])];
-  if (experience.length === 0) return null;
+  if (experienceIndex < 0 || experienceIndex >= experience.length) return null;
 
-  const first = { ...experience[0]! };
-  const bullets = [...(first.bullets ?? [])];
+  const entry = { ...experience[experienceIndex]! };
+  const bullets = [...(entry.bullets ?? [])];
   if (bullets.length === 0) {
     return null;
-  } else if (!keywordInText(bullets[0]!, term)) {
-    bullets[0] = `${bullets[0]!.replace(/\.$/, "")} — ${term}.`;
-  } else {
+  }
+  if (keywordInText(bullets[0]!, term)) {
     return null;
   }
-  first.bullets = bullets;
-  experience[0] = first;
+  bullets[0] = `${bullets[0]!.replace(/\.$/, "")} — ${term}.`;
+  entry.bullets = bullets;
+  experience[experienceIndex] = entry;
   return { ...tailored, experience };
+}
+
+export function applyKeywordToExperience(
+  tailored: TailoredResumeOutput,
+  keyword: string,
+): TailoredResumeOutput | null {
+  return applyKeywordToExperienceAt(tailored, keyword, 0);
+}
+
+export function shouldOfferRolePicker(
+  issue: BlockingIssue,
+  outcome?: { status: string; unmet?: string[] } | null,
+): boolean {
+  if (extractReinforceKeyword(issue)) return true;
+  if (outcome?.status === "partial" && (outcome.unmet?.length ?? 0) > 0) {
+    return outcome.unmet!.some((item) => item.toLowerCase().includes("experience"));
+  }
+  return false;
+}
+
+export function tryApplyMechanicalReinforceAt(
+  tailored: TailoredResumeOutput,
+  issue: BlockingIssue,
+  experienceIndex: number,
+): MechanicalFixResult | null {
+  const reinforce = extractReinforceKeyword(issue);
+  if (!reinforce) return null;
+
+  const updated = applyKeywordToExperienceAt(tailored, reinforce.keyword, experienceIndex);
+  if (!updated) {
+    return {
+      resume: tailored,
+      changes: [],
+      unmet: ["already in experience"],
+    };
+  }
+  const target = updated.experience[experienceIndex];
+  const label = target?.company || target?.title || "selected role";
+  return {
+    resume: updated,
+    changes: [
+      {
+        section: "Experience",
+        label: `Reinforce ${reinforce.keyword} in ${label}`,
+      },
+    ],
+    unmet: [],
+  };
 }
 
 function previewSkillsAdd(

@@ -44,6 +44,7 @@ interface Props {
   mechanicalOutcomes?: Readonly<Record<string, QuickWinMechanicalOutcome>>;
   /** Revert the last mechanical apply for a quick-win issue. */
   onUndoMechanicalFix?: (issue: BlockingIssue) => void;
+  onApplyMechanicalFixAtRole?: (issue: BlockingIssue, experienceIndex: number) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -463,6 +464,7 @@ export function ATSGuidancePanel({
   onApplyMechanicalFix,
   mechanicalOutcomes = {},
   onUndoMechanicalFix,
+  onApplyMechanicalFixAtRole,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -712,6 +714,11 @@ export function ATSGuidancePanel({
                 onUndoMechanical={
                   onUndoMechanicalFix && shouldShowUndoButton(mechanicalOutcomes[key])
                     ? () => onUndoMechanicalFix(issue)
+                    : undefined
+                }
+                onApplyMechanicalAtRole={
+                  onApplyMechanicalFixAtRole
+                    ? (experienceIndex) => onApplyMechanicalFixAtRole(issue, experienceIndex)
                     : undefined
                 }
               />

@@ -39,6 +39,7 @@ import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnch
 import {
   canApplyMechanicalQuickWin,
   tryApplyMechanicalQuickWin,
+  tryApplyMechanicalReinforceAt,
 } from "@/lib/mechanicalFix";
 import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
@@ -163,6 +164,33 @@ function SessionContent() {
       if (!tailored) return;
       const key = issueKey(issue);
       const result = tryApplyMechanicalQuickWin(tailored, issue);
+      const outcome = mechanicalOutcomeFromResult(result);
+      if (outcome.status === "failed") {
+        setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+        return;
+      }
+
+      const updatedResume = result!.resume;
+      mechanicalUndoRef.current[key] = tailored;
+      setTailored(updatedResume);
+      setEditorSyncKey((k) => k + 1);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+      if (outcome.status === "applied") {
+        setAddressedAtsKeys((prev) => new Set(prev).add(key));
+      }
+
+      void saveTailoredResume(sessionId, updatedResume).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
+      });
+    },
+    [tailored, sessionId],
+  );
+  const applyMechanicalFixAtRole = useCallback(
+    (issue: import("@/lib/api").BlockingIssue, experienceIndex: number) => {
+      if (!tailored) return;
+      const key = issueKey(issue);
+      const result = tryApplyMechanicalReinforceAt(tailored, issue, experienceIndex);
       const outcome = mechanicalOutcomeFromResult(result);
       if (outcome.status === "failed") {
         setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
@@ -591,6 +619,35 @@ function SessionContent() {
       () => setPendingSuggestions((prev) => prev.filter((s) => s.id !== id)),
       1200,
     );
+  }
+
+  function retargetOrphanSuggestion(id: string, experienceIndex: number) {
+    const sug = pendingSuggestions.find((s) => s.id === id);
+    if (!sug || !tailored) return;
+    const entry = tailored.experience[experienceIndex];
+    const company = entry?.company?.trim();
+    if (!company) return;
+    setSuggestionError(null);
+    const patch = normalizeResumePatch(tailored, {
+      ...sug.patch,
+      company,
+    });
+    const { updated, applied, failureReason } = applyResumePatch(tailored, patch);
+    if (!applied) {
+      setSuggestionError(
+        failureReason ?? "Could not apply this suggestion to the selected role.",
+      );
+      return;
+    }
+    setTailored(updated);
+    setEditorSyncKey((k) => k + 1);
+    setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+    saveTailoredResume(sessionId, updated).catch((err) => {
+      setRunError(
+        err instanceof Error ? err.message : "Could not save this edit. Please try again.",
+      );
+    });
+    setPendingSuggestions((prev) => prev.filter((s) => s.id !== id));
   }
 
   function acceptAllSuggestions() {
@@ -1455,6 +1512,7 @@ function SessionContent() {
                       onAcceptAllSuggestions={acceptAllSuggestions}
                       onRejectSuggestion={rejectSuggestion}
                       onDismissSuggestion={dismissSuggestion}
+                      onRetargetOrphanSuggestion={retargetOrphanSuggestion}
                       entryIssueBadges={entryIssueBadges}
                     />
                   </>
@@ -1514,6 +1572,7 @@ function SessionContent() {
                             onApplyMechanicalFix={applyMechanicalFix}
                             mechanicalOutcomes={mechanicalOutcomes}
                             onUndoMechanicalFix={undoMechanicalFix}
+                            onApplyMechanicalFixAtRole={applyMechanicalFixAtRole}
                           />
                         ) : (
                           <p className="text-slate-600 dark:text-slate-400 text-xs py-4 text-center">
@@ -1608,6 +1667,7 @@ function SessionContent() {
                   onApplyMechanicalFix={applyMechanicalFix}
                   mechanicalOutcomes={mechanicalOutcomes}
                   onUndoMechanicalFix={undoMechanicalFix}
+                  onApplyMechanicalFixAtRole={applyMechanicalFixAtRole}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

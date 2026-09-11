@@ -7,7 +7,9 @@ import {
   type MechanicalFixPreview,
   type MechanicalFixResult,
 } from "@/lib/mechanicalFix";
+import { resolveEmployerTargets, shouldOfferRolePicker } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
+import { RolePicker } from "./RolePicker";
 
 const CATEGORY_LABELS: Record<BlockingIssue["category"], string> = {
   keyword: "Keyword",
@@ -107,6 +109,7 @@ interface QuickWinCardProps {
   onUndoMechanical?: () => void;
   /** When true, mechanical apply is available and Fix with AI should stay hidden until failure. */
   canApplyMechanical?: boolean;
+  onApplyMechanicalAtRole?: (experienceIndex: number) => void;
 }
 
 export function QuickWinCard({
@@ -119,12 +122,18 @@ export function QuickWinCard({
   onApplyMechanical,
   onUndoMechanical,
   canApplyMechanical = false,
+  onApplyMechanicalAtRole,
 }: QuickWinCardProps) {
   const preview = tailored ? previewMechanicalQuickWin(tailored, issue) : null;
   const willChange = formatMechanicalPreviewLine(preview);
   const receipt = outcome ? formatMechanicalOutcomeReceipt(outcome) : null;
   const hasOutcome = outcome !== null;
   const hideFixWithAi = shouldHideFixWithAiForMechanical(canApplyMechanical, outcome);
+  const showRolePicker =
+    Boolean(tailored && onApplyMechanicalAtRole) &&
+    shouldOfferRolePicker(issue, outcome) &&
+    !addressed;
+  const employerTargets = tailored ? resolveEmployerTargets(tailored) : [];
 
   return (
     <div
@@ -207,6 +216,14 @@ export function QuickWinCard({
             <Check className="w-3 h-3" />
             Apply fix
           </button>
+        )}
+        {showRolePicker && (
+          <RolePicker
+            targets={employerTargets}
+            triggerLabel="Choose a role"
+            confirmLabel="Add there"
+            onConfirm={onApplyMechanicalAtRole!}
+          />
         )}
         {onUndoMechanical && shouldShowUndoButton(outcome) && (
           <button

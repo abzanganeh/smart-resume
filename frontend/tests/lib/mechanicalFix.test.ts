@@ -3,8 +3,10 @@ import test from "node:test"
 
 import type { BlockingIssue, TailoredResumeOutput } from "@/lib/api"
 import {
+  applyKeywordToExperienceAt,
   applyKeywordToSkills,
   canApplyMechanicalQuickWin,
+  shouldOfferRolePicker,
   extractMissingKeyword,
   extractReinforceKeyword,
   previewMechanicalQuickWin,
@@ -269,6 +271,25 @@ test("canApplyMechanicalQuickWin is false when keyword already in skills", () =>
     fix_effort: "one_click",
   }
   assert.equal(canApplyMechanicalQuickWin(tailored, issue), false)
+})
+
+test("applyKeywordToExperienceAt updates selected employer bullet", () => {
+  const updated = applyKeywordToExperienceAt(tailored, "SIEM", 1)
+  assert.ok(updated)
+  assert.match(updated.experience[1]!.bullets[0]!, /SIEM/i)
+  assert.equal(updated.experience[0]!.bullets[0], tailored.experience[0]!.bullets[0])
+})
+
+test("shouldOfferRolePicker for reinforce keyword issues", () => {
+  const issue: BlockingIssue = {
+    category: "keyword",
+    description: "'SIEM' appears only in skills",
+    suggestion:
+      "Reinforce 'SIEM' in your experience so it appears in 2+ sections (ATS keyword density rule).",
+    impact: "high",
+    fix_effort: "one_click",
+  }
+  assert.equal(shouldOfferRolePicker(issue, null), true)
 })
 
 test("resolveEmployerTargets returns experience entries with indices", () => {
