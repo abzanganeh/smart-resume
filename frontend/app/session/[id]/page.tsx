@@ -153,16 +153,16 @@ function SessionContent() {
   const applyMechanicalFix = useCallback(
     (issue: import("@/lib/api").BlockingIssue) => {
       if (!tailored) return;
-      const updated = tryApplyMechanicalQuickWin(tailored, issue);
-      if (!updated) {
+      const result = tryApplyMechanicalQuickWin(tailored, issue);
+      if (!result || result.changes.length === 0) {
         setRunError("Use Fix with AI for this item — Apply fix could not update your resume.");
         return;
       }
-      setTailored(updated);
+      setTailored(result.resume);
       setEditorSyncKey((k) => k + 1);
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
       setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
-      void saveTailoredResume(sessionId, updated).catch((err) => {
+      void saveTailoredResume(sessionId, result.resume).catch((err) => {
         setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
       });
     },

@@ -6,6 +6,21 @@ const ADD_TO_SKILLS_RE =
 const REINFORCE_RE =
   /Reinforce ['"\u2018\u2019\u201c\u201d]([^'"\u2018\u2019\u201c\u201d]{1,80})['"\u2018\u2019\u201c\u201d] in your (experience|summary)(?: or (experience|summary))?/i;
 
+export type MechanicalFixChange = { section: string; label: string };
+
+export type MechanicalFixResult = {
+  resume: TailoredResumeOutput;
+  changes: MechanicalFixChange[];
+  unmet: string[];
+};
+
+export type MechanicalFixPreview = {
+  changes: MechanicalFixChange[];
+  unmet: string[];
+};
+
+export type EmployerTarget = { company: string; title: string; index: number };
+
 export function extractMissingKeyword(issue: BlockingIssue): string | null {
   if (issue.category !== "keyword" || issue.fix_effort !== "one_click") {
     return null;
@@ -49,6 +64,13 @@ function keywordInText(text: string, keyword: string): boolean {
   return text.toLowerCase().includes(keyword.toLowerCase());
 }
 
+function keywordAlreadyInSkills(tailored: TailoredResumeOutput, keyword: string): boolean {
+  const flat = new Set(
+    flattenSkillTerms(tailored.skills ?? []).map((t) => t.toLowerCase()),
+  );
+  return flat.has(keyword.trim().toLowerCase());
+}
+
 function findSkillCategoryLine(skills: string[], keyword: string): number {
   const kw = keyword.toLowerCase();
   for (let i = 0; i < skills.length; i++) {
@@ -61,14 +83,25 @@ function findSkillCategoryLine(skills: string[], keyword: string): number {
   return -1;
 }
 
+export function resolveEmployerTargets(
+  tailored: TailoredResumeOutput,
+): EmployerTarget[] {
+  return (tailored.experience ?? [])
+    .map((exp, index) => ({
+      company: (exp.company ?? "").trim(),
+      title: (exp.title ?? "").trim(),
+      index,
+    }))
+    .filter((target) => target.company.length > 0 || target.title.length > 0);
+}
+
 export function applyKeywordToSkills(
   tailored: TailoredResumeOutput,
   keyword: string,
 ): TailoredResumeOutput | null {
   const term = keyword.trim();
   if (!term) return null;
-  const flat = new Set(flattenSkillTerms(tailored.skills ?? []).map((t) => t.toLowerCase()));
-  if (flat.has(term.toLowerCase())) return null;
+  if (keywordAlreadyInSkills(tailored, term)) return null;
 
   const skills = [...(tailored.skills ?? [])];
   const categoryIdx = findSkillCategoryLine(skills, term);
@@ -121,7 +154,7 @@ export function applyKeywordToExperience(
   const first = { ...experience[0]! };
   const bullets = [...(first.bullets ?? [])];
   if (bullets.length === 0) {
-    bullets.push(`Delivered ${term} in production customer environments.`);
+    return null;
   } else if (!keywordInText(bullets[0]!, term)) {
     bullets[0] = `${bullets[0]!.replace(/\.$/, "")} — ${term}.`;
   } else {
@@ -132,38 +165,134 @@ export function applyKeywordToExperience(
   return { ...tailored, experience };
 }
 
-function applyKeywordReinforcement(
+function previewSkillsAdd(
+  tailored: TailoredResumeOutput,
+  keyword: string,
+): MechanicalFixPreview {
+  if (keywordAlreadyInSkills(tailored, keyword)) {
+    return { changes: [], unmet: ["already in skills"] };
+  }
+  return {
+    changes: [{ section: "Skills", label: `Add ${keyword}` }],
+    unmet: [],
+  };
+}
+
+function previewReinforcement(
   tailored: TailoredResumeOutput,
   keyword: string,
   targets: Array<"experience" | "summary">,
-): TailoredResumeOutput | null {
+): MechanicalFixPreview {
+  const changes: MechanicalFixChange[] = [];
+  const unmet: string[] = [];
+
+  for (const target of targets) {
+    if (target === "summary") {
+      const summary = (tailored.summary ?? "").trim();
+      if (keywordInText(summary, keyword)) {
+        unmet.push("already in summary");
+      } else {
+        changes.push({ section: "Summary", label: `Include ${keyword}` });
+        break;
+      }
+    } else {
+      const experience = tailored.experience ?? [];
+      if (experience.length === 0) {
+        unmet.push("no experience entries");
+      } else {
+        const first = experience[0]!;
+        const bullets = first.bullets ?? [];
+        if (bullets.length === 0) {
+          unmet.push("no experience bullet to reinforce");
+          break;
+        }
+        if (keywordInText(bullets[0]!, keyword)) {
+          unmet.push("already in experience");
+        } else {
+          changes.push({
+            section: "Experience",
+            label: `Reinforce ${keyword} in ${first.company || first.title || "first role"}`,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  return { changes, unmet };
+}
+
+function applySkillsAdd(
+  tailored: TailoredResumeOutput,
+  keyword: string,
+): MechanicalFixResult | null {
+  const preview = previewSkillsAdd(tailored, keyword);
+  if (preview.changes.length === 0) {
+    return preview.unmet.length > 0 ? { resume: tailored, ...preview } : null;
+  }
+  const updated = applyKeywordToSkills(tailored, keyword);
+  if (!updated) {
+    return { resume: tailored, changes: [], unmet: ["already in skills"] };
+  }
+  return { resume: updated, changes: preview.changes, unmet: preview.unmet };
+}
+
+function applyReinforcement(
+  tailored: TailoredResumeOutput,
+  keyword: string,
+  targets: Array<"experience" | "summary">,
+): MechanicalFixResult | null {
+  const preview = previewReinforcement(tailored, keyword, targets);
+  if (preview.changes.length === 0) {
+    return preview.unmet.length > 0 ? { resume: tailored, ...preview } : null;
+  }
+
   for (const target of targets) {
     const updated =
       target === "summary"
         ? applyKeywordToSummary(tailored, keyword)
         : applyKeywordToExperience(tailored, keyword);
-    if (updated) return updated;
+    if (updated) {
+      return {
+        resume: updated,
+        changes: preview.changes,
+        unmet: preview.unmet,
+      };
+    }
   }
+
+  return { resume: tailored, changes: [], unmet: preview.unmet };
+}
+
+export function previewMechanicalQuickWin(
+  tailored: TailoredResumeOutput,
+  issue: BlockingIssue,
+): MechanicalFixPreview | null {
+  const missing = extractMissingKeyword(issue);
+  if (missing) {
+    return previewSkillsAdd(tailored, missing);
+  }
+
+  const reinforce = extractReinforceKeyword(issue);
+  if (reinforce) {
+    return previewReinforcement(tailored, reinforce.keyword, reinforce.targets);
+  }
+
   return null;
 }
 
 export function tryApplyMechanicalQuickWin(
   tailored: TailoredResumeOutput,
   issue: BlockingIssue,
-): TailoredResumeOutput | null {
+): MechanicalFixResult | null {
   const missing = extractMissingKeyword(issue);
   if (missing) {
-    let updated = applyKeywordToSkills(tailored, missing) ?? tailored;
-    const reinforced = applyKeywordReinforcement(updated, missing, [
-      "summary",
-      "experience",
-    ]);
-    return reinforced ?? (updated !== tailored ? updated : null);
+    return applySkillsAdd(tailored, missing);
   }
 
   const reinforce = extractReinforceKeyword(issue);
   if (reinforce) {
-    return applyKeywordReinforcement(tailored, reinforce.keyword, reinforce.targets);
+    return applyReinforcement(tailored, reinforce.keyword, reinforce.targets);
   }
 
   return null;
@@ -173,5 +302,6 @@ export function canApplyMechanicalQuickWin(
   tailored: TailoredResumeOutput,
   issue: BlockingIssue,
 ): boolean {
-  return tryApplyMechanicalQuickWin(tailored, issue) !== null;
+  const preview = previewMechanicalQuickWin(tailored, issue);
+  return preview !== null && preview.changes.length > 0;
 }
