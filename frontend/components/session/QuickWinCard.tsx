@@ -72,6 +72,14 @@ export function shouldShowUndoButton(
   return outcome?.status === "applied" || outcome?.status === "partial";
 }
 
+/** Hide Fix with AI while a one-click mechanical apply is still available (pre-failure). */
+export function shouldHideFixWithAiForMechanical(
+  canApplyMechanical: boolean,
+  outcome: QuickWinMechanicalOutcome | null | undefined,
+): boolean {
+  return canApplyMechanical && outcome == null;
+}
+
 export function formatMechanicalOutcomeReceipt(
   outcome: QuickWinMechanicalOutcome,
 ): { headline: string; details?: string[] } {
@@ -97,6 +105,8 @@ interface QuickWinCardProps {
   onFixWithAI?: () => void;
   onApplyMechanical?: () => void;
   onUndoMechanical?: () => void;
+  /** When true, mechanical apply is available and Fix with AI should stay hidden until failure. */
+  canApplyMechanical?: boolean;
 }
 
 export function QuickWinCard({
@@ -108,11 +118,13 @@ export function QuickWinCard({
   onFixWithAI,
   onApplyMechanical,
   onUndoMechanical,
+  canApplyMechanical = false,
 }: QuickWinCardProps) {
   const preview = tailored ? previewMechanicalQuickWin(tailored, issue) : null;
   const willChange = formatMechanicalPreviewLine(preview);
   const receipt = outcome ? formatMechanicalOutcomeReceipt(outcome) : null;
   const hasOutcome = outcome !== null;
+  const hideFixWithAi = shouldHideFixWithAiForMechanical(canApplyMechanical, outcome);
 
   return (
     <div
@@ -205,7 +217,7 @@ export function QuickWinCard({
             Undo
           </button>
         )}
-        {onFixWithAI && (
+        {onFixWithAI && !hideFixWithAi && (
           <button
             type="button"
             onClick={onFixWithAI}

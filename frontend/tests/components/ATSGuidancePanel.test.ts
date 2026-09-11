@@ -14,6 +14,7 @@ import {
   formatMechanicalPreviewLine,
   mechanicalOutcomeFromResult,
   shouldShowEmployerConstraintCopy,
+  shouldHideFixWithAiForMechanical,
   shouldShowUndoButton,
   shouldShowWillChangeLine,
 } from "../../components/session/QuickWinCard";
@@ -230,6 +231,19 @@ function runTests() {
   assert(shouldShowUndoButton({ status: "partial", changes: ["Add SIEM"], unmet: ["x"] }), "undo for partial");
   assert(!shouldShowUndoButton({ status: "failed", reason: "nope" }), "no undo for failed");
   assert(!shouldShowUndoButton(null), "no undo without outcome");
+
+  assert(
+    shouldHideFixWithAiForMechanical(true, null),
+    "hide Fix with AI when mechanical apply available and no outcome yet",
+  );
+  assert(
+    !shouldHideFixWithAiForMechanical(true, { status: "failed", reason: "nope" }),
+    "show Fix with AI after mechanical failure",
+  );
+  assert(
+    !shouldHideFixWithAiForMechanical(false, null),
+    "show Fix with AI when no mechanical path",
+  );
 
   const alreadyInSkillsIssue: BlockingIssue = {
     category: "keyword",

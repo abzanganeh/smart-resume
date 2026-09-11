@@ -678,8 +678,8 @@ export function ATSGuidancePanel({
             Quick wins
           </h3>
           <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
-            Fix with AI opens chat and proposes resume edits — accept each patch on your resume to apply it.
-            Items grey out after a patch is accepted. Use Skip if you do not want to fix one.
+            Quick wins are small edits that raise your ATS score. Apply fix edits your resume right away
+            and can be undone. Items without it open chat — accept each highlight on the resume to apply it.
             {addressedCount > 0 && (
               <span className="text-slate-600 dark:text-slate-400"> · {addressedCount} addressed</span>
             )}
@@ -688,6 +688,9 @@ export function ATSGuidancePanel({
             {quickWins.map((issue) => {
               const key = issueKey(issue);
               const addressed = addressedKeys.has(key);
+              const canApplyMechanical = Boolean(
+                tailored && canApplyMechanicalQuickWin(tailored, issue),
+              );
               return (
               <QuickWinCard
                 key={key}
@@ -695,14 +698,14 @@ export function ATSGuidancePanel({
                 tailored={tailored}
                 addressed={addressed}
                 outcome={mechanicalOutcomes[key] ?? null}
+                canApplyMechanical={canApplyMechanical}
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
                 onApplyMechanical={
                   onApplyMechanicalFix &&
                   !addressed &&
                   !mechanicalOutcomes[key] &&
-                  tailored &&
-                  canApplyMechanicalQuickWin(tailored, issue)
+                  canApplyMechanical
                     ? () => onApplyMechanicalFix(issue)
                     : undefined
                 }
