@@ -6,7 +6,7 @@ import { type BlockingIssue, type IssueAnchor, type QAOutput, type TailoredResum
 import { canApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
-import { QuickWinCard } from "./QuickWinCard";
+import { QuickWinCard, shouldShowUndoButton, type QuickWinMechanicalOutcome } from "./QuickWinCard";
 
 interface Props {
   output: QAOutput | null;
@@ -40,6 +40,10 @@ interface Props {
   onScrollToAnchor?: (anchor: IssueAnchor) => void;
   /** Apply a mechanical one-click fix (e.g. insert missing keyword into Skills). */
   onApplyMechanicalFix?: (issue: BlockingIssue) => void;
+  /** Per-issue mechanical apply outcome shown on the quick-win card. */
+  mechanicalOutcomes?: Readonly<Record<string, QuickWinMechanicalOutcome>>;
+  /** Revert the last mechanical apply for a quick-win issue. */
+  onUndoMechanicalFix?: (issue: BlockingIssue) => void;
 }
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -457,6 +461,8 @@ export function ATSGuidancePanel({
   recalculateDisabled = false,
   onScrollToAnchor,
   onApplyMechanicalFix,
+  mechanicalOutcomes = {},
+  onUndoMechanicalFix,
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -688,14 +694,21 @@ export function ATSGuidancePanel({
                 issue={issue}
                 tailored={tailored}
                 addressed={addressed}
+                outcome={mechanicalOutcomes[key] ?? null}
                 onSkip={() => skipIssue(issue)}
                 onFixWithAI={onSendToChat ? () => fixSingleQuickWin(issue) : undefined}
                 onApplyMechanical={
                   onApplyMechanicalFix &&
                   !addressed &&
+                  !mechanicalOutcomes[key] &&
                   tailored &&
                   canApplyMechanicalQuickWin(tailored, issue)
                     ? () => onApplyMechanicalFix(issue)
+                    : undefined
+                }
+                onUndoMechanical={
+                  onUndoMechanicalFix && shouldShowUndoButton(mechanicalOutcomes[key])
+                    ? () => onUndoMechanicalFix(issue)
                     : undefined
                 }
               />

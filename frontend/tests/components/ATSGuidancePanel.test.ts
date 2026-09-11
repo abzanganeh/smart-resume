@@ -10,12 +10,15 @@ import {
   HEADLINE_PREVIEW_LENGTH,
 } from "../../components/session/ATSGuidancePanel";
 import {
+  formatMechanicalOutcomeReceipt,
   formatMechanicalPreviewLine,
+  mechanicalOutcomeFromResult,
   shouldShowEmployerConstraintCopy,
+  shouldShowUndoButton,
   shouldShowWillChangeLine,
 } from "../../components/session/QuickWinCard";
 import type { BlockingIssue, QAOutput, TailoredResumeOutput } from "../../lib/api";
-import { previewMechanicalQuickWin } from "../../lib/mechanicalFix";
+import { previewMechanicalQuickWin, tryApplyMechanicalQuickWin } from "../../lib/mechanicalFix";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(`FAIL: ${message}`);
@@ -159,8 +162,9 @@ function runTests() {
   assert(skillsWillChange !== null && skillsWillChange.includes("cloud infrastructure"), "skills quick win preview names the keyword");
   assert(shouldShowWillChangeLine(skillsWillChange, false), "will-change line shows when not addressed");
   assert(!shouldShowWillChangeLine(skillsWillChange, true), "will-change line hides when addressed");
-  assert(shouldShowEmployerConstraintCopy(false), "employer constraint shows when not addressed");
-  assert(!shouldShowEmployerConstraintCopy(true), "employer constraint hides when addressed");
+  assert(shouldShowEmployerConstraintCopy(false, false), "employer constraint shows when not addressed");
+  assert(!shouldShowEmployerConstraintCopy(true, false), "employer constraint hides when addressed");
+  assert(!shouldShowEmployerConstraintCopy(false, true), "employer constraint hides when outcome shown");
   assert(formatMechanicalPreviewLine(null) === null, "null preview formats to null");
   assert(
     formatMechanicalPreviewLine({ changes: [], unmet: ["already in skills"] }) === null,
@@ -189,6 +193,59 @@ function runTests() {
   assert(
     formatMechanicalPreviewLine(previewMechanicalQuickWin(tailoredFixture, metricIssue)) === null,
     "non-mechanical issue has no preview line",
+  );
+
+  const appliedReceipt = formatMechanicalOutcomeReceipt({
+    status: "applied",
+    changes: ["Add cloud infrastructure"],
+  });
+  assert(appliedReceipt.headline === "Applied · Add cloud infrastructure", "applied receipt headline");
+
+  const partialReceipt = formatMechanicalOutcomeReceipt({
+    status: "partial",
+    changes: ["Include SIEM"],
+    unmet: ["already in experience"],
+  });
+  assert(
+    partialReceipt.headline === "Partly applied · Include SIEM",
+    "partial receipt headline",
+  );
+  assert(
+    JSON.stringify(partialReceipt.details) === JSON.stringify(["already in experience"]),
+    "partial receipt lists unmet",
+  );
+  assert(appliedReceipt.details === undefined, "applied receipt has no details");
+
+  const failedReceipt = formatMechanicalOutcomeReceipt({
+    status: "failed",
+    reason: "Couldn't apply automatically — already in skills",
+  });
+  assert(
+    failedReceipt.headline === "Couldn't apply automatically — already in skills",
+    "failed receipt headline",
+  );
+  assert(failedReceipt.details === undefined, "failed receipt has no details");
+
+  assert(shouldShowUndoButton({ status: "applied", changes: ["Add SIEM"] }), "undo for applied");
+  assert(shouldShowUndoButton({ status: "partial", changes: ["Add SIEM"], unmet: ["x"] }), "undo for partial");
+  assert(!shouldShowUndoButton({ status: "failed", reason: "nope" }), "no undo for failed");
+  assert(!shouldShowUndoButton(null), "no undo without outcome");
+
+  const alreadyInSkillsIssue: BlockingIssue = {
+    category: "keyword",
+    description: "Already present",
+    suggestion: "Add 'Python' to the Skills section.",
+    impact: "high",
+    fix_effort: "one_click",
+  };
+  const failedOutcome = mechanicalOutcomeFromResult(
+    tryApplyMechanicalQuickWin(tailoredFixture, alreadyInSkillsIssue),
+  );
+  assert(failedOutcome.status === "failed", "empty changes map to failed outcome");
+  assert(
+    failedOutcome.status === "failed" &&
+      failedOutcome.reason.includes("already in skills"),
+    "failed outcome includes unmet reason",
   );
 
   console.log("\nAll tests passed.\n");

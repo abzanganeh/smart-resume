@@ -31,6 +31,10 @@ import { MetricsGate } from "@/components/session/MetricsGate";
 import { ResumeDiff } from "@/components/session/ResumeDiff";
 import { QAChecklist } from "@/components/session/QAChecklist";
 import { ATSGuidancePanel, issueKey } from "@/components/session/ATSGuidancePanel";
+import {
+  mechanicalOutcomeFromResult,
+  type QuickWinMechanicalOutcome,
+} from "@/components/session/QuickWinCard";
 import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
 import {
   canApplyMechanicalQuickWin,
@@ -141,6 +145,10 @@ function SessionContent() {
   const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
   const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
   const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
+  const [mechanicalOutcomes, setMechanicalOutcomes] = useState<
+    Record<string, QuickWinMechanicalOutcome>
+  >({});
+  const mechanicalUndoRef = useRef<Record<string, TailoredResumeOutput>>({});
   const entryIssueBadges = useMemo(() => {
     const visible = (qa?.blocking_issues ?? []).filter(
       (issue) => !skippedAtsKeys.has(issueKey(issue)),
@@ -153,20 +161,54 @@ function SessionContent() {
   const applyMechanicalFix = useCallback(
     (issue: import("@/lib/api").BlockingIssue) => {
       if (!tailored) return;
+      const key = issueKey(issue);
       const result = tryApplyMechanicalQuickWin(tailored, issue);
-      if (!result || result.changes.length === 0) {
-        setRunError("Use Fix with AI for this item — Apply fix could not update your resume.");
+      const outcome = mechanicalOutcomeFromResult(result);
+      if (outcome.status === "failed") {
+        setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
         return;
       }
-      setTailored(result.resume);
+
+      const updatedResume = result!.resume;
+      mechanicalUndoRef.current[key] = tailored;
+      setTailored(updatedResume);
       setEditorSyncKey((k) => k + 1);
       setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
-      setAddressedAtsKeys((prev) => new Set(prev).add(issueKey(issue)));
-      void saveTailoredResume(sessionId, result.resume).catch((err) => {
+      setMechanicalOutcomes((prev) => ({ ...prev, [key]: outcome }));
+      if (outcome.status === "applied") {
+        setAddressedAtsKeys((prev) => new Set(prev).add(key));
+      }
+
+      void saveTailoredResume(sessionId, updatedResume).catch((err) => {
         setRunError(err instanceof Error ? err.message : "Could not save mechanical fix.");
       });
     },
     [tailored, sessionId],
+  );
+  const undoMechanicalFix = useCallback(
+    (issue: import("@/lib/api").BlockingIssue) => {
+      const key = issueKey(issue);
+      const snapshot = mechanicalUndoRef.current[key];
+      if (!snapshot) return;
+      setTailored(snapshot);
+      setEditorSyncKey((k) => k + 1);
+      setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+      setMechanicalOutcomes((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      delete mechanicalUndoRef.current[key];
+      setAddressedAtsKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      void saveTailoredResume(sessionId, snapshot).catch((err) => {
+        setRunError(err instanceof Error ? err.message : "Could not save undo.");
+      });
+    },
+    [sessionId],
   );
   const runInFlightRef = useRef(false);
   const activeStepRef = useRef<Step>(step);
@@ -481,6 +523,8 @@ function SessionContent() {
     pendingAtsFixRef.current = [];
     setAddressedAtsKeys(new Set());
     setSkippedAtsKeys(new Set());
+    setMechanicalOutcomes({});
+    mechanicalUndoRef.current = {};
   }
 
   function addSuggestions(patches: ResumePatch[]) {
@@ -799,6 +843,8 @@ function SessionContent() {
     setSessionLoaded(false);
     setAtsScoreHistory([]);
     setOriginalAtsScore(null);
+    setMechanicalOutcomes({});
+    mechanicalUndoRef.current = {};
 
     checkSession(sessionId)
       .then((s) => {
@@ -1466,6 +1512,8 @@ function SessionContent() {
                             onSendToChat={openChatForAtsIssues}
                             onScrollToAnchor={scrollToIssueAnchor}
                             onApplyMechanicalFix={applyMechanicalFix}
+                            mechanicalOutcomes={mechanicalOutcomes}
+                            onUndoMechanicalFix={undoMechanicalFix}
                           />
                         ) : (
                           <p className="text-slate-600 dark:text-slate-400 text-xs py-4 text-center">
@@ -1558,6 +1606,8 @@ function SessionContent() {
                   }}
                   onScrollToAnchor={scrollToIssueAnchor}
                   onApplyMechanicalFix={applyMechanicalFix}
+                  mechanicalOutcomes={mechanicalOutcomes}
+                  onUndoMechanicalFix={undoMechanicalFix}
                 />
               </div>
               <QAChecklist output={qa} streaming={isStreaming && !showProgress} />

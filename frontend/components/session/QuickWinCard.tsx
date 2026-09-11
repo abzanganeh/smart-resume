@@ -5,6 +5,7 @@ import type { BlockingIssue, TailoredResumeOutput } from "@/lib/api";
 import {
   previewMechanicalQuickWin,
   type MechanicalFixPreview,
+  type MechanicalFixResult,
 } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 
@@ -31,29 +32,87 @@ export function shouldShowWillChangeLine(
   return Boolean(willChange) && !addressed;
 }
 
-export function shouldShowEmployerConstraintCopy(addressed: boolean): boolean {
-  return !addressed;
+export function shouldShowEmployerConstraintCopy(
+  addressed: boolean,
+  hasOutcome: boolean,
+): boolean {
+  return !addressed && !hasOutcome;
+}
+
+export type QuickWinMechanicalOutcome =
+  | { status: "applied"; changes: string[] }
+  | { status: "partial"; changes: string[]; unmet: string[] }
+  | { status: "failed"; reason: string };
+
+export function mechanicalOutcomeFromResult(
+  result: MechanicalFixResult | null,
+): QuickWinMechanicalOutcome {
+  if (!result) {
+    return {
+      status: "failed",
+      reason: "Couldn't apply automatically — no matching edit for this item.",
+    };
+  }
+  if (result.changes.length === 0) {
+    return {
+      status: "failed",
+      reason: `Couldn't apply automatically — ${result.unmet.join(", ")}`,
+    };
+  }
+  const changeLabels = result.changes.map((change) => change.label);
+  if (result.unmet.length > 0) {
+    return { status: "partial", changes: changeLabels, unmet: result.unmet };
+  }
+  return { status: "applied", changes: changeLabels };
+}
+
+export function shouldShowUndoButton(
+  outcome: QuickWinMechanicalOutcome | null | undefined,
+): boolean {
+  return outcome?.status === "applied" || outcome?.status === "partial";
+}
+
+export function formatMechanicalOutcomeReceipt(
+  outcome: QuickWinMechanicalOutcome,
+): { headline: string; details?: string[] } {
+  switch (outcome.status) {
+    case "applied":
+      return { headline: `Applied · ${outcome.changes.join(", ")}` };
+    case "partial":
+      return {
+        headline: `Partly applied · ${outcome.changes.join(", ")}`,
+        details: outcome.unmet,
+      };
+    case "failed":
+      return { headline: outcome.reason };
+  }
 }
 
 interface QuickWinCardProps {
   issue: BlockingIssue;
   tailored?: TailoredResumeOutput | null;
   addressed?: boolean;
+  outcome?: QuickWinMechanicalOutcome | null;
   onSkip: () => void;
   onFixWithAI?: () => void;
   onApplyMechanical?: () => void;
+  onUndoMechanical?: () => void;
 }
 
 export function QuickWinCard({
   issue,
   tailored,
   addressed = false,
+  outcome = null,
   onSkip,
   onFixWithAI,
   onApplyMechanical,
+  onUndoMechanical,
 }: QuickWinCardProps) {
   const preview = tailored ? previewMechanicalQuickWin(tailored, issue) : null;
   const willChange = formatMechanicalPreviewLine(preview);
+  const receipt = outcome ? formatMechanicalOutcomeReceipt(outcome) : null;
+  const hasOutcome = outcome !== null;
 
   return (
     <div
@@ -93,12 +152,32 @@ export function QuickWinCard({
           <p className={cn("text-xs mt-1", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-600 dark:text-slate-400")}>
             {issue.suggestion}
           </p>
-          {shouldShowWillChangeLine(willChange, addressed) && (
+          {shouldShowWillChangeLine(willChange, addressed || hasOutcome) && (
             <p className="text-xs mt-1.5 text-emerald-800 dark:text-emerald-200/90">
               <span className="font-semibold">Will change:</span> {willChange}
             </p>
           )}
-          {shouldShowEmployerConstraintCopy(addressed) && (
+          {receipt && (
+            <div className="text-xs mt-1.5 space-y-0.5">
+              <p
+                className={cn(
+                  outcome?.status === "failed"
+                    ? "text-amber-800 dark:text-amber-200/90"
+                    : "text-emerald-800 dark:text-emerald-200/90",
+                )}
+              >
+                {receipt.headline}
+              </p>
+              {receipt.details && receipt.details.length > 0 && (
+                <ul className="list-disc list-inside text-slate-600 dark:text-slate-400">
+                  {receipt.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {shouldShowEmployerConstraintCopy(addressed, hasOutcome) && (
             <p className="text-[11px] mt-1 text-slate-600 dark:text-slate-400">
               We only use employers already on your resume.
             </p>
@@ -107,7 +186,7 @@ export function QuickWinCard({
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {onApplyMechanical && !addressed && (
+        {onApplyMechanical && !addressed && !hasOutcome && (
           <button
             type="button"
             onClick={onApplyMechanical}
@@ -115,6 +194,15 @@ export function QuickWinCard({
           >
             <Check className="w-3 h-3" />
             Apply fix
+          </button>
+        )}
+        {onUndoMechanical && shouldShowUndoButton(outcome) && (
+          <button
+            type="button"
+            onClick={onUndoMechanical}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-600/60 transition-colors"
+          >
+            Undo
           </button>
         )}
         {onFixWithAI && (
