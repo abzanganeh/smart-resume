@@ -58,6 +58,14 @@ _JUNK_LINE = frozenset(
     }
 )
 
+_MAX_COMPANY_NAME_LEN = 60
+
+_PROSE_LINE = re.compile(
+    r"[.,;:!?]|\b(we|our|you|they|is|are|will|have|been|building|looking|"
+    r"seeking|responsible|experience|opportunity|team|role)\b",
+    re.IGNORECASE,
+)
+
 
 def _looks_like_job_title(text: str) -> bool:
     return bool(_JOB_TITLE_WORDS.search(text))
@@ -67,9 +75,20 @@ def _looks_like_location(text: str) -> bool:
     return bool(_LOCATION_HINT.search(text))
 
 
+def _looks_like_prose_line(text: str) -> bool:
+    cleaned = text.strip()
+    if len(cleaned) > _MAX_COMPANY_NAME_LEN:
+        return True
+    return bool(_PROSE_LINE.search(cleaned))
+
+
 def _looks_like_company_name(text: str) -> bool:
     cleaned = text.strip().rstrip(".,")
     if not cleaned or len(cleaned) < 2:
+        return False
+    if len(cleaned) > _MAX_COMPANY_NAME_LEN:
+        return False
+    if _looks_like_prose_line(cleaned):
         return False
     if cleaned.lower() in _JUNK_LINE:
         return False

@@ -19,7 +19,8 @@ import {
 
 export interface DashboardStepStackProps {
   hasMasterResume: boolean
-  masterChunkCount: number
+  /** e.g. "8 roles · 2 schools" — from parsed_sections, not chunk_count. */
+  masterResumeDetail: string | null
   masterUpdatedAt: string | null
   jobRolesReady: boolean
   jobRolesStale?: boolean
@@ -40,7 +41,7 @@ export interface DashboardStepStackProps {
  */
 export function DashboardStepStack({
   hasMasterResume,
-  masterChunkCount,
+  masterResumeDetail,
   masterUpdatedAt,
   jobRolesReady,
   jobRolesStale = false,
@@ -86,7 +87,7 @@ export function DashboardStepStack({
         <DashboardStepCard
           step={1}
           icon={FileText}
-          title={`Master resume ready · ${masterChunkCount} section${masterChunkCount === 1 ? "" : "s"}${masterUpdatedAt ? ` (${formatDate(masterUpdatedAt)})` : ""}`}
+          title={`Master resume ready · ${masterResumeDetail ?? "indexed"}${masterUpdatedAt ? ` (${formatDate(masterUpdatedAt)})` : ""}`}
           description=""
           ready
           primaryHref="/session/new"

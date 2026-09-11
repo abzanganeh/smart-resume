@@ -85,6 +85,7 @@ interface Props {
   onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
+  onRetargetOrphanSuggestion?: (id: string, experienceIndex: number) => void;
   entryIssueBadges?: Record<string, EntryIssueBadge>;
 }
 
@@ -521,7 +522,7 @@ function hasGuardRewriteNotes(notes: string[]): boolean {
   });
 }
 
-export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, entryIssueBadges = {} }: Props) {
+export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges = {} }: Props) {
   function acceptSug(id: string) { onAcceptSuggestion?.(id); }
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
 
@@ -1371,16 +1372,18 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
             count={orphanedSuggestions(suggestions, data).length}
           />
           <p className="text-xs text-red-800 dark:text-red-200/80 mb-3">
-            The AI proposed a change that doesn&apos;t match anything in your resume (maybe already deleted, wrong section, or wrong name).
-            Click <strong>Ignore</strong> to dismiss, or edit manually with the pencil / trash icons.
+            The AI suggested a change to something that isn&apos;t on your resume. Point it at a real
+            entry, or dismiss it.
           </p>
           <div className="space-y-2">
             {orphanedSuggestions(suggestions, data).map((sug) => (
               <OrphanSuggestionCard
                 key={sug.id}
                 suggestion={sug}
+                resume={data}
                 onAccept={acceptSug}
                 onReject={rejectSug}
+                onRetarget={onRetargetOrphanSuggestion}
               />
             ))}
           </div>

@@ -9,6 +9,8 @@ interface Props {
   output: AuditOutput | null;
   streaming: boolean;
   sessionId: string;
+  /** Deterministic ATS score on the original resume (same rubric as tailored ATS). */
+  originalAtsScore?: number | null;
   /** Claimed keywords restored from the server on mount. */
   initialClaimedKeywords?: string[];
   /** Extra notes restored from the server on mount. */
@@ -29,6 +31,7 @@ export function AuditPanel({
   output,
   streaming,
   sessionId,
+  originalAtsScore = null,
   initialClaimedKeywords,
   initialExtraNotes,
   initialBulletFixes,
@@ -227,12 +230,29 @@ export function AuditPanel({
     <div className="space-y-6">
 
       {/* Score */}
-      <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between">
+      <div className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 flex flex-wrap items-start justify-between gap-4">
+        {typeof originalAtsScore === "number" && (
+          <div>
+            <p className="text-slate-600 dark:text-slate-400 text-sm flex items-center gap-1.5">
+              ATS match (original resume)
+              <span
+                title="Deterministic keyword and structure score — the same rubric used after you tailor your resume."
+                className="cursor-help text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </span>
+            </p>
+            <p className={cn("text-3xl font-bold mt-0.5", scoreColor)}>
+              {originalAtsScore}
+              <span className="text-slate-600 dark:text-slate-400 text-lg font-normal"> / 100</span>
+            </p>
+          </div>
+        )}
         <div>
           <p className="text-slate-600 dark:text-slate-400 text-sm flex items-center gap-1.5">
-            Original resume audit score
+            Resume quality review
             <span
-              title="Measures how well your current resume matches the job. The ATS score (Phase 4) measures the tailored version."
+              title="Holistic AI review of your original resume — complementary to the deterministic ATS match score."
               className="cursor-help text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300"
             >
               <Info className="w-3.5 h-3.5" />
@@ -243,7 +263,7 @@ export function AuditPanel({
             <span className="text-slate-600 dark:text-slate-400 text-lg font-normal"> / 100</span>
           </p>
         </div>
-        <div className="text-right text-sm text-slate-600 dark:text-slate-400">
+        <div className="text-right text-sm text-slate-600 dark:text-slate-400 ml-auto">
           <p>{output.page_estimate}</p>
           {output.page_limit_exceeded && (
             <p className="text-red-700 dark:text-red-400 text-xs mt-0.5">Page limit exceeded</p>

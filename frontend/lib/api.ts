@@ -93,6 +93,8 @@ export async function checkSession(
   stale: Record<string, string | null>;
   stale_since?: string | null;
   phase1_complete: boolean;
+  /** Deterministic ATS score for the original resume (same rubric as Phase 4). */
+  original_ats_score?: number | null;
   has_user_info?: boolean;
   resume_parsed?: ParsedResume | null;
   user_claimed_keywords: string[];

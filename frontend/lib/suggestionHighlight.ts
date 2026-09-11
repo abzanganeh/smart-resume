@@ -441,6 +441,7 @@ export function isPatchPlaceable(
     const exp = resume.experience[idx]!;
     if (patch.delete_experience) return true;
     if (patch.new_title?.trim() || patch.new_dates?.trim()) return true;
+    if (patch.add_bullet?.trim()) return true;
     if (patch.bullet_old?.trim()) {
       return exp.bullets.some((b) => b === patch.bullet_old || textsMatch(b, patch.bullet_old!));
     }

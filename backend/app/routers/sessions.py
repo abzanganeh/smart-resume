@@ -30,6 +30,8 @@ from app.services.session_ownership import (
     bearer_claims_or_none,
     resolve_bearer_user_id,
 )
+from app.agent.phase4_deterministic import compute_score_result, scoring_terms_from_keywords
+from app.services.checkup_service import parsed_to_tailored
 from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -88,12 +90,26 @@ async def check_session(session_id: str):
         if company and company not in ("Unknown", "—"):
             export_company = company
 
+    original_ats_score: int | None = None
+    if session.resume_parsed is not None and session.phase1_output is not None:
+        must_have_terms = scoring_terms_from_keywords(
+            session.phase1_output.must_have_keywords
+        )
+        if must_have_terms:
+            score_result = compute_score_result(
+                parsed_to_tailored(session.resume_parsed),
+                must_have_terms,
+                tone_profile=session.phase1_output.tone_profile,
+            )
+            original_ats_score = score_result.ats_score
+
     return {
         "session_id": session.session_id,
         "ok": True,
         "resume_raw": session.resume_raw or "",
         "has_jd": has_jd,
         "export_company": export_company,
+        "original_ats_score": original_ats_score,
         "phases": phases_out,
         "cover_letter": (
             json.loads(session.cover_letter_output.model_dump_json())

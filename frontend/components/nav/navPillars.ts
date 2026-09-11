@@ -21,6 +21,7 @@ export const NAV_PILLARS: readonly NavPillar[] = [
     links: [
       { href: "/profile", label: "Master resume" },
       { href: "/session/new", label: "Tailor for a job" },
+      // TODO(post-staging): dedicated /dashboard/tailored-resumes page; hash scroll is interim.
       { href: "/dashboard#tailored-resumes", label: "Tailored resumes" },
       { href: "/cover-letter/new", label: "Cover letter" },
       { href: "/fit", label: "Job fit" },

@@ -9,7 +9,7 @@ export const PRODUCT_NAME = "FlintApply" as const;
 
 export const COMPANY_LINE = "by The Flint AI" as const;
 
-export const COMPANY_NAME = "Flint AI" as const;
+export const COMPANY_NAME = "The Flint AI" as const;
 
 export const COMPANY_URL = "https://theflintai.com" as const;
 

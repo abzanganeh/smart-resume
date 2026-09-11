@@ -3,10 +3,14 @@
 import { Check, Pencil, RotateCw, Trash2, X } from "lucide-react";
 import {
   HIGHLIGHT,
+  isPatchPlaceable,
   toneForSuggestion,
   type HighlightTone,
 } from "@/lib/suggestionHighlight";
+import type { TailoredResumeOutput } from "@/lib/api";
+import { resolveEmployerTargets } from "@/lib/mechanicalFix";
 import type { ResumeSuggestion } from "@/lib/suggestions";
+import { RolePicker } from "./RolePicker";
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
@@ -380,31 +384,71 @@ function orphanPatchPreview(patch: import("@/lib/api").ResumePatch): string[] {
 
 export function OrphanSuggestionCard({
   suggestion,
+  resume,
   onAccept,
   onReject,
+  onRetarget,
 }: {
   suggestion: ResumeSuggestion;
+  resume: TailoredResumeOutput;
   onAccept: (id: string) => void;
   onReject: (id: string) => void;
+  onRetarget?: (id: string, experienceIndex: number) => void;
 }) {
   const tone = toneForSuggestion(suggestion);
   const preview = orphanPatchPreview(suggestion.patch);
+  const placeable = isPatchPlaceable(suggestion.patch, resume);
+  const targets = resolveEmployerTargets(resume);
+  const wrongCompany =
+    suggestion.patch.section === "experience" ? suggestion.patch.company?.trim() : "";
+
   return (
     <HighlightBox tone={tone === "none" ? "pending" : tone}>
       <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400/80 uppercase tracking-wider mb-1">
         AI suggestion
       </p>
+      {!placeable && (
+        <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
+          The AI suggested a change to something that isn&apos;t on your resume. Point it at a real
+          entry, or dismiss it.
+        </p>
+      )}
+      {wrongCompany && !placeable && (
+        <p className="text-xs text-amber-800 dark:text-amber-200/90 mb-2">
+          Suggested for &quot;{wrongCompany}&quot; — no such role on your resume.
+        </p>
+      )}
       <div className="space-y-1 mb-2">
         {preview.map((line, i) => (
           <p key={i} className="text-slate-700 dark:text-slate-300 text-xs">{line}</p>
         ))}
       </div>
-      {suggestion.status === "pending" && (
+      {suggestion.status === "pending" && placeable && (
         <div className="flex justify-end">
           <SuggestionActionButtons
             onAccept={() => onAccept(suggestion.id)}
             onReject={() => onReject(suggestion.id)}
           />
+        </div>
+      )}
+      {suggestion.status === "pending" && !placeable && (
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          {onRetarget && targets.length > 0 && (
+            <RolePicker
+              targets={targets}
+              triggerLabel="Add to ▾"
+              confirmLabel="Add there"
+              onConfirm={(experienceIndex) => onRetarget(suggestion.id, experienceIndex)}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => onReject(suggestion.id)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-600 hover:bg-slate-500 text-slate-100 text-[11px] font-medium transition-colors"
+          >
+            <X className="w-3 h-3" />
+            Dismiss
+          </button>
         </div>
       )}
       {suggestion.status === "accepted" && (
