@@ -26,10 +26,11 @@ interface Props {
   onAcceptAllSuggestions?: () => void;
   onRejectSuggestion?: (id: string) => void;
   onDismissSuggestion?: (id: string) => void;
+  onRetargetOrphanSuggestion?: (id: string, experienceIndex: number) => void;
   entryIssueBadges?: Record<string, EntryIssueBadge>;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, entryIssueBadges }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -78,6 +79,7 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         onAcceptAllSuggestions={onAcceptAllSuggestions}
         onRejectSuggestion={onRejectSuggestion}
         onDismissSuggestion={onDismissSuggestion}
+        onRetargetOrphanSuggestion={onRetargetOrphanSuggestion}
         entryIssueBadges={entryIssueBadges}
       />
     </div>
