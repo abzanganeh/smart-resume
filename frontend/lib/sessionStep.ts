@@ -16,7 +16,7 @@ export function normalizeSessionStep(raw: string | null): SessionTailoringStep {
 /** Saved sessions with a completed rewrite should open on Tailored Rewrite, not Analysis. */
 export function defaultSessionStep(snapshot: SessionPhaseSnapshot): SessionTailoringStep {
   const phase3 = snapshot.phases?.["3"]
-  if (phase3?.status === "done" && phase3.output) return "rewrite"
+  if (phase3?.output) return "rewrite"
   return "analysis"
 }
 

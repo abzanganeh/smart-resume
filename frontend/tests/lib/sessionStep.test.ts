@@ -3,12 +3,12 @@ import test from "node:test"
 
 import { defaultSessionStep, sessionHref } from "@/lib/sessionStep"
 
-test("defaultSessionStep opens rewrite when phase 3 is done", () => {
+test("defaultSessionStep opens rewrite when phase 3 output exists", () => {
   const step = defaultSessionStep({
     phases: {
       "1": { status: "done", output: {} },
       "2": { status: "done", output: {} },
-      "3": { status: "done", output: { summary: "Tailored" } },
+      "3": { status: "error", output: { summary: "Tailored" } },
     },
   })
   assert.equal(step, "rewrite")

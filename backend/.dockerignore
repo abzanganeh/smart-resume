@@ -1,0 +1,5 @@
+# Never bake workstation secrets into the backend image — compose env_file supplies runtime config.
+.env
+.env.*
+!.env.example
+!.env.staging.example

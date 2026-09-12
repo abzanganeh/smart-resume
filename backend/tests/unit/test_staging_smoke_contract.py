@@ -156,6 +156,12 @@ def test_production_preflight_rejects_sk_test_on_https_prod() -> None:
         assert needle in text, f"production-preflight.sh must contain {needle!r}"
 
 
+def test_local_sim_forces_mailpit_over_baked_resend() -> None:
+    compose = (_repo_root() / "docker-compose.local-sim.yml").read_text()
+    assert "./backend/.env.staging:/app/.env:ro" in compose
+    assert 'RESEND_API_KEY: ""' in compose
+
+
 def test_docker_compose_loopback_binds_sensitive_services() -> None:
     compose = (_repo_root() / "docker-compose.yml").read_text()
     for service in ("postgres", "redis", "mailpit"):

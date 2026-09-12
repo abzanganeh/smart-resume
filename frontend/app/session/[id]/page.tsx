@@ -138,6 +138,7 @@ function SessionContent() {
 
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiSettingsHighlight, setAiSettingsHighlight] = useState(false);
+  const [rewriteRestoreHint, setRewriteRestoreHint] = useState<string | null>(null);
   const [namePromptRecord, setNamePromptRecord] = useState<SessionResumeRecord | null>(null);
   const [namePromptValue, setNamePromptValue] = useState("");
   const [namePromptSaving, setNamePromptSaving] = useState(false);
@@ -360,7 +361,8 @@ function SessionContent() {
 
     const applyCached = (phaseNum: string) => {
       const cached = s.phases?.[phaseNum];
-      if (cached?.status === "done" && cached.output) {
+      // Restore whenever durable output exists — status may be stale after a failed rerun.
+      if (cached?.output) {
         applyPhaseOutputByNumber(Number(phaseNum), cached.output);
       }
     };
@@ -376,7 +378,7 @@ function SessionContent() {
     }
 
     const phase4 = s.phases?.["4"];
-    if (!phase4Stale && phase4?.status === "done" && phase4.output) {
+    if (!phase4Stale && phase4?.output) {
       const out = phase4.output as QAOutput;
       if (typeof out.ats_score === "number") {
         setAtsScoreHistory([out.ats_score]);
@@ -902,11 +904,25 @@ function SessionContent() {
     setOriginalAtsScore(null);
     setMechanicalOutcomes({});
     mechanicalUndoRef.current = {};
+    setRewriteRestoreHint(null);
 
     checkSession(sessionId)
-      .then((s) => {
+      .then(async (s) => {
         if (cancelled) return;
         hydrateFromSession(s);
+        const phase3Output = s.phases?.["3"]?.output;
+        if (!phase3Output && authSession?.backendAccessToken) {
+          try {
+            const record = await getSessionResumeRecord(sessionId);
+            if (record.tailoring_stage === "polished") {
+              setRewriteRestoreHint(
+                "Your saved tailored rewrite is no longer in this session (usually after a server restart). Run tailored rewrite once to restore it — future opens will reload automatically.",
+              );
+            }
+          } catch {
+            // Anonymous or no dashboard row yet.
+          }
+        }
         if (!searchParams.get("step")) {
           const initial = defaultSessionStep(s);
           if (initial !== "analysis") {
@@ -931,7 +947,7 @@ function SessionContent() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, hydrateFromSession, router, searchParams]);
+  }, [sessionId, hydrateFromSession, router, searchParams, authSession?.backendAccessToken]);
 
   useEffect(() => {
     runInFlightRef.current = false;
@@ -1419,6 +1435,11 @@ function SessionContent() {
                   </div>
                 )}
               </div>
+              {rewriteRestoreHint && !tailored && (
+                <p className="mb-4 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                  {rewriteRestoreHint}
+                </p>
+              )}
               {!tailored && !phaseRunning && sessionLoaded && (
                 pendingCreditAction?.label === "Run tailored rewrite" ? (
                   <CreditChargeConfirm
