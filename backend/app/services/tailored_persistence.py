@@ -143,6 +143,21 @@ async def commit_tailored_resume(
     if not user_id or not user_id.strip():
         return
 
+    async def _persist_dashboard_cache() -> None:
+        from app.services.dashboard.session_cache import sync_session_cache_for_session
+
+        async with async_session_factory() as db:
+            try:
+                await sync_session_cache_for_session(db, session)
+                await db.commit()
+            except Exception as exc:
+                await db.rollback()
+                log.warning(
+                    "tailored_persistence.session_cache_failed",
+                    session_id=session_id,
+                    error=str(exc),
+                )
+
     try:
         uid = uuid.UUID(user_id)
     except ValueError:
@@ -173,3 +188,4 @@ async def commit_tailored_resume(
         )
 
     asyncio.create_task(_db_sync(), name=f"commit_tailored:{session_id}")
+    asyncio.create_task(_persist_dashboard_cache(), name=f"session_cache:{session_id}")

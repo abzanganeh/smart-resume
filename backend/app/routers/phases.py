@@ -47,6 +47,7 @@ from app.services.billing.quota import (
     QuotaAction,
 )
 from app.services.master_resume.crud import has_any_live_chunk
+from app.services.dashboard.session_cache import sync_session_cache_for_session
 from app.services.session_store import (
     get_session,
     is_phase_lock_held,
@@ -537,7 +538,11 @@ def _maybe_embed_edited_bullet(session: "Session", body: dict) -> None:  # type:
 
 
 @router.patch("/{session_id}/resume/tailored")
-async def patch_tailored_resume(session_id: str, body: dict):
+async def patch_tailored_resume(
+    session_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
     """Save inline edits; supports legacy field patches and section_id updates."""
     session = await get_session(session_id)
     if not session:
@@ -846,6 +851,7 @@ async def patch_tailored_resume(session_id: str, body: dict):
     session.stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
+    await sync_session_cache_for_session(db, session)
 
     # Embed the edited bullet into the corpus so future sessions can
     # retrieve it.  Only experience bullets carry enough signal — summary
@@ -871,7 +877,11 @@ async def get_versions(session_id: str):
 
 
 @router.post("/{session_id}/resume/versions/{snapshot_id}/restore")
-async def restore_version(session_id: str, snapshot_id: str):
+async def restore_version(
+    session_id: str,
+    snapshot_id: str,
+    db: AsyncSession = Depends(get_db),
+):
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -891,6 +901,7 @@ async def restore_version(session_id: str, snapshot_id: str):
     session.stale_since = now
     session.phase4_stale_since = now
     await update_session(session)
+    await sync_session_cache_for_session(db, session)
     return {
         "version": restored.version,
         "snapshot_id": restored.snapshot_id,

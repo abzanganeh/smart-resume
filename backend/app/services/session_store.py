@@ -83,6 +83,11 @@ async def update_session(session: Session) -> None:
     await _save(session.session_id, session)
 
 
+async def touch_session(session: Session) -> None:
+    """Refresh Redis TTL without mutating session fields (active-view keepalive)."""
+    await _save(session.session_id, session)
+
+
 async def update_phase_status(session_id: str, phase: int, status: str) -> None:
     session = await get_session(session_id)
     if session is None:

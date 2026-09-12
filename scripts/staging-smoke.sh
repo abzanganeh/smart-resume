@@ -120,11 +120,19 @@ else
 fi
 
 # Auth register smoke (unique email per run) + authenticated tracker funnel
+if [[ "$API_URL" =~ ^https?://(localhost|127\.0\.0\.1): ]] \
+  && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^smart-resume-postgres-1$'; then
+  docker exec smart-resume-postgres-1 psql -U smart_resume -d smart_resume -q -c \
+    "DELETE FROM users WHERE email LIKE 'staging-smoke%@example.com';" \
+    2>/dev/null || true
+fi
+
 smoke_email="staging-smoke-$(date +%s%N)-$$@example.com"
+smoke_device_fp="staging-smoke-$(date +%s%N)-$$"
 register_tmp="$(mktemp)"
 register_status="$(curl -s -o "$register_tmp" -w '%{http_code}' -X POST "$API_URL/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$smoke_email\",\"password\":\"tr0ub4dor&3sandwich-eats-paint\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-06\",\"turnstile_token\":\"staging-smoke-turnstile\"}")"
+  -d "{\"email\":\"$smoke_email\",\"password\":\"tr0ub4dor&3sandwich-eats-paint\",\"display_name\":\"Smoke Test\",\"accepted_tos_version\":\"2026-06\",\"turnstile_token\":\"staging-smoke-turnstile\",\"device_fingerprint\":\"$smoke_device_fp\"}")"
 register_json="$(cat "$register_tmp")"
 rm -f "$register_tmp"
 
