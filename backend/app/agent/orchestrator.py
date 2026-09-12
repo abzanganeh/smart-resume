@@ -377,11 +377,18 @@ async def run_phase(
                 )
 
                 async with async_session_factory() as db:
+                    refreshed = await session_store.get_session(session_id)
                     await mark_resume_record_polished(
                         db,
                         user_id=user_id,
                         session_id=session_id,
                     )
+                    if refreshed is not None:
+                        from app.services.dashboard.session_cache import (
+                            sync_session_cache_for_session,
+                        )
+
+                        await sync_session_cache_for_session(db, refreshed)
                     await db.commit()
             except Exception as exc:  # noqa: BLE001 — do not fail the phase run
                 log.warning(
@@ -423,6 +430,11 @@ async def run_phase(
                             session=persisted,
                             ats_score=output.ats_score,
                         )
+                        from app.services.dashboard.session_cache import (
+                            sync_session_cache_for_session,
+                        )
+
+                        await sync_session_cache_for_session(db, persisted)
                         await db.commit()
             except Exception as exc:  # noqa: BLE001 — do not fail the phase run
                 log.warning(

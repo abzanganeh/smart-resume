@@ -32,37 +32,30 @@ from app.services.session_ownership import (
 )
 from app.agent.phase4_deterministic import compute_score_result, scoring_terms_from_keywords
 from app.services.checkup_service import parsed_to_tailored
-from app.services.session_store import create_session, get_session, update_session
+from app.services.dashboard.session_cache import (
+    backfill_session_from_record_if_needed,
+    restore_session_from_record,
+    sync_session_cache_for_session,
+)
+from app.services.session_store import create_session, get_session, touch_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
-class SessionResumeRecordResponse(BaseModel):
-    id: uuid.UUID
-    display_name: str | None
-    jd_title: str
-    jd_company: str
-    tailoring_stage: str
+async def _resolve_user_id_for_restore(
+    authorization: str | None,
+) -> uuid.UUID | None:
+    claims = bearer_claims_or_none(authorization)
+    if not claims:
+        return None
+    sub = str(claims.get("sub") or "")
+    try:
+        return uuid.UUID(sub)
+    except ValueError:
+        return None
 
 
-@router.post("", status_code=201)
-@limiter.limit("20/minute")
-async def new_session(
-    request: Request,
-    authorization: str | None = Header(default=None, alias="Authorization"),
-):
-    session = await create_session()
-    await bind_session_user_from_bearer(authorization, session)
-    return {"session_id": session.session_id}
-
-
-@router.get("/{session_id}")
-async def check_session(session_id: str):
-    """Existence check + resume text and cached phase outputs for UI hydration."""
-    session = await get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
+def _session_check_payload(session) -> dict:
     def phase_payload(n: int) -> dict:
         status = getattr(session, f"phase{n}_status")
         output = getattr(session, f"phase{n}_output")
@@ -125,12 +118,64 @@ async def check_session(session_id: str):
             if session.resume_parsed is not None
             else None
         ),
-        # Fix 2: expose user additions so the UI can survive a full page refresh.
         "user_claimed_keywords": session.user_claimed_keywords,
         "user_extra_notes": session.user_extra_notes,
         "bullet_fixes": [bf.model_dump() for bf in session.bullet_fixes],
         "approved_metrics": [am.model_dump() for am in (session.approved_metrics or [])],
     }
+
+
+async def _load_session_for_check(
+    session_id: str,
+    authorization: str | None,
+    db: AsyncSession,
+):
+    session = await get_session(session_id)
+    user_id = await _resolve_user_id_for_restore(authorization)
+    if session is None and user_id is not None:
+        session = await restore_session_from_record(
+            db,
+            session_id=session_id,
+            user_id=user_id,
+        )
+    elif session is not None and user_id is not None:
+        session = await backfill_session_from_record_if_needed(db, session)
+    if session is not None:
+        # Keep Redis TTL alive while the user is actively viewing the session.
+        await touch_session(session)
+    return session
+
+
+class SessionResumeRecordResponse(BaseModel):
+    id: uuid.UUID
+    display_name: str | None
+    jd_title: str
+    jd_company: str
+    tailoring_stage: str
+
+
+@router.post("", status_code=201)
+@limiter.limit("20/minute")
+async def new_session(
+    request: Request,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    session = await create_session()
+    await bind_session_user_from_bearer(authorization, session)
+    return {"session_id": session.session_id}
+
+
+@router.get("/{session_id}")
+async def check_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Existence check + resume text and cached phase outputs for UI hydration."""
+    session = await _load_session_for_check(session_id, authorization, db)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return _session_check_payload(session)
 
 
 class TailoredEditRequest(BaseModel):
@@ -158,7 +203,12 @@ async def save_approved_metrics(session_id: str, body: ApprovedMetricsRequest):
 
 
 @router.patch("/{session_id}/tailored")
-async def save_tailored_edits(session_id: str, body: TailoredEditRequest):
+async def save_tailored_edits(
+    session_id: str,
+    body: TailoredEditRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
     """Persist user-edited tailored resume (overwrites phase3_output)."""
     session = await get_session(session_id)
     if not session:
@@ -168,6 +218,9 @@ async def save_tailored_edits(session_id: str, body: TailoredEditRequest):
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
     await update_session(session)
+    user_id = await _resolve_user_id_for_restore(authorization)
+    if user_id is not None:
+        await sync_session_cache_for_session(db, session)
     return {"ok": True}
 
 
