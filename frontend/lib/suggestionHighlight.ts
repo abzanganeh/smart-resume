@@ -1,4 +1,5 @@
 import {
+  bulletsTextMatch,
   inferEducationInstitution,
   matchEducationInstitution,
   matchExperienceCompany,
@@ -118,7 +119,7 @@ export function bulletEditSuggestion(
     (s) =>
       s.patch.bullet_old &&
       s.patch.bullet_new &&
-      textsMatch(s.patch.bullet_old, bulletText),
+      bulletsTextMatch(bulletText, s.patch.bullet_old),
   );
 }
 
@@ -290,7 +291,7 @@ export function projectBulletEditSuggestion(
     (s) =>
       s.patch.project_bullet_old &&
       s.patch.project_bullet_new &&
-      textsMatch(s.patch.project_bullet_old, bulletText),
+      bulletsTextMatch(bulletText, s.patch.project_bullet_old),
   );
 }
 
@@ -443,7 +444,7 @@ export function isPatchPlaceable(
     if (patch.new_title?.trim() || patch.new_dates?.trim()) return true;
     if (patch.add_bullet?.trim()) return true;
     if (patch.bullet_old?.trim()) {
-      return exp.bullets.some((b) => b === patch.bullet_old || textsMatch(b, patch.bullet_old!));
+      return exp.bullets.some((b) => bulletsTextMatch(b, patch.bullet_old!));
     }
     return false;
   }
@@ -488,7 +489,7 @@ export function isPatchPlaceable(
         const bullets = Array.isArray((proj as Record<string, unknown>).bullets)
           ? ((proj as Record<string, unknown>).bullets as string[])
           : [];
-        return bullets.some((b) => textsMatch(b, patch.project_bullet_old!));
+        return bullets.some((b) => bulletsTextMatch(b, patch.project_bullet_old!));
       }
       if ((patch.project_bullets_replace_all?.length ?? 0) > 0) return true;
       if (patch.new_project_title?.trim() || patch.new_project_description != null) {

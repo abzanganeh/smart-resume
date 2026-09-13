@@ -1,4 +1,9 @@
-import { applyResumePatch, coerceEducationPatch } from "@/lib/applyResumePatch";
+import {
+  applyResumePatch,
+  bulletsTextMatch,
+  coerceEducationPatch,
+  MIN_FUZZY_BULLET_LEN,
+} from "@/lib/applyResumePatch";
 import type { ResumePatch, TailoredResumeOutput } from "@/lib/api";
 
 function assert(condition: boolean, message: string) {
@@ -94,6 +99,72 @@ function runTests() {
   assert(
     truncatedBulletResult.updated.experience[1]?.bullets[0] === "Engineered MFA flows with metrics.",
     "fuzzy-matched bullet text replaced",
+  );
+
+  const ambiguousBase: TailoredResumeOutput = {
+    ...base,
+    experience: [
+      base.experience[0]!,
+      {
+        ...base.experience[1]!,
+        bullets: [
+          "Built MFA flows with WebAuthn.",
+          "Built MFA flows for SSO integrations.",
+        ],
+      },
+    ],
+  };
+  const ambiguousPatch: ResumePatch = {
+    section: "experience",
+    company: "Acceptto",
+    bullet_old: "Built MFA flows with WebAuthn",
+    bullet_new: "Engineered MFA flows with WebAuthn.",
+  };
+  const ambiguousResult = applyResumePatch(ambiguousBase, ambiguousPatch);
+  assert(ambiguousResult.applied, "unique prefix match applies");
+  assert(
+    ambiguousResult.updated.experience[1]?.bullets[0] === "Engineered MFA flows with WebAuthn.",
+    "first matching bullet updated",
+  );
+  assert(
+    ambiguousResult.updated.experience[1]?.bullets[1] === "Built MFA flows for SSO integrations.",
+    "sibling bullet unchanged",
+  );
+
+  const collisionPatch: ResumePatch = {
+    section: "experience",
+    company: "Acceptto",
+    bullet_old: "Built MFA flows",
+    bullet_new: "Engineered MFA flows.",
+  };
+  const collisionResult = applyResumePatch(ambiguousBase, collisionPatch);
+  assert(!collisionResult.applied, "ambiguous shared-prefix needle does not apply");
+
+  const missBulletPatch: ResumePatch = {
+    section: "experience",
+    company: "Acceptto",
+    description: "noop",
+    bullet_old: "Totally unrelated bullet text.",
+    bullet_new: "Should not apply.",
+  };
+  const missBulletResult = applyResumePatch(base, missBulletPatch);
+  assert(!missBulletResult.applied, "company match with no bullet match returns applied=false");
+  assert(
+    JSON.stringify(missBulletResult.updated) === JSON.stringify(base),
+    "resume unchanged when bullet does not match",
+  );
+
+  assert(
+    !bulletsTextMatch("Built MFA flows.", "Built"),
+    "short needles below MIN_FUZZY_BULLET_LEN do not fuzzy-match",
+  );
+  assert(
+    bulletsTextMatch("Built MFA flows with WebAuthn.", "Built MFA flows with"),
+    "prefix needle matches when length threshold met",
+  );
+  assert(
+    !bulletsTextMatch("Built MFA flows.", "Built MFA"),
+    "needles shorter than MIN_FUZZY_BULLET_LEN do not fuzzy-match",
   );
 
   const missPatch: ResumePatch = {

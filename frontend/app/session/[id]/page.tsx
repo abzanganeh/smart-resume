@@ -674,7 +674,13 @@ function SessionContent() {
       );
       return;
     }
-    setSuggestionError(null);
+    if (acceptedIds.length < pending.length) {
+      setSuggestionError(
+        `Applied ${acceptedIds.length} of ${pending.length} suggestions. Some did not match — accept individually or edit manually.`,
+      );
+    } else {
+      setSuggestionError(null);
+    }
     setTailored(current);
     setEditorSyncKey((k) => k + 1);
     setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));

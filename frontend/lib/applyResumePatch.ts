@@ -32,24 +32,42 @@ function projectDisplayName(project: Record<string, unknown>): string {
   return String(project.name ?? "").trim();
 }
 
+export const MIN_FUZZY_BULLET_LEN = 12;
+
 function normalizeBulletText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-/** Fuzzy bullet match — same rules as suggestion highlights (truncated LLM bullet_old). */
-export function bulletsTextMatch(a: string, b: string): boolean {
-  const left = normalizeBulletText(a);
-  const right = normalizeBulletText(b);
-  if (!left || !right) return false;
-  return left === right || left.includes(right) || right.includes(left);
+/**
+ * Prefix-safe bullet match for LLM patches (truncated bullet_old).
+ * Avoids bidirectional substring hits that would rewrite the wrong sibling bullet.
+ */
+export function bulletsTextMatch(resumeBullet: string, needle: string): boolean {
+  const bullet = normalizeBulletText(resumeBullet);
+  const patch = normalizeBulletText(needle);
+  if (!bullet || !patch) return false;
+  if (bullet === patch) return true;
+  if (patch.length < MIN_FUZZY_BULLET_LEN) return false;
+  if (bullet.startsWith(patch)) return true;
+  if (patch.startsWith(bullet) && bullet.length >= MIN_FUZZY_BULLET_LEN) return true;
+  return false;
 }
 
 function findMatchingBulletIndex(bullets: string[], needle: string): number {
   const trimmed = needle.trim();
   if (!trimmed) return -1;
-  const exact = bullets.findIndex((b) => b === trimmed);
+
+  const normalizedNeedle = normalizeBulletText(trimmed);
+  const exact = bullets.findIndex(
+    (b) => normalizeBulletText(b) === normalizedNeedle,
+  );
   if (exact >= 0) return exact;
-  return bullets.findIndex((b) => bulletsTextMatch(b, trimmed));
+
+  const matches = bullets
+    .map((b, i) => i)
+    .filter((i) => bulletsTextMatch(bullets[i]!, trimmed));
+  if (matches.length === 1) return matches[0];
+  return -1;
 }
 
 function normalizeOrgKey(name: string): string {
