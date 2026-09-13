@@ -666,7 +666,15 @@ function SessionContent() {
         acceptedIds.push(sug.id);
       }
     }
-    if (!acceptedIds.length) return;
+    if (!acceptedIds.length) {
+      setSuggestionError(
+        pending.length === 1
+          ? "Could not apply this suggestion. Try Accept on the highlighted bullet or edit manually."
+          : "Could not apply these suggestions. Try accepting each highlight individually.",
+      );
+      return;
+    }
+    setSuggestionError(null);
     setTailored(current);
     setEditorSyncKey((k) => k + 1);
     setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));

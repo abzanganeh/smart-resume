@@ -82,6 +82,20 @@ function runTests() {
     "bullet text replaced",
   );
 
+  const truncatedBulletPatch: ResumePatch = {
+    section: "experience",
+    company: "Acceptto",
+    description: "Stronger verb (truncated bullet_old from chat)",
+    bullet_old: "Built MFA flows",
+    bullet_new: "Engineered MFA flows with metrics.",
+  };
+  const truncatedBulletResult = applyResumePatch(base, truncatedBulletPatch);
+  assert(truncatedBulletResult.applied, "bullet patch applies when bullet_old is a prefix");
+  assert(
+    truncatedBulletResult.updated.experience[1]?.bullets[0] === "Engineered MFA flows with metrics.",
+    "fuzzy-matched bullet text replaced",
+  );
+
   const missPatch: ResumePatch = {
     section: "experience",
     company: "Unknown Corp",

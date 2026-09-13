@@ -477,12 +477,24 @@ export function isPatchPlaceable(
       );
     }
     if (patch.project_name?.trim()) {
-      return resume.projects.some((proj) =>
+      const proj = resume.projects.find((p) =>
         matchProjectName(
-          projectDisplayName(proj as Record<string, unknown>),
+          projectDisplayName(p as Record<string, unknown>),
           patch.project_name!,
         ),
       );
+      if (!proj) return false;
+      if (patch.project_bullet_old?.trim()) {
+        const bullets = Array.isArray((proj as Record<string, unknown>).bullets)
+          ? ((proj as Record<string, unknown>).bullets as string[])
+          : [];
+        return bullets.some((b) => textsMatch(b, patch.project_bullet_old!));
+      }
+      if ((patch.project_bullets_replace_all?.length ?? 0) > 0) return true;
+      if (patch.new_project_title?.trim() || patch.new_project_description != null) {
+        return true;
+      }
+      return false;
     }
     return false;
   }

@@ -32,6 +32,26 @@ function projectDisplayName(project: Record<string, unknown>): string {
   return String(project.name ?? "").trim();
 }
 
+function normalizeBulletText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+/** Fuzzy bullet match — same rules as suggestion highlights (truncated LLM bullet_old). */
+export function bulletsTextMatch(a: string, b: string): boolean {
+  const left = normalizeBulletText(a);
+  const right = normalizeBulletText(b);
+  if (!left || !right) return false;
+  return left === right || left.includes(right) || right.includes(left);
+}
+
+function findMatchingBulletIndex(bullets: string[], needle: string): number {
+  const trimmed = needle.trim();
+  if (!trimmed) return -1;
+  const exact = bullets.findIndex((b) => b === trimmed);
+  if (exact >= 0) return exact;
+  return bullets.findIndex((b) => bulletsTextMatch(b, trimmed));
+}
+
 function normalizeOrgKey(name: string): string {
   return name
     .toLowerCase()
@@ -429,10 +449,10 @@ export function applyResumePatch(
       const next = { ...exp };
 
       if (coerced.bullet_old && coerced.bullet_new) {
-        const matched = exp.bullets.some((b) => b === coerced.bullet_old);
-        if (matched) {
-          next.bullets = exp.bullets.map((b) =>
-            b === coerced.bullet_old ? coerced.bullet_new! : b,
+        const matchIdx = findMatchingBulletIndex(exp.bullets, coerced.bullet_old);
+        if (matchIdx >= 0) {
+          next.bullets = exp.bullets.map((b, i) =>
+            i === matchIdx ? coerced.bullet_new! : b,
           );
           anyChange = true;
         }
@@ -669,11 +689,8 @@ export function applyResumePatch(
         effectivePatch.project_bullet_old?.trim() &&
         effectivePatch.project_bullet_new?.trim()
       ) {
-        // Replace a single bullet — fuzzy match on leading ~60 chars
         const oldText = effectivePatch.project_bullet_old.trim();
-        const matchIdx = bullets.findIndex(
-          (b) => b === oldText || b.startsWith(oldText.slice(0, 60)),
-        );
+        const matchIdx = findMatchingBulletIndex(bullets, oldText);
         if (matchIdx < 0) {
           return {
             updated,
