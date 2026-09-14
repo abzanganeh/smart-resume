@@ -35,6 +35,50 @@ test("orphan experience patch with invented company is not placeable", () => {
   assert.equal(isPatchPlaceable(patch, tailored), false)
 })
 
+test("truncated project bullet patch is placeable and applies", () => {
+  const withProject: TailoredResumeOutput = {
+    ...tailored,
+    projects: [
+      {
+        name: "FlintApply",
+        bullets: ["Developed AI-powered job-search SaaS with tailoring and cover letters."],
+      },
+    ],
+  }
+  const patch = {
+    section: "projects" as const,
+    project_name: "FlintApply",
+    project_bullet_old: "Developed AI-powered job-search SaaS with tailoring",
+    project_bullet_new: "Led AI-powered job-search SaaS with tailoring and cover letters.",
+  }
+  assert.equal(isPatchPlaceable(patch, withProject), true)
+  const result = applyResumePatch(withProject, patch)
+  assert.equal(result.applied, true)
+  assert.match(
+    (result.updated.projects[0] as { bullets: string[] }).bullets[0]!,
+    /Led AI-powered job-search SaaS/i,
+  )
+})
+
+test("project bullet patch without matching bullet text is not placeable", () => {
+  const withProject: TailoredResumeOutput = {
+    ...tailored,
+    projects: [
+      {
+        name: "FlintApply",
+        bullets: ["Developed AI-powered job-search SaaS with tailoring and cover letters."],
+      },
+    ],
+  }
+  const patch = {
+    section: "projects" as const,
+    project_name: "FlintApply",
+    project_bullet_old: "Totally different bullet.",
+    project_bullet_new: "Led AI-powered job-search SaaS.",
+  }
+  assert.equal(isPatchPlaceable(patch, withProject), false)
+})
+
 test("retargeted orphan patch applies to real employer", () => {
   const patch = {
     section: "experience" as const,

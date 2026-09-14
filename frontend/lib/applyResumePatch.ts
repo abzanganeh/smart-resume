@@ -32,6 +32,44 @@ function projectDisplayName(project: Record<string, unknown>): string {
   return String(project.name ?? "").trim();
 }
 
+export const MIN_FUZZY_BULLET_LEN = 12;
+
+function normalizeBulletText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Prefix-safe bullet match for LLM patches (truncated bullet_old).
+ * Avoids bidirectional substring hits that would rewrite the wrong sibling bullet.
+ */
+export function bulletsTextMatch(resumeBullet: string, needle: string): boolean {
+  const bullet = normalizeBulletText(resumeBullet);
+  const patch = normalizeBulletText(needle);
+  if (!bullet || !patch) return false;
+  if (bullet === patch) return true;
+  if (patch.length < MIN_FUZZY_BULLET_LEN) return false;
+  if (bullet.startsWith(patch)) return true;
+  if (patch.startsWith(bullet) && bullet.length >= MIN_FUZZY_BULLET_LEN) return true;
+  return false;
+}
+
+function findMatchingBulletIndex(bullets: string[], needle: string): number {
+  const trimmed = needle.trim();
+  if (!trimmed) return -1;
+
+  const normalizedNeedle = normalizeBulletText(trimmed);
+  const exact = bullets.findIndex(
+    (b) => normalizeBulletText(b) === normalizedNeedle,
+  );
+  if (exact >= 0) return exact;
+
+  const matches = bullets
+    .map((b, i) => i)
+    .filter((i) => bulletsTextMatch(bullets[i]!, trimmed));
+  if (matches.length === 1) return matches[0];
+  return -1;
+}
+
 function normalizeOrgKey(name: string): string {
   return name
     .toLowerCase()
@@ -94,11 +132,67 @@ function matchOrgName(actual: string, patch: string): boolean {
   return false;
 }
 
+/** Prefer exact org name; refuse ambiguous substring matches (e.g. Flint vs FlintApply). */
+function findUniqueOrgIndex<T>(
+  entries: T[],
+  patchName: string,
+  getName: (entry: T) => string,
+  matcher: (actual: string, patch: string) => boolean,
+): number {
+  const normalizedPatch = normalizeOrgKey(patchName);
+  const exact = entries.findIndex((entry) => normalizeOrgKey(getName(entry)) === normalizedPatch);
+  if (exact >= 0) return exact;
+  const matches = entries
+    .map((_, index) => index)
+    .filter((index) => matcher(getName(entries[index]!), patchName));
+  return matches.length === 1 ? matches[0]! : -1;
+}
+
+export function findUniqueExperienceIndex(
+  experience: TailoredExperience[],
+  patchCompany: string,
+): number {
+  return findUniqueOrgIndex(
+    experience,
+    patchCompany,
+    (exp) => exp.company,
+    matchExperienceCompany,
+  );
+}
+
+export function findUniqueProjectIndex(
+  projects: Record<string, unknown>[],
+  patchName: string,
+): number {
+  return findUniqueOrgIndex(
+    projects,
+    patchName,
+    (proj) => projectDisplayName(proj),
+    matchProjectName,
+  );
+}
+
 function findExperienceIndex(
   experience: TailoredExperience[],
   patchCompany: string,
 ): number {
-  return experience.findIndex((exp) => matchExperienceCompany(exp.company, patchCompany));
+  return findUniqueExperienceIndex(experience, patchCompany);
+}
+
+function findProjectIndex(
+  projects: Record<string, unknown>[],
+  patchName: string,
+): number {
+  return findUniqueProjectIndex(projects, patchName);
+}
+
+function anchorBulletStillMatches(
+  liveBullet: string,
+  patchOld: string | undefined,
+): boolean {
+  const needle = patchOld?.trim();
+  if (!needle) return true;
+  return bulletsTextMatch(liveBullet, needle);
 }
 
 function findEducationIndex(
@@ -307,6 +401,50 @@ export function coerceProjectsPatch(
   };
 }
 
+function tryApplyByAnchor(
+  updated: TailoredResumeOutput,
+  patch: ResumePatch,
+): ApplyResumePatchResult | null {
+  const anchor = patch.anchor;
+  if (!anchor || anchor.bullet_index == null) return null;
+
+  if (anchor.section === "experience" && patch.bullet_new?.trim()) {
+    const entry = updated.experience[anchor.entry_index];
+    if (!entry) return null;
+    const bulletIndex = anchor.bullet_index;
+    if (bulletIndex >= entry.bullets.length) return null;
+    if (!anchorBulletStillMatches(entry.bullets[bulletIndex]!, patch.bullet_old)) return null;
+    const next = {
+      ...entry,
+      bullets: entry.bullets.map((bullet, index) =>
+        index === bulletIndex ? patch.bullet_new!.trim() : bullet,
+      ),
+    };
+    updated.experience = updated.experience.map((row, index) =>
+      index === anchor.entry_index ? next : row,
+    );
+    return { updated, applied: true };
+  }
+
+  if (anchor.section === "projects" && patch.project_bullet_new?.trim()) {
+    const projects = updated.projects ?? [];
+    const project = projects[anchor.entry_index] as Record<string, unknown> | undefined;
+    if (!project) return null;
+    const bullets = Array.isArray(project.bullets) ? [...(project.bullets as string[])] : [];
+    const bulletIndex = anchor.bullet_index;
+    if (bulletIndex >= bullets.length) return null;
+    if (!anchorBulletStillMatches(bullets[bulletIndex]!, patch.project_bullet_old)) return null;
+    bullets[bulletIndex] = patch.project_bullet_new.trim();
+    const nextProject = { ...project, bullets };
+    updated.projects = projects.map((row, index) =>
+      index === anchor.entry_index ? nextProject : row,
+    );
+    return { updated, applied: true };
+  }
+
+  return null;
+}
+
 /** Apply a single chat patch to a tailored resume copy. Returns applied=false when nothing matched. */
 export function applyResumePatch(
   tailored: TailoredResumeOutput,
@@ -314,6 +452,8 @@ export function applyResumePatch(
 ): ApplyResumePatchResult {
   const updated = structuredClone(tailored);
   const effectivePatch = normalizeResumePatch(updated, patch);
+  const anchored = tryApplyByAnchor(updated, effectivePatch);
+  if (anchored) return anchored;
   let applied = false;
 
   if (effectivePatch.section === "contact" && effectivePatch.new_name?.trim()) {
@@ -429,10 +569,10 @@ export function applyResumePatch(
       const next = { ...exp };
 
       if (coerced.bullet_old && coerced.bullet_new) {
-        const matched = exp.bullets.some((b) => b === coerced.bullet_old);
-        if (matched) {
-          next.bullets = exp.bullets.map((b) =>
-            b === coerced.bullet_old ? coerced.bullet_new! : b,
+        const matchIdx = findMatchingBulletIndex(exp.bullets, coerced.bullet_old);
+        if (matchIdx >= 0) {
+          next.bullets = exp.bullets.map((b, i) =>
+            i === matchIdx ? coerced.bullet_new! : b,
           );
           anyChange = true;
         }
@@ -630,11 +770,9 @@ export function applyResumePatch(
 
     // Edit bullets in a specific project
     if (effectivePatch.project_name?.trim()) {
-      const projIdx = before.findIndex((p) =>
-        matchProjectName(
-          projectDisplayName(p as Record<string, unknown>),
-          effectivePatch.project_name!,
-        ),
+      const projIdx = findProjectIndex(
+        before as Record<string, unknown>[],
+        effectivePatch.project_name!,
       );
       if (projIdx < 0) {
         return {
@@ -669,11 +807,8 @@ export function applyResumePatch(
         effectivePatch.project_bullet_old?.trim() &&
         effectivePatch.project_bullet_new?.trim()
       ) {
-        // Replace a single bullet — fuzzy match on leading ~60 chars
         const oldText = effectivePatch.project_bullet_old.trim();
-        const matchIdx = bullets.findIndex(
-          (b) => b === oldText || b.startsWith(oldText.slice(0, 60)),
-        );
+        const matchIdx = findMatchingBulletIndex(bullets, oldText);
         if (matchIdx < 0) {
           return {
             updated,

@@ -1,4 +1,8 @@
+import { resolveBulletAtAnchor } from "@/lib/anchoredPatch";
 import {
+  bulletsTextMatch,
+  findUniqueExperienceIndex,
+  findUniqueProjectIndex,
   inferEducationInstitution,
   matchEducationInstitution,
   matchExperienceCompany,
@@ -118,7 +122,7 @@ export function bulletEditSuggestion(
     (s) =>
       s.patch.bullet_old &&
       s.patch.bullet_new &&
-      textsMatch(s.patch.bullet_old, bulletText),
+      bulletsTextMatch(bulletText, s.patch.bullet_old),
   );
 }
 
@@ -290,7 +294,7 @@ export function projectBulletEditSuggestion(
     (s) =>
       s.patch.project_bullet_old &&
       s.patch.project_bullet_new &&
-      textsMatch(s.patch.project_bullet_old, bulletText),
+      bulletsTextMatch(bulletText, s.patch.project_bullet_old),
   );
 }
 
@@ -415,6 +419,26 @@ export function isPatchPlaceable(
   patch: ResumePatch,
   resume: TailoredResumeOutput,
 ): boolean {
+  if (patch.anchor) {
+    const resolved = resolveBulletAtAnchor(resume, patch.anchor);
+    if (resolved) {
+      const liveOld =
+        resolved.bullet_old ??
+        resolved.project_bullet_old ??
+        resolved.education_bullet_old;
+      const patchOld =
+        patch.bullet_old ??
+        patch.project_bullet_old ??
+        patch.education_bullet_old;
+      if (patchOld?.trim() && liveOld && !bulletsTextMatch(liveOld, patchOld)) {
+        return false;
+      }
+      if (resolved.section === "experience" && patch.bullet_new?.trim()) return true;
+      if (resolved.section === "projects" && patch.project_bullet_new?.trim()) return true;
+      if (resolved.section === "education" && patch.education_bullet_new?.trim()) return true;
+    }
+  }
+
   if (patch.section === "contact" && patch.new_name?.trim()) {
     return true;
   }
@@ -434,16 +458,14 @@ export function isPatchPlaceable(
   }
 
   if (patch.section === "experience" && patch.company?.trim()) {
-    const idx = resume.experience.findIndex((exp) =>
-      matchExperienceCompany(exp.company, patch.company!),
-    );
+    const idx = findUniqueExperienceIndex(resume.experience, patch.company!);
     if (idx < 0) return false;
     const exp = resume.experience[idx]!;
     if (patch.delete_experience) return true;
     if (patch.new_title?.trim() || patch.new_dates?.trim()) return true;
     if (patch.add_bullet?.trim()) return true;
     if (patch.bullet_old?.trim()) {
-      return exp.bullets.some((b) => b === patch.bullet_old || textsMatch(b, patch.bullet_old!));
+      return exp.bullets.some((b) => bulletsTextMatch(b, patch.bullet_old!));
     }
     return false;
   }
@@ -477,12 +499,23 @@ export function isPatchPlaceable(
       );
     }
     if (patch.project_name?.trim()) {
-      return resume.projects.some((proj) =>
-        matchProjectName(
-          projectDisplayName(proj as Record<string, unknown>),
-          patch.project_name!,
-        ),
+      const projIdx = findUniqueProjectIndex(
+        resume.projects as Record<string, unknown>[],
+        patch.project_name!,
       );
+      if (projIdx < 0) return false;
+      const proj = resume.projects[projIdx] as Record<string, unknown>;
+      if (patch.project_bullet_old?.trim()) {
+        const bullets = Array.isArray((proj as Record<string, unknown>).bullets)
+          ? ((proj as Record<string, unknown>).bullets as string[])
+          : [];
+        return bullets.some((b) => bulletsTextMatch(b, patch.project_bullet_old!));
+      }
+      if ((patch.project_bullets_replace_all?.length ?? 0) > 0) return true;
+      if (patch.new_project_title?.trim() || patch.new_project_description != null) {
+        return true;
+      }
+      return false;
     }
     return false;
   }

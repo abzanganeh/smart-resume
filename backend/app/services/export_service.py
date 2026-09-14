@@ -19,11 +19,37 @@ log = structlog.get_logger()
 
 _RESUME_PDF_CSS = """
     @page { size: Letter; margin: 0.6in 0.65in; }
-    body { font-family: Georgia, serif; font-size: 10.5pt; color: #111; line-height: 1.45; }
+    body {
+        font-family: Georgia, serif;
+        font-size: 10.5pt;
+        color: #111;
+        line-height: 1.45;
+        hyphens: none;
+    }
     h1 { font-size: 18pt; margin: 0 0 2pt; }
     h2 { font-size: 11pt; border-bottom: 1px solid #555; padding-bottom: 2pt; margin: 12pt 0 4pt; }
-    ul { margin: 2pt 0; padding-left: 14pt; }
-    li { margin-bottom: 2pt; }
+    .summary, .bullet-text { hyphens: none; }
+    .exp-header-row {
+        display: table;
+        width: 100%;
+    }
+    .exp-title, .exp-dates { display: table-cell; vertical-align: top; }
+    .exp-dates {
+        text-align: right;
+        white-space: nowrap;
+        width: 1%;
+        padding-left: 8pt;
+    }
+    .bullet-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.35em;
+        margin-bottom: 2pt;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+    .bullet-char { flex-shrink: 0; width: 0.6em; text-align: center; }
+    .bullet-text { flex: 1; min-width: 0; }
     p  { margin: 2pt 0; }
 """
 
@@ -52,8 +78,19 @@ def _format_skills_for_export(skills: list[str]) -> list[str]:
     return [", ".join(skills)]
 
 
+_COMPOUND_HYPHEN_RE = re.compile(r"(?<=\w)-(?=\w)")
+
+
 def _visible_bullets(bullets: list[str]) -> list[str]:
-    return [b for b in bullets if b and b.strip()]
+    return [b for b in bullets if isinstance(b, str) and b.strip()]
+
+
+def _protect_compound_hyphens(text: str) -> str:
+    """Use non-breaking hyphens so WeasyPrint does not split terms like on-prem."""
+    return _COMPOUND_HYPHEN_RE.sub("\u2011", text)
+
+
+_jinja_env.filters["protect_hyphens"] = _protect_compound_hyphens
 
 
 def _authoritative_contact(
