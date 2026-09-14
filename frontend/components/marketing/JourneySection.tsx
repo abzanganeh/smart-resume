@@ -238,24 +238,35 @@ export function JourneySection() {
         className="mx-auto mt-8 max-w-4xl rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-5 dark:border-slate-700 dark:bg-slate-900/30"
         data-testid="landing-flint-coming-soon"
       >
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          Separate product
-        </p>
-        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-          <span className="font-semibold text-slate-900 dark:text-white">
-            {FLINT_COMING_SOON.productName}
-          </span>
-          {" — "}
-          {FLINT_COMING_SOON.description}{" "}
-          <Link
-            href={FLINT_COMING_SOON.learnMoreUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-amber-800 hover:underline dark:text-amber-300"
-          >
-            Learn more →
-          </Link>
-        </p>
+        <div className="flex items-start gap-4">
+          <img
+            src={FLINT_COMING_SOON.markSrc}
+            alt=""
+            width={48}
+            height={48}
+            className="h-12 w-12 shrink-0"
+          />
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Separate product
+            </p>
+            <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              <span className="font-semibold text-slate-900 dark:text-white">
+                {FLINT_COMING_SOON.productName}
+              </span>
+              {" — "}
+              {FLINT_COMING_SOON.description}{" "}
+              <Link
+                href={FLINT_COMING_SOON.learnMoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-800 hover:underline dark:text-amber-300"
+              >
+                Learn more →
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="sr-only">

@@ -11,8 +11,7 @@
     font-size: 11pt;
     line-height: 1.4;
     color: #1a1a1a;
-    padding: 0.5in;
-    max-width: 8.5in;
+    hyphens: none;
   }
   .name {
     font-size: 22pt;
@@ -43,20 +42,51 @@
     border-bottom: 0.5px solid #ccc;
     padding-bottom: 2px;
   }
-  .summary { margin-bottom: 8px; }
+  .summary { margin-bottom: 8px; hyphens: none; }
   .skills { margin-bottom: 8px; font-size: 10.5pt; }
   .skill-category { margin-bottom: 4px; }
   .skill-category-name { font-weight: bold; }
   .exp-entry { margin-bottom: 10px; }
-  .exp-header {
-    display: flex;
-    justify-content: space-between;
+  .exp-header-row {
+    display: table;
+    width: 100%;
     font-weight: bold;
     font-size: 10.5pt;
+    margin-bottom: 2px;
+  }
+  .exp-title,
+  .exp-dates {
+    display: table-cell;
+    vertical-align: top;
+  }
+  .exp-dates {
+    text-align: right;
+    white-space: nowrap;
+    width: 1%;
+    padding-left: 8pt;
+    font-weight: bold;
   }
   .exp-company { font-style: italic; font-weight: normal; font-size: 10pt; }
-  ul { margin-left: 14px; margin-top: 4px; }
-  li { margin-bottom: 2px; font-size: 10.5pt; }
+  .bullet-list { margin-top: 4px; }
+  .bullet-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35em;
+    margin-bottom: 2px;
+    font-size: 10.5pt;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+  .bullet-char {
+    flex-shrink: 0;
+    width: 0.6em;
+    text-align: center;
+  }
+  .bullet-text {
+    flex: 1;
+    min-width: 0;
+    hyphens: none;
+  }
   .project-name { font-weight: bold; font-size: 10.5pt; }
   .project-url { font-size: 9.5pt; color: #555; margin-left: 6px; }
   .edu-entry { font-size: 10.5pt; margin-bottom: 4px; }
@@ -64,6 +94,17 @@
 </style>
 </head>
 <body>
+
+{% macro bullet_list(bullets) %}
+<div class="bullet-list">
+  {% for bullet in bullets if bullet and bullet.strip() %}
+  <div class="bullet-line">
+    <span class="bullet-char" aria-hidden="true">&#8226;</span>
+    <span class="bullet-text">{{ bullet | protect_hyphens }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
 
 {% set c = contact if contact is mapping else {} %}
 <div class="name">{{ c.get('name', user.name if user else '') }}</div>
@@ -80,7 +121,7 @@
 
 {% if summary %}
 <h2>Summary</h2>
-<div class="summary">{{ summary }}</div>
+<div class="summary">{{ summary | protect_hyphens }}</div>
 {% endif %}
 
 {% if skill_lines %}
@@ -101,16 +142,12 @@
 <h2>Experience</h2>
 {% for exp in experience %}
 <div class="exp-entry">
-  <div class="exp-header">
-    <span>{{ exp.title }} &nbsp;—&nbsp; <span class="exp-company">{{ exp.company }}</span></span>
-    <span>{{ exp.dates }}</span>
+  <div class="exp-header-row">
+    <span class="exp-title">{{ exp.title }} &nbsp;—&nbsp; <span class="exp-company">{{ exp.company }}</span></span>
+    <span class="exp-dates">{{ exp.dates }}</span>
   </div>
   {% if exp.bullets %}
-  <ul>
-    {% for bullet in exp.bullets if bullet and bullet.strip() %}
-    <li>{{ bullet }}</li>
-    {% endfor %}
-  </ul>
+  {{ bullet_list(exp.bullets) }}
   {% endif %}
 </div>
 {% endfor %}
@@ -126,11 +163,7 @@
     {% if p.get('url') %}<span class="project-url">{{ p.get('url') }}</span>{% endif %}
   </div>
   {% if p.get('bullets') %}
-  <ul>
-    {% for bullet in p.get('bullets', []) if bullet and bullet.strip() %}
-    <li>{{ bullet }}</li>
-    {% endfor %}
-  </ul>
+  {{ bullet_list(p.get('bullets', [])) }}
   {% endif %}
 </div>
 {% endfor %}
@@ -143,11 +176,7 @@
   <strong>{{ edu.degree }}</strong> &nbsp;—&nbsp; {{ edu.institution }}
   {% if edu.year %} ({{ edu.year }}){% endif %}
   {% if edu.bullets %}
-  <ul>
-    {% for bullet in edu.bullets if bullet and bullet.strip() %}
-    <li>{{ bullet }}</li>
-    {% endfor %}
-  </ul>
+  {{ bullet_list(edu.bullets) }}
   {% endif %}
 </div>
 {% endfor %}

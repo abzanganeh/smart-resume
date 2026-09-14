@@ -7,13 +7,18 @@ export interface ResumeSuggestion {
   id: string;
   patch: ResumePatch;
   status: SuggestionStatus;
+  sourceIssueKey?: string;
 }
 
-export function makeSuggestions(patches: ResumePatch[]): ResumeSuggestion[] {
-  return patches.map((patch) => ({
+export function makeSuggestions(
+  patches: ResumePatch[],
+  sourceIssueKeys?: Array<string | undefined>,
+): ResumeSuggestion[] {
+  return patches.map((patch, index) => ({
     id: crypto.randomUUID(),
     patch,
     status: "pending",
+    sourceIssueKey: sourceIssueKeys?.[index],
   }));
 }
 
@@ -28,8 +33,12 @@ function patchTargetsProjectName(patch: ResumePatch): string | null {
 export function mergeSuggestionBatch(
   prev: ResumeSuggestion[],
   patches: ResumePatch[],
+  sourceIssueKeys?: Array<string | undefined>,
 ): ResumeSuggestion[] {
-  const incoming = makeSuggestions(patches);
+  const incoming = makeSuggestions(patches, sourceIssueKeys);
+  const incomingAnchorKeys = new Set(
+    incoming.map((s) => s.sourceIssueKey).filter((key): key is string => !!key),
+  );
   const targetedProjects = [
     ...new Set(
       patches
@@ -38,15 +47,14 @@ export function mergeSuggestionBatch(
     ),
   ];
 
-  const kept =
-    targetedProjects.length === 0
-      ? prev
-      : prev.filter((s) => {
-          if (s.status !== "pending") return true;
-          const target = patchTargetsProjectName(s.patch);
-          if (!target) return true;
-          return !targetedProjects.some((name) => matchProjectName(target, name));
-        });
+  const kept = prev.filter((s) => {
+    if (s.status !== "pending") return true;
+    if (s.sourceIssueKey && incomingAnchorKeys.has(s.sourceIssueKey)) return false;
+    if (targetedProjects.length === 0) return true;
+    const target = patchTargetsProjectName(s.patch);
+    if (!target) return true;
+    return !targetedProjects.some((name) => matchProjectName(target, name));
+  });
 
   return [...kept, ...incoming];
 }

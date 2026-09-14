@@ -10,7 +10,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react"
-import { COMPANY_LINE, COMPANY_URL, FLINT_DESKTOP_URL, FLINT_PRODUCT_NAME, PRODUCT_NAME } from "@/lib/brand"
+import { COMPANY_LINE, COMPANY_URL, FLINT_DESKTOP_URL, FLINT_MARK_SRC, FLINT_PRODUCT_NAME, PRODUCT_NAME } from "@/lib/brand"
 import { DashboardStepCard } from "@/components/dashboard/DashboardStepCard"
 import {
   computeStepStates,
@@ -307,22 +307,33 @@ export function DashboardStepStack({
         className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 px-6 py-5"
         data-testid="dashboard-flint-coming-soon"
       >
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
-          Separate product
-        </p>
-        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-          <span className="font-semibold text-slate-900 dark:text-white">{FLINT_PRODUCT_NAME}</span>
-          {` — live interview co-pilot (separate desktop app ${COMPANY_LINE}). `}
-          Not included in your {PRODUCT_NAME} subscription. Early access handoff is available from tailored sessions.{" "}
-          <Link
-            href={FLINT_DESKTOP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-amber-800 dark:text-amber-300 hover:underline"
-          >
-            Learn more →
-          </Link>
-        </p>
+        <div className="flex items-start gap-4">
+          <img
+            src={FLINT_MARK_SRC}
+            alt=""
+            width={48}
+            height={48}
+            className="h-12 w-12 shrink-0"
+          />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+              Separate product
+            </p>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+              <span className="font-semibold text-slate-900 dark:text-white">{FLINT_PRODUCT_NAME}</span>
+              {` — live interview co-pilot (separate desktop app ${COMPANY_LINE}). `}
+              Not included in your {PRODUCT_NAME} subscription.{" "}
+              <Link
+                href={FLINT_DESKTOP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-800 dark:text-amber-300 hover:underline"
+              >
+                Learn more →
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   )

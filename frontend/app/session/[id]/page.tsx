@@ -58,7 +58,9 @@ import { CreditChargeConfirm } from "@/components/billing/CreditChargeConfirm";
 import { CreditMeter } from "@/components/billing/CreditMeter";
 import { useEntitlement } from "@/hooks/useEntitlement";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
+import { hydratePatchesFromIssues, sourceIssueKeysForPatches } from "@/lib/anchoredPatch";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
+import { isPatchPlaceable } from "@/lib/suggestionHighlight";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
 import {
   formatDuplicateApplicationPrompt,
@@ -115,6 +117,7 @@ function SessionContent() {
   const [runErrorType, setRunErrorType] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
   const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+  const [atsTargetIssues, setAtsTargetIssues] = useState<import("@/lib/api").BlockingIssue[]>([]);
   const [issueQueue, setIssueQueue] = useState<import("@/lib/api").BlockingIssue[]>([]);
   const [issueQueueIdx, setIssueQueueIdx] = useState(0);
   const [expiryWarning, setExpiryWarning] = useState(false);
@@ -545,6 +548,7 @@ function SessionContent() {
 
   function openChatForAtsIssues(message: string, issues: import("@/lib/api").BlockingIssue[]) {
     pendingAtsFixRef.current = issues;
+    setAtsTargetIssues(issues);
     setChatPrefill(message);
     setSidebarTab("chat");
   }
@@ -560,8 +564,10 @@ function SessionContent() {
   function addSuggestions(patches: ResumePatch[]) {
     if (patches.length === 0 || !tailored) return;
     setSuggestionError(null);
-    const normalized = patches.map((p) => normalizeResumePatch(tailored, p));
-    setPendingSuggestions((prev) => mergeSuggestionBatch(prev, normalized));
+    const hydrated = hydratePatchesFromIssues(tailored, patches, atsTargetIssues);
+    const normalized = hydrated.map((patch) => normalizeResumePatch(tailored, patch));
+    const sourceIssueKeys = sourceIssueKeysForPatches(tailored, normalized, atsTargetIssues);
+    setPendingSuggestions((prev) => mergeSuggestionBatch(prev, normalized, sourceIssueKeys));
   }
 
   function acceptSuggestion(id: string) {
@@ -655,10 +661,22 @@ function SessionContent() {
   function acceptAllSuggestions() {
     const pending = pendingSuggestions.filter((s) => s.status === "pending");
     if (!pending.length || !tailored) return;
-    // Apply all patches sequentially against an accumulator to avoid stale-closure issues
+    const placeable = pending.filter((s) => isPatchPlaceable(s.patch, tailored));
+    const orphanCount = pending.length - placeable.length;
+    if (!placeable.length) {
+      setSuggestionError(
+        orphanCount > 0
+          ? "None of the pending suggestions matched your resume. Use the Couldn't apply banner to retarget or dismiss them."
+          : pending.length === 1
+            ? "Could not apply this suggestion. Try Accept on the highlighted bullet or edit manually."
+            : "Could not apply these suggestions. Try accepting each highlight individually.",
+      );
+      return;
+    }
+    // Apply placeable patches sequentially against an accumulator to avoid stale-closure issues
     let current = tailored;
     const acceptedIds: string[] = [];
-    for (const sug of pending) {
+    for (const sug of placeable) {
       const patch = normalizeResumePatch(current, sug.patch);
       const { updated, applied } = applyResumePatch(current, patch);
       if (applied) {
@@ -666,7 +684,23 @@ function SessionContent() {
         acceptedIds.push(sug.id);
       }
     }
-    if (!acceptedIds.length) return;
+    if (!acceptedIds.length) {
+      setSuggestionError(
+        placeable.length === 1
+          ? "Could not apply this suggestion. Try Accept on the highlighted bullet or edit manually."
+          : "Could not apply these suggestions. Try accepting each highlight individually.",
+      );
+      return;
+    }
+    if (acceptedIds.length < placeable.length || orphanCount > 0) {
+      setSuggestionError(
+        `Applied ${acceptedIds.length} of ${placeable.length} placeable suggestion${placeable.length === 1 ? "" : "s"}${
+          orphanCount > 0 ? ` (${orphanCount} still need retarget or dismiss)` : ""
+        }.`,
+      );
+    } else {
+      setSuggestionError(null);
+    }
     setTailored(current);
     setEditorSyncKey((k) => k + 1);
     setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
@@ -1607,6 +1641,8 @@ function SessionContent() {
                           tailored={tailored}
                           prefillMessage={chatPrefill}
                           onClearPrefill={() => setChatPrefill(null)}
+                          targetIssues={atsTargetIssues}
+                          onTargetIssuesConsumed={() => setAtsTargetIssues([])}
                           queueBanner={
                             issueQueue.length > 0 && issueQueueIdx < issueQueue.length
                               ? {

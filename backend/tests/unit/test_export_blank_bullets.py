@@ -43,5 +43,5 @@ def test_render_docx_skips_blank_bullets() -> None:
 
 def test_resume_html_skips_blank_bullets() -> None:
     html = _resume_to_html(_session_with_blank_bullets())
-    assert html.count("<li>") == 2
-    assert "<li></li>" not in html
+    assert html.count('<span class="bullet-text">') == 2
+    assert '<span class="bullet-text"></span>' not in html

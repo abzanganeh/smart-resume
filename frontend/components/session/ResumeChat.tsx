@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageSquare, Send, SkipForward, Sparkles, X } from "lucide-react";
 import {
   chatWithResume,
-  type BlockingIssue,
   type ChatMessage,
   type ChatResponse,
+  type BlockingIssue,
   type ResumePatch,
   type TailoredResumeOutput,
 } from "@/lib/api";
@@ -108,12 +108,23 @@ interface Props {
   onSuggestPatches: (patches: ResumePatch[]) => void;
   prefillMessage?: string | null;
   onClearPrefill?: () => void;
+  targetIssues?: BlockingIssue[];
+  onTargetIssuesConsumed?: () => void;
   queueBanner?: QueueBanner | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessage, onClearPrefill, queueBanner }: Props) {
+export function ResumeChat({
+  sessionId,
+  tailored,
+  onSuggestPatches,
+  prefillMessage,
+  onClearPrefill,
+  targetIssues = [],
+  onTargetIssuesConsumed,
+  queueBanner,
+}: Props) {
   const [messages, setMessages] = useState<MessageEntry[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -153,7 +164,9 @@ export function ResumeChat({ sessionId, tailored, onSuggestPatches, prefillMessa
         message: text,
         history: buildHistory(),
         tailored_snapshot: resume,
+        target_issues: targetIssues.length > 0 ? targetIssues : undefined,
       });
+      onTargetIssuesConsumed?.();
 
       if (res.patches.length > 0) {
         onSuggestPatches(res.patches);
