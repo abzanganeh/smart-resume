@@ -14,9 +14,14 @@ export const COMPANY_NAME = "The Flint AI" as const;
 export const COMPANY_URL = "https://theflintai.com" as const;
 
 /** Separate desktop interview co-pilot — not part of FlintApply billing. */
-export const FLINT_PRODUCT_NAME = "Flint" as const;
+export const FLINT_PRODUCT_NAME = "FlintGuide" as const;
 
-export const FLINT_DESKTOP_URL = "https://github.com/abzanganeh/flint" as const;
+export const FLINT_DESKTOP_URL = "https://guide.theflintai.com" as const;
+
+export const FLINT_MARK_SRC = "/brand/flintguide-mark.png" as const;
+
+/** When false, session export shows Coming soon instead of the handoff deep link. */
+export const FLINT_HANDOFF_ENABLED = false as const;
 
 export const PRIVACY_EMAIL = "privacy@zanganehai.com" as const;
 

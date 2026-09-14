@@ -11,6 +11,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  FLINT_DESKTOP_URL,
+  FLINT_HANDOFF_ENABLED,
+  FLINT_PRODUCT_NAME,
+} from "../../lib/brand";
+import {
   buildFlintImportLink,
   FLINT_OPEN_FALLBACK_MS,
 } from "../../lib/flintDeepLink";
@@ -95,4 +100,13 @@ test("does not show fallback when Flint takes focus before timeout", async () =>
 
   scheduledFn?.();
   assert.equal(result.showFallback(), false);
+});
+
+test("desktop product brand points at FlintGuide landing", () => {
+  assert.equal(FLINT_PRODUCT_NAME, "FlintGuide");
+  assert.equal(FLINT_DESKTOP_URL, "https://guide.theflintai.com");
+});
+
+test("session export handoff is gated until FlintGuide launch", () => {
+  assert.equal(FLINT_HANDOFF_ENABLED, false);
 });

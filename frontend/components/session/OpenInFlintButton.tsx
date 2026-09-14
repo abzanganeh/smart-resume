@@ -4,7 +4,12 @@ import { useState } from "react";
 import { Copy, ExternalLink } from "lucide-react";
 
 import { ApiError, createFlintHandoff } from "@/lib/api";
-import { PRODUCT_NAME } from "@/lib/brand";
+import {
+  FLINT_DESKTOP_URL,
+  FLINT_HANDOFF_ENABLED,
+  FLINT_PRODUCT_NAME,
+  PRODUCT_NAME,
+} from "@/lib/brand";
 import {
   buildFlintImportLink,
   FLINT_OPEN_FALLBACK_MS,
@@ -16,14 +21,54 @@ import { cn } from "@/lib/utils";
 interface Props {
   sessionId: string;
   disabled?: boolean;
-  /** Optional download page when Flint is not installed. */
+  /** Optional download page when FlintGuide is not installed. */
   flintDownloadUrl?: string;
 }
 
-export function OpenInFlintButton({
+function OpenInFlintComingSoon({
+  flintDownloadUrl = FLINT_DESKTOP_URL,
+}: Pick<Props, "flintDownloadUrl">) {
+  const btnCls =
+    "flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors";
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        className={cn(
+          btnCls,
+          "bg-indigo-600/50 text-white opacity-60 cursor-not-allowed",
+        )}
+      >
+        <ExternalLink className="w-4 h-4" />
+        <span>Open in {FLINT_PRODUCT_NAME}</span>
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide bg-white/20 text-white px-2 py-0.5 rounded-full"
+        >
+          Coming soon
+        </span>
+      </button>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        {FLINT_PRODUCT_NAME} interview prep is launching soon.{" "}
+        <a
+          href={flintDownloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-indigo-700 dark:text-indigo-400 hover:underline"
+        >
+          Learn more →
+        </a>
+      </p>
+    </div>
+  );
+}
+
+function OpenInFlintHandoff({
   sessionId,
   disabled = false,
-  flintDownloadUrl = "https://github.com/abzanganeh/flint",
+  flintDownloadUrl = FLINT_DESKTOP_URL,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +101,7 @@ export function OpenInFlintButton({
         const deepLink = buildFlintImportLink(token);
         setLastDeepLink(deepLink);
         setHandoffReady(true);
-        setStatus("Opening Flint…");
+        setStatus(`Opening ${FLINT_PRODUCT_NAME}…`);
         const launched = navigateFlintImportCarrier(carrier, deepLink);
         window.setTimeout(() => {
           if (document.hasFocus() || !launched) {
@@ -69,7 +114,7 @@ export function OpenInFlintButton({
         const message =
           err instanceof ApiError
             ? err.message
-            : "Could not prepare Flint import. Please try again.";
+            : `Could not prepare ${FLINT_PRODUCT_NAME} import. Please try again.`;
         setError(message);
         setStatus(null);
         setHandoffReady(false);
@@ -105,7 +150,7 @@ export function OpenInFlintButton({
         )}
       >
         <ExternalLink className="w-4 h-4" />
-        {loading ? "Preparing…" : "Open in Flint"}
+        {loading ? "Preparing…" : `Open in ${FLINT_PRODUCT_NAME}`}
       </button>
       {status && (
         <p className="text-sm text-slate-600 dark:text-slate-400" role="status" aria-live="polite">
@@ -121,12 +166,14 @@ export function OpenInFlintButton({
         <div className="rounded-lg border border-indigo-500/40 bg-indigo-50 dark:bg-indigo-950/30 p-3 space-y-2">
           {showAutoOpenHint ? (
             <p className="text-sm text-slate-700 dark:text-slate-300">
-              Flint did not open automatically (common on Linux dev builds). Paste the
-              link below into Flint → New Session → Import from {PRODUCT_NAME} link.
+              {FLINT_PRODUCT_NAME} did not open automatically (common on Linux dev
+              builds). Paste the link below into {FLINT_PRODUCT_NAME} → New Session →
+              Import from {PRODUCT_NAME} link.
             </p>
           ) : (
             <p className="text-sm text-slate-700 dark:text-slate-300">
-              Import link ready. If Flint does not open, paste the link there manually.
+              Import link ready. If {FLINT_PRODUCT_NAME} does not open, paste the link
+              there manually.
             </p>
           )}
           <button
@@ -139,18 +186,26 @@ export function OpenInFlintButton({
           </button>
           <p className="text-xs text-slate-600 dark:text-slate-400 break-all font-mono">{lastDeepLink}</p>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Don&apos;t have Flint yet?{" "}
+            Don&apos;t have {FLINT_PRODUCT_NAME} yet?{" "}
             <a
               href={flintDownloadUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-indigo-700 dark:text-indigo-400 hover:text-indigo-300 underline"
             >
-              Download Flint
+              Get {FLINT_PRODUCT_NAME}
             </a>
           </p>
         </div>
       )}
     </div>
   );
+}
+
+export function OpenInFlintButton(props: Props) {
+  if (!FLINT_HANDOFF_ENABLED) {
+    return <OpenInFlintComingSoon flintDownloadUrl={props.flintDownloadUrl} />;
+  }
+
+  return <OpenInFlintHandoff {...props} />;
 }
