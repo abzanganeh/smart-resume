@@ -1,3 +1,4 @@
+import { resolveBulletAtAnchor } from "@/lib/anchoredPatch";
 import {
   bulletsTextMatch,
   inferEducationInstitution,
@@ -416,6 +417,15 @@ export function isPatchPlaceable(
   patch: ResumePatch,
   resume: TailoredResumeOutput,
 ): boolean {
+  if (patch.anchor) {
+    const resolved = resolveBulletAtAnchor(resume, patch.anchor);
+    if (resolved) {
+      if (resolved.section === "experience" && patch.bullet_new?.trim()) return true;
+      if (resolved.section === "projects" && patch.project_bullet_new?.trim()) return true;
+      if (resolved.section === "education" && patch.education_bullet_new?.trim()) return true;
+    }
+  }
+
   if (patch.section === "contact" && patch.new_name?.trim()) {
     return true;
   }

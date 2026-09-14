@@ -345,6 +345,48 @@ export function coerceProjectsPatch(
   };
 }
 
+function tryApplyByAnchor(
+  updated: TailoredResumeOutput,
+  patch: ResumePatch,
+): ApplyResumePatchResult | null {
+  const anchor = patch.anchor;
+  if (!anchor || anchor.bullet_index == null) return null;
+
+  if (anchor.section === "experience" && patch.bullet_new?.trim()) {
+    const entry = updated.experience[anchor.entry_index];
+    if (!entry) return null;
+    const bulletIndex = anchor.bullet_index;
+    if (bulletIndex >= entry.bullets.length) return null;
+    const next = {
+      ...entry,
+      bullets: entry.bullets.map((bullet, index) =>
+        index === bulletIndex ? patch.bullet_new!.trim() : bullet,
+      ),
+    };
+    updated.experience = updated.experience.map((row, index) =>
+      index === anchor.entry_index ? next : row,
+    );
+    return { updated, applied: true };
+  }
+
+  if (anchor.section === "projects" && patch.project_bullet_new?.trim()) {
+    const projects = updated.projects ?? [];
+    const project = projects[anchor.entry_index] as Record<string, unknown> | undefined;
+    if (!project) return null;
+    const bullets = Array.isArray(project.bullets) ? [...(project.bullets as string[])] : [];
+    const bulletIndex = anchor.bullet_index;
+    if (bulletIndex >= bullets.length) return null;
+    bullets[bulletIndex] = patch.project_bullet_new.trim();
+    const nextProject = { ...project, bullets };
+    updated.projects = projects.map((row, index) =>
+      index === anchor.entry_index ? nextProject : row,
+    );
+    return { updated, applied: true };
+  }
+
+  return null;
+}
+
 /** Apply a single chat patch to a tailored resume copy. Returns applied=false when nothing matched. */
 export function applyResumePatch(
   tailored: TailoredResumeOutput,
@@ -352,6 +394,8 @@ export function applyResumePatch(
 ): ApplyResumePatchResult {
   const updated = structuredClone(tailored);
   const effectivePatch = normalizeResumePatch(updated, patch);
+  const anchored = tryApplyByAnchor(updated, effectivePatch);
+  if (anchored) return anchored;
   let applied = false;
 
   if (effectivePatch.section === "contact" && effectivePatch.new_name?.trim()) {

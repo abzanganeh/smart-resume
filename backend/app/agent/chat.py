@@ -11,6 +11,7 @@ from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
 from app.models.chat import ChatMessage, ChatRequest, ChatResponse, ResumePatch
 from app.models.session import Session
+from app.services.anchored_patch import build_anchor_target_block, hydrate_chat_patches
 
 log = structlog.get_logger("chat_agent")
 
@@ -192,6 +193,16 @@ async def run(
         .replace("{qa_context}", qa_context)
     )
 
+    anchor_block = ""
+    anchored_count = sum(1 for issue in request.target_issues if issue.anchor is not None)
+    if anchored_count:
+        anchor_block = (
+            "\n\n"
+            + build_anchor_target_block(resume_data, request.target_issues)
+            + f"\n\nReturn up to {anchored_count} patches — one per anchored target above, in order. "
+            "For anchored targets, only supply bullet_new (or project_bullet_new); do not copy bullet_old from the fix intent."
+        )
+
     messages: list[LLMMessage] = [
         LLMMessage(role="system", content=system_content),
         *[LLMMessage(role=m.role, content=m.content) for m in request.history],
@@ -200,6 +211,7 @@ async def run(
             content=(
                 "[Latest request — emit patches ONLY for this message, not prior chat turns]\n"
                 f"{request.message}"
+                f"{anchor_block}"
             ),
         ),
     ]
@@ -212,6 +224,11 @@ async def run(
             result.patches,
             request.message,
             project_names,
+        )
+        result.patches = hydrate_chat_patches(
+            resume_data,
+            result.patches,
+            request.target_issues,
         )
         return _fill_missing_descriptions(result)
     except Exception as exc:

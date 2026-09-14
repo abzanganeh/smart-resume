@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.qa import BlockingIssue, IssueAnchor
+
 
 class NewProject(BaseModel):
     """A new project entry to append to the resume projects list."""
@@ -47,6 +49,13 @@ class ResumePatch(BaseModel):
         description=(
             "Short, plain-English description of what changed and why (shown to user). "
             "Optional — when omitted, a fallback label is synthesized from the patch fields."
+        ),
+    )
+    anchor: IssueAnchor | None = Field(
+        default=None,
+        description=(
+            "When set, apply targets this resume entry/bullet by index. "
+            "bullet_old is hydrated from the live resume at this anchor."
         ),
     )
 
@@ -243,6 +252,13 @@ class ChatRequest(BaseModel):
         description=(
             "Client's current tailored resume JSON (includes accepted chat edits). "
             "When set, used instead of the stored phase3_output for patch generation."
+        ),
+    )
+    target_issues: list[BlockingIssue] = Field(
+        default_factory=list,
+        description=(
+            "ATS blocking issues selected for batch fix. Anchors are used to stamp "
+            "exact bullet_old on returned patches."
         ),
     )
 

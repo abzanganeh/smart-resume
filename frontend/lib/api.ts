@@ -1234,6 +1234,7 @@ export interface SubscriptionCurrentResponse {
 export interface ResumePatch {
   section: "summary" | "experience" | "skills" | "education" | "certifications" | "projects" | "contact";
   description: string;
+  anchor?: IssueAnchor | null;
   // Contact
   new_name?: string;
   // Summary
@@ -1314,6 +1315,7 @@ export async function chatWithResume(
     message: string;
     history: ChatMessage[];
     tailored_snapshot?: TailoredResumeOutput;
+    target_issues?: BlockingIssue[];
   },
 ): Promise<ChatResponse> {
   return request(`/api/sessions/${sessionId}/chat`, {

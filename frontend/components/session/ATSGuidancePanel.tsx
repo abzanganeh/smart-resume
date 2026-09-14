@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { type BlockingIssue, type IssueAnchor, type QAOutput, type TailoredResumeOutput } from "@/lib/api";
+import { buildBatchChatMessage } from "@/lib/anchoredPatch";
 import { canApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
@@ -437,14 +438,6 @@ function buildBlockingChatMessage(issue: BlockingIssue): string {
   return `Fix this issue in my resume:\n[${CATEGORY_LABELS[issue.category]}] ${issue.description}\nSuggestion: ${issue.suggestion}\nFix effort: ${issue.fix_effort.replace(/_/g, " ")}`;
 }
 
-function buildBatchChatMessage(issues: BlockingIssue[]): string {
-  const lines = issues.map(
-    (i, n) =>
-      `${n + 1}. [${CATEGORY_LABELS[i.category]}] ${i.description}\n   Suggestion: ${i.suggestion}`,
-  );
-  return `Address these ${issues.length} issues in my resume in a single round of edits:\n\n${lines.join("\n\n")}\n\nReturn patches for as many as you can apply at once.`;
-}
-
 export function ATSGuidancePanel({
   output,
   streaming = false,
@@ -793,7 +786,10 @@ export function ATSGuidancePanel({
                   type="button"
                   onClick={() => {
                     if (selectedIssues.length === 0) return;
-                    sendIssuesToChat(selectedIssues, buildBatchChatMessage(selectedIssues));
+                    sendIssuesToChat(
+                      selectedIssues,
+                      buildBatchChatMessage(selectedIssues, tailored),
+                    );
                     setSelectedKeys(new Set());
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 dark:bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-800 dark:text-amber-200 text-xs font-semibold transition-colors"
