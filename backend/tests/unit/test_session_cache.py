@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.rewrite import TailoredResumeOutput
+from app.models.user import AuthProvider, User, UserTier
 from app.models.session import PhaseStatus, Session
 from app.services.dashboard.session_cache import (
     build_session_cache,
@@ -19,6 +22,25 @@ from app.services.dashboard.resume_record import compute_jd_text_hash
 
 
 pytestmark = pytest.mark.unit
+
+
+async def _seed_user(db_session: AsyncSession) -> uuid.UUID:
+    user_id = uuid.uuid4()
+    db_session.add(
+        User(
+            id=user_id,
+            email=f"session-cache-{user_id.hex[:8]}@example.com",
+            auth_provider=AuthProvider.email,
+            password_hash="x",
+            display_name="Session Cache",
+            tier=UserTier.free,
+            credit_balance=0,
+            accepted_tos_version="2026-06",
+            email_verified_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+    return user_id
 
 
 def _tailored() -> TailoredResumeOutput:
@@ -56,7 +78,7 @@ async def test_build_session_cache_requires_tailored_output() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_restore_session_from_record_rehydrates_redis(db_session) -> None:
-    user_id = uuid.uuid4()
+    user_id = await _seed_user(db_session)
     session_id = str(uuid.uuid4())
     tailored = _tailored()
     session = Session(
@@ -98,7 +120,7 @@ async def test_restore_session_from_record_rehydrates_redis(db_session) -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_persist_session_cache_updates_record(db_session) -> None:
-    user_id = uuid.uuid4()
+    user_id = await _seed_user(db_session)
     session_id = str(uuid.uuid4())
     record = ResumeRecord(
         user_id=user_id,
