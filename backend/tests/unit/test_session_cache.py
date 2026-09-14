@@ -53,6 +53,7 @@ async def test_build_session_cache_requires_tailored_output() -> None:
     assert cache["tailored_output"]["summary"] == "Tailored summary"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_restore_session_from_record_rehydrates_redis(db_session) -> None:
     user_id = uuid.uuid4()
@@ -94,6 +95,7 @@ async def test_restore_session_from_record_rehydrates_redis(db_session) -> None:
     assert loaded.phase3_output is not None
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_persist_session_cache_updates_record(db_session) -> None:
     user_id = uuid.uuid4()

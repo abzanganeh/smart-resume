@@ -77,6 +77,15 @@ export function hydratePatchFromAnchor(
   };
 }
 
+function anchorInIssues(anchor: IssueAnchor, issues: BlockingIssue[]): boolean {
+  return issues.some(
+    (issue) =>
+      issue.anchor?.section === anchor.section &&
+      issue.anchor.entry_index === anchor.entry_index &&
+      issue.anchor.bullet_index === anchor.bullet_index,
+  );
+}
+
 export function matchAnchorForPatch(
   resume: TailoredResumeOutput,
   patch: ResumePatch,
@@ -117,7 +126,9 @@ export function hydratePatchesFromIssues(
 ): ResumePatch[] {
   if (!issues.some((issue) => issue.anchor)) return patches;
   return patches.map((patch) => {
-    const anchor = patch.anchor ?? matchAnchorForPatch(resume, patch, issues);
+    const anchor =
+      matchAnchorForPatch(resume, patch, issues) ??
+      (patch.anchor && anchorInIssues(patch.anchor, issues) ? patch.anchor : null);
     return hydratePatchFromAnchor(resume, patch, anchor);
   });
 }

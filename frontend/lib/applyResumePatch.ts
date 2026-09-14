@@ -132,11 +132,67 @@ function matchOrgName(actual: string, patch: string): boolean {
   return false;
 }
 
+/** Prefer exact org name; refuse ambiguous substring matches (e.g. Flint vs FlintApply). */
+function findUniqueOrgIndex<T>(
+  entries: T[],
+  patchName: string,
+  getName: (entry: T) => string,
+  matcher: (actual: string, patch: string) => boolean,
+): number {
+  const normalizedPatch = normalizeOrgKey(patchName);
+  const exact = entries.findIndex((entry) => normalizeOrgKey(getName(entry)) === normalizedPatch);
+  if (exact >= 0) return exact;
+  const matches = entries
+    .map((_, index) => index)
+    .filter((index) => matcher(getName(entries[index]!), patchName));
+  return matches.length === 1 ? matches[0]! : -1;
+}
+
+export function findUniqueExperienceIndex(
+  experience: TailoredExperience[],
+  patchCompany: string,
+): number {
+  return findUniqueOrgIndex(
+    experience,
+    patchCompany,
+    (exp) => exp.company,
+    matchExperienceCompany,
+  );
+}
+
+export function findUniqueProjectIndex(
+  projects: Record<string, unknown>[],
+  patchName: string,
+): number {
+  return findUniqueOrgIndex(
+    projects,
+    patchName,
+    (proj) => projectDisplayName(proj),
+    matchProjectName,
+  );
+}
+
 function findExperienceIndex(
   experience: TailoredExperience[],
   patchCompany: string,
 ): number {
-  return experience.findIndex((exp) => matchExperienceCompany(exp.company, patchCompany));
+  return findUniqueExperienceIndex(experience, patchCompany);
+}
+
+function findProjectIndex(
+  projects: Record<string, unknown>[],
+  patchName: string,
+): number {
+  return findUniqueProjectIndex(projects, patchName);
+}
+
+function anchorBulletStillMatches(
+  liveBullet: string,
+  patchOld: string | undefined,
+): boolean {
+  const needle = patchOld?.trim();
+  if (!needle) return true;
+  return bulletsTextMatch(liveBullet, needle);
 }
 
 function findEducationIndex(
@@ -357,6 +413,7 @@ function tryApplyByAnchor(
     if (!entry) return null;
     const bulletIndex = anchor.bullet_index;
     if (bulletIndex >= entry.bullets.length) return null;
+    if (!anchorBulletStillMatches(entry.bullets[bulletIndex]!, patch.bullet_old)) return null;
     const next = {
       ...entry,
       bullets: entry.bullets.map((bullet, index) =>
@@ -376,6 +433,7 @@ function tryApplyByAnchor(
     const bullets = Array.isArray(project.bullets) ? [...(project.bullets as string[])] : [];
     const bulletIndex = anchor.bullet_index;
     if (bulletIndex >= bullets.length) return null;
+    if (!anchorBulletStillMatches(bullets[bulletIndex]!, patch.project_bullet_old)) return null;
     bullets[bulletIndex] = patch.project_bullet_new.trim();
     const nextProject = { ...project, bullets };
     updated.projects = projects.map((row, index) =>
@@ -712,11 +770,9 @@ export function applyResumePatch(
 
     // Edit bullets in a specific project
     if (effectivePatch.project_name?.trim()) {
-      const projIdx = before.findIndex((p) =>
-        matchProjectName(
-          projectDisplayName(p as Record<string, unknown>),
-          effectivePatch.project_name!,
-        ),
+      const projIdx = findProjectIndex(
+        before as Record<string, unknown>[],
+        effectivePatch.project_name!,
       );
       if (projIdx < 0) {
         return {

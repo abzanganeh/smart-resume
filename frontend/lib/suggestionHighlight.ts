@@ -1,6 +1,8 @@
 import { resolveBulletAtAnchor } from "@/lib/anchoredPatch";
 import {
   bulletsTextMatch,
+  findUniqueExperienceIndex,
+  findUniqueProjectIndex,
   inferEducationInstitution,
   matchEducationInstitution,
   matchExperienceCompany,
@@ -420,6 +422,17 @@ export function isPatchPlaceable(
   if (patch.anchor) {
     const resolved = resolveBulletAtAnchor(resume, patch.anchor);
     if (resolved) {
+      const liveOld =
+        resolved.bullet_old ??
+        resolved.project_bullet_old ??
+        resolved.education_bullet_old;
+      const patchOld =
+        patch.bullet_old ??
+        patch.project_bullet_old ??
+        patch.education_bullet_old;
+      if (patchOld?.trim() && liveOld && !bulletsTextMatch(liveOld, patchOld)) {
+        return false;
+      }
       if (resolved.section === "experience" && patch.bullet_new?.trim()) return true;
       if (resolved.section === "projects" && patch.project_bullet_new?.trim()) return true;
       if (resolved.section === "education" && patch.education_bullet_new?.trim()) return true;
@@ -445,9 +458,7 @@ export function isPatchPlaceable(
   }
 
   if (patch.section === "experience" && patch.company?.trim()) {
-    const idx = resume.experience.findIndex((exp) =>
-      matchExperienceCompany(exp.company, patch.company!),
-    );
+    const idx = findUniqueExperienceIndex(resume.experience, patch.company!);
     if (idx < 0) return false;
     const exp = resume.experience[idx]!;
     if (patch.delete_experience) return true;
@@ -488,13 +499,12 @@ export function isPatchPlaceable(
       );
     }
     if (patch.project_name?.trim()) {
-      const proj = resume.projects.find((p) =>
-        matchProjectName(
-          projectDisplayName(p as Record<string, unknown>),
-          patch.project_name!,
-        ),
+      const projIdx = findUniqueProjectIndex(
+        resume.projects as Record<string, unknown>[],
+        patch.project_name!,
       );
-      if (!proj) return false;
+      if (projIdx < 0) return false;
+      const proj = resume.projects[projIdx] as Record<string, unknown>;
       if (patch.project_bullet_old?.trim()) {
         const bullets = Array.isArray((proj as Record<string, unknown>).bullets)
           ? ((proj as Record<string, unknown>).bullets as string[])

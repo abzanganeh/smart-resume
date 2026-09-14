@@ -139,6 +139,10 @@ function runTests() {
   };
   const collisionResult = applyResumePatch(ambiguousBase, collisionPatch);
   assert(!collisionResult.applied, "ambiguous shared-prefix needle does not apply");
+  assert(
+    JSON.stringify(collisionResult.updated) === JSON.stringify(ambiguousBase),
+    "ambiguous shared-prefix collision leaves resume unchanged",
+  );
 
   const missBulletPatch: ResumePatch = {
     section: "experience",
@@ -154,6 +158,10 @@ function runTests() {
     "resume unchanged when bullet does not match",
   );
 
+  assert(
+    !bulletsTextMatch("Built MFA flows with WebAuthn.", "with WebAuthn"),
+    "mid-string needle must not fuzzy-match",
+  );
   assert(
     !bulletsTextMatch("Built MFA flows.", "Built"),
     "short needles below MIN_FUZZY_BULLET_LEN do not fuzzy-match",
@@ -413,6 +421,27 @@ function runTests() {
   assert(
     projectDisplayName(projectTitleResult.updated.projects[0] as Record<string, unknown>) === "Flint",
     "project title shortened",
+  );
+
+  const ambiguousProjects: TailoredResumeOutput = {
+    ...base,
+    projects: [
+      { name: "FlintApply", description: "", bullets: ["Resume tailoring."] },
+      { name: "FlintGuide", description: "", bullets: ["Interview co-pilot."] },
+    ],
+  };
+  const ambiguousProjectPatch: ResumePatch = {
+    section: "projects",
+    description: "Rewrite bullet",
+    project_name: "Flint",
+    project_bullet_old: "Resume tailoring.",
+    project_bullet_new: "Should not apply.",
+  };
+  const ambiguousProjectResult = applyResumePatch(ambiguousProjects, ambiguousProjectPatch);
+  assert(!ambiguousProjectResult.applied, "ambiguous Flint project name does not apply");
+  assert(
+    JSON.stringify(ambiguousProjectResult.updated) === JSON.stringify(ambiguousProjects),
+    "ambiguous Flint project patch leaves resume unchanged",
   );
 
   console.log("\nAll applyResumePatch tests passed.\n");

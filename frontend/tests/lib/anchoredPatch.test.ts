@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   buildBatchChatMessage,
   hydratePatchFromAnchor,
+  hydratePatchesFromIssues,
+  matchAnchorForPatch,
   resolveBulletAtAnchor,
 } from "@/lib/anchoredPatch";
 import { applyResumePatch } from "@/lib/applyResumePatch";
@@ -56,7 +58,7 @@ test("hydratePatchFromAnchor replaces wrong LLM bullet_old", () => {
   assert.ok(isPatchPlaceable(hydrated, tailored));
 });
 
-test("applyResumePatch uses anchor index when bullet_old is stale", () => {
+test("applyResumePatch uses anchor index when bullet_old is missing", () => {
   const patch = hydratePatchFromAnchor(
     tailored,
     {
@@ -73,6 +75,83 @@ test("applyResumePatch uses anchor index when bullet_old is stale", () => {
     (result.updated.projects[0] as { bullets: string[] }).bullets[0],
     /^Engineered local-first/,
   );
+});
+
+test("applyResumePatch refuses anchor apply when bullet_old is wrong", () => {
+  const patch = {
+    section: "projects" as const,
+    description: "Rewrite bullet",
+    project_bullet_old: "Totally wrong stale bullet text.",
+    project_bullet_new: "Should not apply via anchor.",
+    anchor: anchoredIssue.anchor,
+  };
+  const result = applyResumePatch(tailored, patch);
+  assert.equal(result.applied, false);
+  assert.deepEqual(result.updated, tailored);
+  assert.equal(isPatchPlaceable(patch, tailored), false);
+});
+
+test("matchAnchorForPatch refuses ambiguous Flint project names", () => {
+  const ambiguous: TailoredResumeOutput = {
+    ...tailored,
+    projects: [
+      { name: "FlintApply", bullets: ["Resume tailoring."] },
+      { name: "FlintGuide", bullets: ["Interview co-pilot."] },
+    ],
+  };
+  const issues: BlockingIssue[] = [
+    {
+      ...anchoredIssue,
+      anchor: { section: "projects", entry_index: 0, bullet_index: 0 },
+    },
+    {
+      ...anchoredIssue,
+      description: "Second Flint project",
+      anchor: { section: "projects", entry_index: 1, bullet_index: 0 },
+    },
+  ];
+  const patch = {
+    section: "projects" as const,
+    description: "Rewrite bullet",
+    project_name: "Flint",
+    project_bullet_new: "Should not bind.",
+  };
+  assert.equal(matchAnchorForPatch(ambiguous, patch, issues), null);
+});
+
+test("resolveBulletAtAnchor returns null for out-of-range index", () => {
+  assert.equal(
+    resolveBulletAtAnchor(tailored, {
+      section: "projects",
+      entry_index: 9,
+      bullet_index: 0,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveBulletAtAnchor(tailored, {
+      section: "projects",
+      entry_index: 0,
+      bullet_index: 9,
+    }),
+    null,
+  );
+});
+
+test("hydratePatchesFromIssues ignores unknown LLM anchor", () => {
+  const hydrated = hydratePatchesFromIssues(
+    tailored,
+    [
+      {
+        section: "projects",
+        description: "Rewrite bullet",
+        project_bullet_new: "Injected rewrite.",
+        anchor: { section: "projects", entry_index: 0, bullet_index: 0 },
+      },
+    ],
+    [],
+  )[0];
+  assert.equal(hydrated.project_bullet_old, undefined);
 });
 
 test("buildBatchChatMessage includes exact bullet text", () => {

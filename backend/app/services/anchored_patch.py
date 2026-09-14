@@ -8,12 +8,29 @@ from app.models.chat import ResumePatch
 from app.models.qa import BlockingIssue, IssueAnchor
 
 
+def _normalize_name(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
 def _names_match(a: str, b: str) -> bool:
-    left = " ".join(a.strip().lower().split())
-    right = " ".join(b.strip().lower().split())
+    left = _normalize_name(a)
+    right = _normalize_name(b)
     if not left or not right:
         return False
     return left == right or left in right or right in left
+
+
+def _anchor_in_issues(anchor: IssueAnchor, issues: list[BlockingIssue]) -> bool:
+    for issue in issues:
+        if issue.anchor is None:
+            continue
+        if (
+            issue.anchor.section == anchor.section
+            and issue.anchor.entry_index == anchor.entry_index
+            and issue.anchor.bullet_index == anchor.bullet_index
+        ):
+            return True
+    return False
 
 
 def resolve_bullet_at_anchor(
@@ -189,7 +206,11 @@ def hydrate_chat_patches(
 
     hydrated: list[ResumePatch] = []
     for patch in patches:
-        anchor = patch.anchor or match_anchor_for_patch(resume, patch, target_issues)
+        anchor = match_anchor_for_patch(resume, patch, target_issues)
+        if anchor is None and patch.anchor is not None and _anchor_in_issues(
+            patch.anchor, target_issues
+        ):
+            anchor = patch.anchor
         hydrated.append(hydrate_patch_from_anchor(resume, patch, anchor))
 
     return hydrated
