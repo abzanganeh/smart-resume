@@ -121,6 +121,31 @@ function runTests() {
     }).includes("Wrote integration tests"),
     "blocking headline shows bullet excerpt not axis label",
   );
+  const anchoredMetric = fixture.blocking_issues[1];
+  const addressed = new Set([issueKey(anchoredMetric)]);
+  const openBlocking = dedupeBlockingIssues(fixture.blocking_issues).filter(
+    (issue) => !addressed.has(issueKey(issue)),
+  );
+  assert(openBlocking.length === 2, "addressed blocking issues are hidden from open list");
+  assert(
+    !openBlocking.some((issue) => issueKey(issue) === issueKey(anchoredMetric)),
+    "addressed key is not in open blocking list",
+  );
+
+  const jumpAnchor = { section: "experience" as const, entry_index: 2, bullet_index: 0 };
+  const jumpIssue: BlockingIssue = {
+    category: "metric",
+    description: "Needs metric",
+    suggestion: "Add a metric.",
+    impact: "high",
+    fix_effort: "user_input",
+    anchor: jumpAnchor,
+  };
+  assert(
+    issueKey(jumpIssue) === `anchor:experience:2:0`,
+    "jump-to-entry uses stable anchor key for scroll target",
+  );
+
   assert(
     issueKey({
       category: "bullet",

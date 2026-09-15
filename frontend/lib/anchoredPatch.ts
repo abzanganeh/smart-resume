@@ -87,7 +87,8 @@ function bulletHintMatches(candidate: string, hint: string): boolean {
   if (!bullet || !needle) return false;
   if (bullet === needle) return true;
   if (bullet.startsWith(needle) || needle.startsWith(bullet)) return true;
-  if (needle.length >= 12 && bullet.includes(needle.slice(0, 12))) return true;
+  const prefixLen = 16;
+  if (needle.length >= prefixLen && bullet.includes(needle.slice(0, prefixLen))) return true;
   return false;
 }
 

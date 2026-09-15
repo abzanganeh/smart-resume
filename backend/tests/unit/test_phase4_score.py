@@ -309,6 +309,32 @@ def test_field_completeness_passes_when_all_entries_have_required_fields() -> No
     assert axis.issues == []
 
 
+def test_metrics_axis_emits_uncapped_anchored_issues_for_many_bullets() -> None:
+    bullets = [
+        f"Built service component {chr(ord('a') + i)} without quantified outcomes"
+        for i in range(7)
+    ]
+    resume = _resume(
+        skills=["Languages: Python"],
+        experience=[
+            {
+                "title": "Engineer",
+                "company": "Acme",
+                "dates": "2024",
+                "bullets": bullets,
+            }
+        ],
+    )
+    result = compute_ats_score(resume, ["Python"])
+    axis = _axis(result, "bullet_metrics")
+    assert len(axis.anchored_issues) == 7
+    from app.agent.phase4_deterministic import build_blocking_issues_from_score
+
+    blocking = build_blocking_issues_from_score(result)
+    metric_issues = [issue for issue in blocking if issue.category == "metric"]
+    assert len(metric_issues) == 7
+
+
 def test_metrics_axis_includes_entry_anchor() -> None:
     resume = _resume(
         skills=["Languages: Python"],

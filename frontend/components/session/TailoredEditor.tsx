@@ -2517,6 +2517,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       )}
                       <BulletList
                         bullets={edu.bullets}
+                        section="education"
+                        entryIndex={eduIndex}
+                        bulletAtsIssues={bulletAtsIssues}
+                        addressedAtsKeys={addressedAtsKeys}
+                        skippedAtsKeys={skippedAtsKeys}
+                        onAcceptAtsIssue={onAcceptAtsIssue}
+                        onIgnoreAtsBulletIssues={onIgnoreAtsBulletIssues}
                         onSaveBullet={(idx, text) => saveEduBullet(edu.institution, idx, text)}
                         onDeleteBullet={(idx) => deleteEduBullet(edu.institution, idx)}
                         onAddBullet={(text) => addEduBullet(edu.institution, text)}
