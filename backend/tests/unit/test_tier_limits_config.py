@@ -55,12 +55,12 @@ def test_premium_soft_cap() -> None:
     assert premium["soft_cap_message"]
 
 
-def test_free_tier_registration_grant_is_three_credits() -> None:
-    """Free tier grants 3 tailored-resume credits (also caps cover letters)."""
+def test_free_tier_registration_grant_is_six_credits() -> None:
+    """Free tier grants 6 tailored-resume credits (also caps cover letters)."""
     free = seed_row_for_plan("free")
     assert free is not None
-    assert free["resumes_per_period"] == 3
-    assert free["cover_letters_per_period"] == 3
+    assert free["resumes_per_period"] == 6
+    assert free["cover_letters_per_period"] == 6
 
 
 def test_premium_tracker_active_limit_is_capped() -> None:

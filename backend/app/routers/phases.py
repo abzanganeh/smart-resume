@@ -47,7 +47,10 @@ from app.services.billing.quota import (
     QuotaAction,
 )
 from app.services.master_resume.crud import has_any_live_chunk
-from app.services.dashboard.session_cache import sync_session_cache_for_session
+from app.services.dashboard.session_cache import (
+    load_session_for_request,
+    sync_session_cache_for_session,
+)
 from app.services.session_store import (
     get_session,
     is_phase_lock_held,
@@ -133,12 +136,21 @@ async def trigger_phase(
     if phase not in (1, 2, 3, 4):
         raise HTTPException(status_code=400, detail="Phase must be 1, 2, 3, or 4.")
 
-    session = await get_session(session_id)
+    session = await load_session_for_request(
+        db,
+        session_id=session_id,
+        authorization=authorization,
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    user_id = await resolve_bearer_user_id(authorization, session)
+    user_id = session.user_id
+    uid: uuid.UUID | None = None
     if user_id:
+        try:
+            uid = uuid.UUID(user_id)
+        except ValueError:
+            uid = None
         await assert_user_email_verified(db, user_id)
 
     if phase >= 2 and getattr(session, f"phase{phase - 1}_status") != PhaseStatus.done:
@@ -156,14 +168,11 @@ async def trigger_phase(
             detail="Phase 3 must complete before a scoped regeneration.",
         )
 
-    # Force runs always win — explicitly clear stale state before the lock check
-    # so the user can recover from a phase that crashed mid-run (e.g. backend
-    # restart left status="running" and the Redis lock orphaned).
-    if body.force:
-        await reset_phase(session_id, phase)
-        session = await get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    # Waive ats_recalc only when the resume was edited after the last Phase 4
+    # score (phase4_stale_since). Cross-session / dashboard-record waives are Slice 2.
+    phase4_scoring_waive = (
+        phase == 4 and session.phase4_stale_since is not None
+    )
 
     phase_status = getattr(session, f"phase{phase}_status")
     if phase_status == PhaseStatus.running:
@@ -260,8 +269,14 @@ async def trigger_phase(
                         },
                     ) from exc
 
-    # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot.
-    if phase == 4 and user_id and not should_skip_billing_quota():
+    # Phase 4 is an ATS recalculation — charge 1 credit / plan counter slot,
+    # except when refreshing a stale score after the user edited the resume.
+    if (
+        phase == 4
+        and user_id
+        and not should_skip_billing_quota()
+        and not phase4_scoring_waive
+    ):
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -307,6 +322,14 @@ async def trigger_phase(
                             "message": "You're out of credits. ATS score recalculation costs 1 credit.",
                         },
                     ) from exc
+
+    # Force runs clear cached output — only after billing passes so a 402 does
+    # not wipe a completed Phase 4 score the user can still see in the UI.
+    if body.force:
+        await reset_phase(session_id, phase)
+        session = await get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
 
     session.phase_run_requested = phase
     session.phase_run_scope = body.scope

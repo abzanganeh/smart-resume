@@ -184,10 +184,10 @@ test("audit edit shows stale banner on rewrite tab; re-run clears it", async ({ 
   await page.getByRole("button", { name: "Save audit edit" }).click()
 
   await page.getByRole("button", { name: "Tailored Rewrite" }).click()
-  await expect(page.getByText("Your audit changed. Re-run Phase 3 to apply updates.")).toBeVisible()
+  await expect(page.getByText("Your analysis changed. Re-run tailored rewrite to apply updates.")).toBeVisible()
 
   await page.getByRole("button", { name: "Re-run" }).click()
-  await expect(page.getByText("Your audit changed. Re-run Phase 3 to apply updates.")).toBeHidden({
+  await expect(page.getByText("Your analysis changed. Re-run tailored rewrite to apply updates.")).toBeHidden({
     timeout: 15_000,
   })
 })

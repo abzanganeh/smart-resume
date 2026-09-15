@@ -69,7 +69,7 @@ export function faqEntries(startingCredits: number): FaqEntry[] {
         text: "If a bullet has no metric, the gap is reported for you to fill instead of being filled in for you.",
       },
       {
-        text: "An 8-point QA checklist runs before every export, and the ATS score is computed deterministically in the backend — never assigned by a language model.",
+        text: "An 8-point export checklist runs before every download, and the ATS score is computed deterministically in the backend — never assigned by a language model.",
       },
       { text: "Job titles, company names, and dates are never rewritten." },
       {

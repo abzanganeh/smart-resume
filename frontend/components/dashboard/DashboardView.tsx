@@ -642,7 +642,7 @@ export function DashboardView({ token }: { token: string }) {
               </div>
             ) : (
               <p className="text-sm text-slate-600 dark:text-slate-400 py-8 text-center">
-                Complete Phase 4 to see your ATS trend.
+                Score a tailored resume to see your ATS trend.
               </p>
             )}
           </div>

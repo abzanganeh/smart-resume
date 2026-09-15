@@ -420,7 +420,7 @@ def _axis_metrics(bullets: list[str], tailored) -> AxisScore:
     unquantified = [(bullet, section, entry_index, bullet_index) for bullet, section, entry_index, bullet_index in located if not _DIGIT.search(bullet)]
     issues = [
         f"Add a metric to: {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
-        for bullet, *_rest in unquantified[:5]
+        for bullet, *_rest in unquantified
     ]
     anchored_issues = [
         AxisIssue(
@@ -431,7 +431,7 @@ def _axis_metrics(bullets: list[str], tailored) -> AxisScore:
                 "bullet_index": bullet_index,
             },
         )
-        for bullet, section, entry_index, bullet_index in unquantified[:5]
+        for bullet, section, entry_index, bullet_index in unquantified
     ]
     return AxisScore(
         key="bullet_metrics",
@@ -470,7 +470,7 @@ def _axis_action_verbs(bullets: list[str], tailored) -> AxisScore:
     score = ratio * _W_ACTION_VERBS
     issues = [
         f"Open with a stronger verb: {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
-        for bullet, *_rest in weak_examples[:5]
+        for bullet, *_rest in weak_examples
     ]
     anchored_issues = [
         AxisIssue(
@@ -481,7 +481,7 @@ def _axis_action_verbs(bullets: list[str], tailored) -> AxisScore:
                 "bullet_index": bullet_index,
             },
         )
-        for bullet, section, entry_index, bullet_index in weak_examples[:5]
+        for bullet, section, entry_index, bullet_index in weak_examples
     ]
     return AxisScore(
         key="action_verbs",
@@ -498,8 +498,9 @@ def _axis_action_verbs(bullets: list[str], tailored) -> AxisScore:
     )
 
 
-def _axis_bullet_length(bullets: list[str]) -> AxisScore:
-    if not bullets:
+def _axis_bullet_length(tailored) -> AxisScore:
+    located = _iter_bullets_with_anchor(tailored)
+    if not located:
         return AxisScore(
             key="bullet_length",
             label="Bullet length sweet spot",
@@ -510,24 +511,47 @@ def _axis_bullet_length(bullets: list[str]) -> AxisScore:
         )
 
     in_range = 0
-    too_short: list[str] = []
-    too_long: list[str] = []
-    for bullet in bullets:
+    too_short: list[tuple[str, str, int, int, int]] = []
+    too_long: list[tuple[str, str, int, int, int]] = []
+    for bullet, section, entry_index, bullet_index in located:
         wc = _word_count(bullet)
         if _BULLET_LENGTH_SWEET_LOW <= wc <= _BULLET_LENGTH_SWEET_HIGH:
             in_range += 1
         elif wc < _BULLET_LENGTH_SWEET_LOW:
-            too_short.append(bullet)
+            too_short.append((bullet, section, entry_index, bullet_index, wc))
         else:
-            too_long.append(bullet)
+            too_long.append((bullet, section, entry_index, bullet_index, wc))
 
-    ratio = in_range / len(bullets)
+    ratio = in_range / len(located)
     score = ratio * _W_BULLET_LENGTH
     issues: list[str] = []
-    for b in too_short[:3]:
-        issues.append(f"Bullet too short ({_word_count(b)} words): {b[:80]}{'…' if len(b) > 80 else ''}")
-    for b in too_long[:3]:
-        issues.append(f"Bullet too long ({_word_count(b)} words): {b[:80]}{'…' if len(b) > 80 else ''}")
+    anchored_issues: list[AxisIssue] = []
+    for bullet, section, entry_index, bullet_index, wc in too_short:
+        text = f"Bullet too short ({wc} words): {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
+        issues.append(text)
+        anchored_issues.append(
+            AxisIssue(
+                text=text,
+                anchor={
+                    "section": section,
+                    "entry_index": entry_index,
+                    "bullet_index": bullet_index,
+                },
+            )
+        )
+    for bullet, section, entry_index, bullet_index, wc in too_long:
+        text = f"Bullet too long ({wc} words): {bullet[:80]}{'…' if len(bullet) > 80 else ''}"
+        issues.append(text)
+        anchored_issues.append(
+            AxisIssue(
+                text=text,
+                anchor={
+                    "section": section,
+                    "entry_index": entry_index,
+                    "bullet_index": bullet_index,
+                },
+            )
+        )
 
     return AxisScore(
         key="bullet_length",
@@ -535,8 +559,9 @@ def _axis_bullet_length(bullets: list[str]) -> AxisScore:
         score=score,
         max_score=_W_BULLET_LENGTH,
         status=_status_from_ratio(ratio, pass_at=0.8, warn_at=0.5),
-        summary=f"{in_range}/{len(bullets)} bullets are 12-25 words (recruiter scan zone).",
+        summary=f"{in_range}/{len(located)} bullets are 12-25 words (recruiter scan zone).",
         issues=issues,
+        anchored_issues=anchored_issues,
     )
 
 
@@ -942,7 +967,7 @@ def compute_ats_score(
         _axis_contact(tailored),
         _axis_metrics(bullets, tailored),
         _axis_action_verbs(bullets, tailored),
-        _axis_bullet_length(bullets),
+        _axis_bullet_length(tailored),
         _axis_resume_length(tailored, career_stage),
         _axis_weak_phrases(bullets),
         _axis_first_person(bullets, summary_text),

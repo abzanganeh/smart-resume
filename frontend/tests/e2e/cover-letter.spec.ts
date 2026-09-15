@@ -137,7 +137,7 @@ test("phase 4 page generate cover letter renders letter body", async ({ page }) 
   await login(page);
 
   await page.goto(`${BASE}/session/${SESSION_ID}?step=export`);
-  await expect(page.getByRole("heading", { name: "QA & Export" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Score & Export" })).toBeVisible();
 
   await page.getByRole("button", { name: "Generate cover letter" }).click();
   await expect(page.getByRole("heading", { name: "Cover letter" })).toBeVisible();

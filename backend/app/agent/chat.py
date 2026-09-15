@@ -10,12 +10,36 @@ import structlog
 from app.llm.base import LLMClient, LLMMessage
 from app.llm.structured import complete_structured
 from app.models.chat import ChatMessage, ChatRequest, ChatResponse, ResumePatch
+from app.models.qa import BlockingIssue
 from app.models.session import Session
-from app.services.anchored_patch import build_anchor_target_block, hydrate_chat_patches
+from app.services.anchored_patch import (
+    build_anchor_target_block,
+    enrich_issues_with_inferred_anchors,
+    hydrate_chat_patches,
+)
 
 log = structlog.get_logger("chat_agent")
 
 _SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "chat.txt").read_text()
+
+MAX_CHAT_TARGET_ISSUES = 8
+MAX_ISSUE_TEXT_LEN = 500
+
+
+def _sanitize_target_issues(issues: list[BlockingIssue]) -> list[BlockingIssue]:
+    """Clamp batch size and field lengths before prompt assembly."""
+    trimmed = issues[:MAX_CHAT_TARGET_ISSUES]
+    sanitized: list[BlockingIssue] = []
+    for issue in trimmed:
+        sanitized.append(
+            issue.model_copy(
+                update={
+                    "description": issue.description[:MAX_ISSUE_TEXT_LEN],
+                    "suggestion": issue.suggestion[:MAX_ISSUE_TEXT_LEN],
+                }
+            )
+        )
+    return sanitized
 
 
 def _normalize_name(value: str) -> str:
@@ -194,13 +218,18 @@ async def run(
     )
 
     anchor_block = ""
-    anchored_count = sum(1 for issue in request.target_issues if issue.anchor is not None)
-    if anchored_count:
+    target_issues = enrich_issues_with_inferred_anchors(
+        resume_data,
+        _sanitize_target_issues(request.target_issues),
+    )
+    if target_issues:
         anchor_block = (
             "\n\n"
-            + build_anchor_target_block(resume_data, request.target_issues)
-            + f"\n\nReturn up to {anchored_count} patches — one per anchored target above, in order. "
-            "For anchored targets, only supply bullet_new (or project_bullet_new); do not copy bullet_old from the fix intent."
+            + build_anchor_target_block(resume_data, target_issues)
+            + f"\n\nReturn exactly {len(target_issues)} patches — one per target above, in order "
+            f"(ignore the default 3-patch limit for this anchored batch). "
+            "For anchored targets, only supply bullet_new (or project_bullet_new). "
+            "Do NOT set company, project_name, institution, or bullet_old — the server fills those from the anchor."
         )
 
     messages: list[LLMMessage] = [
@@ -228,7 +257,7 @@ async def run(
         result.patches = hydrate_chat_patches(
             resume_data,
             result.patches,
-            request.target_issues,
+            target_issues,
         )
         return _fill_missing_descriptions(result)
     except Exception as exc:

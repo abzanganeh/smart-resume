@@ -17,8 +17,8 @@ pytestmark = pytest.mark.integration
 async def test_billing_free_tier_public_default(app_client: AsyncClient) -> None:
     resp = await app_client.get("/api/billing/free-tier")
     assert resp.status_code == 200, resp.text
-    # Free-tier registration grant: 3 credits (tier_limits free resumes_per_period).
-    assert resp.json()["starting_credits"] == 3
+    # Free-tier registration grant: 6 credits (tier_limits free resumes_per_period).
+    assert resp.json()["starting_credits"] == 6
 
 
 @pytest.mark.asyncio

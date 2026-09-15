@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   buildBatchChatMessage,
+  enrichIssuesWithInferredAnchors,
   hydratePatchFromAnchor,
   hydratePatchesFromIssues,
+  inferAnchorFromIssue,
   matchAnchorForPatch,
   resolveBulletAtAnchor,
 } from "@/lib/anchoredPatch";
@@ -152,6 +154,142 @@ test("hydratePatchesFromIssues ignores unknown LLM anchor", () => {
     [],
   )[0];
   assert.equal(hydrated.project_bullet_old, undefined);
+});
+
+test("inferAnchorFromIssue resolves bullet-too-short suggestions", () => {
+  const withExperience: TailoredResumeOutput = {
+    ...tailored,
+    experience: [
+      {
+        title: "Engineer",
+        company: "Northwind Payments",
+        dates: "2022 – 2024",
+        bullets: ["Mentored 3 engineers on code review standards and on-call practices."],
+        removed_bullets: [],
+        keywords_injected: [],
+      },
+    ],
+  };
+  const issue: BlockingIssue = {
+    category: "bullet",
+    description: "Bullet length sweet spot (12-25 words)",
+    suggestion:
+      "Bullet too short (10 words): Mentored 3 engineers on code review standards and on-call practices.",
+    impact: "medium",
+    fix_effort: "manual_rewrite",
+  };
+  const anchor = inferAnchorFromIssue(withExperience, issue);
+  assert.deepEqual(anchor, { section: "experience", entry_index: 0, bullet_index: 0 });
+  assert.deepEqual(
+    enrichIssuesWithInferredAnchors(withExperience, [issue])[0]!.anchor,
+    anchor,
+  );
+});
+
+test("hydratePatchesFromIssues positional bind fixes invented JD company", () => {
+  const withExperience: TailoredResumeOutput = {
+    ...tailored,
+    experience: [
+      {
+        title: "Software Engineer",
+        company: "LedgerFlow",
+        dates: "2022 – 2024",
+        bullets: ["Led AWS migration for payment processing platform."],
+        removed_bullets: [],
+        keywords_injected: [],
+      },
+    ],
+  };
+  const metricIssue: BlockingIssue = {
+    category: "metric",
+    description: "Add a metric to AWS migration bullet",
+    suggestion: "Add a quantified outcome such as reduced migration time by 35%.",
+    impact: "medium",
+    fix_effort: "user_input",
+    anchor: { section: "experience", entry_index: 0, bullet_index: 0 },
+  };
+  const hydrated = hydratePatchesFromIssues(
+    withExperience,
+    [
+      {
+        section: "experience",
+        description: "Add quantifiable metric to AWS migration bullet",
+        company: "Northwind Payments",
+        bullet_old: "Wrong bullet.",
+        bullet_new: "Led AWS migration for payment processing platform, reducing cutover time by 35%.",
+      },
+    ],
+    [metricIssue],
+  )[0]!;
+  assert.equal(hydrated.company, "LedgerFlow");
+  assert.match(hydrated.bullet_old ?? "", /Led AWS migration/);
+  assert.equal(isPatchPlaceable(hydrated, withExperience), true);
+});
+
+test("hydratePatchesFromIssues swapped companies do not mis-bind", () => {
+  const withTwoCompanies: TailoredResumeOutput = {
+    ...tailored,
+    experience: [
+      {
+        title: "Engineer",
+        company: "Acme Corp",
+        dates: "2020 – 2022",
+        bullets: ["Built APIs for payments."],
+        removed_bullets: [],
+        keywords_injected: [],
+      },
+      {
+        title: "Engineer",
+        company: "Northwind Payments",
+        dates: "2022 – 2024",
+        bullets: ["Led AWS migration for payment processing platform."],
+        removed_bullets: [],
+        keywords_injected: [],
+      },
+    ],
+  };
+  const issues: BlockingIssue[] = [
+    {
+      category: "metric",
+      description: "Acme metric",
+      suggestion: "Add metric.",
+      impact: "medium",
+      fix_effort: "user_input",
+      anchor: { section: "experience", entry_index: 0, bullet_index: 0 },
+    },
+    {
+      category: "metric",
+      description: "Northwind metric",
+      suggestion: "Add metric.",
+      impact: "medium",
+      fix_effort: "user_input",
+      anchor: { section: "experience", entry_index: 1, bullet_index: 0 },
+    },
+  ];
+  const hydrated = hydratePatchesFromIssues(
+    withTwoCompanies,
+    [
+      {
+        section: "experience",
+        description: "Northwind fix",
+        company: "Northwind Payments",
+        bullet_old: "Led AWS migration for payment processing platform.",
+        bullet_new: "Led AWS migration for payment processing platform, reducing cutover time by 35%.",
+      },
+      {
+        section: "experience",
+        description: "Acme fix",
+        company: "Acme Corp",
+        bullet_old: "Built APIs for payments.",
+        bullet_new: "Built APIs for payments, processing 2M transactions daily.",
+      },
+    ],
+    issues,
+  );
+  assert.equal(hydrated[0]!.company, "Northwind Payments");
+  assert.deepEqual(hydrated[0]!.anchor, issues[1]!.anchor);
+  assert.equal(hydrated[1]!.company, "Acme Corp");
+  assert.deepEqual(hydrated[1]!.anchor, issues[0]!.anchor);
 });
 
 test("buildBatchChatMessage includes exact bullet text", () => {
