@@ -145,6 +145,17 @@ def test_resolve_bullet_at_anchor_returns_none_for_oob_index() -> None:
     ) is None
 
 
+def test_bullet_hint_matches_requires_sixteen_char_prefix() -> None:
+    from app.services.anchored_patch import _bullet_hint_matches
+
+    bullet = "The team Delivered out daily for stakeholders"
+    assert not _bullet_hint_matches(bullet, "Delivered outcomes for platform")
+    assert _bullet_hint_matches(
+        bullet,
+        "The team Delivered out daily for stakeholders",
+    )
+
+
 def test_infer_anchor_from_bullet_too_short_suggestion() -> None:
     issue = BlockingIssue(
         category="bullet",
