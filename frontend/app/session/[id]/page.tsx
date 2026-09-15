@@ -1134,7 +1134,7 @@ function SessionContent() {
             const active = s === step;
             const hasOutput = stepHasOutput[s];
             const isStale = (s === "rewrite" && !!stale["3"]) || (s === "export" && !!stale["4"]);
-            const clickable = tabsUnlocked;
+            const clickable = s === "analysis" || tabsUnlocked;
             return (
               <div key={s} className="flex items-center gap-1 shrink-0">
                 <button
@@ -1385,10 +1385,11 @@ function SessionContent() {
               </div>
               {audit && !isStreaming && (
                 <button
+                  type="button"
                   onClick={() => goTo("rewrite")}
                   className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
                 >
-                  Rewrite my resume →
+                  Continue to {STEP_LABELS.rewrite} →
                 </button>
               )}
             </div>
@@ -1661,10 +1662,11 @@ function SessionContent() {
               />
               {tailored && !isStreaming && (
                 <button
+                  type="button"
                   onClick={() => void goToExport()}
                   className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
                 >
-                  Run QA & export →
+                  Continue to {STEP_LABELS.export} →
                 </button>
               )}
             </div>
