@@ -24,6 +24,10 @@ def _normalize_bullet(value: str) -> str:
     return " ".join(value.strip().split())
 
 
+# Prefix match only when the hint is long enough to avoid cross-bullet collisions.
+_ANCHOR_HINT_PREFIX_LEN = 16
+
+
 def _bullet_hint_matches(candidate: str, hint: str) -> bool:
     bullet = _normalize_bullet(candidate)
     needle = _normalize_bullet(hint.rstrip("…"))
@@ -33,7 +37,10 @@ def _bullet_hint_matches(candidate: str, hint: str) -> bool:
         return True
     if bullet.startswith(needle) or needle.startswith(bullet):
         return True
-    if len(needle) >= 12 and needle[:12] in bullet:
+    if (
+        len(needle) >= _ANCHOR_HINT_PREFIX_LEN
+        and needle[:_ANCHOR_HINT_PREFIX_LEN] in bullet
+    ):
         return True
     return False
 
