@@ -47,7 +47,7 @@ import { getJobPreferences } from "@/lib/jobs"
 import { getApplicationFunnel } from "@/lib/tracker"
 import { DashboardStepStack } from "@/components/dashboard/DashboardStepStack"
 import { summarizeMasterResume } from "@/lib/masterResumeSummary"
-import { sessionHref } from "@/lib/sessionStep"
+import { dashboardSessionStep, sessionHref } from "@/lib/sessionStep"
 
 const STATUS_OPTIONS: { value: ResumeRecordStatus | ""; label: string }[] = [
   { value: "", label: "All statuses" },
@@ -642,7 +642,7 @@ export function DashboardView({ token }: { token: string }) {
               </div>
             ) : (
               <p className="text-sm text-slate-600 dark:text-slate-400 py-8 text-center">
-                Complete Phase 4 to see your ATS trend.
+                Score a tailored resume to see your ATS trend.
               </p>
             )}
           </div>
@@ -831,7 +831,7 @@ export function DashboardView({ token }: { token: string }) {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Link href={sessionHref(r.session_id, "rewrite")} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>
+                    <Link href={sessionHref(r.session_id, dashboardSessionStep(r))} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>
                     <button type="button" onClick={() => void handleRename(r)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg" title="Rename"><Pencil className="w-3.5 h-3.5" /> Name</button>
                     <button type="button" onClick={() => void handleDuplicate(r.id)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><Copy className="w-3.5 h-3.5" /> Duplicate</button>
                     <button type="button" onClick={() => void downloadResume(token, r.id, "pdf", `${r.jd_company}_resume.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg"><Download className="w-3.5 h-3.5" /> PDF</button>

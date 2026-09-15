@@ -77,6 +77,74 @@ export function hydratePatchFromAnchor(
   };
 }
 
+function normalizeBulletText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function bulletHintMatches(candidate: string, hint: string): boolean {
+  const bullet = normalizeBulletText(candidate);
+  const needle = normalizeBulletText(hint.replace(/…$/, ""));
+  if (!bullet || !needle) return false;
+  if (bullet === needle) return true;
+  if (bullet.startsWith(needle) || needle.startsWith(bullet)) return true;
+  if (needle.length >= 12 && bullet.includes(needle.slice(0, 12))) return true;
+  return false;
+}
+
+function bulletHintFromIssue(issue: BlockingIssue): string | null {
+  const text = issue.suggestion.trim();
+  if (!text) return null;
+  const hint = text.split(":").pop()?.trim().replace(/…$/, "").trim() ?? "";
+  return hint.length >= 8 ? hint : null;
+}
+
+export function inferAnchorFromIssue(
+  resume: TailoredResumeOutput,
+  issue: BlockingIssue,
+): IssueAnchor | null {
+  if (issue.anchor) return issue.anchor;
+  const hint = bulletHintFromIssue(issue);
+  if (!hint) return null;
+
+  const matches: IssueAnchor[] = [];
+  resume.experience.forEach((entry, entryIndex) => {
+    entry.bullets.forEach((bullet, bulletIndex) => {
+      if (bulletHintMatches(bullet, hint)) {
+        matches.push({ section: "experience", entry_index: entryIndex, bullet_index: bulletIndex });
+      }
+    });
+  });
+  (resume.projects ?? []).forEach((entry, entryIndex) => {
+    const bullets = Array.isArray((entry as { bullets?: string[] }).bullets)
+      ? (entry as { bullets: string[] }).bullets
+      : [];
+    bullets.forEach((bullet, bulletIndex) => {
+      if (bulletHintMatches(bullet, hint)) {
+        matches.push({ section: "projects", entry_index: entryIndex, bullet_index: bulletIndex });
+      }
+    });
+  });
+  resume.education.forEach((entry, entryIndex) => {
+    (entry.bullets ?? []).forEach((bullet, bulletIndex) => {
+      if (bulletHintMatches(bullet, hint)) {
+        matches.push({ section: "education", entry_index: entryIndex, bullet_index: bulletIndex });
+      }
+    });
+  });
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+export function enrichIssuesWithInferredAnchors(
+  resume: TailoredResumeOutput,
+  issues: BlockingIssue[],
+): BlockingIssue[] {
+  return issues.map((issue) => {
+    const anchor = inferAnchorFromIssue(resume, issue);
+    if (!anchor || issue.anchor) return issue;
+    return { ...issue, anchor };
+  });
+}
+
 function anchorInIssues(anchor: IssueAnchor, issues: BlockingIssue[]): boolean {
   return issues.some(
     (issue) =>
@@ -84,6 +152,80 @@ function anchorInIssues(anchor: IssueAnchor, issues: BlockingIssue[]): boolean {
       issue.anchor.entry_index === anchor.entry_index &&
       issue.anchor.bullet_index === anchor.bullet_index,
   );
+}
+
+function patchConflictsWithAnchor(
+  resume: TailoredResumeOutput,
+  patch: ResumePatch,
+  anchor: IssueAnchor,
+): boolean {
+  const resolved = resolveBulletAtAnchor(resume, anchor);
+  if (!resolved) return true;
+  if (resolved.section === "experience" && patch.section === "experience") {
+    const company = patch.company?.trim();
+    return Boolean(company && !matchExperienceCompany(company, resolved.company ?? ""));
+  }
+  if (resolved.section === "projects" && patch.section === "projects") {
+    const projectName = patch.project_name?.trim();
+    return Boolean(
+      projectName && !matchProjectName(projectName, resolved.project_name ?? ""),
+    );
+  }
+  if (resolved.section === "education" && patch.section === "education") {
+    const institution = patch.institution?.trim();
+    return Boolean(
+      institution &&
+        institution.toLowerCase() !== (resolved.institution ?? "").toLowerCase(),
+    );
+  }
+  return false;
+}
+
+function patchContentMatchesAnchor(
+  resume: TailoredResumeOutput,
+  patch: ResumePatch,
+  anchor: IssueAnchor,
+): boolean {
+  const resolved = resolveBulletAtAnchor(resume, anchor);
+  if (!resolved) return false;
+  if (resolved.section === "experience" && patch.section === "experience") {
+    const company = patch.company?.trim();
+    const bulletOld = patch.bullet_old?.trim();
+    if (company && !matchExperienceCompany(company, resolved.company ?? "")) return false;
+    if (bulletOld && resolved.bullet_old && !bulletHintMatches(resolved.bullet_old, bulletOld)) {
+      return false;
+    }
+    return true;
+  }
+  if (resolved.section === "projects" && patch.section === "projects") {
+    const projectName = patch.project_name?.trim();
+    const bulletOld = patch.project_bullet_old?.trim();
+    if (projectName && !matchProjectName(projectName, resolved.project_name ?? "")) return false;
+    if (
+      bulletOld &&
+      resolved.project_bullet_old &&
+      !bulletHintMatches(resolved.project_bullet_old, bulletOld)
+    ) {
+      return false;
+    }
+    return true;
+  }
+  if (resolved.section === "education" && patch.section === "education") {
+    const institution = patch.institution?.trim();
+    const bulletOld = patch.education_bullet_old?.trim();
+    if (institution && institution.toLowerCase() !== (resolved.institution ?? "").toLowerCase()) {
+      return false;
+    }
+    if (
+      bulletOld &&
+      resolved.education_bullet_old &&
+      !bulletHintMatches(resolved.education_bullet_old, bulletOld)
+    ) {
+      return false;
+    }
+    return true;
+  }
+  return false;
 }
 
 export function matchAnchorForPatch(
@@ -119,18 +261,37 @@ export function matchAnchorForPatch(
   return matches.length === 1 ? matches[0] : null;
 }
 
+function anchorForPatchIndex(
+  resume: TailoredResumeOutput,
+  patch: ResumePatch,
+  issues: BlockingIssue[],
+  patchIndex: number,
+): IssueAnchor | null {
+  const matched = matchAnchorForPatch(resume, patch, issues);
+  if (matched) return matched;
+  const positional = issues[patchIndex]?.anchor;
+  if (positional) {
+    if (issues.length === 1 || !patchConflictsWithAnchor(resume, patch, positional)) {
+      return positional;
+    }
+  }
+  return patch.anchor && anchorInIssues(patch.anchor, issues) ? patch.anchor : null;
+}
+
 export function hydratePatchesFromIssues(
   resume: TailoredResumeOutput,
   patches: ResumePatch[],
   issues: BlockingIssue[],
 ): ResumePatch[] {
-  if (!issues.some((issue) => issue.anchor)) return patches;
-  return patches.map((patch) => {
-    const anchor =
-      matchAnchorForPatch(resume, patch, issues) ??
-      (patch.anchor && anchorInIssues(patch.anchor, issues) ? patch.anchor : null);
-    return hydratePatchFromAnchor(resume, patch, anchor);
-  });
+  const enriched = enrichIssuesWithInferredAnchors(resume, issues);
+  if (!enriched.some((issue) => issue.anchor)) return patches;
+  return patches.map((patch, index) =>
+    hydratePatchFromAnchor(
+      resume,
+      patch,
+      anchorForPatchIndex(resume, patch, enriched, index),
+    ),
+  );
 }
 
 export function sourceIssueKeysForPatches(
@@ -138,10 +299,11 @@ export function sourceIssueKeysForPatches(
   patches: ResumePatch[],
   issues: BlockingIssue[],
 ): (string | undefined)[] {
+  const enriched = enrichIssuesWithInferredAnchors(resume, issues);
   return patches.map((patch) => {
-    const anchor = patch.anchor ?? matchAnchorForPatch(resume, patch, issues);
+    const anchor = patch.anchor ?? matchAnchorForPatch(resume, patch, enriched);
     if (!anchor) return undefined;
-    const issue = issues.find(
+    const issue = enriched.find(
       (candidate) =>
         candidate.anchor?.section === anchor.section &&
         candidate.anchor.entry_index === anchor.entry_index &&

@@ -36,7 +36,7 @@ async def test_admin_free_grant_get_default_seed(
     resp = await app_client.get("/api/admin/credits/free-grant", headers=headers)
     assert resp.status_code == 200, resp.text
     # Registration grant (tier_limits free resumes_per_period).
-    assert resp.json()["amount"] == 3
+    assert resp.json()["amount"] == 6
 
 
 @pytest.mark.asyncio

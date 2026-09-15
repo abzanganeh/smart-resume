@@ -7,7 +7,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  * `resumes_per_period`) — the landing hero renders this number, so a stale
  * value advertises an offer we do not honour.
  */
-export const FREE_TIER_STARTING_CREDITS = 3;
+export const FREE_TIER_STARTING_CREDITS = 6;
 
 export const VOICE_AVAILABILITY_COPY =
   "Live transcription is free in Chrome and Edge. Whisper on Firefox and Safari requires a paid plan.";
@@ -15,7 +15,7 @@ export const VOICE_AVAILABILITY_COPY =
 /** Credit-priced actions on the free tier — keep in sync with backend quota rules. */
 export const FREE_TIER_CREDIT_ACTIONS = [
   { action: "Tailored rewrite", cost: "1 credit" },
-  { action: "QA & export (ATS score)", cost: "1 credit" },
+  { action: "Score & export (ATS score)", cost: "1 credit (re-score after edits is free)" },
   { action: "Cover letter generation", cost: "1 credit" },
   { action: "Coached story interview", cost: "1 credit / session" },
   { action: "Story resume regenerate", cost: "First free; then 1" },

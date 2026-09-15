@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -33,11 +34,10 @@ from app.services.session_ownership import (
 from app.agent.phase4_deterministic import compute_score_result, scoring_terms_from_keywords
 from app.services.checkup_service import parsed_to_tailored
 from app.services.dashboard.session_cache import (
-    backfill_session_from_record_if_needed,
-    restore_session_from_record,
+    load_session_for_request,
     sync_session_cache_for_session,
 )
-from app.services.session_store import create_session, get_session, touch_session, update_session
+from app.services.session_store import create_session, get_session, update_session
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -130,20 +130,11 @@ async def _load_session_for_check(
     authorization: str | None,
     db: AsyncSession,
 ):
-    session = await get_session(session_id)
-    user_id = await _resolve_user_id_for_restore(authorization)
-    if session is None and user_id is not None:
-        session = await restore_session_from_record(
-            db,
-            session_id=session_id,
-            user_id=user_id,
-        )
-    elif session is not None and user_id is not None:
-        session = await backfill_session_from_record_if_needed(db, session)
-    if session is not None:
-        # Keep Redis TTL alive while the user is actively viewing the session.
-        await touch_session(session)
-    return session
+    return await load_session_for_request(
+        db,
+        session_id=session_id,
+        authorization=authorization,
+    )
 
 
 class SessionResumeRecordResponse(BaseModel):
@@ -214,9 +205,18 @@ async def save_tailored_edits(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
-        session.phase3_output = TailoredResumeOutput.model_validate(body.tailored_output)
+        new_output = TailoredResumeOutput.model_validate(body.tailored_output)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid tailored output: {exc}") from exc
+    prior_output = session.phase3_output
+    session.phase3_output = new_output
+    if session.phase4_output is not None:
+        content_changed = (
+            prior_output is None
+            or prior_output.model_dump_json() != new_output.model_dump_json()
+        )
+        if content_changed:
+            session.phase4_stale_since = datetime.now(timezone.utc)
     await update_session(session)
     user_id = await _resolve_user_id_for_restore(authorization)
     if user_id is not None:

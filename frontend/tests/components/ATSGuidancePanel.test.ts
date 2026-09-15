@@ -5,9 +5,12 @@
  */
 import {
   sortBlockingIssues,
+  dedupeBlockingIssues,
   scoreColor,
   truncateHeadlinePreview,
   HEADLINE_PREVIEW_LENGTH,
+  blockingIssueHeadline,
+  issueKey,
 } from "../../components/session/ATSGuidancePanel";
 import {
   formatMechanicalOutcomeReceipt,
@@ -110,6 +113,55 @@ function runTests() {
     scoreColor(30) === "text-red-700 dark:text-red-400",
     "score 30 uses red color in both themes",
   );
+
+  assert(
+    blockingIssueHeadline({
+      ...fixture.blocking_issues[1],
+      suggestion: "Open with a stronger verb: Wrote integration tests with pytest.",
+    }).includes("Wrote integration tests"),
+    "blocking headline shows bullet excerpt not axis label",
+  );
+  assert(
+    issueKey({
+      category: "bullet",
+      description: "Strong action verbs",
+      suggestion: "Open with a stronger verb: Old text…",
+      impact: "medium",
+      fix_effort: "manual_rewrite",
+      anchor: { section: "experience", entry_index: 1, bullet_index: 2 },
+    }) ===
+      issueKey({
+        category: "bullet",
+        description: "Strong action verbs",
+        suggestion: "Open with a stronger verb: New text after re-score…",
+        impact: "medium",
+        fix_effort: "manual_rewrite",
+        anchor: { section: "experience", entry_index: 1, bullet_index: 2 },
+      }),
+    "anchored issue key is stable across re-score suggestion text",
+  );
+
+  const anchor = { section: "experience" as const, entry_index: 1, bullet_index: 2 };
+  const deduped = dedupeBlockingIssues([
+    {
+      category: "bullet",
+      description: "Strong action verbs",
+      suggestion: "Open with a stronger verb: Wrote integration tests with pytest.",
+      impact: "medium",
+      fix_effort: "manual_rewrite",
+      anchor,
+    },
+    {
+      category: "metric",
+      description: "Quantified bullets",
+      suggestion: "Add a metric to: Wrote integration tests with pytest.",
+      impact: "high",
+      fix_effort: "user_input",
+      anchor,
+    },
+  ]);
+  assert(deduped.length === 1, "dedupe merges metric + bullet on same anchor");
+  assert(deduped[0]?.impact === "high", "dedupe keeps higher impact row");
 
   const sorted = sortBlockingIssues(fixture.blocking_issues);
   assert(sorted[0].impact === "high" && sorted[0].fix_effort === "one_click", "high + one_click sorts first");

@@ -66,7 +66,8 @@ RULES FOR PATCHES:
 12. NEVER emit a patch that references a company, project, or institution for edits/deletes/reorders unless it is present in the resume JSON — except new_experience and new_education which intentionally add rows.
 
 PATCH LIMITS:
-- Maximum 3 patches per reply.
+- Maximum 3 patches per reply for general edits.
+- When ANCHORED FIX TARGETS are provided in the user message, return one patch per target in order — even when there are more than 3 targets.
 - Each patch needs a clear description the user reads before accepting.
 
 REPLY WORDING:

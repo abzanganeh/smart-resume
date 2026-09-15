@@ -275,11 +275,22 @@ async def ensure_in_progress_resume_record(
         db.add(record)
         return record
 
+    rebinding = record.session_id != session.session_id
     record.session_id = session.session_id
     record.jd_text_hash = jd_hash
     record.jd_title = jd_title
     record.jd_company = jd_company
     record.updated_at = now
+    if rebinding:
+        # New tailoring session for the same JD — do not inherit prior ATS scores
+        # or cached Phase 4 output from the old session (billing + UI freshness).
+        record.current_ats_score = 0
+        record.starting_ats_score = 0
+        record.tailoring_stage = TailoringStage.in_progress
+        if record.session_cache:
+            cache = dict(record.session_cache)
+            cache.pop("phase4_output", None)
+            record.session_cache = cache or None
     return record
 
 

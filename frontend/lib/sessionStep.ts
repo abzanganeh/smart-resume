@@ -27,3 +27,14 @@ export function sessionHref(
   if (!step || step === "analysis") return `/session/${sessionId}`
   return `/session/${sessionId}?step=${step}`
 }
+
+/** Dashboard "Open" should not skip Analysis on drafts that have no rewrite yet. */
+export function dashboardSessionStep(
+  record: {
+    tailoring_stage: "in_progress" | "polished"
+    current_ats_score?: number | null
+  },
+): SessionTailoringStep {
+  if (record.tailoring_stage === "polished") return "rewrite"
+  return "analysis"
+}

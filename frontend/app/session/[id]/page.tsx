@@ -35,7 +35,10 @@ import {
   mechanicalOutcomeFromResult,
   type QuickWinMechanicalOutcome,
 } from "@/components/session/QuickWinCard";
-import { summarizeEntryIssueBadges, scrollToResumeAnchor } from "@/lib/issueAnchors";
+import {
+  buildBulletAtsIssueMap,
+  summarizeEntryIssueBadges,
+} from "@/lib/issueAnchors";
 import {
   canApplyMechanicalQuickWin,
   tryApplyMechanicalQuickWin,
@@ -43,6 +46,7 @@ import {
 } from "@/lib/mechanicalFix";
 import type { IssueAnchor } from "@/lib/api";
 import { ExportButtons } from "@/components/session/ExportButtons";
+import { HumanProofreadNotice } from "@/components/session/HumanProofreadNotice";
 import { OpenInFlintButton } from "@/components/session/OpenInFlintButton";
 import { CoverLetterPanel } from "@/components/session/CoverLetterPanel";
 import { VersionHistory } from "@/components/session/VersionHistory";
@@ -58,7 +62,12 @@ import { CreditChargeConfirm } from "@/components/billing/CreditChargeConfirm";
 import { CreditMeter } from "@/components/billing/CreditMeter";
 import { useEntitlement } from "@/hooks/useEntitlement";
 import { saveTailoredResume, commitTailoredResume, type ResumePatch } from "@/lib/api";
-import { hydratePatchesFromIssues, sourceIssueKeysForPatches } from "@/lib/anchoredPatch";
+import {
+  enrichIssuesWithInferredAnchors,
+  hydratePatchesFromIssues,
+  sourceIssueKeysForPatches,
+} from "@/lib/anchoredPatch";
+import { reconcileAddressedKeys } from "@/lib/reconcileAddressedKeys";
 import { applyResumePatch, normalizeResumePatch } from "@/lib/applyResumePatch";
 import { isPatchPlaceable } from "@/lib/suggestionHighlight";
 import { mergeSuggestionBatch, type ResumeSuggestion } from "@/lib/suggestions";
@@ -85,7 +94,7 @@ const STEPS: Step[] = ["analysis", "rewrite", "export"];
 const STEP_LABELS: Record<Step, string> = {
   analysis: "Analysis",
   rewrite: "Tailored Rewrite",
-  export: "QA & Export",
+  export: "Score & Export",
 };
 
 type AnalysisPipeline = { mode: "full" | "audit-only"; phase: 1 | 2 };
@@ -116,7 +125,11 @@ function SessionContent() {
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
   const [runErrorType, setRunErrorType] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"ats" | "chat">("ats");
-  const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+  const [chatBoot, setChatBoot] = useState<{ key: number; initial: string }>({
+    key: 0,
+    initial: "",
+  });
+  const [atsGuidanceSelectedKeys, setAtsGuidanceSelectedKeys] = useState<Set<string> | null>(null);
   const [atsTargetIssues, setAtsTargetIssues] = useState<import("@/lib/api").BlockingIssue[]>([]);
   const [issueQueue, setIssueQueue] = useState<import("@/lib/api").BlockingIssue[]>([]);
   const [issueQueueIdx, setIssueQueueIdx] = useState(0);
@@ -150,6 +163,7 @@ function SessionContent() {
   const pendingAtsFixRef = useRef<import("@/lib/api").BlockingIssue[]>([]);
   const [addressedAtsKeys, setAddressedAtsKeys] = useState<Set<string>>(() => new Set());
   const [skippedAtsKeys, setSkippedAtsKeys] = useState<Set<string>>(() => new Set());
+  const [editorScrollTarget, setEditorScrollTarget] = useState<IssueAnchor | null>(null);
   const [mechanicalOutcomes, setMechanicalOutcomes] = useState<
     Record<string, QuickWinMechanicalOutcome>
   >({});
@@ -160,9 +174,20 @@ function SessionContent() {
     );
     return summarizeEntryIssueBadges(visible);
   }, [qa?.blocking_issues, skippedAtsKeys]);
-  const scrollToIssueAnchor = useCallback((anchor: IssueAnchor) => {
-    scrollToResumeAnchor(anchor);
-  }, []);
+  const bulletAtsIssues = useMemo(
+    () => buildBulletAtsIssueMap(qa?.blocking_issues ?? []),
+    [qa?.blocking_issues],
+  );
+  const scrollToIssueAnchor = useCallback(
+    (anchor: IssueAnchor) => {
+      setEditorScrollTarget(anchor);
+      if (step !== "rewrite") {
+        setStep("rewrite");
+        router.push(`/session/${sessionId}?step=rewrite`, { scroll: false });
+      }
+    },
+    [step, sessionId, router],
+  );
   const applyMechanicalFix = useCallback(
     (issue: import("@/lib/api").BlockingIssue) => {
       if (!tailored) return;
@@ -349,7 +374,7 @@ function SessionContent() {
       const qaOut = output as QAOutput;
       setQa(qaOut);
       recordAtsScore(qaOut);
-      resetAtsIssueTracking();
+      reconcileAtsTrackingAfterRescore(qaOut);
     }
   }, [recordAtsScore]);
 
@@ -412,7 +437,7 @@ function SessionContent() {
       try {
         await persistTailoredBeforeExport();
       } catch {
-        setRunError("Could not save resume changes before QA. Please try again.");
+        setRunError("Could not save resume changes before scoring. Please try again.");
         return;
       }
     }
@@ -510,9 +535,10 @@ function SessionContent() {
   function startIssueQueue(issues: import("@/lib/api").BlockingIssue[]) {
     if (!issues.length) return;
     pendingAtsFixRef.current = [issues[0]!];
+    setAtsTargetIssues(issues);
     setIssueQueue(issues);
     setIssueQueueIdx(0);
-    setChatPrefill(buildIssuePrefill(issues[0]!));
+    setChatBoot({ key: Date.now(), initial: buildIssuePrefill(issues[0]!) });
     setSidebarTab("chat");
     goTo("rewrite");
   }
@@ -522,7 +548,7 @@ function SessionContent() {
     setIssueQueueIdx(next);
     if (next < issueQueue.length) {
       pendingAtsFixRef.current = [issueQueue[next]!];
-      setChatPrefill(buildIssuePrefill(issueQueue[next]!));
+      setChatBoot({ key: Date.now(), initial: buildIssuePrefill(issueQueue[next]!) });
     } else {
       setIssueQueue([]);
       pendingAtsFixRef.current = [];
@@ -549,8 +575,18 @@ function SessionContent() {
   function openChatForAtsIssues(message: string, issues: import("@/lib/api").BlockingIssue[]) {
     pendingAtsFixRef.current = issues;
     setAtsTargetIssues(issues);
-    setChatPrefill(message);
+    setAtsGuidanceSelectedKeys(null);
+    setChatBoot({ key: Date.now(), initial: message });
     setSidebarTab("chat");
+  }
+
+  function navigateToRewriteWithAtsSelection(issues: import("@/lib/api").BlockingIssue[]) {
+    if (!issues.length) return;
+    pendingAtsFixRef.current = issues;
+    setAtsTargetIssues(issues);
+    setAtsGuidanceSelectedKeys(new Set(issues.map(issueKey)));
+    setSidebarTab("ats");
+    goTo("rewrite");
   }
 
   function resetAtsIssueTracking() {
@@ -561,13 +597,44 @@ function SessionContent() {
     mechanicalUndoRef.current = {};
   }
 
+  /** After re-score: keep skip/dismiss state; drop "addressed" only for bullets still failing. */
+  function reconcileAtsTrackingAfterRescore(qaOut: QAOutput) {
+    setAddressedAtsKeys((prev) => reconcileAddressedKeys(prev, qaOut));
+    pendingAtsFixRef.current = [];
+    setMechanicalOutcomes({});
+    mechanicalUndoRef.current = {};
+  }
+
   function addSuggestions(patches: ResumePatch[]) {
     if (patches.length === 0 || !tailored) return;
     setSuggestionError(null);
-    const hydrated = hydratePatchesFromIssues(tailored, patches, atsTargetIssues);
+    const enrichedIssues = enrichIssuesWithInferredAnchors(tailored, atsTargetIssues);
+    const hydrated = hydratePatchesFromIssues(tailored, patches, enrichedIssues);
     const normalized = hydrated.map((patch) => normalizeResumePatch(tailored, patch));
-    const sourceIssueKeys = sourceIssueKeysForPatches(tailored, normalized, atsTargetIssues);
-    setPendingSuggestions((prev) => mergeSuggestionBatch(prev, normalized, sourceIssueKeys));
+    const sourceIssueKeys = sourceIssueKeysForPatches(tailored, normalized, enrichedIssues);
+    const placeable = normalized
+      .map((patch, index) => ({ patch, sourceIssueKey: sourceIssueKeys[index] }))
+      .filter(({ patch }) => isPatchPlaceable(patch, tailored));
+    if (placeable.length === 0) {
+      setSuggestionError(
+        normalized.length > 0
+          ? "The AI suggestions didn't match your resume (often a wrong company name from the job description). Try Fix together again or pick one issue at a time."
+          : null,
+      );
+      return;
+    }
+    if (placeable.length < normalized.length) {
+      setSuggestionError(
+        `Applied ${placeable.length} of ${normalized.length} suggestions — ${normalized.length - placeable.length} couldn't be matched to your resume and were skipped.`,
+      );
+    }
+    setPendingSuggestions((prev) =>
+      mergeSuggestionBatch(
+        prev,
+        placeable.map((entry) => entry.patch),
+        placeable.map((entry) => entry.sourceIssueKey),
+      ),
+    );
   }
 
   function acceptSuggestion(id: string) {
@@ -704,6 +771,19 @@ function SessionContent() {
     setTailored(current);
     setEditorSyncKey((k) => k + 1);
     setStale((prev) => ({ ...prev, "4": new Date().toISOString() }));
+    const issuesToMark: import("@/lib/api").BlockingIssue[] = [...pendingAtsFixRef.current];
+    if (qa) {
+      const catalog = [...(qa.blocking_issues ?? []), ...(qa.quick_wins ?? [])];
+      for (const sug of placeable) {
+        if (!sug.sourceIssueKey) continue;
+        const match = catalog.find((issue) => issueKey(issue) === sug.sourceIssueKey);
+        if (match) issuesToMark.push(match);
+      }
+    }
+    if (issuesToMark.length > 0) {
+      markAtsIssuesAddressed(issuesToMark);
+      pendingAtsFixRef.current = [];
+    }
     setPendingSuggestions((prev) => prev.filter((s) => !acceptedIds.includes(s.id)));
     saveTailoredResume(sessionId, current).catch((err) => {
       setRunError(err instanceof Error ? err.message : "Could not save edits. Please try again.");
@@ -748,10 +828,14 @@ function SessionContent() {
   }, [runPhase, persistTailoredBeforeExport, tailored]);
 
   const recalculateAtsWithConfirm = useCallback(() => {
+    if (stale["4"]) {
+      void recalculateAts();
+      return;
+    }
     requestCreditAction("Recalculate ATS score", () => {
       void recalculateAts();
     });
-  }, [requestCreditAction, recalculateAts]);
+  }, [requestCreditAction, recalculateAts, stale]);
 
   const runCurrentPhase = useCallback(
     async (options?: { force?: boolean; scope?: PhaseRunScope; auditOnly?: boolean }) => {
@@ -762,7 +846,7 @@ function SessionContent() {
         try {
           await persistTailoredBeforeExport();
         } catch {
-          setRunError("Could not save resume changes before QA. Please try again.");
+          setRunError("Could not save resume changes before scoring. Please try again.");
           return;
         }
       }
@@ -1062,12 +1146,17 @@ function SessionContent() {
 
   const staleMessageForStep = (s: Step): string | null => {
     if (s === "rewrite" && stale["3"]) {
-      return "Your audit changed. Re-run Phase 3 to apply updates.";
+      return "Your analysis changed. Re-run tailored rewrite to apply updates.";
     }
     if (s === "export" && stale["4"]) {
-      return "Your rewrite changed. Re-run Phase 4 to refresh QA.";
+      return "You edited your resume after scoring. Update the ATS score to refresh your results.";
     }
     return null;
+  };
+
+  const staleRerunLabelForStep = (s: Step): string => {
+    if (s === "export") return "Update score";
+    return "Re-run";
   };
 
   const sessionAiControls = (
@@ -1134,7 +1223,7 @@ function SessionContent() {
             const active = s === step;
             const hasOutput = stepHasOutput[s];
             const isStale = (s === "rewrite" && !!stale["3"]) || (s === "export" && !!stale["4"]);
-            const clickable = tabsUnlocked;
+            const clickable = s === "analysis" || tabsUnlocked;
             return (
               <div key={s} className="flex items-center gap-1 shrink-0">
                 <button
@@ -1279,6 +1368,7 @@ function SessionContent() {
               message={staleMessageForStep(step)!}
               onRerun={() => runCurrentPhase({ force: true })}
               running={phaseRunning}
+              rerunLabel={staleRerunLabelForStep(step)}
             />
           )}
 
@@ -1385,10 +1475,11 @@ function SessionContent() {
               </div>
               {audit && !isStreaming && (
                 <button
+                  type="button"
                   onClick={() => goTo("rewrite")}
                   className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
                 >
-                  Rewrite my resume →
+                  Continue to {STEP_LABELS.rewrite} →
                 </button>
               )}
             </div>
@@ -1569,6 +1660,15 @@ function SessionContent() {
                       onDismissSuggestion={dismissSuggestion}
                       onRetargetOrphanSuggestion={retargetOrphanSuggestion}
                       entryIssueBadges={entryIssueBadges}
+                      bulletAtsIssues={bulletAtsIssues}
+                      addressedAtsKeys={addressedAtsKeys}
+                      skippedAtsKeys={skippedAtsKeys}
+                      onAcceptAtsIssue={(issue) => markAtsIssuesAddressed([issue])}
+                      onIgnoreAtsBulletIssues={(issues) => {
+                        if (issues[0]) skipAtsIssue(issues[0]);
+                      }}
+                      scrollTarget={editorScrollTarget}
+                      onScrollTargetHandled={() => setEditorScrollTarget(null)}
                     />
                   </>
                 }
@@ -1623,6 +1723,8 @@ function SessionContent() {
                             onSkipIssue={skipAtsIssue}
                             onStartQueue={startIssueQueue}
                             onSendToChat={openChatForAtsIssues}
+                            initialSelectedKeys={atsGuidanceSelectedKeys}
+                            onInitialSelectionApplied={() => setAtsGuidanceSelectedKeys(null)}
                             onScrollToAnchor={scrollToIssueAnchor}
                             onApplyMechanicalFix={applyMechanicalFix}
                             mechanicalOutcomes={mechanicalOutcomes}
@@ -1631,16 +1733,16 @@ function SessionContent() {
                           />
                         ) : (
                           <p className="text-slate-600 dark:text-slate-400 text-xs py-4 text-center">
-                            Run QA &amp; Export to see your ATS score and guidance.
+                            Score your resume on the {STEP_LABELS.export} step to see ATS guidance here.
                           </p>
                         )}
                     </div>
                     <div className={cn("flex-1 flex flex-col min-h-0", sidebarTab !== "chat" && "hidden")}>
                         <ResumeChat
+                          key={chatBoot.key}
                           sessionId={sessionId}
                           tailored={tailored}
-                          prefillMessage={chatPrefill}
-                          onClearPrefill={() => setChatPrefill(null)}
+                          initialMessage={chatBoot.initial}
                           targetIssues={atsTargetIssues}
                           onTargetIssuesConsumed={() => setAtsTargetIssues([])}
                           queueBanner={
@@ -1661,10 +1763,11 @@ function SessionContent() {
               />
               {tailored && !isStreaming && (
                 <button
+                  type="button"
                   onClick={() => void goToExport()}
                   className="mt-6 px-6 py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 transition-colors"
                 >
-                  Run QA & export →
+                  Continue to {STEP_LABELS.export} →
                 </button>
               )}
             </div>
@@ -1672,15 +1775,17 @@ function SessionContent() {
 
           {step === "export" && (
             <div>
-              <h1 className="text-xl font-bold mb-1">QA & Export</h1>
-              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Final quality check before you download.</p>
+              <h1 className="text-xl font-bold mb-1">{STEP_LABELS.export}</h1>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                ATS score, export checks, and download — run scoring once before you export.
+              </p>
               {!qa && !phaseRunning && sessionLoaded && (
                 <button
                   type="button"
                   onClick={() => runCurrentPhase()}
                   className="mb-6 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300"
                 >
-                  Run QA checklist
+                  Score my resume
                 </button>
               )}
               {showProgress && (
@@ -1716,6 +1821,7 @@ function SessionContent() {
                   skippedKeys={skippedAtsKeys}
                   onSkipIssue={skipAtsIssue}
                   onStartQueue={startIssueQueue}
+                  onNavigateToBatchFix={navigateToRewriteWithAtsSelection}
                   onSendToChat={(msg, issues) => {
                     openChatForAtsIssues(msg, issues);
                     goTo("rewrite");
@@ -1732,6 +1838,7 @@ function SessionContent() {
                 <div className="mt-6 space-y-4">
                   <div>
                     <h2 className="text-slate-700 dark:text-slate-300 font-semibold mb-3 text-sm">Download your tailored resume</h2>
+                    <HumanProofreadNotice context="export" className="mb-4" />
                     <ExportButtons
                       sessionId={sessionId}
                       disabled={false}
