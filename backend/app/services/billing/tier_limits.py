@@ -89,8 +89,8 @@ def get_seed_rows() -> list[TierLimitsSeedRow]:
         TierLimitsSeedRow(
             plan_code="free",
             # Registration grant credit count (also caps cover-letter debits on free).
-            resumes_per_period=3,
-            cover_letters_per_period=3,
+            resumes_per_period=6,
+            cover_letters_per_period=6,
             searches_per_period=5,
             fit_analyses_per_period=3,
             checkups_per_period=3,

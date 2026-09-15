@@ -25,7 +25,7 @@ from app.models.session import PhaseStatus, Session
 from app.models.userinfo import UserInfo
 from app.services.checkup_service import parsed_to_tailored
 from app.services.dashboard.resume_record import _find_record_for_session
-from app.services.session_store import get_session, update_session
+from app.services.session_store import get_session, touch_session, update_session
 
 log = structlog.get_logger("session_cache")
 
@@ -282,12 +282,83 @@ async def restore_session_from_record(
     return session
 
 
+async def load_session_for_request(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    authorization: str | None,
+) -> Session | None:
+    """Load Redis session and merge durable Postgres snapshot when logged in."""
+    from app.services.session_ownership import resolve_bearer_user_id
+
+    session = await get_session(session_id)
+    uid: uuid.UUID | None = None
+    if session is not None:
+        user_id_str = await resolve_bearer_user_id(authorization, session)
+        if user_id_str:
+            try:
+                uid = uuid.UUID(user_id_str)
+            except ValueError:
+                uid = None
+    elif authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            from app.services.auth.tokens import (
+                TokenExpiredError,
+                TokenInvalidError,
+                decode_access_token,
+            )
+
+            try:
+                claims = decode_access_token(token, expected_type="access")
+                sub = str(claims.get("sub") or "")
+                if sub:
+                    uid = uuid.UUID(sub)
+            except (TokenExpiredError, TokenInvalidError, ValueError):
+                uid = None
+
+    if session is None and uid is not None:
+        session = await restore_session_from_record(
+            db,
+            session_id=session_id,
+            user_id=uid,
+        )
+        if session is not None:
+            await resolve_bearer_user_id(authorization, session)
+    elif session is not None and uid is not None:
+        session = await backfill_session_from_record_if_needed(db, session)
+
+    if session is not None:
+        await touch_session(session)
+    return session
+
+
+async def session_has_prior_ats_score(
+    db: AsyncSession,
+    *,
+    session: Session,
+    user_id: uuid.UUID,
+) -> bool:
+    """True when this live session (not a rebound dashboard row) completed Phase 4."""
+    if session.phase4_output is not None:
+        return True
+    return session.phase4_status == PhaseStatus.done
+
+
 async def backfill_session_from_record_if_needed(
     db: AsyncSession,
     session: Session,
 ) -> Session:
-    """Rehydrate missing phase3 output on a live Redis session from Postgres."""
-    if session.phase3_output is not None or not session.user_id:
+    """Rehydrate missing phase outputs on a live Redis session from Postgres."""
+    if not session.user_id:
+        return session
+    needs_backfill = (
+        session.phase3_output is None
+        or session.phase4_output is None
+        or session.phase1_output is None
+        or session.phase2_output is None
+    )
+    if not needs_backfill:
         return session
     try:
         user_id = uuid.UUID(session.user_id)
@@ -342,5 +413,8 @@ async def backfill_session_from_record_if_needed(
     if restored.phase3_output is not None:
         session.phase3_output = restored.phase3_output
         session.phase3_status = PhaseStatus.done
+    if restored.phase4_output is not None and session.phase4_output is None:
+        session.phase4_output = restored.phase4_output
+        session.phase4_status = PhaseStatus.done
     await update_session(session)
     return session

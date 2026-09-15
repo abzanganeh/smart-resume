@@ -164,9 +164,9 @@ test("phase 4 run shows ATS score and blocking issues", async ({ page }) => {
   await login(page);
 
   await page.goto(`${BASE}/session/${SESSION_ID}?step=export`);
-  await expect(page.getByRole("heading", { name: "QA & Export" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Score & Export" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Run QA checklist" }).click();
+  await page.getByRole("button", { name: "Score my resume" }).click();
 
   await expect(page.getByText("74")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/Up to 91 achievable/)).toBeVisible();

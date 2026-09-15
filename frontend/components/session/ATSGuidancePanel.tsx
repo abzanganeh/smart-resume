@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Info, MessageSquare, Sparkles, Zap } from "lucide-react";
 import { type BlockingIssue, type IssueAnchor, type QAOutput, type TailoredResumeOutput } from "@/lib/api";
 import { buildBatchChatMessage } from "@/lib/anchoredPatch";
+import { issueKey } from "@/lib/issueAnchors";
 import { canApplyMechanicalQuickWin } from "@/lib/mechanicalFix";
 import { cn } from "@/lib/utils";
 import { ScoreBreakdownPanel } from "./ScoreBreakdownPanel";
@@ -24,6 +25,15 @@ interface Props {
   onSkipIssue?: (issue: BlockingIssue) => void;
   /** Open chat to fix issues; parent tracks targets until a patch is accepted. */
   onSendToChat?: (message: string, issues: BlockingIssue[]) => void;
+  /**
+   * Export/primary flow: navigate to tailoring with these issues pre-selected in ATS Guidance
+   * instead of opening chat immediately.
+   */
+  onNavigateToBatchFix?: (issues: BlockingIssue[]) => void;
+  /** Pre-select blocking issues (e.g. after navigating from export). */
+  initialSelectedKeys?: ReadonlySet<string> | null;
+  /** Called once after initialSelectedKeys is applied to local selection state. */
+  onInitialSelectionApplied?: () => void;
   /**
    * Called when user clicks "Fix with AI" on a blocking issue (primary/export variant).
    * Receives all blocking issues with the clicked one first so the caller can drive a queue.
@@ -50,6 +60,9 @@ interface Props {
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
 const EFFORT_ORDER = { one_click: 0, user_input: 1, manual_rewrite: 2 } as const;
+
+/** Default number of blocking issues shown before the user expands the list. */
+export const DEFAULT_VISIBLE_BLOCKING_COUNT = 5;
 
 const CATEGORY_LABELS: Record<BlockingIssue["category"], string> = {
   keyword: "Keyword",
@@ -281,6 +294,7 @@ function BlockingIssueRow({
   addressed = false,
   onSendToChat,
   onStartQueue,
+  onNavigateToBatchFix,
   onScrollToAnchor,
   selected,
   onToggleSelect,
@@ -290,6 +304,7 @@ function BlockingIssueRow({
   addressed?: boolean;
   onSendToChat?: () => void;
   onStartQueue?: () => void;
+  onNavigateToBatchFix?: () => void;
   onScrollToAnchor?: (anchor: IssueAnchor) => void;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -353,8 +368,8 @@ function BlockingIssueRow({
             Addressed
           </span>
         )}
-        <span className={cn("text-sm flex-1 truncate", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-700 dark:text-slate-300")}>
-          {issue.description}
+        <span className={cn("text-sm flex-1 min-w-0 truncate", addressed ? "text-slate-600 dark:text-slate-400" : "text-slate-700 dark:text-slate-300")}>
+          {blockingIssueHeadline(issue)}
         </span>
         {open ? (
           <ChevronUp className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
@@ -365,6 +380,9 @@ function BlockingIssueRow({
       </div>
       {open && (
         <div className="px-3 py-2.5 border-t border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-900/40 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {issue.description}
+          </p>
           <p className="text-slate-600 dark:text-slate-400 text-xs">
             <span className="text-slate-600 dark:text-slate-400 font-medium">Suggestion: </span>
             {issue.suggestion}
@@ -378,11 +396,21 @@ function BlockingIssueRow({
               onClick={() => onScrollToAnchor(issue.anchor!)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
-              Jump to entry →
+              Jump to entry in editor →
             </button>
           )}
-          {/* Primary variant: queue-based flow */}
-          {onStartQueue && (
+          {/* Export: navigate to tailoring ATS tab; sidebar: queue or chat */}
+          {onNavigateToBatchFix && (
+            <button
+              type="button"
+              onClick={onNavigateToBatchFix}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/20 text-amber-700 dark:text-amber-400 text-xs font-semibold hover:bg-amber-400/20 transition-colors"
+            >
+              <Sparkles className="w-3 h-3" />
+              Fix all together →
+            </button>
+          )}
+          {onStartQueue && !onNavigateToBatchFix && (
             <button
               type="button"
               onClick={onStartQueue}
@@ -421,10 +449,41 @@ function sortBlockingIssues(issues: BlockingIssue[]): BlockingIssue[] {
   });
 }
 
-/** Stable key for deduping the same issue across quick_wins and blocking_issues. */
-export function issueKey(issue: BlockingIssue): string {
-  return `${issue.category}|${issue.description}|${issue.suggestion}`;
+/** One row per bullet anchor — metric + verb axes share the same issueKey. */
+export function dedupeBlockingIssues(issues: BlockingIssue[]): BlockingIssue[] {
+  const byKey = new Map<string, BlockingIssue>();
+  for (const issue of issues) {
+    const key = issueKey(issue);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, issue);
+      continue;
+    }
+    const impactDiff = IMPACT_ORDER[issue.impact] - IMPACT_ORDER[existing.impact];
+    if (impactDiff < 0) {
+      byKey.set(key, issue);
+      continue;
+    }
+    if (impactDiff === 0 && EFFORT_ORDER[issue.fix_effort] < EFFORT_ORDER[existing.fix_effort]) {
+      byKey.set(key, issue);
+    }
+  }
+  return sortBlockingIssues([...byKey.values()]);
 }
+
+/** One-line label for a blocking issue — shows the bullet excerpt, not just the axis name. */
+export function blockingIssueHeadline(issue: BlockingIssue): string {
+  const suggestion = issue.suggestion.trim();
+  if (suggestion.includes(":")) {
+    const afterColon = suggestion.split(":").slice(1).join(":").trim().replace(/…$/, "").trim();
+    if (afterColon.length >= 8) {
+      return afterColon.length > 96 ? `${afterColon.slice(0, 96)}…` : afterColon;
+    }
+  }
+  return issue.description;
+}
+
+export { issueKey } from "@/lib/issueAnchors";
 
 function buildQuickWinChatMessage(issue: BlockingIssue): string {
   const keywordHint =
@@ -448,6 +507,9 @@ export function ATSGuidancePanel({
   skippedKeys = new Set<string>(),
   onSkipIssue,
   onSendToChat,
+  onNavigateToBatchFix,
+  initialSelectedKeys = null,
+  onInitialSelectionApplied,
   onStartQueue,
   variant = "primary",
   staleSince = null,
@@ -461,6 +523,8 @@ export function ATSGuidancePanel({
 }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showAllBlocking, setShowAllBlocking] = useState(false);
+  const [showAddressedBlocking, setShowAddressedBlocking] = useState(false);
 
   // Reset selection when the QA output changes (new recalculation).
   const outputRef = useRef(output);
@@ -468,8 +532,19 @@ export function ATSGuidancePanel({
     if (output !== outputRef.current) {
       outputRef.current = output;
       setSelectedKeys(new Set());
+      setShowAllBlocking(false);
     }
   }, [output]);
+
+  const initialSelectionAppliedRef = useRef("");
+  useEffect(() => {
+    if (!initialSelectedKeys || initialSelectedKeys.size === 0) return;
+    const signature = [...initialSelectedKeys].sort().join("\0");
+    if (signature === initialSelectionAppliedRef.current) return;
+    initialSelectionAppliedRef.current = signature;
+    setSelectedKeys(new Set(initialSelectedKeys));
+    onInitialSelectionApplied?.();
+  }, [initialSelectedKeys, onInitialSelectionApplied]);
 
   function sendIssuesToChat(issues: BlockingIssue[], message: string) {
     if (issues.length === 0 || !onSendToChat) return;
@@ -512,18 +587,25 @@ export function ATSGuidancePanel({
   if (!output || output.ats_score === undefined) {
     return (
       <div className="text-slate-600 dark:text-slate-400 text-sm py-4">
-        Run QA or recalculate to see ATS guidance.
+        Score your resume or recalculate to see ATS guidance.
       </div>
     );
   }
 
-  const blocking = sortBlockingIssues(output.blocking_issues ?? []).filter(
+  const blockingAll = dedupeBlockingIssues(output.blocking_issues ?? []).filter(
     (issue) => !skippedKeys.has(issueKey(issue)),
   );
+  const openBlocking = blockingAll.filter((issue) => !addressedKeys.has(issueKey(issue)));
+  const addressedBlocking = blockingAll.filter((issue) => addressedKeys.has(issueKey(issue)));
+  const visibleBlocking =
+    showAllBlocking || openBlocking.length <= DEFAULT_VISIBLE_BLOCKING_COUNT
+      ? openBlocking
+      : openBlocking.slice(0, DEFAULT_VISIBLE_BLOCKING_COUNT);
+  const hiddenBlockingCount = Math.max(0, openBlocking.length - visibleBlocking.length);
   const quickWins = (output.quick_wins ?? []).filter(
     (issue) => !skippedKeys.has(issueKey(issue)),
   );
-  const addressedCount = [...quickWins, ...blocking].filter((issue) =>
+  const addressedCount = [...quickWins, ...blockingAll].filter((issue) =>
     addressedKeys.has(issueKey(issue)),
   ).length;
   const ringSize = variant === "sidebar" ? 72 : 96;
@@ -721,13 +803,30 @@ export function ATSGuidancePanel({
       )}
 
       {/* Blocking issues */}
-      {blocking.length > 0 && (
+      {blockingAll.length > 0 && (
         <section>
+          {scoreHistory.length >= 2 &&
+            (scoreHistory[scoreHistory.length - 1] ?? 0) > (scoreHistory[scoreHistory.length - 2] ?? 0) && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-500/10 dark:bg-emerald-400/10 border border-emerald-400/30 text-xs text-emerald-800 dark:text-emerald-200/90">
+              Score improved, but {openBlocking.length} bullet{openBlocking.length === 1 ? "" : "s"} still
+              need polish. Edit the bullet text (or use Fix with AI), then click Recalculate — marking
+              Accept without changing wording will not clear these.
+            </div>
+          )}
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2 leading-relaxed">
+            These come from the <strong>last ATS score</strong>, not from chat highlights. Use
+            <strong> Edit bullet</strong> under each hint to fix wording, then <strong>Recalculate</strong>.
+            <strong> Ignore</strong> dismisses a hint you disagree with.
+          </p>
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <h3 className="text-slate-700 dark:text-slate-300 font-semibold text-sm">
-              Blocking issues ({blocking.length})
+              Blocking issues ({openBlocking.length}
+              {blockingAll.length !== openBlocking.length
+                ? ` · ${addressedBlocking.length} marked fixed`
+                : ""}
+              )
             </h3>
-            {(onStartQueue || onSendToChat) && (
+            {(onStartQueue || onSendToChat || onNavigateToBatchFix) && openBlocking.length > 0 && (
               <div className="flex items-center gap-2 text-[11px]">
                 {selectedKeys.size > 0 ? (
                   <button
@@ -740,7 +839,7 @@ export function ATSGuidancePanel({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setSelectedKeys(new Set(blocking.map((issue) => issueKey(issue))))}
+                    onClick={() => setSelectedKeys(new Set(openBlocking.map((issue) => issueKey(issue))))}
                     className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
                   >
                     Select all
@@ -752,12 +851,24 @@ export function ATSGuidancePanel({
 
           {/* Batch action toolbar — shown when any issues are selected */}
           {selectedKeys.size > 0 && (() => {
-            const selectedIssues = blocking.filter((issue) => selectedKeys.has(issueKey(issue)));
+            const selectedIssues = openBlocking.filter((issue) => selectedKeys.has(issueKey(issue)));
             const hasLength = selectedIssues.some((issue) => issue.category === "length");
             const hasNonLength = selectedIssues.some((issue) => issue.category !== "length");
             const conflicting = hasLength && hasNonLength;
             return (
             <div className="mb-3 p-3 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 flex flex-col gap-2">
+              {onNavigateToBatchFix && selectedKeys.size > 1 && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-200/90">
+                  <strong>Fix all together</strong> runs one AI pass for every selected issue.
+                  <strong> Fix one by one</strong> opens chat and handles only the first issue per round
+                  (you&apos;ll repeat for the rest).
+                </p>
+              )}
+              {onNavigateToBatchFix && selectedKeys.size === 1 && (
+                <p className="text-[11px] text-amber-800 dark:text-amber-200/90">
+                  Fix all together opens tailoring with this issue selected — click Fix all together there to run.
+                </p>
+              )}
               {conflicting && (
                 <p className="text-[11px] text-amber-700 dark:text-amber-300/80">
                   Length issues can't be fixed while adding content — deselect the Length issue or fix it separately after other edits are done.
@@ -779,23 +890,30 @@ export function ATSGuidancePanel({
                 >
                   <MessageSquare className="w-3 h-3" />
                   Fix one by one
+                  {selectedKeys.size > 1 ? ` (1/${selectedKeys.size})` : ""}
                 </button>
               )}
-              {onSendToChat && (
+              {(onSendToChat || onNavigateToBatchFix) && (
                 <button
                   type="button"
                   onClick={() => {
                     if (selectedIssues.length === 0) return;
-                    sendIssuesToChat(
-                      selectedIssues,
-                      buildBatchChatMessage(selectedIssues, tailored),
-                    );
+                    if (onNavigateToBatchFix) {
+                      onNavigateToBatchFix(selectedIssues);
+                    } else if (onSendToChat) {
+                      sendIssuesToChat(
+                        selectedIssues,
+                        buildBatchChatMessage(selectedIssues, tailored),
+                      );
+                    }
                     setSelectedKeys(new Set());
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 dark:bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-800 dark:text-amber-200 text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold transition-colors"
                 >
-                  <MessageSquare className="w-3 h-3" />
-                  Fix together
+                  <Sparkles className="w-3 h-3" />
+                  {onNavigateToBatchFix
+                    ? `Fix all together${selectedKeys.size > 1 ? ` (${selectedKeys.size})` : ""} →`
+                    : `Fix together${selectedKeys.size > 1 ? ` (${selectedKeys.size})` : ""}`}
                 </button>
               )}
               </div>
@@ -803,26 +921,69 @@ export function ATSGuidancePanel({
             );
           })()}
 
+          {hiddenBlockingCount > 0 && (
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
+              Showing {visibleBlocking.length} of {openBlocking.length}.{" "}
+              <button
+                type="button"
+                onClick={() => setShowAllBlocking(true)}
+                className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
+              >
+                Show all
+              </button>
+            </p>
+          )}
+          {showAllBlocking && openBlocking.length > DEFAULT_VISIBLE_BLOCKING_COUNT && (
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
+              Showing all {openBlocking.length} issues.{" "}
+              <button
+                type="button"
+                onClick={() => setShowAllBlocking(false)}
+                className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
+              >
+                Show fewer
+              </button>
+            </p>
+          )}
+
+          {openBlocking.length === 0 && addressedBlocking.length > 0 && (
+            <p className="text-xs text-emerald-700 dark:text-emerald-300 mb-2">
+              All blocking items are marked fixed. Recalculate ATS score to confirm they clear, or open
+              marked fixed below to review.
+            </p>
+          )}
+
           <div className="space-y-1.5">
-            {blocking.map((issue, renderIdx) => {
+            {visibleBlocking.map((issue, renderIdx) => {
               const key = issueKey(issue);
-              const addressed = addressedKeys.has(key);
               return (
               <BlockingIssueRow
                 key={key}
                 issue={issue}
-                addressed={addressed}
+                addressed={false}
                 defaultOpen={renderIdx === 0 && variant === "primary" && selectedKeys.size === 0}
                 selected={selectedKeys.has(key)}
                 onToggleSelect={
-                  (onStartQueue || onSendToChat)
+                  (onStartQueue || onSendToChat || onNavigateToBatchFix)
                     ? () => toggleBlockingSelection(key)
                     : undefined
                 }
                 onSendToChat={onSendToChat ? () => fixSingleBlockingIssue(issue) : undefined}
-                onStartQueue={onStartQueue
+                onNavigateToBatchFix={onNavigateToBatchFix
                   ? () => {
-                      const others = blocking.filter((i) => issueKey(i) !== key);
+                      const selectedIssues = openBlocking.filter((candidate) =>
+                        selectedKeys.has(issueKey(candidate)),
+                      );
+                      const issues =
+                        selectedIssues.length > 0 && selectedKeys.has(key)
+                          ? selectedIssues
+                          : [issue];
+                      onNavigateToBatchFix(issues);
+                    }
+                  : undefined}
+                onStartQueue={onStartQueue && !onNavigateToBatchFix
+                  ? () => {
+                      const others = openBlocking.filter((i) => issueKey(i) !== key);
                       onStartQueue([issue, ...others]);
                     }
                   : undefined}
@@ -830,6 +991,33 @@ export function ATSGuidancePanel({
               />
             );})}
           </div>
+
+          {addressedBlocking.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-300 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setShowAddressedBlocking((v) => !v)}
+                className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              >
+                {showAddressedBlocking ? "Hide" : "Show"} {addressedBlocking.length} marked fixed
+              </button>
+              {showAddressedBlocking && (
+                <div className="space-y-1.5 mt-2">
+                  {addressedBlocking.map((issue) => {
+                    const key = issueKey(issue);
+                    return (
+                      <BlockingIssueRow
+                        key={key}
+                        issue={issue}
+                        addressed
+                        onScrollToAnchor={onScrollToAnchor}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
     </div>

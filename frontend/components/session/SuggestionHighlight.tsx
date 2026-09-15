@@ -7,6 +7,7 @@ import {
   toneForSuggestion,
   type HighlightTone,
 } from "@/lib/suggestionHighlight";
+import { findUniqueExperienceIndex } from "@/lib/applyResumePatch";
 import type { TailoredResumeOutput } from "@/lib/api";
 import { resolveEmployerTargets } from "@/lib/mechanicalFix";
 import type { ResumeSuggestion } from "@/lib/suggestions";
@@ -401,6 +402,8 @@ export function OrphanSuggestionCard({
   const targets = resolveEmployerTargets(resume);
   const wrongCompany =
     suggestion.patch.section === "experience" ? suggestion.patch.company?.trim() : "";
+  const companyOnResume =
+    !!wrongCompany && findUniqueExperienceIndex(resume.experience, wrongCompany) >= 0;
 
   return (
     <HighlightBox tone={tone === "none" ? "pending" : tone}>
@@ -409,11 +412,12 @@ export function OrphanSuggestionCard({
       </p>
       {!placeable && (
         <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
-          The AI suggested a change to something that isn&apos;t on your resume. Point it at a real
-          entry, or dismiss it.
+          {companyOnResume
+            ? "The AI pointed at the right employer but couldn't match the exact bullet text. Use Add to to place it on a role, or dismiss and run Fix together again."
+            : "The AI suggested a change to something that isn't on your resume. Point it at a real entry, or dismiss it."}
         </p>
       )}
-      {wrongCompany && !placeable && (
+      {wrongCompany && !placeable && !companyOnResume && (
         <p className="text-xs text-amber-800 dark:text-amber-200/90 mb-2">
           Suggested for &quot;{wrongCompany}&quot; — no such role on your resume.
         </p>

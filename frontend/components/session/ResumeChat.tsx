@@ -106,8 +106,8 @@ interface Props {
   tailored: TailoredResumeOutput | null;
   /** Called with every batch of patches returned by the AI — parent turns them into inline suggestions. */
   onSuggestPatches: (patches: ResumePatch[]) => void;
-  prefillMessage?: string | null;
-  onClearPrefill?: () => void;
+  /** Seed the input on mount (survives React Strict Mode remounts when paired with a changing `key`). */
+  initialMessage?: string;
   targetIssues?: BlockingIssue[];
   onTargetIssuesConsumed?: () => void;
   queueBanner?: QueueBanner | null;
@@ -119,14 +119,13 @@ export function ResumeChat({
   sessionId,
   tailored,
   onSuggestPatches,
-  prefillMessage,
-  onClearPrefill,
+  initialMessage = "",
   targetIssues = [],
   onTargetIssuesConsumed,
   queueBanner,
 }: Props) {
   const [messages, setMessages] = useState<MessageEntry[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialMessage);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -136,15 +135,14 @@ export function ResumeChat({
   }, [messages, loading]);
 
   useEffect(() => {
-    if (!prefillMessage) return;
-    setInput(prefillMessage);
-    onClearPrefill?.();
+    if (!initialMessage) return;
+    setInput(initialMessage);
     setTimeout(() => {
       inputRef.current?.focus();
-      const len = prefillMessage.length;
+      const len = initialMessage.length;
       inputRef.current?.setSelectionRange(len, len);
     }, 50);
-  }, [prefillMessage, onClearPrefill]);
+  }, [initialMessage]);
 
   function buildHistory(): ChatMessage[] {
     return messages.map((m) => ({ role: m.role, content: m.content }));

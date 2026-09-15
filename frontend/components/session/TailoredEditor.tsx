@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import {
   patchTailoredResume,
+  type BlockingIssue,
+  type IssueAnchor,
   type PhaseRunScope,
   type TailoredResumeOutput,
 } from "@/lib/api";
@@ -67,7 +69,15 @@ import {
 import { EntryIssueBadgePill } from "./EntryIssueBadge";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { filterStaleRewriteNotes } from "@/lib/filterRewriteNotes";
-import { entryAnchorKey, resumeAnchorDomId, type EntryIssueBadge } from "@/lib/issueAnchors";
+import {
+  bulletAnchorKey,
+  entryAnchorKey,
+  resumeAnchorDomId,
+  scrollToResumeAnchorWithRetry,
+  type EntryIssueBadge,
+} from "@/lib/issueAnchors";
+import { BulletAtsHints } from "./BulletAtsHints";
+import { HumanProofreadNotice } from "./HumanProofreadNotice";
 
 interface Props {
   initial: TailoredResumeOutput;
@@ -87,6 +97,15 @@ interface Props {
   onDismissSuggestion?: (id: string) => void;
   onRetargetOrphanSuggestion?: (id: string, experienceIndex: number) => void;
   entryIssueBadges?: Record<string, EntryIssueBadge>;
+  bulletAtsIssues?: Record<string, BlockingIssue[]>;
+  addressedAtsKeys?: ReadonlySet<string>;
+  skippedAtsKeys?: ReadonlySet<string>;
+  /** Called after the user saves a real bullet text change (not on Ignore). */
+  onAcceptAtsIssue?: (issue: BlockingIssue) => void;
+  onIgnoreAtsBulletIssues?: (issues: BlockingIssue[]) => void;
+  /** Scroll + expand the matching resume entry (from ATS “Jump to entry”). */
+  scrollTarget?: IssueAnchor | null;
+  onScrollTargetHandled?: () => void;
 }
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -199,12 +218,26 @@ function InlineText({
 
 function BulletList({
   bullets,
+  section,
+  entryIndex,
+  bulletAtsIssues,
+  addressedAtsKeys,
+  skippedAtsKeys,
+  onAcceptAtsIssue,
+  onIgnoreAtsBulletIssues,
   onSaveBullet,
   onDeleteBullet,
   onAddBullet,
   addPlaceholder = "Add a bullet…",
 }: {
   bullets: string[];
+  section?: IssueAnchor["section"];
+  entryIndex?: number;
+  bulletAtsIssues?: Record<string, BlockingIssue[]>;
+  addressedAtsKeys?: ReadonlySet<string>;
+  skippedAtsKeys?: ReadonlySet<string>;
+  onAcceptAtsIssue?: (issue: BlockingIssue) => void;
+  onIgnoreAtsBulletIssues?: (issues: BlockingIssue[]) => void;
   onSaveBullet: (idx: number, text: string) => Promise<void>;
   onDeleteBullet: (idx: number) => Promise<void>;
   onAddBullet: (text: string) => Promise<void>;
@@ -217,11 +250,20 @@ function BulletList({
   const [saving, setSaving] = useState(false);
 
   async function commitEdit(idx: number) {
+    const original = bullets[idx].trim();
     const text = (drafts[idx] ?? bullets[idx]).trim();
+    const hintKey =
+      section !== undefined && entryIndex !== undefined
+        ? bulletAnchorKey(section, entryIndex, idx)
+        : null;
+    const hints = hintKey ? bulletAtsIssues?.[hintKey] ?? [] : [];
     setSaving(true);
     await onSaveBullet(idx, text);
     setSaving(false);
     setEditingIdx(null);
+    if (text !== original && hints.length > 0 && onAcceptAtsIssue) {
+      onAcceptAtsIssue(hints[0]!);
+    }
   }
 
   async function commitDelete(idx: number) {
@@ -239,60 +281,84 @@ function BulletList({
     setAdding(false);
   }
 
+  function startEdit(idx: number, text: string) {
+    setDrafts((p) => ({ ...p, [idx]: text }));
+    setEditingIdx(idx);
+  }
+
   return (
     <div className="space-y-1.5">
-      {bullets.map((b, idx) => (
-        <div key={idx} className="group flex items-start gap-2">
-          {editingIdx === idx ? (
-            <div className="flex-1 space-y-1.5">
-              <textarea
-                autoFocus
-                value={drafts[idx] ?? b}
-                onChange={(e) => setDrafts((p) => ({ ...p, [idx]: e.target.value }))}
-                rows={2}
-                className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => commitEdit(idx)}
-                  disabled={saving}
-                  className="flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-50"
-                >
-                  <Save className="w-3 h-3" />
-                  {saving ? "…" : "Save"}
-                </button>
-                <button
-                  onClick={() => setEditingIdx(null)}
-                  className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
-                >
-                  Cancel
-                </button>
+      {bullets.map((b, idx) => {
+        const hintKey =
+          section !== undefined && entryIndex !== undefined
+            ? bulletAnchorKey(section, entryIndex, idx)
+            : null;
+        const hints = hintKey ? bulletAtsIssues?.[hintKey] ?? [] : [];
+
+        return (
+        <div key={idx} className="space-y-1">
+          <div className="group flex items-start gap-2">
+            {editingIdx === idx ? (
+              <div className="flex-1 space-y-1.5">
+                <textarea
+                  autoFocus
+                  value={drafts[idx] ?? b}
+                  onChange={(e) => setDrafts((p) => ({ ...p, [idx]: e.target.value }))}
+                  rows={2}
+                  className="w-full bg-white dark:bg-slate-900 border border-amber-400/50 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => commitEdit(idx)}
+                    disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-400 text-slate-900 text-xs font-semibold hover:bg-amber-300 disabled:opacity-50"
+                  >
+                    <Save className="w-3 h-3" />
+                    {saving ? "…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setEditingIdx(null)}
+                    className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs hover:bg-slate-300 dark:hover:bg-slate-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <span className="text-slate-600 dark:text-slate-400 mt-1 shrink-0">•</span>
-              <p className="flex-1 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">{b}</p>
-              <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition shrink-0">
-                <button
-                  onClick={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
-                  className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
-                  title="Edit bullet"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => commitDelete(idx)}
-                  className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-red-400"
-                  title="Delete bullet"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </>
+            ) : (
+              <>
+                <span className="text-slate-600 dark:text-slate-400 mt-1 shrink-0">•</span>
+                <p className="flex-1 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">{b}</p>
+                <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition shrink-0">
+                  <button
+                    onClick={() => startEdit(idx, b)}
+                    className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-400"
+                    title="Edit bullet"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => commitDelete(idx)}
+                    className="p-1 rounded text-slate-600 dark:text-slate-400 hover:text-red-400"
+                    title="Delete bullet"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {hints.length > 0 && onIgnoreAtsBulletIssues && (
+            <BulletAtsHints
+              issues={hints}
+              addressedKeys={addressedAtsKeys ?? new Set()}
+              skippedKeys={skippedAtsKeys ?? new Set()}
+              onEditBullet={() => startEdit(idx, b)}
+              onIgnore={onIgnoreAtsBulletIssues}
+            />
           )}
         </div>
-      ))}
+        );
+      })}
 
       {adding ? (
         <div className="space-y-1.5 pt-1">
@@ -337,6 +403,13 @@ function BulletList({
 function ScopedBulletList({
   bullets,
   company,
+  section,
+  entryIndex,
+  bulletAtsIssues,
+  addressedAtsKeys,
+  skippedAtsKeys,
+  onAcceptAtsIssue,
+  onIgnoreAtsBulletIssues,
   phaseRunning,
   suggestions = [],
   onAcceptSuggestion,
@@ -349,6 +422,13 @@ function ScopedBulletList({
 }: {
   bullets: string[];
   company: string;
+  section?: IssueAnchor["section"];
+  entryIndex?: number;
+  bulletAtsIssues?: Record<string, BlockingIssue[]>;
+  addressedAtsKeys?: ReadonlySet<string>;
+  skippedAtsKeys?: ReadonlySet<string>;
+  onAcceptAtsIssue?: (issue: BlockingIssue) => void;
+  onIgnoreAtsBulletIssues?: (issues: BlockingIssue[]) => void;
   phaseRunning?: boolean;
   suggestions?: ResumeSuggestion[];
   onAcceptSuggestion?: (id: string) => void;
@@ -366,11 +446,20 @@ function ScopedBulletList({
   const [saving, setSaving] = useState(false);
 
   async function commitEdit(idx: number) {
+    const original = bullets[idx].trim();
     const text = (drafts[idx] ?? bullets[idx]).trim();
+    const hintKey =
+      section !== undefined && entryIndex !== undefined
+        ? bulletAnchorKey(section, entryIndex, idx)
+        : null;
+    const hints = hintKey ? bulletAtsIssues?.[hintKey] ?? [] : [];
     setSaving(true);
     await onSaveBullet(idx, text);
     setSaving(false);
     setEditingIdx(null);
+    if (text !== original && hints.length > 0 && onAcceptAtsIssue) {
+      onAcceptAtsIssue(hints[0]!);
+    }
   }
 
   async function commitDelete(idx: number) {
@@ -388,10 +477,23 @@ function ScopedBulletList({
     setAdding(false);
   }
 
+  function startEdit(idx: number, text: string) {
+    setDrafts((p) => ({ ...p, [idx]: text }));
+    setEditingIdx(idx);
+  }
+
   return (
     <div className="space-y-1.5">
-      {bullets.map((b, idx) => (
-        <div key={idx} className="group flex items-start gap-2">
+      {bullets.map((b, idx) => {
+        const hintKey =
+          section !== undefined && entryIndex !== undefined
+            ? bulletAnchorKey(section, entryIndex, idx)
+            : null;
+        const hints = hintKey ? bulletAtsIssues?.[hintKey] ?? [] : [];
+
+        return (
+        <div key={idx} className="space-y-1">
+          <div className="group flex items-start gap-2">
           {editingIdx === idx ? (
             <div className="flex-1 space-y-1.5">
               <textarea
@@ -441,7 +543,7 @@ function ScopedBulletList({
                   onAccept={(id) => onAcceptSuggestion?.(id)}
                   onReject={(id) => onRejectSuggestion?.(id)}
                   onRegen={() => onRegenBullet(idx)}
-                  onEdit={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
+                  onEdit={() => startEdit(idx, b)}
                   onDelete={() => commitDelete(idx)}
                 />
               );
@@ -455,13 +557,24 @@ function ScopedBulletList({
                 onAccept={() => {}}
                 onReject={() => {}}
                 onRegen={() => onRegenBullet(idx)}
-                onEdit={() => { setDrafts((p) => ({ ...p, [idx]: b })); setEditingIdx(idx); }}
+                onEdit={() => startEdit(idx, b)}
                 onDelete={() => commitDelete(idx)}
               />
             );
           })()}
+          </div>
+          {hints.length > 0 && onIgnoreAtsBulletIssues && (
+            <BulletAtsHints
+              issues={hints}
+              addressedKeys={addressedAtsKeys ?? new Set()}
+              skippedKeys={skippedAtsKeys ?? new Set()}
+              onEditBullet={() => startEdit(idx, b)}
+              onIgnore={onIgnoreAtsBulletIssues}
+            />
+          )}
         </div>
-      ))}
+        );
+      })}
 
       {adding ? (
         <div className="space-y-1.5 pt-1">
@@ -522,7 +635,7 @@ function hasGuardRewriteNotes(notes: string[]): boolean {
   });
 }
 
-export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges = {} }: Props) {
+export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions = [], onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges = {}, bulletAtsIssues, addressedAtsKeys, skippedAtsKeys, onAcceptAtsIssue, onIgnoreAtsBulletIssues, scrollTarget, onScrollTargetHandled }: Props) {
   function acceptSug(id: string) { onAcceptSuggestion?.(id); }
   function rejectSug(id: string) { onRejectSuggestion?.(id); }
 
@@ -618,6 +731,22 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
     );
     if (pendingEdu) setExpandedEdu(pendingEdu.institution);
   }, [suggestions, data.experience, data.education]);
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+
+    if (scrollTarget.section === "experience") {
+      const exp = data.experience[scrollTarget.entry_index];
+      if (exp) setExpandedExp(exp.company);
+    } else if (scrollTarget.section === "education") {
+      const edu = data.education[scrollTarget.entry_index];
+      if (edu) setExpandedEdu(edu.institution);
+    }
+
+    scrollToResumeAnchorWithRetry(scrollTarget, () => {
+      onScrollTargetHandled?.();
+    });
+  }, [scrollTarget, data.experience, data.education, onScrollTargetHandled]);
 
   async function patch(payload: Record<string, unknown>) {
     const result = await patchTailoredResume(sessionId, payload);
@@ -1140,6 +1269,7 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
 
   return (
     <div className="space-y-8">
+      <HumanProofreadNotice context="editor" />
       <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/40 dark:bg-slate-800/40 px-4 py-3 text-xs text-slate-700 dark:text-slate-300">
         <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Edit your resume directly — no chat required</p>
         <p>
@@ -1954,6 +2084,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                       <ScopedBulletList
                         bullets={exp.bullets}
                         company={exp.company}
+                        section="experience"
+                        entryIndex={expIndex}
+                        bulletAtsIssues={bulletAtsIssues}
+                        addressedAtsKeys={addressedAtsKeys}
+                        skippedAtsKeys={skippedAtsKeys}
+                        onAcceptAtsIssue={onAcceptAtsIssue}
+                        onIgnoreAtsBulletIssues={onIgnoreAtsBulletIssues}
                         phaseRunning={phaseRunning}
                         suggestions={suggestions}
                         onAcceptSuggestion={acceptSug}
@@ -2687,6 +2824,13 @@ export function TailoredEditor({ initial, sessionId, editorSyncKey = 0, onSaved,
                   ) : (
                     <BulletList
                       bullets={bullets}
+                      section="projects"
+                      entryIndex={i}
+                      bulletAtsIssues={bulletAtsIssues}
+                      addressedAtsKeys={addressedAtsKeys}
+                      skippedAtsKeys={skippedAtsKeys}
+                      onAcceptAtsIssue={onAcceptAtsIssue}
+                      onIgnoreAtsBulletIssues={onIgnoreAtsBulletIssues}
                       onSaveBullet={(idx, text) => saveProjectBullet(i, idx, text)}
                       onDeleteBullet={(idx) => deleteProjectBullet(i, idx)}
                       onAddBullet={(text) => addProjectBullet(i, text)}

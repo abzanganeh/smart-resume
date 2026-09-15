@@ -6,9 +6,10 @@ interface Props {
   message: string;
   onRerun: () => void;
   running?: boolean;
+  rerunLabel?: string;
 }
 
-export function StaleBanner({ message, onRerun, running }: Props) {
+export function StaleBanner({ message, onRerun, running, rerunLabel = "Re-run" }: Props) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-500/10 dark:bg-amber-400/10 border border-amber-400/30 rounded-lg px-4 py-3 mb-6">
       <div className="flex items-start gap-2 flex-1 text-amber-800 dark:text-amber-200 text-sm">
@@ -21,7 +22,7 @@ export function StaleBanner({ message, onRerun, running }: Props) {
         disabled={running}
         className="px-4 py-2 rounded-lg bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300 disabled:opacity-50 whitespace-nowrap"
       >
-        {running ? "Running…" : "Re-run"}
+        {running ? "Running…" : rerunLabel}
       </button>
     </div>
   );

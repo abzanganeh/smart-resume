@@ -11,7 +11,7 @@ describe("FREE_TIER_CREDIT_ACTIONS", () => {
     const labels = FREE_TIER_CREDIT_ACTIONS.map((row) => row.action);
     assert.deepEqual(labels, [
       "Tailored rewrite",
-      "QA & export (ATS score)",
+      "Score & export (ATS score)",
       "Cover letter generation",
       "Coached story interview",
       "Story resume regenerate",
@@ -31,7 +31,7 @@ describe("FREE_TIER_STARTING_CREDITS", () => {
     // offer we do not honour.  Backend seed: tier_limits.py free
     // resumes_per_period = 3, asserted by
     // backend/tests/unit/test_tier_limits_config.py.
-    assert.equal(FREE_TIER_STARTING_CREDITS, 3);
+    assert.equal(FREE_TIER_STARTING_CREDITS, 6);
   });
 });
 

@@ -248,7 +248,7 @@ test.describe("pricing", () => {
 test.describe("progressive disclosure", () => {
   test("keeps the detail collapsed until asked for", async ({ page }) => {
     const answer = page.getByText(
-      /8-point QA checklist runs before every export/i,
+      /8-point export checklist runs before every download/i,
     )
     await expect(answer).toBeHidden()
 

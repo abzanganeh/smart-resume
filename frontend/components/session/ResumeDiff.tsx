@@ -1,6 +1,7 @@
 "use client";
 
 import { type PhaseRunScope, type TailoredResumeOutput } from "@/lib/api";
+import type { BlockingIssue, IssueAnchor } from "@/lib/api";
 import type { EntryIssueBadge } from "@/lib/issueAnchors";
 import { TailoredEditor } from "./TailoredEditor";
 import type { ResumeSuggestion } from "@/lib/suggestions";
@@ -28,9 +29,16 @@ interface Props {
   onDismissSuggestion?: (id: string) => void;
   onRetargetOrphanSuggestion?: (id: string, experienceIndex: number) => void;
   entryIssueBadges?: Record<string, EntryIssueBadge>;
+  bulletAtsIssues?: Record<string, BlockingIssue[]>;
+  addressedAtsKeys?: ReadonlySet<string>;
+  skippedAtsKeys?: ReadonlySet<string>;
+  onAcceptAtsIssue?: (issue: BlockingIssue) => void;
+  onIgnoreAtsBulletIssues?: (issues: BlockingIssue[]) => void;
+  scrollTarget?: IssueAnchor | null;
+  onScrollTargetHandled?: () => void;
 }
 
-export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges }: Props) {
+export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRevision = 0, onEdited, onVersionSnapshot, onScopedRun, phaseRunning, suggestionDraft, onClearSuggestion, suggestions, onAcceptSuggestion, onAcceptAllSuggestions, onRejectSuggestion, onDismissSuggestion, onRetargetOrphanSuggestion, entryIssueBadges, bulletAtsIssues, addressedAtsKeys, skippedAtsKeys, onAcceptAtsIssue, onIgnoreAtsBulletIssues, scrollTarget, onScrollTargetHandled }: Props) {
   if (streaming && !tailored) {
     return (
       <div className="space-y-3">
@@ -81,6 +89,13 @@ export function ResumeDiff({ tailored, streaming, costInfo, sessionId, editorRev
         onDismissSuggestion={onDismissSuggestion}
         onRetargetOrphanSuggestion={onRetargetOrphanSuggestion}
         entryIssueBadges={entryIssueBadges}
+        bulletAtsIssues={bulletAtsIssues}
+        addressedAtsKeys={addressedAtsKeys}
+        skippedAtsKeys={skippedAtsKeys}
+        onAcceptAtsIssue={onAcceptAtsIssue}
+        onIgnoreAtsBulletIssues={onIgnoreAtsBulletIssues}
+        scrollTarget={scrollTarget}
+        onScrollTargetHandled={onScrollTargetHandled}
       />
     </div>
   );
