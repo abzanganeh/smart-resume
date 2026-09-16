@@ -20,7 +20,7 @@
 
 export const FREE_USER_FIXTURE = {
   subscription: null,
-  credit_balance: 3,
+  credit_balance: 6,
 }
 
 export const SUBSCRIBED_USER_FIXTURE = {
@@ -89,8 +89,8 @@ function runTests() {
     const props = deriveWidgetProps(FREE_USER_FIXTURE)
     assert(props.kind === "free", "free user → kind is free")
     assert(
-      "credits" in props && props.credits === 3,
-      "free user → shows correct credit count (3)",
+      "credits" in props && props.credits === 6,
+      "free user → shows correct credit count (6)",
     )
   }
 

@@ -29,7 +29,7 @@ describe("FREE_TIER_STARTING_CREDITS", () => {
     // The landing hero and signup copy render this number whenever
     // /api/billing/free-tier is unreachable, so a stale value advertises an
     // offer we do not honour.  Backend seed: tier_limits.py free
-    // resumes_per_period = 3, asserted by
+    // resumes_per_period = 6, asserted by
     // backend/tests/unit/test_tier_limits_config.py.
     assert.equal(FREE_TIER_STARTING_CREDITS, 6);
   });

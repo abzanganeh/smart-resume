@@ -17,7 +17,7 @@ const baseUser: BackendUser = {
   email: "a@b.com",
   display_name: "Test",
   tier: "free",
-  credit_balance: 3,
+  credit_balance: 6,
   auth_provider: "email",
   email_verified_at: null,
   has_totp: false,
