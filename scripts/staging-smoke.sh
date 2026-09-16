@@ -304,8 +304,8 @@ for msg in data.get('messages', []):
               green "PASS  Corpus search returns jobs on localhost staging ($job_count)"
               pass=$((pass + 1))
             else
-              yellow "SKIP  Corpus search job rows on localhost — run: docker compose exec backend uv run python scripts/seed_staging_job_cache.py"
-              skip=$((skip + 1))
+              red "FAIL  Corpus search returned 0 jobs on localhost — re-run ./scripts/desktop-staging-local-sim-up.sh (seeds job_cache)"
+              fail=$((fail + 1))
             fi
           fi
         else

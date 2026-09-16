@@ -309,3 +309,49 @@ async def test_free_user_corpus_search_after_preferred_titles(
     body = r.json()
     assert body["total"] >= 1
     assert body["source"] == "corpus"
+
+
+@pytest.mark.asyncio
+async def test_free_user_sparse_corpus_skips_hirebase_without_402(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Free tier with corpus hits must not 402 when Hirebase would charge."""
+    token, user_id = await _register(app_client, db_session)
+    await _seed_master_resume(db_session, user_id)
+    await _seed_corpus_job(db_session)
+
+    from app.models.user import User
+    from sqlalchemy import select
+
+    user = (
+        await db_session.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    ).scalar_one()
+    set_preferred_titles(user, ["Mobile Developer"])
+    await db_session.commit()
+
+    from app.config import settings
+
+    with (
+        patch.object(settings, "HIREBASE_API_KEY", "hb_test_sparse_corpus"),
+        patch(
+            "app.services.jobs.hirebase_client.search",
+            new_callable=AsyncMock,
+        ) as mock_search,
+        patch(
+            "app.services.jobs.job_service.settings.JOB_SEARCH_DB_MIN_RESULTS",
+            5,
+        ),
+    ):
+        r = await app_client.post(
+            "/api/jobs/search",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"query": "Mobile Developer", "page": 1, "page_size": 20},
+        )
+        mock_search.assert_not_called()
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] >= 1
+    assert body["source"] == "corpus"
+    assert body["jobs"]

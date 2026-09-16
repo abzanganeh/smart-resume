@@ -33,6 +33,7 @@ from app.services.billing.exceptions import (
     PlanLimitReachedError,
     SubscriptionRequiredError,
 )
+from app.services.admin.feature_unlocks import user_has_feature_unlock
 from app.services.billing.quota import QuotaAction, check_and_increment_quota
 from app.services.jobs.job_service import (
     get_job_by_id,
@@ -298,6 +299,10 @@ async def search_jobs(
 ):
     await _require_job_search_access(db, user=user, expand=body.expand)
     filters = _merge_filters(user, body.filters)
+    has_subscription = await _has_active_subscription(db, user_id=user.id)
+    allow_hirebase = has_subscription or await user_has_feature_unlock(
+        db, user_id=user.id, feature="job_search"
+    )
     jobs, total, stale, message, charge, source = await run_keyword_search(
         db,
         user_id=user.id,
@@ -308,6 +313,7 @@ async def search_jobs(
         page_size=body.page_size,
         blocked_companies=_blocked(user),
         expand=body.expand,
+        allow_hirebase=allow_hirebase,
     )
     await _require_subscription_quota(
         db, user=user, action=QuotaAction.job_search, charge=charge
