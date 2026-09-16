@@ -319,7 +319,8 @@ Checklist:
 - [ ] Extension OAuth callback registered; sign-in from extension yields valid backend token
 - [ ] Capture JD on Greenhouse → tailor in web app → return to apply form
 - [ ] Autofill overlay lists recent tailored session for current host (`GET /api/job-descriptions/recent-tailored`)
-- [ ] Autofill payload for Greenhouse includes `job_application[email]` selectors; LinkedIn/Lever/Ashby return heuristic keys with empty selectors
+- [ ] Autofill payload for Greenhouse includes `job_application[email]` selectors (**day-one primary ATS**)
+- [ ] **Beta ATS (heuristic only, not day-one blockers):** Lever, Ashby, LinkedIn, and unknown hosts return contact field keys with **empty selectors** — the extension universal fill engine matches labels/ARIA heuristically. Empty selectors are expected; do not fail staging on Lever/Ashby/LinkedIn autofill quality.
 - [ ] 409 before tailor shows “Resume not tailored yet” in extension (`resume_not_tailored_yet`)
 - [ ] Autofill payload never includes resume summary text in contact fields
 - [ ] Flint “Open in Flint” handoff (`Flint/docs/STRATEGY_B_E2E_RUNBOOK.md`)
