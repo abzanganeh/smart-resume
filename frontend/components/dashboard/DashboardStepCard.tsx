@@ -28,6 +28,9 @@ export interface DashboardStepCardProps {
   primaryLabel?: string
   secondaryHref?: string
   secondaryLabel?: string
+  /** Optional third CTA (e.g. jump to tailored resumes list). */
+  tertiaryHref?: string
+  tertiaryLabel?: string
   /**
    * On a prerequisite-locked step, optional escape hatch so power users can
    * jump ahead without implying the recommended path is complete.
@@ -57,6 +60,8 @@ export function DashboardStepCard({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
+  tertiaryHref,
+  tertiaryLabel,
   skipHref,
   skipLabel,
   expandedWhenReady = false,
@@ -108,7 +113,7 @@ export function DashboardStepCard({
           </p>
         </div>
         {primaryHref && primaryLabel && (
-          <div className="flex flex-row gap-2 shrink-0 w-full sm:w-auto">
+          <div className="flex flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
             <Link
               href={primaryHref}
               target={isExternal(primaryHref) ? "_blank" : undefined}
@@ -123,6 +128,14 @@ export function DashboardStepCard({
                 className="flex-1 sm:flex-none min-h-[40px] px-4 py-2.5 sm:py-1.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm sm:text-xs text-center inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
               >
                 {secondaryLabel}
+              </Link>
+            )}
+            {tertiaryHref && tertiaryLabel && (
+              <Link
+                href={tertiaryHref}
+                className="flex-1 sm:flex-none min-h-[40px] px-4 py-2.5 sm:py-1.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-lg transition-colors text-sm sm:text-xs text-center inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              >
+                {tertiaryLabel}
               </Link>
             )}
           </div>
@@ -175,7 +188,7 @@ export function DashboardStepCard({
         </div>
       </div>
       {!locked && primaryHref && primaryLabel && (
-        <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
           <Link
             href={primaryHref}
             target={isExternal(primaryHref) ? "_blank" : undefined}
@@ -190,6 +203,14 @@ export function DashboardStepCard({
               className="px-5 py-2.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-xl transition-colors text-sm text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
             >
               {secondaryLabel}
+            </Link>
+          )}
+          {tertiaryHref && tertiaryLabel && (
+            <Link
+              href={tertiaryHref}
+              className="px-5 py-2.5 border border-slate-400 dark:border-slate-600 hover:border-slate-500 text-slate-700 dark:text-slate-200 rounded-xl transition-colors text-sm text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+            >
+              {tertiaryLabel}
             </Link>
           )}
         </div>

@@ -63,6 +63,16 @@ export async function createSession(): Promise<{ session_id: string }> {
   return request("/api/sessions", { method: "POST" });
 }
 
+export async function saveApplicationLabel(
+  sessionId: string,
+  displayName: string,
+): Promise<{ ok: boolean; display_name: string }> {
+  return request(`/api/sessions/${sessionId}/application`, {
+    method: "PATCH",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
 export interface BulletFixPayload {
   original: string;
   suggestion: string;
@@ -96,6 +106,8 @@ export async function checkSession(
   /** Deterministic ATS score for the original resume (same rubric as Phase 4). */
   original_ats_score?: number | null;
   has_user_info?: boolean;
+  jd_raw?: string;
+  application_display_name?: string | null;
   resume_parsed?: ParsedResume | null;
   user_claimed_keywords: string[];
   user_extra_notes: string;

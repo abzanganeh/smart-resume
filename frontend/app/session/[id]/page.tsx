@@ -430,6 +430,9 @@ function SessionContent() {
   const goTo = (s: Step) => {
     setStep(s);
     router.push(`/session/${sessionId}?step=${s}`, { scroll: false });
+    // Same-page step swaps keep scroll Y unless we reset — analysis is long and
+    // "Continue" sits at the bottom, so rewrite/export would open off-screen.
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
   const goToExport = useCallback(async () => {
@@ -1382,9 +1385,27 @@ function SessionContent() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {phaseRunning ? (
+                    <span
+                      className="text-xs text-slate-500 dark:text-slate-500 cursor-not-allowed"
+                      title="Wait for the current run to finish"
+                    >
+                      ← Edit job description
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/session/new?step=jd&continue=${sessionId}`}
+                      className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 underline"
+                    >
+                      ← Edit job description
+                    </Link>
+                  )}
                   {phase1Complete && (
-                    <Link href="/session/new" className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline">
-                      New session
+                    <Link
+                      href="/session/new?fresh=1"
+                      className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline"
+                    >
+                      New application
                     </Link>
                   )}
                   {keywords && !phaseRunning && (

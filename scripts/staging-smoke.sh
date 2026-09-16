@@ -97,7 +97,7 @@ fi
 
 free_credits="$(http_json_field "$API_URL/api/billing/free-tier" starting_credits 2>/dev/null || true)"
 if [[ -n "$free_credits" ]]; then
-  check "Free-tier starting credits is 3" test "$free_credits" = "3"
+  check "Free-tier starting credits is 6" test "$free_credits" = "6"
 else
   skip_check "Free-tier credits" "field missing"
 fi
@@ -142,7 +142,7 @@ if [[ "$register_status" = "201" && -n "$register_json" ]]; then
   check "Register response includes access_token" test "$(echo "$register_json" | python3 -c "import json,sys; print('ok' if json.load(sys.stdin).get('access_token') else '')")" = "ok"
   register_credits="$(echo "$register_json" | python3 -c "import json,sys; print(json.load(sys.stdin).get('user',{}).get('credit_balance',''))" 2>/dev/null || true)"
   if [[ -n "$register_credits" && -n "$free_credits" ]]; then
-    check "Register credit_balance matches free-tier starting_credits (3)" test "$register_credits" = "$free_credits"
+    check "Register credit_balance matches free-tier starting_credits" test "$register_credits" = "$free_credits"
   else
     skip_check "Register credit_balance vs free-tier" "missing field(s)"
   fi
