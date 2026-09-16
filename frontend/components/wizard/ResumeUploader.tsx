@@ -17,6 +17,8 @@ interface Props {
   hasMasterResume?: boolean;
   /** Called after the first upload is persisted to the master profile. */
   onMasterResumeSaved?: () => void;
+  /** When false, parse/upload actions stay disabled (e.g. application name missing). */
+  canProceed?: boolean;
 }
 
 const MIN_RESUME_CHARS = 200;
@@ -28,7 +30,14 @@ function setUploadError(setError: (msg: string | null) => void, e: unknown) {
 
 type Mode = "upload" | "paste" | "voice" | "saved";
 
-export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, onMasterResumeSaved }: Props) {
+export function ResumeUploader({
+  sessionId,
+  token,
+  onParsed,
+  hasMasterResume,
+  onMasterResumeSaved,
+  canProceed = true,
+}: Props) {
   const [mode, setMode]       = useState<Mode>("upload");
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,6 +70,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
   // ── File upload ────────────────────────────────────────────────────────────
   const handleFile = useCallback(
     async (file: File) => {
+      if (!canProceed) return;
       setError(null);
       if (file.size > 5 * 1024 * 1024) { setError("File exceeds 5MB limit."); return; }
       const allowed = [
@@ -80,11 +90,12 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
         setLoading(false);
       }
     },
-    [sessionId, onParsed, persistToMaster],
+    [sessionId, onParsed, persistToMaster, canProceed],
   );
 
   // ── Paste ──────────────────────────────────────────────────────────────────
   const handlePaste = async () => {
+    if (!canProceed) return;
     const trimmed = pasteText.trim();
     if (!trimmed) return;
     if (trimmed.length < MIN_RESUME_CHARS) {
@@ -108,6 +119,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
 
   // ── Voice transcript → parse ───────────────────────────────────────────────
   const handleVoiceTranscript = async (text: string) => {
+    if (!canProceed) return;
     setLoading(true);
     setError(null);
     try {
@@ -148,7 +160,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
   };
 
   const handleUseSaved = async () => {
-    if (!savedText?.trim()) return;
+    if (!canProceed || !savedText?.trim()) return;
     setLoading(true);
     setError(null);
     try {
@@ -247,7 +259,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
             <span className="text-slate-600 dark:text-slate-400 text-xs">{pasteText.length.toLocaleString()} / 15,000 chars</span>
             <button
               onClick={() => void handlePaste()}
-              disabled={!pasteText.trim() || loading}
+              disabled={!canProceed || !pasteText.trim() || loading}
               className="px-5 py-2 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 disabled:opacity-40 transition-colors text-sm"
             >
               {loading ? "Parsing…" : "Parse resume"}
@@ -262,7 +274,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
         <VoiceTab
           token={token}
           submitLabel={loading ? "Parsing…" : "Parse resume"}
-          disabled={loading}
+          disabled={loading || !canProceed}
           onTranscript={(text) => void handleVoiceTranscript(text)}
         />
       )}
@@ -304,7 +316,7 @@ export function ResumeUploader({ sessionId, token, onParsed, hasMasterResume, on
               <div className="flex items-center justify-between">
                 <span className="text-slate-600 dark:text-slate-400 text-xs">{savedText.length.toLocaleString()} characters</span>
                 <button
-                  type="button" onClick={() => void handleUseSaved()} disabled={!savedText.trim() || loading}
+                  type="button" onClick={() => void handleUseSaved()} disabled={!canProceed || !savedText.trim() || loading}
                   className="px-5 py-2 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 disabled:opacity-40 transition-colors text-sm"
                 >
                   {loading ? "Parsing…" : "Use this resume"}

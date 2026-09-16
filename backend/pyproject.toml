@@ -61,4 +61,5 @@ dev = [
 asyncio_mode = "auto"
 markers = [
     "integration: tests that require a live external service (postgres, redis, etc.)",
+    "unit: pure unit tests with no external services",
 ]

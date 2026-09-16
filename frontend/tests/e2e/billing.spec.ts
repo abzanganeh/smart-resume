@@ -53,7 +53,7 @@ const PRICES_FIXTURE = {
 
 const SUB_CURRENT_FREE_FIXTURE = {
   subscription: null,
-  credit_balance: 3,
+  credit_balance: 6,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

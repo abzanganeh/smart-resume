@@ -16,6 +16,7 @@ import type { ApplicationStatus } from "@/lib/api"
 import {
   archiveApplication,
   createApplication,
+  countApplicationsByStatus,
   getApplicationFunnel,
   listApplications,
   patchApplication,
@@ -276,8 +277,11 @@ export default function TrackerPage() {
     )
   }
 
+  const statusCounts = countApplicationsByStatus(apps)
   const activeLimit = funnel?.tracker_active_limit ?? null
-  const activeCount = funnel?.active_total ?? 0
+  const activeCount = showArchived
+    ? (funnel?.active_total ?? apps.filter((a) => !a.archived_at).length)
+    : apps.length
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 py-8">
@@ -314,7 +318,7 @@ export default function TrackerPage() {
         </div>
       </div>
 
-      {funnel && (
+      {!loading && (
         <section
           className="mb-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/60 px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600 dark:text-slate-400"
           aria-label="Application funnel summary"
@@ -328,15 +332,15 @@ export default function TrackerPage() {
             <span key={c.key} className="tabular-nums">
               {c.label}:{" "}
               <span className="text-slate-700 dark:text-slate-300 font-medium">
-                {funnel.status_counts[c.key] ?? 0}
+                {statusCounts[c.key] ?? 0}
               </span>
             </span>
           ))}
-          {funnel.archived_total > 0 && (
+          {(funnel?.archived_total ?? 0) > 0 && (
             <span className="tabular-nums">
               Archived:{" "}
               <span className="text-slate-700 dark:text-slate-300 font-medium">
-                {funnel.archived_total}
+                {funnel?.archived_total ?? 0}
               </span>
             </span>
           )}

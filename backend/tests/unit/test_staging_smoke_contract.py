@@ -45,6 +45,7 @@ def test_staging_smoke_script_includes_verify_unlock_flow() -> None:
         "/api/v1/search",
         'check "GET /api/auth/verify/{token} returns 200"',
         'check "Register spendable_credit_balance is 0 until verify"',
+        'check "Free-tier starting credits is 6"',
         'check "Post-verify spendable_credit_balance equals starting credits',
         'check "Post-verify email_verified_at is set"',
         'check "POST /api/jobs/search returns 200 after titles confirmed"',

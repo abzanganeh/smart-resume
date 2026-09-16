@@ -798,7 +798,7 @@ export function DashboardView({ token }: { token: string }) {
               </>
             )}
             <Link
-              href="/session/new"
+              href="/session/new?fresh=1"
               className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 hover:underline font-medium"
             >
               New tailored resume

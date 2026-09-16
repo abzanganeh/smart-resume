@@ -822,6 +822,37 @@ async def test_tracker_application_list_is_scoped_to_the_caller(
 
 
 @pytest.mark.integration
+async def test_create_application_with_foreign_resume_record_is_denied(
+    app_client: AsyncClient,
+    db_session: AsyncSession,
+    two_users: tuple[tuple[str, uuid.UUID], tuple[str, uuid.UUID]],
+) -> None:
+    """Creating an application with another user's resume_record_id must not leak labels."""
+    (victim_token, victim_id), (attacker_token, _) = two_users
+    record = await _seed_resume_record(db_session, victim_id)
+    record.display_name = "Victim Secret Label — Staff Engineer"
+    record.jd_title = "Victim Secret Label — Staff Engineer"
+    record.jd_company = "Northwind Systems"
+    await db_session.commit()
+
+    owner = await app_client.post(
+        "/api/applications",
+        json={"resume_record_id": str(record.id)},
+        headers=_auth(victim_token),
+    )
+    assert owner.status_code == 201, owner.text
+
+    attacker = await app_client.post(
+        "/api/applications",
+        json={"resume_record_id": str(record.id)},
+        headers=_auth(attacker_token),
+    )
+    assert attacker.status_code == 404, attacker.text
+    assert "Victim Secret Label" not in attacker.text
+    assert "Northwind Systems" not in attacker.text
+
+
+@pytest.mark.integration
 async def test_session_resume_record_lookup_is_scoped_to_the_caller(
     app_client: AsyncClient,
     db_session: AsyncSession,

@@ -15,6 +15,8 @@ interface Props {
   jdId?: string;
   showCompletenessWarning?: boolean;
   sourceUrl?: string | null;
+  disabled?: boolean;
+  disabledHint?: string;
 }
 
 const MAX_JD = 10_000;
@@ -28,6 +30,8 @@ export function JDInput({
   jdId,
   showCompletenessWarning = false,
   sourceUrl,
+  disabled = false,
+  disabledHint,
 }: Props) {
   const [jdText, setJdText] = useState(initialJdText);
   const [jdUrl, setJdUrl] = useState(sourceUrl ?? "");
@@ -47,6 +51,7 @@ export function JDInput({
   }, [sourceUrl]);
 
   const handleSubmit = () => {
+    if (disabled) return;
     setError(null);
     const cleaned = normalizeJdText(jdText);
     if (!cleaned && !jdUrl.trim()) {
@@ -131,6 +136,12 @@ export function JDInput({
         <p className="text-slate-600 dark:text-slate-400 text-xs mt-1">Note: many job boards require login — pasting the text is more reliable.</p>
       </div>
 
+      {disabled && disabledHint && (
+        <p className="text-amber-800 dark:text-amber-200 text-sm bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
+          {disabledHint}
+        </p>
+      )}
+
       {error && (
         <div className="flex items-start gap-2 text-red-700 dark:text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg p-3">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -139,8 +150,9 @@ export function JDInput({
       )}
 
       <button
+        type="button"
         onClick={handleSubmit}
-        disabled={loading || (!jdText.trim() && !jdUrl.trim())}
+        disabled={disabled || loading || (!jdText.trim() && !jdUrl.trim())}
         className="w-full py-2.5 bg-amber-400 text-slate-900 font-semibold rounded-lg hover:bg-amber-300 disabled:opacity-40 transition-colors"
       >
         {loading ? "Saving…" : "Analyze job description →"}

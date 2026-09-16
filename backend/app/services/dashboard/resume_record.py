@@ -193,6 +193,95 @@ def extract_jd_metadata(session: Session) -> tuple[str, str]:
     return title, company
 
 
+_GENERIC_RECORD_TITLES = frozenset({"resume draft", "untitled role"})
+_PLACEHOLDER_COMPANIES = frozenset({"—", "unknown", ""})
+
+
+def sanitize_label_part(text: str) -> str:
+    """Strip control characters from user-facing labels before persistence."""
+    return "".join(ch for ch in text if ch == " " or ord(ch) >= 32).strip()
+
+
+def parse_application_label(label: str) -> tuple[str | None, str | None]:
+    """Parse user labels like ``Acme Health — Senior Backend`` into (company, role)."""
+    cleaned = sanitize_label_part(label)
+    if not cleaned:
+        return None, None
+    for sep in (" — ", " - ", " @ "):
+        if sep in cleaned:
+            left, right = cleaned.split(sep, 1)
+            company = sanitize_label_part(left) or None
+            role = sanitize_label_part(right) or None
+            return company, role
+    return None, cleaned
+
+
+def is_placeholder_record_title(title: str, *, contact_name: str | None = None) -> bool:
+    cleaned = (title or "").strip()
+    if not cleaned:
+        return True
+    if cleaned.lower() in _GENERIC_RECORD_TITLES:
+        return True
+    if cleaned.endswith("— resume draft") or cleaned.endswith("- resume draft"):
+        return True
+    if contact_name and cleaned == f"{contact_name.strip()} — resume draft":
+        return True
+    return False
+
+
+def is_placeholder_record_company(company: str) -> bool:
+    return (company or "").strip().lower() in _PLACEHOLDER_COMPANIES
+
+
+def _finalize_tracker_company(*candidates: str | None) -> str:
+    for candidate in candidates:
+        if candidate and not is_placeholder_record_company(candidate):
+            return candidate.strip()
+    return "Unknown"
+
+
+def resolve_record_tracker_title_company(record: ResumeRecord) -> tuple[str, str]:
+    """Best label for tracker rows — mirrors dashboard ``display_name || jd_title``."""
+    label = sanitize_label_part(record.display_name or "")
+    if label:
+        company, role = parse_application_label(label)
+        title = role or label
+        return title, _finalize_tracker_company(company, record.jd_company)
+
+    # Keep blank titles blank so tracker duplicate detection can skip them.
+    title = (record.jd_title or "").strip()
+    return title, _finalize_tracker_company(record.jd_company)
+
+
+def apply_application_label_to_metadata(
+    session: Session,
+    *,
+    jd_title: str,
+    jd_company: str,
+    app_label: str | None,
+) -> tuple[str, str]:
+    """Prefer the user-facing application label over early resume-upload placeholders."""
+    label = sanitize_label_part(app_label or "")
+    if not label:
+        return jd_title, jd_company
+
+    contact_name = None
+    if session.resume_parsed and session.resume_parsed.contact.name.strip():
+        contact_name = session.resume_parsed.contact.name.strip()
+
+    parsed_company, parsed_role = parse_application_label(label)
+    title = jd_title
+    company = jd_company
+
+    if is_placeholder_record_title(jd_title, contact_name=contact_name):
+        title = parsed_role or label
+
+    if is_placeholder_record_company(jd_company) and parsed_company:
+        company = parsed_company
+
+    return sanitize_label_part(title), sanitize_label_part(company)
+
+
 def default_record_title(session: Session) -> tuple[str, str]:
     if session.user_info and session.user_info.target_role.strip():
         return session.user_info.target_role.strip(), "—"
@@ -256,6 +345,14 @@ async def ensure_in_progress_resume_record(
             )
         ).scalar_one_or_none()
 
+    app_label = (session.application_display_name or "").strip() or None
+    jd_title, jd_company = apply_application_label_to_metadata(
+        session,
+        jd_title=jd_title,
+        jd_company=jd_company,
+        app_label=app_label,
+    )
+
     if record is None:
         record = ResumeRecord(
             user_id=user_id,
@@ -268,7 +365,7 @@ async def ensure_in_progress_resume_record(
             starting_ats_score=0,
             status=ResumeRecordStatus.draft,
             tailoring_stage=TailoringStage.in_progress,
-            display_name=None,
+            display_name=app_label,
             created_at=now,
             updated_at=now,
         )
@@ -280,6 +377,8 @@ async def ensure_in_progress_resume_record(
     record.jd_text_hash = jd_hash
     record.jd_title = jd_title
     record.jd_company = jd_company
+    if app_label:
+        record.display_name = app_label
     record.updated_at = now
     if rebinding:
         # New tailoring session for the same JD — do not inherit prior ATS scores
@@ -349,6 +448,13 @@ async def upsert_resume_record_from_session(
 
     jd_hash = compute_jd_text_hash(jd_text)
     jd_title, jd_company = extract_jd_metadata(session)
+    app_label = (session.application_display_name or "").strip() or None
+    jd_title, jd_company = apply_application_label_to_metadata(
+        session,
+        jd_title=jd_title,
+        jd_company=jd_company,
+        app_label=app_label,
+    )
     now = datetime.now(timezone.utc)
 
     existing = await _find_record_for_session(
@@ -377,7 +483,7 @@ async def upsert_resume_record_from_session(
             starting_ats_score=ats_score,
             status=ResumeRecordStatus.draft,
             tailoring_stage=TailoringStage.polished,
-            display_name=None,
+            display_name=app_label,
             created_at=now,
             updated_at=now,
         )
@@ -398,6 +504,8 @@ async def upsert_resume_record_from_session(
     existing.jd_title = jd_title
     existing.jd_company = jd_company
     existing.jd_text_hash = jd_hash
+    if app_label:
+        existing.display_name = app_label
     existing.current_ats_score = ats_score
     if not had_scores:
         existing.starting_ats_score = ats_score

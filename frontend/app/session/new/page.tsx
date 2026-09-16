@@ -19,6 +19,7 @@ import { UserInfoForm } from "@/components/wizard/UserInfoForm";
 import { JDInput } from "@/components/wizard/JDInput";
 import {
   createSession,
+  saveApplicationLabel,
   saveUserInfo,
   submitJD,
   checkSession,
@@ -27,6 +28,9 @@ import {
   type ParsedResume,
   type UserInfoPayload,
 } from "@/lib/api";
+
+const SESSION_STORAGE_KEY = "smart_resume_session_id";
+const APP_NAME_STORAGE_KEY = "smart_resume_application_name";
 
 // Resume → Job Description → Your Info (platform AI — no BYOK step)
 const STEPS = ["resume", "jd", "info"] as const;
@@ -52,11 +56,15 @@ function NewSessionContent() {
   const [jdSourceUrl, setJdSourceUrl] = useState<string | null>(null);
   const [jdReviewRecommended, setJdReviewRecommended] = useState(false);
   const [infoHydrating, setInfoHydrating] = useState(false);
+  const [applicationName, setApplicationName] = useState("");
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const jdLoadedRef = useRef(false);
   const checkupResumeAppliedRef = useRef(false);
   const sessionBootstrapRef = useRef(false);
+  const appNameRestoredRef = useRef(false);
+  const lastPersistedNameRef = useRef<string | null>(null);
   const [hasMasterResume, setHasMasterResume] = useState<boolean | undefined>(undefined);
 
   // Restore extension handoff if OAuth stripped jd_id from the URL.
@@ -70,43 +78,83 @@ function NewSessionContent() {
     }
   }, [searchParams, router]);
 
-  // Bootstrap wizard session once — not on every ?step= / jd_review URL tweak.
+  // Restore application label from sessionStorage once (survives refresh mid-wizard).
+  useEffect(() => {
+    if (appNameRestoredRef.current) return;
+    const storedName = sessionStorage.getItem(APP_NAME_STORAGE_KEY);
+    if (!storedName) return;
+    appNameRestoredRef.current = true;
+    setApplicationName(storedName);
+    lastPersistedNameRef.current = storedName;
+  }, []);
+
+  const hydrateWizardFromSession = (
+    snap: Awaited<ReturnType<typeof checkSession>>,
+  ) => {
+    if (snap.resume_parsed) setParsedResume(snap.resume_parsed);
+    if (snap.jd_raw?.trim()) setJdText(snap.jd_raw);
+    const label = snap.application_display_name?.trim();
+    if (label) {
+      setApplicationName((prev) => (prev.trim() ? prev : label));
+      sessionStorage.setItem(APP_NAME_STORAGE_KEY, label);
+      lastPersistedNameRef.current = label;
+    }
+  };
+
+  // Bootstrap wizard session once — resume in-progress runs unless ?fresh=1.
   useEffect(() => {
     if (sessionBootstrapRef.current) return;
     sessionBootstrapRef.current = true;
 
     void (async () => {
-      const isFreshStart = !searchParams.get("step");
+      setBootstrapError(null);
+      const forceFresh = searchParams.get("fresh") === "1";
+      const continueId = searchParams.get("continue");
+      const urlStep = searchParams.get("step") as Step | null;
+      const editingJd = urlStep === "jd";
 
-      if (!isFreshStart) {
-        const existing = sessionStorage.getItem("smart_resume_session_id");
-        if (existing) {
-          try {
-            const res = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/sessions/${existing}`
-            );
-            if (res.ok) {
-              setSessionId(existing);
-              return;
-            }
-          } catch {
-            // backend unreachable — fall through to create
+      const tryRestore = async (id: string): Promise<boolean> => {
+        try {
+          const snap = await checkSession(id);
+          if (snap.phase1_complete && !editingJd) {
+            router.replace(`/session/${id}?step=analysis`);
+            return true;
           }
-          sessionStorage.removeItem("smart_resume_session_id");
+          setSessionId(id);
+          sessionStorage.setItem(SESSION_STORAGE_KEY, id);
+          hydrateWizardFromSession(snap);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      if (!forceFresh) {
+        const candidate =
+          continueId ?? sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (candidate && (await tryRestore(candidate))) {
+          return;
+        }
+        if (candidate) {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
         }
       } else {
-        sessionStorage.removeItem("smart_resume_session_id");
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        sessionStorage.removeItem(APP_NAME_STORAGE_KEY);
+        lastPersistedNameRef.current = null;
       }
 
       try {
         const r = await createSession();
         setSessionId(r.session_id);
-        sessionStorage.setItem("smart_resume_session_id", r.session_id);
+        sessionStorage.setItem(SESSION_STORAGE_KEY, r.session_id);
       } catch {
-        // backend not running — will show error when user tries to upload
+        setBootstrapError(
+          "Could not start a tailoring session. Check that the API is running and try again.",
+        );
       }
     })();
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   // Deep-link query params (paste JD, checkup funnel) — may change without new session.
   useEffect(() => {
@@ -273,9 +321,9 @@ function NewSessionContent() {
   }, [backendToken, searchParams, router]);
 
   const goTo = (s: Step) => {
-    setStep(s);
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     params.set("step", s);
+    params.delete("fresh");
     const handoff = getExtensionHandoff();
     const jdId = searchParams.get("jd_id") ?? handoff?.jd_id;
     const jdSource = searchParams.get("source") ?? handoff?.source;
@@ -283,8 +331,42 @@ function NewSessionContent() {
     if (jdId) params.set("jd_id", jdId);
     if (jdSource) params.set("source", jdSource);
     if (jdReview) params.set("jd_review", "1");
+    else params.delete("jd_review");
+    setStep(s);
     router.replace(`/session/new?${params.toString()}`);
   };
+
+  const persistApplicationName = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === lastPersistedNameRef.current) return;
+    sessionStorage.setItem(APP_NAME_STORAGE_KEY, trimmed);
+    lastPersistedNameRef.current = trimmed;
+    if (!sessionId) return;
+    try {
+      await saveApplicationLabel(sessionId, trimmed);
+    } catch {
+      // Best-effort — wizard can continue; dashboard sync retries on JD submit.
+    }
+  };
+
+  const applicationNameField = (
+    <div className="mb-6">
+      <label className="block text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
+        Application name *
+      </label>
+      <input
+        value={applicationName}
+        onChange={(e) => setApplicationName(e.target.value)}
+        onBlur={() => {
+          if (applicationName.trim()) {
+            void persistApplicationName(applicationName);
+          }
+        }}
+        placeholder="e.g. Acme Health — Senior Backend Engineer"
+        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-600"
+      />
+    </div>
+  );
 
   // Browser back/forward (and explicit "New session" clicks): keep wizard
   // step aligned with the URL.  A missing ?step= param means the user
@@ -296,18 +378,18 @@ function NewSessionContent() {
       // If a jd_id is present, the token effect will set step once the JD
       // loads and push ?step=jd into the URL. Resetting here would race.
       if (searchParams.get("jd_id")) return;
-      // No valid step param → fresh navigation; clear in-memory wizard state.
+      // goTo() updates step before ?step= lands — never wipe sessionId here.
+      if (sessionId) return;
       if (step !== "resume") {
         setStep("resume");
         setParsedResume(null);
         setJdText("");
-        setSessionId(null);
       }
       return;
     }
     const urlStep = raw as Step;
     if (urlStep !== step) setStep(urlStep);
-  }, [searchParams, step]);
+  }, [searchParams, step, sessionId]);
 
   // Hydrate resume parse state when landing on info (refresh or master import).
   useEffect(() => {
@@ -363,8 +445,11 @@ function NewSessionContent() {
     };
   }, [step, sessionId, router]);
 
-  const handleResumeParsed = (parsed: ParsedResume) => {
+  const handleResumeParsed = async (parsed: ParsedResume) => {
     setParsedResume(parsed);
+    if (applicationName.trim()) {
+      await persistApplicationName(applicationName);
+    }
     // If JD is already filled (extension flow: JD → Resume → Info), advance to info.
     // Otherwise follow the normal flow: Resume → JD.
     goTo(jdText.trim() ? "info" : "jd");
@@ -379,6 +464,9 @@ function NewSessionContent() {
     if (!sessionId) return;
     setLoading(true);
     try {
+      if (applicationName.trim()) {
+        await persistApplicationName(applicationName);
+      }
       const result = await submitJD(sessionId, payload);
       if (result.jd_text) setJdText(result.jd_text);
       else if (payload.jd_text) setJdText(payload.jd_text);
@@ -415,9 +503,23 @@ function NewSessionContent() {
         }
       }
 
+      let hasUserInfo = false;
+      try {
+        const afterJd = await checkSession(sessionId);
+        hasUserInfo = !!afterJd.has_user_info;
+      } catch {
+        // continue to wizard routing
+      }
+
       if (resumeData) {
         setParsedResume(resumeData);
-        goTo("info");
+        if (hasUserInfo) {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
+          sessionStorage.removeItem(APP_NAME_STORAGE_KEY);
+          router.replace(`/session/${sessionId}?step=analysis`);
+        } else {
+          goTo("info");
+        }
       } else {
         goTo("resume");
       }
@@ -434,7 +536,8 @@ function NewSessionContent() {
       const handoff = getExtensionHandoff();
       const jdId = searchParams.get("jd_id") ?? handoff?.jd_id ?? undefined;
       await saveUserInfo(sessionId, info, jdId);
-      sessionStorage.removeItem("smart_resume_session_id");
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(APP_NAME_STORAGE_KEY);
       router.replace(`/session/${sessionId}?step=analysis`);
     } finally {
       setLoading(false);
@@ -488,7 +591,7 @@ function NewSessionContent() {
                     ? "text-slate-800 dark:text-slate-200"
                     : i < stepIndex
                     ? "text-slate-600 dark:text-slate-400"
-                    : "text-slate-600 dark:text-slate-400 dark:text-slate-600"
+                    : "text-slate-600 dark:text-slate-400"
                 }`}
               >
                 {STEP_LABELS[s]}
@@ -509,30 +612,64 @@ function NewSessionContent() {
           {step === "resume" && !sessionId && (
             <div className="py-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-              <p className="text-slate-600 dark:text-slate-400 text-sm mt-4">Starting your session…</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mt-4">
+                {bootstrapError ?? "Starting your session…"}
+              </p>
             </div>
           )}
           {step === "resume" && sessionId && (
             <div>
-              <h1 className="text-xl font-bold mb-1">Upload your resume</h1>
+              <h1 className="text-xl font-bold mb-1">Name this application</h1>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                Pick a name you&apos;ll recognize on your dashboard — company and role work well.
+                Your progress is saved under this name until you finish tailoring.
+              </p>
+              {applicationNameField}
+              <h2 className="text-lg font-semibold mb-1">Upload your resume</h2>
               <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
                 Upload a file, paste text, speak it, or reuse your saved master resume. Voice with
                 live transcription is free in Chrome and Edge.
               </p>
+              {!applicationName.trim() && (
+                <p className="text-amber-800 dark:text-amber-200 text-sm mb-4 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
+                  Name this application above before continuing.
+                </p>
+              )}
               <ResumeUploader
                 sessionId={sessionId}
                 token={session?.backendAccessToken ?? undefined}
-                onParsed={handleResumeParsed}
+                onParsed={(parsed) => void handleResumeParsed(parsed)}
                 hasMasterResume={hasMasterResume}
                 onMasterResumeSaved={() => setHasMasterResume(true)}
+                canProceed={applicationName.trim().length > 0}
               />
             </div>
           )}
 
           {/* ── Step 3: Job Description ─────────────────────────────────── */}
-          {step === "jd" && (
+          {step === "jd" && !sessionId && (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <p className="text-slate-600 dark:text-slate-400 text-sm mt-4">
+                {bootstrapError ?? "Starting your session…"}
+              </p>
+            </div>
+          )}
+          {step === "jd" && sessionId && (
             <div>
               <h1 className="text-xl font-bold mb-1">Job description</h1>
+              {applicationName.trim() ? (
+                <p className="text-slate-600 dark:text-slate-400 text-xs mb-2">
+                  Application: <span className="font-medium text-slate-800 dark:text-slate-200">{applicationName}</span>
+                </p>
+              ) : (
+                <>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                    Name this application so you can find it on your dashboard.
+                  </p>
+                  {applicationNameField}
+                </>
+              )}
               <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
                 Paste the full job posting. {PRODUCT_NAME} uses platform AI to extract ATS keywords
                 and pre-fill your info from your resume.
@@ -544,12 +681,22 @@ function NewSessionContent() {
                 jdId={searchParams.get("jd_id") ?? undefined}
                 showCompletenessWarning={jdReviewRecommended}
                 sourceUrl={jdSourceUrl}
+                disabled={!applicationName.trim()}
+                disabledHint="Name this application above before analyzing the job description."
               />
             </div>
           )}
 
           {/* ── Step 4: Your Info ───────────────────────────────────────── */}
-          {step === "info" && (
+          {step === "info" && !sessionId && (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+              <p className="text-slate-600 dark:text-slate-400 text-sm mt-4">
+                {bootstrapError ?? "Starting your session…"}
+              </p>
+            </div>
+          )}
+          {step === "info" && sessionId && (
             <div>
               <h1 className="text-xl font-bold mb-1">Your information</h1>
               <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">

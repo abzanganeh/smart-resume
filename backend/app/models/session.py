@@ -75,6 +75,8 @@ class Session(BaseModel):
     resume_parsed: ParsedResume | None = None
     user_info: UserInfo | None = None
     jd_raw: str | None = None
+    # User-facing label for this tailoring run (dashboard ResumeRecord.display_name).
+    application_display_name: str | None = None
     provider: str | None = None
     model: str | None = None
 

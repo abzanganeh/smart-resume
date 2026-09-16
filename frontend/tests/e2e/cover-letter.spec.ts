@@ -14,7 +14,7 @@ const MOCK_USER = {
   email: "cover-letter-e2e@example.com",
   display_name: "Cover Letter E2E",
   tier: "free",
-  credit_balance: 3,
+  credit_balance: 6,
   auth_provider: "email",
   email_verified_at: "2026-05-01T00:00:00Z",
   has_totp: false,
