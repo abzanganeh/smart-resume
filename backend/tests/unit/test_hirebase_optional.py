@@ -72,6 +72,7 @@ async def test_run_keyword_search_skips_hirebase_when_key_unset() -> None:
             page_size=20,
             blocked_companies=[],
             expand=False,
+            allow_hirebase=False,
         )
 
     mock_corpus.assert_awaited()
@@ -79,6 +80,6 @@ async def test_run_keyword_search_skips_hirebase_when_key_unset() -> None:
     assert source == "corpus"
     assert total == 1
     assert len(jobs) == 1
-    assert stale is True
+    assert stale is False
     assert message and "cached job corpus" in message
     assert charge is False

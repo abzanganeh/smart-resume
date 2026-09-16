@@ -352,6 +352,6 @@ async def test_free_user_sparse_corpus_skips_hirebase_without_402(
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["total"] >= 1
+    assert body["total"] == 1
     assert body["source"] == "corpus"
-    assert body["jobs"]
+    assert body["jobs"][0]["title"] == "Mobile Developer"
