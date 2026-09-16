@@ -101,6 +101,7 @@ def test_desktop_staging_local_sim_up_script_contract() -> None:
         "--env-file .env.staging",
         "load_job_corpus_seed.py",
         "poll_job_corpus_once.py",
+        "seed_staging_job_cache.py",
         "Missing backend/.env.staging",
         "Missing .env.staging",
     )

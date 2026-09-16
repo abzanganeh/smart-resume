@@ -89,6 +89,11 @@ docker compose "${COMPOSE_ENV[@]}" "${COMPOSE_FILES[@]}" exec -T backend \
   uv run python scripts/poll_job_corpus_once.py --limit "${CORPUS_POLL_LIMIT}" \
   || warn "Corpus poll failed — re-run poll_job_corpus_once.py inside the backend container."
 
+echo "Seeding staging job_cache sample rows (idempotent)..."
+docker compose "${COMPOSE_ENV[@]}" "${COMPOSE_FILES[@]}" exec -T backend \
+  uv run python scripts/seed_staging_job_cache.py \
+  || warn "Staging job_cache seed failed — /jobs smoke may return empty results."
+
 echo
 echo "=== Local-sim desktop staging ==="
 echo "Frontend:  http://localhost:${FRONTEND_PORT}"
