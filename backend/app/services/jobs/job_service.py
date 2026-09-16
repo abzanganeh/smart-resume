@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -93,6 +93,43 @@ def _job_cache_term_clause(term: str):
             )
         )
     return or_(*clauses)
+
+
+def _date_posted_cutoff(filter_value: str | None) -> datetime | None:
+    """Map frontend ``date_posted`` filter to a UTC cutoff (inclusive)."""
+    if not filter_value or filter_value == "any":
+        return None
+    now = datetime.now(timezone.utc)
+    windows = {
+        "24h": timedelta(days=1),
+        "week": timedelta(days=7),
+        "month": timedelta(days=30),
+    }
+    delta = windows.get(filter_value)
+    if delta is None:
+        return None
+    return now - delta
+
+
+def _apply_job_cache_filters(stmt, filters: dict[str, Any]):
+    """Apply structured search filters shared by corpus cache queries."""
+    if filters.get("remote"):
+        stmt = stmt.where(JobCache.remote.is_(True))
+    cutoff = _date_posted_cutoff(filters.get("date_posted"))
+    if cutoff is not None:
+        stmt = stmt.where(JobCache.posted_date >= cutoff)
+    min_salary = filters.get("salary_min_usd")
+    if min_salary is not None:
+        stmt = stmt.where(
+            or_(
+                JobCache.salary_max_usd >= int(min_salary),
+                JobCache.salary_min_usd >= int(min_salary),
+            )
+        )
+    employment = filters.get("employment_type")
+    if employment:
+        stmt = stmt.where(JobCache.employment_type.ilike(f"%{employment}%"))
+    return stmt
 
 
 def _apply_job_search_terms(stmt, terms: list[str], *, match_all_terms: bool):
@@ -198,8 +235,7 @@ async def search_active_job_cache(
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
-    if filters.get("remote"):
-        stmt = stmt.where(JobCache.remote.is_(True))
+    stmt = _apply_job_cache_filters(stmt, filters)
 
     relevance = _job_cache_relevance_score(terms) if terms else literal(0)
     offset = (page - 1) * page_size
@@ -243,8 +279,7 @@ async def search_cache(
     if location and location.strip():
         loc = f"%{location.strip()}%"
         stmt = stmt.where(JobCache.location.ilike(loc))
-    if filters.get("remote"):
-        stmt = stmt.where(JobCache.remote.is_(True))
+    stmt = _apply_job_cache_filters(stmt, filters)
 
     relevance = _job_cache_relevance_score(terms) if terms else literal(0)
     offset = (page - 1) * page_size
@@ -364,6 +399,7 @@ async def run_keyword_search(
     page_size: int,
     blocked_companies: list[str],
     expand: bool = False,
+    allow_hirebase: bool = True,
 ) -> tuple[list[JobResult], int, bool, str | None, bool, str]:
     """Execute search; returns (jobs, total, stale, message, charge_quota, source)."""
     normalized = normalize_query(query)
@@ -393,8 +429,19 @@ async def run_keyword_search(
                 source=JobSearchSource.cache,
             )
             return corpus_jobs, corpus_total, False, None, False, "corpus"
+        if not allow_hirebase and corpus_total > 0 and not expand:
+            await log_search(
+                session,
+                user_id=user_id,
+                query=normalized,
+                location=location,
+                filters=filters,
+                result_count=corpus_total,
+                source=JobSearchSource.cache,
+            )
+            return corpus_jobs, corpus_total, False, _CORPUS_ONLY_MESSAGE, False, "corpus"
 
-    if not hirebase_is_configured():
+    if not allow_hirebase or not hirebase_is_configured():
         return await _corpus_only_search(
             session,
             user_id=user_id,
