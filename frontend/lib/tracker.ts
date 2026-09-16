@@ -179,6 +179,19 @@ export async function listApplications(
   return authRequest(`/api/applications${search}`, token)
 }
 
+/** Pipeline column counts from the same list that powers the kanban board. */
+export function countApplicationsByStatus(
+  apps: ApplicationSummary[],
+): Record<ApplicationStatus, number> {
+  const counts = Object.fromEntries(
+    PIPELINE_COLUMNS.map((column) => [column.key, 0]),
+  ) as Record<ApplicationStatus, number>
+  for (const app of apps) {
+    counts[app.status] = (counts[app.status] ?? 0) + 1
+  }
+  return counts
+}
+
 export async function getApplicationFunnel(
   token: string,
 ): Promise<ApplicationFunnelResponse> {

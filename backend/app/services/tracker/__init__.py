@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.dashboard import ResumeRecord
+from app.services.dashboard.resume_record import resolve_record_tracker_title_company
 from app.models.tracker import (
     MAX_ATTACHMENT_BYTES,
     MAX_ATTACHMENT_TOTAL_BYTES,
@@ -106,7 +107,8 @@ async def resolve_title_company(
                 status_code=409,
                 detail="An application is already linked to this resume record",
             )
-        return record.jd_title, record.jd_company, resume_record_id
+        title, company = resolve_record_tracker_title_company(record)
+        return title, company, resume_record_id
 
     title = (jd_title or "").strip()
     company = (jd_company or "").strip()
