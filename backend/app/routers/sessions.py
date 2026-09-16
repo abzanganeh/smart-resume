@@ -113,6 +113,8 @@ def _session_check_payload(session) -> dict:
         "stale_since": session.stale_since.isoformat() if session.stale_since else None,
         "phase1_complete": session.phase1_status.value == "done",
         "has_user_info": session.user_info is not None,
+        "jd_raw": session.jd_raw or "",
+        "application_display_name": session.application_display_name,
         "resume_parsed": (
             json.loads(session.resume_parsed.model_dump_json())
             if session.resume_parsed is not None
@@ -300,6 +302,43 @@ async def chat_with_resume(
                 status_code=402,
                 detail=free_tier_ai_cap_detail(),
             ) from exc
+
+
+class ApplicationLabelRequest(BaseModel):
+    display_name: str
+
+
+@router.patch("/{session_id}/application")
+@limiter.limit("20/minute")
+async def save_application_label(
+    request: Request,
+    session_id: str,
+    body: ApplicationLabelRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    """Persist the user-facing application name for this tailoring run."""
+    session = await load_session_for_request(
+        db,
+        session_id=session_id,
+        authorization=authorization,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    label = body.display_name.strip()
+    if not label:
+        raise HTTPException(status_code=422, detail="Application name cannot be empty.")
+    if len(label) > 500:
+        raise HTTPException(status_code=422, detail="Application name is too long.")
+
+    session.application_display_name = label
+    await update_session(session)
+
+    from app.services.dashboard.resume_record import sync_dashboard_record_from_session
+
+    await sync_dashboard_record_from_session(session)
+    return {"ok": True, "display_name": label}
 
 
 @router.get("/{session_id}/resume-record", response_model=SessionResumeRecordResponse)

@@ -90,10 +90,12 @@ export function DashboardStepStack({
           title={`Master resume ready · ${masterResumeDetail ?? "indexed"}${masterUpdatedAt ? ` (${formatDate(masterUpdatedAt)})` : ""}`}
           description=""
           ready
-          primaryHref="/session/new"
-          primaryLabel="Tailor for a job"
+          primaryHref="/session/new?fresh=1"
+          primaryLabel="Tailor for a new job"
           secondaryHref="/profile"
           secondaryLabel="View master"
+          tertiaryHref={hasTailored ? "/dashboard#tailored-resumes" : undefined}
+          tertiaryLabel={hasTailored ? "Tailored resumes" : undefined}
           testId="dashboard-step-master"
         />
       ) : (
@@ -223,12 +225,18 @@ export function DashboardStepStack({
         }
         ready={tailorReady}
         locked={states.tailor === "locked"}
-        primaryHref={hasJd || hasMasterResume ? "/session/new" : undefined}
+        primaryHref={
+          hasJd || hasMasterResume
+            ? tailorReady
+              ? "/session/new?fresh=1"
+              : "/session/new"
+            : undefined
+        }
         primaryLabel={tailorReady ? "New tailoring" : "Tailor now →"}
         secondaryHref={tailorReady ? "/dashboard#tailored-resumes" : undefined}
         secondaryLabel={tailorReady ? "View list" : undefined}
         skipHref={
-          states.tailor === "locked" && hasMasterResume ? "/session/new" : undefined
+          states.tailor === "locked" && hasMasterResume ? "/session/new?fresh=1" : undefined
         }
         skipLabel={
           states.tailor === "locked" && hasMasterResume
@@ -258,7 +266,7 @@ export function DashboardStepStack({
         secondaryLabel={hasTailored ? "Track application" : undefined}
         skipHref={
           states.apply === "locked" && (hasJd || hasMasterResume)
-            ? "/session/new"
+            ? "/session/new?fresh=1"
             : undefined
         }
         skipLabel={

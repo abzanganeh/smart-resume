@@ -427,14 +427,19 @@ async def submit_jd(
     # If the JD changed, all phase outputs are stale — wipe them so the
     # user is not misled by results computed from the old job description.
     if jd_changed:
-        session.phase1_output = None
-        session.phase2_output = None
-        session.phase3_output = None
-        session.phase4_output = None
+        from app.services.session_store import get_session as reload_session, reset_phase
+
         session.phase3_stale_since = None
         session.phase4_stale_since = None
+        await update_session(session)
+        for phase in (1, 2, 3, 4):
+            await reset_phase(session_id, phase)
+        session = await reload_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        await update_session(session)
 
-    await update_session(session)
     from app.services.dashboard.resume_record import sync_dashboard_record_from_session
 
     await sync_dashboard_record_from_session(session)

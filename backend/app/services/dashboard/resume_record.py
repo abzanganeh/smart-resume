@@ -256,6 +256,8 @@ async def ensure_in_progress_resume_record(
             )
         ).scalar_one_or_none()
 
+    app_label = (session.application_display_name or "").strip() or None
+
     if record is None:
         record = ResumeRecord(
             user_id=user_id,
@@ -268,7 +270,7 @@ async def ensure_in_progress_resume_record(
             starting_ats_score=0,
             status=ResumeRecordStatus.draft,
             tailoring_stage=TailoringStage.in_progress,
-            display_name=None,
+            display_name=app_label,
             created_at=now,
             updated_at=now,
         )
@@ -280,6 +282,8 @@ async def ensure_in_progress_resume_record(
     record.jd_text_hash = jd_hash
     record.jd_title = jd_title
     record.jd_company = jd_company
+    if app_label:
+        record.display_name = app_label
     record.updated_at = now
     if rebinding:
         # New tailoring session for the same JD — do not inherit prior ATS scores
@@ -349,6 +353,7 @@ async def upsert_resume_record_from_session(
 
     jd_hash = compute_jd_text_hash(jd_text)
     jd_title, jd_company = extract_jd_metadata(session)
+    app_label = (session.application_display_name or "").strip() or None
     now = datetime.now(timezone.utc)
 
     existing = await _find_record_for_session(
@@ -377,7 +382,7 @@ async def upsert_resume_record_from_session(
             starting_ats_score=ats_score,
             status=ResumeRecordStatus.draft,
             tailoring_stage=TailoringStage.polished,
-            display_name=None,
+            display_name=app_label,
             created_at=now,
             updated_at=now,
         )
@@ -398,6 +403,8 @@ async def upsert_resume_record_from_session(
     existing.jd_title = jd_title
     existing.jd_company = jd_company
     existing.jd_text_hash = jd_hash
+    if app_label:
+        existing.display_name = app_label
     existing.current_ats_score = ats_score
     if not had_scores:
         existing.starting_ats_score = ats_score
