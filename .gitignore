@@ -1,7 +1,10 @@
-# Internal design docs (markdown only — not pushed to GitHub)
-docs/**/*.md
-docs/**/*.txt
+# Local-only: planning, operator runbooks, Cursor/agent, design assets (not on GitHub)
+docs/
+adr/
+STAGING.md
 tech_docs/
+frontend/AGENTS.md
+frontend/CLAUDE.md
 
 # Personal resume files — local only, never commit
 doc-resumes/
@@ -20,9 +23,6 @@ Thumbs.db
 *client_secret*.json
 *.pem
 *.key
-docs/**/*.json
-docs/**/*.yml
-docs/**/*.yaml
 
 # Python
 __pycache__/
