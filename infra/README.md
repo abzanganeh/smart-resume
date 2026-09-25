@@ -1,9 +1,7 @@
 # Flint Apply — Job Search Infrastructure (Release Phase 3 §18.10)
 
 This directory contains AWS Lambda handlers and Terraform for the job-search
-cache pipeline and saved-search alert dispatcher described in
-`docs/SYSTEM_DESIGN_PHASE_2.md` §18.10 and `docs/IMPLEMENTATION_PLAN.md`
-Steps 21–22.
+cache pipeline and saved-search alert dispatcher (Release Phase 3 job search).
 
 ## Components
 

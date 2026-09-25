@@ -10,7 +10,7 @@
 
 An AI-powered job-search platform. Build your master resume by speaking or uploading, tailor it to any job description in minutes, find matching jobs, write cover letters, and track every application — all in one place.
 
-> **Rebrand note:** Product UI and API surfaces use **FlintApply** / `flintapply.com`. Legal pages (`/legal/*`) still reference the legacy *TalioCV* controller name until the entity charter lands (see [STAGING.md §9](./STAGING.md#9-company--legal-entity-migration-the-flint-ai)).
+> **Rebrand note:** Product UI and API surfaces use **FlintApply** / `flintapply.com`. Legal pages (`/legal/*`) still reference the legacy *TalioCV* controller name until the entity charter lands.
 
 ---
 
@@ -24,7 +24,7 @@ cp backend/.env.example backend/.env
 docker compose up
 ```
 
-**Desktop staging (local workstation):** see [STAGING.md §2](./STAGING.md#2-infrastructure-fastest-path-docker-compose-on-a-vm) — run `./scripts/desktop-staging-local-sim-up.sh` for Mailpit + dummy Stripe on host **3001/8001** (never bind **3000**; Kia/Trust uses that port). VM/production deploy uses the same runbook without `local-sim`.
+**Desktop staging (local workstation):** run `./scripts/desktop-staging-local-sim-up.sh` for Mailpit + dummy Stripe on host **3001/8001** (never bind **3000** on this workstation). Production VM: `docker compose` with `docker-compose.prod-vm.yml` and Caddy on ports **3000/8000**.
 
 | Service   | URL                          |
 |-----------|------------------------------|
@@ -244,7 +244,7 @@ infra/
   alert_dispatcher/          System alert handler
 ```
 
-Sessions are stored in Redis. Resume chunks and embeddings are in Postgres (pgvector). See `docs/SYSTEM_DESIGN_PHASE_2.md` for the full architecture, API contracts, data models, and system design sections (§1–§22).
+Sessions are stored in Redis. Resume chunks and embeddings are in Postgres (pgvector).
 
 ---
 
